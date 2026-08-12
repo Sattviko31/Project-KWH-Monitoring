@@ -1,0 +1,808 @@
+﻿@{
+    ViewData["Title"] = "Usage Statistics";
+}
+
+<!-- Breadcrumb -->
+<div class="erp-breadcrumb">
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
+    <span class="current">Usage Statistics</span>
+</div>
+
+<!-- Page Header -->
+<div class="erp-page-header">
+    <div>
+        <h2><i class="fas fa-chart-bar text-primary"></i> Usage Statistics</h2>
+        <div class="subtitle">
+            <i class="fas fa-clock"></i> Last Update: <span class="last-update">-</span>
+            <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span class="status-text">Online</span></span>
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-erp-action" id="btnRefresh">
+            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
+        </button>
+        <a asp-action="Settings" class="btn btn-erp-action">
+            <i class="fas fa-cog"></i> <span class="d-none d-sm-inline">Settings</span>
+        </a>
+    </div>
+</div>
+
+<!-- Tabs (ERP Style) -->
+<div class="erp-tabs">
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="Index">
+        <i class="fas fa-th"></i> <span>Panel Monitoring</span>
+    </a>
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="Charts">
+        <i class="fas fa-chart-line"></i> <span>All Charts</span>
+    </a>
+    <a class="erp-tab active" asp-controller="Monitoring" asp-action="UsageStatistics">
+        <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
+    </a>
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="AnomalyLogs">
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Logs</span>
+    </a>
+</div>
+
+    <!-- Device Filter Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Usage Statistics</h5>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <small class="text-muted" id="deviceFilterLabel">Semua Panel</small>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-toggle="collapse" data-target="#usageFilterCollapse" aria-expanded="false" title="Toggle filter perangkat">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+        </div>
+    </div>
+
+    <div class="collapse mb-3" id="usageFilterCollapse">
+        <div class="filter-bar-container">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="position-relative flex-grow-1" style="min-width: 200px; max-width: 320px;">
+                    <i class="fas fa-search position-absolute text-muted" style="left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.8rem;"></i>
+                    <input type="text" id="usageDeviceSearch" class="form-control form-control-sm ps-4" placeholder="Cari panel..." />
+                </div>
+                <select id="usageCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
+                    <option value="all">🏷️ Semua Kategori</option>
+                    <option value="Billboard">🔵 Billboard</option>
+                    <option value="Megatron">🟠 Megatron</option>
+                    <option value="NeonBox">🟣 Neon Box</option>
+                </select>
+                <button id="btnClearUsageFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mt-2 d-flex flex-wrap gap-1" id="usageChipList"></div>
+        </div>
+    </div>
+
+    <!-- Date Navigation -->
+    <div class="row mb-2 mb-md-3">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body py-2">
+                    <div class="row align-items-center date-nav-row">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 fw-bold"><i class="fas fa-calendar"></i></label>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-primary btn-sm" id="btnPrevDay">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto">
+                            <input type="date" class="form-control form-control-sm" id="filterDate" style="min-width: 140px;">
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-primary btn-sm" id="btnNextDay">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-secondary btn-sm" id="btnToday">
+                                <i class="fas fa-calendar-day"></i> <span class="d-none d-sm-inline">Hari Ini</span>
+                            </button>
+                        </div>
+                        <div class="col">
+                            <span class="text-muted ms-2" id="selectedDayName">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="stats-row mb-3 mb-md-4">
+        <div>
+            <div class="stat-card bg-primary h-100">
+                <div class="stat-label">Hari Ini</div>
+                <div class="stat-value" id="usageToday">0 kWh</div>
+                <small style="opacity:0.75">Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
+                <i class="fas fa-calendar-day stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-success h-100">
+                <div class="stat-label">Bulan Ini</div>
+                <div class="stat-value" id="usageMonth">0 kWh</div>
+                <small style="opacity:0.75">Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
+                <i class="fas fa-calendar-week stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-info h-100">
+                <div class="stat-label">Tahun Ini</div>
+                <div class="stat-value" id="usageYear">0 kWh</div>
+                <small style="opacity:0.75">Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
+                <i class="fas fa-calendar stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-warning h-100">
+                <div class="stat-label">Estimasi Biaya</div>
+                <div class="stat-value" id="usageCost">Rp 0</div>
+                <small style="opacity:0.75">Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
+                <i class="fas fa-money-bill-wave stat-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-row mb-3 mb-md-4">
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-clock"></i> Per Jam</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Per Hari</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Per Bulan</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Peak Info -->
+    <div class="peak-row">
+        <div>
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <h6 class="text-muted mb-1"><i class="fas fa-bolt text-warning"></i> Peak Hour</h6>
+                    <h5 class="text-primary mb-1" id="peakHourValue">0 kWh</h5>
+                    <p class="text-muted mb-0">Jam: <span id="peakHourTime">-</span></p>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <h6 class="text-muted mb-1"><i class="fas fa-calendar-day text-success"></i> Peak Day</h6>
+                    <h5 class="text-success mb-1" id="peakDayValue">0 kWh</h5>
+                    <p class="text-muted mb-0">Tanggal: <span id="peakDayDate">-</span></p>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="card bg-light">
+                <div class="card-body py-2">
+                    <h6 class="text-muted mb-1"><i class="fas fa-calendar-alt text-info"></i> Peak Month</h6>
+                    <h5 class="text-info mb-1" id="peakMonthValue">0 kWh</h5>
+                    <p class="text-muted mb-0">Bulan: <span id="peakMonthName">-</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let charts = {};
+        let selectedDate = new Date();
+        let refreshTimer = null;
+        let usageFilterDebounce = null;
+
+        // ============================================
+        // DEVICE FILTER LOGIC
+        // ============================================
+        let usagePanelList = []; // Fetched from API
+        let activeUsageChipDeviceKey = null; // null = all devices
+        let usageAnomalyStatusMap = {};
+        let usageDeviceCategoryMap = {}; // deviceKey -> category
+
+        function getUsageChipClass(deviceKey) {
+            var anomaly = usageAnomalyStatusMap[deviceKey];
+            if (anomaly === 'OVERLOAD') return 'chip-high';
+            if (anomaly === 'DROP') return 'chip-medium';
+            return 'chip-normal';
+        }
+
+        function renderUsageChips() {
+            var $list = $('#usageChipList');
+            $list.empty();
+
+            if (usagePanelList.length === 0) return;
+
+            var categoryFilter = $('#usageCategoryFilter').val();
+
+            var sorted = usagePanelList.slice().sort(function(a, b) {
+                var aAnomaly = usageAnomalyStatusMap[a.deviceKey] || '';
+                var bAnomaly = usageAnomalyStatusMap[b.deviceKey] || '';
+                var order = { 'OVERLOAD': 0, 'DROP': 1, '': 2 };
+                var aOrder = order[aAnomaly] !== undefined ? order[aAnomaly] : 2;
+                var bOrder = order[bAnomaly] !== undefined ? order[bAnomaly] : 2;
+                if (aOrder !== bOrder) return aOrder - bOrder;
+                var nameA = (a.groupName || a.deviceKey).toLowerCase();
+                var nameB = (b.groupName || b.deviceKey).toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+
+            // "All" chip
+            var $allChip = $('<span>')
+                .addClass('panel-chip chip-normal' + (activeUsageChipDeviceKey === null ? ' active' : ''))
+                .attr('data-device-key', '__all__')
+                .html('<span class="chip-dot"></span>Semua Panel')
+                .on('click', function() {
+                    activeUsageChipDeviceKey = null;
+                    $list.find('.panel-chip').removeClass('active');
+                    $(this).addClass('active');
+                    updateDeviceFilterLabel();
+                    loadData();
+                });
+            $list.append($allChip);
+
+            sorted.forEach(function(panel) {
+                var chipClass = getUsageChipClass(panel.deviceKey);
+                var label = panel.groupName || panel.deviceKey;
+                var isActive = activeUsageChipDeviceKey === panel.deviceKey;
+
+                // Category filter: hide chips that don't match
+                var panelCategory = panel.deviceCategory || usageDeviceCategoryMap[panel.deviceKey] || 'Billboard';
+                var visibleByCategory = (categoryFilter === 'all' || panelCategory === categoryFilter);
+
+                var $chip = $('<span>')
+                    .addClass('panel-chip ' + chipClass + (isActive ? ' active' : ''))
+                    .attr('data-device-key', panel.deviceKey)
+                    .attr('data-category', panelCategory)
+                    .html('<span class="chip-dot"></span>' + label)
+                    .on('click', function() {
+                        activeUsageChipDeviceKey = panel.deviceKey;
+                        $list.find('.panel-chip').removeClass('active');
+                        $(this).addClass('active');
+                        updateDeviceFilterLabel();
+                        loadData();
+                    });
+
+                if (!visibleByCategory) {
+                    $chip.hide();
+                }
+
+                $list.append($chip);
+            });
+        }
+
+        function updateDeviceFilterLabel() {
+            var category = $('#usageCategoryFilter').val();
+            var categoryLabel = '';
+            if (category && category !== 'all') {
+                var catNames = { 'Billboard': '🔵 Billboard', 'Megatron': '🟠 Megatron', 'NeonBox': '🟣 Neon Box' };
+                categoryLabel = ' — ' + (catNames[category] || category);
+            }
+
+            if (activeUsageChipDeviceKey === null) {
+                $('#deviceFilterLabel').text('Semua Panel' + categoryLabel);
+            } else {
+                var panel = usagePanelList.find(function(p) { return p.deviceKey === activeUsageChipDeviceKey; });
+                var name = panel ? (panel.groupName || panel.deviceKey) : activeUsageChipDeviceKey;
+                $('#deviceFilterLabel').text(name + categoryLabel);
+            }
+        }
+
+        function setupUsageFilterEvents() {
+            $('#usageDeviceSearch').on('input', function() {
+                clearTimeout(usageFilterDebounce);
+                usageFilterDebounce = setTimeout(function() {
+                    // Filter chips by search text
+                    var search = $('#usageDeviceSearch').val().trim().toLowerCase();
+                    $('#usageChipList').find('.panel-chip').each(function() {
+                        var dk = $(this).attr('data-device-key');
+                        if (dk === '__all__') { $(this).show(); return; }
+                        var panel = usagePanelList.find(function(p) { return p.deviceKey === dk; });
+                        var name = panel ? (panel.groupName || '').toLowerCase() : '';
+                        if (!search || name.includes(search) || dk.toLowerCase().includes(search)) {
+                            $(this).show();
+                        } else {
+                            $(this).hide();
+                        }
+                    });
+                }, 200);
+            });
+
+            $('#usageCategoryFilter').on('change', function() {
+                // If a specific device is selected and it doesn't match the new category, reset to all
+                var category = $(this).val();
+                if (activeUsageChipDeviceKey && category !== 'all') {
+                    var panel = usagePanelList.find(function(p) { return p.deviceKey === activeUsageChipDeviceKey; });
+                    var panelCategory = panel ? (panel.deviceCategory || usageDeviceCategoryMap[panel.deviceKey] || 'Billboard') : 'Billboard';
+                    if (panelCategory !== category) {
+                        activeUsageChipDeviceKey = null;
+                        updateDeviceFilterLabel();
+                        loadData();
+                    }
+                }
+                renderUsageChips();
+            });
+
+            $('#btnClearUsageFilter').on('click', function() {
+                $('#usageDeviceSearch').val('');
+                $('#usageCategoryFilter').val('all');
+                activeUsageChipDeviceKey = null;
+                $('#usageChipList').find('.panel-chip').removeClass('active');
+                $('#usageChipList').find('[data-device-key="__all__"]').addClass('active');
+                $('#usageChipList').find('.panel-chip').show();
+                updateDeviceFilterLabel();
+                loadData();
+            });
+        }
+
+        function fetchUsagePanelList() {
+            $.ajax({
+                url: '/api/Api/panels',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(panels) {
+                    usagePanelList = panels.map(function(p) {
+                        return {
+                            deviceKey: p.deviceKey,
+                            groupName: p.groupName,
+                            deviceId: p.deviceId,
+                            deviceCategory: p.deviceCategory || 'Billboard'
+                        };
+                    });
+                    // Load device categories to ensure accurate filtering
+                    loadUsageDeviceCategories();
+                },
+                error: function() {
+                    console.error('Error fetching panel list for usage filter');
+                }
+            });
+        }
+
+        function loadUsageDeviceCategories() {
+            $.ajax({
+                url: '/api/Api/device-categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    if (data.devices) {
+                        usageDeviceCategoryMap = data.devices;
+                        // Update panelList categories
+                        usagePanelList.forEach(function(panel) {
+                            if (usageDeviceCategoryMap[panel.deviceKey]) {
+                                panel.deviceCategory = usageDeviceCategoryMap[panel.deviceKey];
+                            }
+                        });
+                    }
+                    renderUsageChips();
+                    console.log('Usage device categories loaded:', usageDeviceCategoryMap);
+                },
+                error: function() {
+                    renderUsageChips();
+                    console.warn('Failed to load device categories for usage stats');
+                }
+            });
+        }
+
+        function updateUsageAnomalyStatus() {
+            // Ambil cooldown state langsung dari anomaly service (real-time)
+            var cooldownState = (typeof window.getAnomalyCooldownState === 'function') 
+                ? window.getAnomalyCooldownState() 
+                : {};
+
+            // Build deviceStatus from cooldown state (real-time, bukan database log)
+            var deviceStatus = {};
+            Object.keys(cooldownState).forEach(function(deviceKey) {
+                if (cooldownState[deviceKey] && cooldownState[deviceKey].waitingForNormal) {
+                    deviceStatus[deviceKey] = cooldownState[deviceKey].type; // 'OVERLOAD' or 'DROP'
+                }
+            });
+
+            usageAnomalyStatusMap = {};
+            usagePanelList.forEach(function(panel) {
+                var status = deviceStatus[panel.deviceKey];
+                if (status === 'OVERLOAD' || status === 'DROP') {
+                    usageAnomalyStatusMap[panel.deviceKey] = status;
+                }
+            });
+            renderUsageChips();
+        }
+
+        $(document).ready(function() {
+            // Initialize device filter
+            setupUsageFilterEvents();
+            fetchUsagePanelList();
+            updateUsageAnomalyStatus();
+
+            // Real-time update saat cooldown state berubah (dari anomaly service)
+            window.addEventListener('anomalyCooldownChanged', function(e) {
+                console.log('🔄 Anomaly cooldown changed (usage stats):', e.detail);
+                updateUsageAnomalyStatus();
+            });
+
+            updateDateInput();
+            updateDayName();
+            loadData();
+            startAutoRefresh();
+
+            $('#btnRefresh').click(function() {
+                loadData();
+            });
+
+            $('#btnPrevDay').click(function() {
+                selectedDate.setDate(selectedDate.getDate() - 1);
+                updateDateInput();
+                updateDayName();
+                loadData();
+            });
+
+            $('#btnNextDay').click(function() {
+                selectedDate.setDate(selectedDate.getDate() + 1);
+                updateDateInput();
+                updateDayName();
+                loadData();
+            });
+
+            $('#btnToday').click(function() {
+                selectedDate = new Date();
+                updateDateInput();
+                updateDayName();
+                loadData();
+            });
+
+            $('#filterDate').change(function() {
+                var dateVal = $(this).val();
+                if (dateVal) {
+                    var parts = dateVal.split('-');
+                    selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    updateDayName();
+                    loadData();
+                }
+            });
+        });
+
+        function updateDateInput() {
+            var y = selectedDate.getFullYear();
+            var m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+            var d = String(selectedDate.getDate()).padStart(2, '0');
+            $('#filterDate').val(y + '-' + m + '-' + d);
+        }
+
+        function updateDayName() {
+            var days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            var months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            
+            var dayName = days[selectedDate.getDay()];
+            var dateStr = selectedDate.getDate() + ' ' + months[selectedDate.getMonth()] + ' ' + selectedDate.getFullYear();
+            
+            var today = new Date();
+            var isToday = selectedDate.toDateString() === today.toDateString();
+            
+            $('#selectedDayName').text(dayName + ' - ' + dateStr + (isToday ? ' (Hari Ini)' : ''));
+        }
+
+        function startAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = setInterval(function() {
+                loadData();
+                $('.last-update').text(new Date().toLocaleString('id-ID'));
+            }, 10000);
+        }
+
+        function loadData() {
+            var startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+            var endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59);
+
+            var baseUrl = '/api/Api/usage-statistics';
+            if (activeUsageChipDeviceKey) {
+                baseUrl += '/' + encodeURIComponent(activeUsageChipDeviceKey);
+            }
+
+            $.ajax({
+                url: baseUrl,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString()
+                }),
+                dataType: 'json',
+                timeout: 15000,
+                success: function(data) {
+                    // Normalize per-device response to match aggregate format
+                    if (activeUsageChipDeviceKey && data.today) {
+                        data = {
+                            totalToday: data.today.total,
+                            avgPerHour: data.today.avgPerHour,
+                            peakHour: data.today.peakHour,
+                            peakHourTime: data.today.peakHourTime,
+                            totalThisMonth: data.month.total,
+                            avgPerDay: data.month.avgPerDay,
+                            peakDay: data.month.peakDay,
+                            peakDayDate: data.month.peakDayDate,
+                            totalThisYear: data.year.total,
+                            avgPerMonth: data.year.avgPerMonth,
+                            peakMonth: data.year.peakMonth,
+                            peakMonthName: data.year.peakMonthName,
+                            hourlyData: data.today.hourlyData,
+                            dailyData: data.month.dailyData,
+                            monthlyData: data.year.monthlyData,
+                            tariffPerKWh: data.tariffPerKWh,
+                            estimatedCost: data.estimatedCost,
+                            realtimeKWh: data.realtimeKWh,
+                            currentHourLabel: data.currentHourLabel,
+                            secondsToNextHour: data.secondsToNextHour,
+                            isToday: data.isToday
+                        };
+                    }
+                    updateUI(data);
+                    $('.last-update').text(new Date().toLocaleString('id-ID'));
+                    $('.status-text').text('Online');
+                },
+                error: function(xhr) {
+                    console.error('Error:', xhr.responseText);
+                    $('.status-text').text('Offline');
+                }
+            });
+        }
+
+        function updateUI(data) {
+            // Calculate real-time averages (exclude empty/zero data)
+            var hourlyData = (data.hourlyData || []).sort((a, b) => a.sortKey - b.sortKey);
+            var dailyData = (data.dailyData || []).sort((a, b) => a.sortKey - b.sortKey);
+            var monthlyData = (data.monthlyData || []).sort((a, b) => a.sortKey - b.sortKey);
+
+            var rtAvgPerHour = calcAvg(hourlyData);
+            var rtAvgPerDay = calcAvg(dailyData);
+            var rtAvgPerMonth = calcAvg(monthlyData);
+
+            // Update summary cards
+            $('#usageToday').text(formatDecimal(data.totalToday) + ' kWh');
+            $('#usageTodayAvg').text(formatDecimal(rtAvgPerHour));
+            $('#usageMonth').text(formatDecimal(data.totalThisMonth) + ' kWh');
+            $('#usageMonthAvg').text(formatDecimal(rtAvgPerDay));
+            $('#usageYear').text(formatDecimal(data.totalThisYear) + ' kWh');
+            $('#usageYearAvg').text(formatDecimal(rtAvgPerMonth));
+
+            var tariff = data.tariffPerKWh || 1500;
+            $('#tariffDisplay').text('Rp ' + formatInteger(tariff));
+            // Hapus 2 angka di belakang koma untuk estimasi biaya
+            $('#usageCost').text('Rp ' + formatInteger(data.estimatedCost));
+
+            // Update peak info
+            $('#peakHourValue').text(formatDecimal(data.peakHour) + ' kWh');
+            $('#peakHourTime').text(data.peakHourTime);
+            $('#peakDayValue').text(formatDecimal(data.peakDay) + ' kWh');
+            $('#peakDayDate').text(data.peakDayDate);
+            $('#peakMonthValue').text(formatDecimal(data.peakMonth) + ' kWh');
+            $('#peakMonthName').text(data.peakMonthName);
+
+            // Update charts
+            updateCharts(data);
+        }
+
+        function calcAvg(arr) {
+            var filled = arr.filter(x => x.energy > 0);
+            if (filled.length === 0) return 0;
+            return filled.reduce((s, x) => s + x.energy, 0) / filled.length;
+        }
+
+        function makeAvgLine(arr, avg) {
+            return arr.map(d => d.energy > 0 ? avg : null);
+        }
+
+        function updateCharts(data) {
+            var commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            };
+
+            // Hourly chart
+            var hourlyCtx = document.getElementById('hourlyChart');
+            if (hourlyCtx) {
+                if (charts.hourly) charts.hourly.destroy();
+                var hourlyData = (data.hourlyData || []).sort((a, b) => a.sortKey - b.sortKey);
+
+                var today = new Date();
+                var isToday = selectedDate.toDateString() === today.toDateString();
+                var currentHour = today.getHours();
+
+                var colors = hourlyData.map(h => {
+                    if (!isToday) return 'rgba(13, 110, 253, 0.7)';
+                    if (h.sortKey === currentHour) return 'rgba(255, 165, 0, 0.9)';
+                    if (h.sortKey < currentHour) return 'rgba(13, 110, 253, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                var avgHourly = calcAvg(hourlyData);
+
+                charts.hourly = new Chart(hourlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: hourlyData.map(h => h.timeLabel),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: hourlyData.map(h => h.energy),
+                            backgroundColor: colors,
+                            borderColor: colors.map(c => c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5')),
+                            borderWidth: 1
+                        }, {
+                            label: 'Rata-rata: ' + formatDecimal(avgHourly) + ' kWh',
+                            data: makeAvgLine(hourlyData, avgHourly),
+                            type: 'line',
+                            borderColor: 'rgba(220, 53, 69, 0.8)',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            pointRadius: 0,
+                            fill: false,
+                            spanGaps: false,
+                            order: 0
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
+                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                        }
+                    }
+                });
+            }
+
+            // Daily chart
+            var dailyCtx = document.getElementById('dailyChart');
+            if (dailyCtx) {
+                if (charts.daily) charts.daily.destroy();
+                var dailyData = (data.dailyData || []).sort((a, b) => a.sortKey - b.sortKey);
+
+                var today = new Date();
+                var isThisMonth = selectedDate.getMonth() === today.getMonth() && selectedDate.getFullYear() === today.getFullYear();
+                var currentDay = today.getDate();
+
+                var colors = dailyData.map(d => {
+                    if (!isThisMonth) return 'rgba(25, 135, 84, 0.7)';
+                    if (d.sortKey === currentDay) return 'rgba(255, 165, 0, 0.9)';
+                    if (d.sortKey < currentDay) return 'rgba(25, 135, 84, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                var avgDaily = calcAvg(dailyData);
+
+                charts.daily = new Chart(dailyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: dailyData.map(d => d.dateLabel),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: dailyData.map(d => d.energy),
+                            backgroundColor: colors,
+                            borderColor: colors.map(c => c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5')),
+                            borderWidth: 1
+                        }, {
+                            label: 'Rata-rata: ' + formatDecimal(avgDaily) + ' kWh',
+                            data: makeAvgLine(dailyData, avgDaily),
+                            type: 'line',
+                            borderColor: 'rgba(220, 53, 69, 0.8)',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            pointRadius: 0,
+                            fill: false,
+                            spanGaps: false,
+                            order: 0
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
+                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                        }
+                    }
+                });
+            }
+
+            // Monthly chart
+            var monthlyCtx = document.getElementById('monthlyChart');
+            if (monthlyCtx) {
+                if (charts.monthly) charts.monthly.destroy();
+                var monthlyData = (data.monthlyData || []).sort((a, b) => a.sortKey - b.sortKey);
+
+                var today = new Date();
+                var isThisYear = selectedDate.getFullYear() === today.getFullYear();
+                var currentMonth = today.getMonth() + 1;
+
+                var colors = monthlyData.map(m => {
+                    if (!isThisYear) return 'rgba(13, 202, 240, 0.7)';
+                    if (m.sortKey === currentMonth) return 'rgba(255, 165, 0, 0.9)';
+                    if (m.sortKey < currentMonth) return 'rgba(13, 202, 240, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                var avgMonthly = calcAvg(monthlyData);
+
+                charts.monthly = new Chart(monthlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyData.map(m => m.monthName),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: monthlyData.map(m => m.energy),
+                            backgroundColor: colors,
+                            borderColor: colors.map(c => c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5')),
+                            borderWidth: 1
+                        }, {
+                            label: 'Rata-rata: ' + formatDecimal(avgMonthly) + ' kWh',
+                            data: makeAvgLine(monthlyData, avgMonthly),
+                            type: 'line',
+                            borderColor: 'rgba(220, 53, 69, 0.8)',
+                            borderWidth: 2,
+                            borderDash: [6, 3],
+                            pointRadius: 0,
+                            fill: false,
+                            spanGaps: false,
+                            order: 0
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
+                            x: { ticks: { font: { size: 9 } } }
+                        }
+                    }
+                });
+            }
+
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            return Number(num).toLocaleString('id-ID');
+        }
+
+        function formatInteger(num) {
+            if (!num) return '0';
+            return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        function formatDecimal(num) {
+            if (!num) return '0,00';
+            return Number(num).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    </script>
+}

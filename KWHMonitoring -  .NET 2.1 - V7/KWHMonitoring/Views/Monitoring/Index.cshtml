@@ -1,0 +1,863 @@
+﻿@model KWHMonitoring.Models.DashboardViewModel
+@{
+    ViewData["Title"] = "Panel Monitoring";
+    var tariffPerKWh = ViewBag.TariffPerKWh ?? 1500m;
+}
+
+<!-- Header yang sama di semua halaman -->
+@await Html.PartialAsync("_DashboardHeader")
+
+<!-- Content: Panel Monitoring -->
+<div class="stats-row mb-3 mb-md-4">
+    <div>
+        <div class="stat-card bg-primary h-100">
+            <div class="stat-label">Total Daya</div>
+            <div class="stat-value">@Model.TotalStats.TotalDaya.ToString("N0") W</div>
+            <i class="fas fa-bolt stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card bg-success h-100">
+            <div class="stat-label">Total Energy</div>
+            <div class="stat-value">@Model.TotalStats.TotalEnergy.ToString("N0") Wh</div>
+            <i class="fas fa-battery-full stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card bg-warning h-100">
+            <div class="stat-label">Energi Aktif</div>
+            <div class="stat-value">@Model.TotalStats.TotalEnergiAktif.ToString("N0") Wh</div>
+            <i class="fas fa-plug stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card bg-secondary h-100">
+            <div class="stat-label">Active Panels</div>
+            <div class="stat-value">@Model.TotalStats.ActivePanels</div>
+            <i class="fas fa-th stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card bg-dark h-100">
+            <div class="stat-label">Avg Power Factor</div>
+            <div class="stat-value">@Model.TotalStats.AvgPowerFactor.ToString("N3")</div>
+            <i class="fas fa-wave-square stat-icon"></i>
+        </div>
+    </div>
+</div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="fas fa-th"></i> Panel Monitoring</h5>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <small class="text-muted" id="filterInfo">Menampilkan <strong id="filteredCount">@Model.Panels.Count</strong>/<strong id="totalCount">@Model.Panels.Count</strong> panel</small>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-toggle="collapse" data-target="#panelFilterCollapse" aria-expanded="false" title="Toggle filter">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel Filter Bar (collapsible) -->
+    <div class="collapse mb-3" id="panelFilterCollapse">
+        <div class="filter-bar-container">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="position-relative flex-grow-1" style="min-width: 200px; max-width: 320px;">
+                    <i class="fas fa-search position-absolute text-muted" style="left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.8rem;"></i>
+                    <input type="text" id="panelSearch" class="form-control form-control-sm ps-4" placeholder="Cari panel..." />
+                </div>
+                <select id="panelStatusFilter" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="all">📊 Semua Status</option>
+                    <option value="HIGH">🔴 High</option>
+                    <option value="MEDIUM">🟡 Medium</option>
+                    <option value="NORMAL">🟢 Normal</option>
+                </select>
+                <select id="panelPhaseFilter" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="all">⚡ Semua Phase</option>
+                    <option value="3phase">3Φ Tiga Phase</option>
+                    <option value="1phase">1Φ Satu Phase</option>
+                </select>
+                <select id="panelCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
+                    <option value="all">🏷️ Semua Kategori</option>
+                    <option value="Billboard">🔵 Billboard</option>
+                    <option value="Megatron">🟠 Megatron</option>
+                    <option value="NeonBox">🟣 Neon Box</option>
+                </select>
+                <button id="btnClearFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <!-- Panel chips list (dynamically populated) -->
+            <div class="mt-2 d-flex flex-wrap gap-1" id="panelChipList">
+            </div>
+        </div>
+    </div>
+
+    <div class="panel-grid mb-3 mb-md-4" id="panelsContainer">
+        @foreach (var panel in Model.Panels)
+        {
+            var safeKey = panel.DeviceKey.Replace("-", "_");
+            <div id="panel_@safeKey">
+                @await Html.PartialAsync("_PanelCard", panel)
+            </div>
+        }
+    </div>
+
+@section Scripts {
+    <script>
+                // Load system settings dari database
+        let systemSettings = {
+            dashboardInterval: 10,
+            chartsInterval: 10,
+            detailsInterval: 10,
+            anomalyInterval: 10,
+            chartDataPoints: 20,
+            maxCapacity: 30000,
+            normalThreshold: 30,
+            mediumThreshold: 70,
+            showGrid: true,
+            showGridX: true,
+            showGridY: true,
+            gridColor: '#e0e0e0',
+            gridLineWidth: 1,
+            showLegend: false
+        };
+
+            function loadSystemSettings() {
+            return new Promise((resolve) => {
+                $.ajax({
+                    url: '/api/Api/get-system-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 5000,
+                    success: function(data) {
+                        if (data.success && data.settings) {
+                            systemSettings.dashboardInterval = parseInt(data.settings['Interval.Dashboard']) || 10;
+                            systemSettings.chartsInterval = parseInt(data.settings['Interval.Charts']) || 10;
+                            systemSettings.detailsInterval = parseInt(data.settings['Interval.Details']) || 10;
+                            systemSettings.anomalyInterval = parseInt(data.settings['Interval.Anomaly']) || 10;
+                            systemSettings.chartDataPoints = parseInt(data.settings['Chart.DataPoints']) || 20;  // ← TAMBAHKAN
+                            systemSettings.maxCapacity = parseInt(data.settings['Load.MaxCapacity']) || 30000;
+                            systemSettings.normalThreshold = parseInt(data.settings['Load.NormalThreshold']) || 30;
+                            systemSettings.mediumThreshold = parseInt(data.settings['Load.MediumThreshold']) || 70;
+                            systemSettings.showGrid = data.settings['Chart.ShowGrid'] !== 'false';
+                            systemSettings.showGridX = data.settings['Chart.ShowGridX'] !== 'false';
+                            systemSettings.showGridY = data.settings['Chart.ShowGridY'] !== 'false';
+                            systemSettings.gridColor = data.settings['Chart.GridColor'] || '#e0e0e0';
+                            systemSettings.gridLineWidth = parseFloat(data.settings['Chart.GridLineWidth']) || 1;
+                            systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
+
+                            console.log('System settings loaded:', systemSettings);
+                        }
+                        resolve();
+                    },
+                    error: function() {
+                        console.log('Using default system settings');
+                        resolve();
+                    }
+                });
+            });
+        }
+
+
+        let refreshTimer = null;
+        let panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new { deviceKey = p.DeviceKey, safeKey = p.DeviceKey.Replace("-", "_") }).ToList()));
+        let allPanelData = []; // Cached panel data for client-side filtering
+
+        // ============================================
+        // PANEL FILTER LOGIC
+        // ============================================
+        let filterDebounce = null;
+        let activeChipDeviceKey = null; // Currently selected chip
+        let anomalyStatusMap = {}; // deviceKey -> anomaly type (OVERLOAD/DROP/undefined)
+
+        function getChipClass(deviceKey) {
+            const anomaly = anomalyStatusMap[deviceKey];
+            if (anomaly === 'OVERLOAD') return 'chip-high';
+            if (anomaly === 'DROP') return 'chip-medium';
+            return 'chip-normal';
+        }
+
+        function renderPanelChips() {
+            const $list = $('#panelChipList');
+            $list.empty();
+
+            if (allPanelData.length === 0) return;
+
+            // Sort: anomaly panels first (OVERLOAD > DROP), then normal by name
+            const sorted = [...allPanelData].sort((a, b) => {
+                const aAnomaly = anomalyStatusMap[a.deviceKey] || '';
+                const bAnomaly = anomalyStatusMap[b.deviceKey] || '';
+                const order = { 'OVERLOAD': 0, 'DROP': 1, '': 2 };
+                const aOrder = order[aAnomaly] !== undefined ? order[aAnomaly] : 2;
+                const bOrder = order[bAnomaly] !== undefined ? order[bAnomaly] : 2;
+                if (aOrder !== bOrder) return aOrder - bOrder;
+                const nameA = (a.groupName || a.deviceKey).toLowerCase();
+                const nameB = (b.groupName || b.deviceKey).toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+
+            sorted.forEach(function(panel) {
+                const chipClass = getChipClass(panel.deviceKey);
+                const label = panel.groupName || panel.deviceKey;
+                const isActive = activeChipDeviceKey === panel.deviceKey;
+
+                const $chip = $('<span>')
+                    .addClass('panel-chip ' + chipClass + (isActive ? ' active' : ''))
+                    .attr('data-device-key', panel.deviceKey)
+                    .html('<span class="chip-dot"></span>' + label)
+                    .on('click', function() {
+                        if (activeChipDeviceKey === panel.deviceKey) {
+                            activeChipDeviceKey = null;
+                            $(this).removeClass('active');
+                        } else {
+                            activeChipDeviceKey = panel.deviceKey;
+                            $list.find('.panel-chip').removeClass('active');
+                            $(this).addClass('active');
+                        }
+                        applyPanelFilter();
+                    });
+
+                $list.append($chip);
+            });
+        }
+
+        function applyPanelFilter() {
+            const search = $('#panelSearch').val().trim().toLowerCase();
+            const status = $('#panelStatusFilter').val();
+            const phase = $('#panelPhaseFilter').val();
+            const category = $('#panelCategoryFilter').val();
+
+            let visibleCount = 0;
+
+            panelList.forEach(function(panel) {
+                const safeKey = panel.safeKey;
+                const $card = $(`#panel_${safeKey}`);
+                if ($card.length === 0) return;
+
+                let show = true;
+
+                // Chip filter (click on a specific panel)
+                if (activeChipDeviceKey && panel.deviceKey !== activeChipDeviceKey) {
+                    show = false;
+                }
+
+                // Search filter
+                if (show && search) {
+                    const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
+                    const groupName = data ? data.groupName.toLowerCase() : '';
+                    const deviceKey = panel.deviceKey.toLowerCase();
+                    const deviceId = data ? data.deviceId.toLowerCase() : '';
+                    if (!groupName.includes(search) && !deviceKey.includes(search) && !deviceId.includes(search)) {
+                        show = false;
+                    }
+                }
+
+                // Status filter
+                if (show && status && status !== 'all') {
+                    const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
+                    const daya = data ? data.dayaWatt : 0;
+                    const maxCap = systemSettings.maxCapacity || 30000;
+                    const loadPercent = Math.min((daya / maxCap) * 100, 100);
+                    let panelStatus = 'NORMAL';
+                    if (loadPercent > systemSettings.mediumThreshold || loadPercent > 70) panelStatus = 'HIGH';
+                    else if (loadPercent > systemSettings.normalThreshold || loadPercent > 30) panelStatus = 'MEDIUM';
+                    if (panelStatus !== status) show = false;
+                }
+
+                // Phase filter
+                if (show && phase && phase !== 'all') {
+                    const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
+                    const isThreePhase = data ? data.isThreePhase : false;
+                    if (phase === '3phase' && !isThreePhase) show = false;
+                    if (phase === '1phase' && isThreePhase) show = false;
+                }
+
+                // Category filter
+                if (show && category && category !== 'all') {
+                    const panelCategory = deviceCategoryMap[panel.deviceKey] || 'Billboard';
+                    if (panelCategory !== category) show = false;
+                }
+
+                if (show) {
+                    $card.show();
+                    visibleCount++;
+                } else {
+                    $card.hide();
+                }
+            });
+
+            $('#filteredCount').text(visibleCount);
+            $('#totalCount').text(panelList.length);
+        }
+
+        function setupFilterEvents() {
+            $('#panelSearch').on('input', function() {
+                clearTimeout(filterDebounce);
+                filterDebounce = setTimeout(applyPanelFilter, 200);
+            });
+
+            $('#panelStatusFilter').on('change', applyPanelFilter);
+            $('#panelPhaseFilter').on('change', applyPanelFilter);
+            $('#panelCategoryFilter').on('change', applyPanelFilter);
+
+            $('#btnClearFilter').on('click', function() {
+                $('#panelSearch').val('');
+                $('#panelStatusFilter').val('all');
+                $('#panelPhaseFilter').val('all');
+                $('#panelCategoryFilter').val('all');
+                activeChipDeviceKey = null;
+                $('#panelChipList').find('.panel-chip').removeClass('active');
+                applyPanelFilter();
+            });
+        }
+
+        // ============================================
+        // DEVICE CATEGORY MANAGEMENT
+        // ============================================
+        var deviceCategoryMap = {};
+
+        function loadDeviceCategories() {
+            return $.ajax({
+                url: '/api/Api/device-categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    if (data.devices) {
+                        deviceCategoryMap = data.devices;
+                    }
+                    // Update all category selectors
+                    Object.keys(deviceCategoryMap).forEach(function(deviceKey) {
+                        var safeKey = deviceKey.replace(/-/g, '_');
+                        updateCategorySelectorUI(safeKey, deviceCategoryMap[deviceKey]);
+                    });
+                    // Re-apply filter after categories are loaded
+                    applyPanelFilter();
+                    console.log('Device categories loaded:', deviceCategoryMap);
+                },
+                error: function() { console.warn('Failed to load device categories'); }
+            });
+        }
+
+        function updateCategorySelectorUI(safeKey, category) {
+            var $sel = $('#categorySelect_' + safeKey);
+            if ($sel.length === 0) return;
+            $sel.val(category);
+            $sel.removeClass('cat-Billboard cat-Megatron cat-NeonBox')
+                .addClass('cat-' + category);
+        }
+
+        function saveDeviceCategory(deviceKey, category) {
+            return $.ajax({
+                url: '/api/Api/device-category',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ deviceKey: deviceKey, category: category }),
+                success: function(data) {
+                    if (data.success) {
+                        deviceCategoryMap[deviceKey] = category;
+                        var safeKey = deviceKey.replace(/-/g, '_');
+                        updateCategorySelectorUI(safeKey, category);
+                    }
+                },
+                error: function() { alert('Gagal menyimpan kategori device'); }
+            });
+        }
+
+        // Category selector change → save
+        $(document).on('change', '.category-selector', function(e) {
+            e.stopPropagation();
+            var deviceKey = $(this).data('device-key');
+            var category = $(this).val();
+            saveDeviceCategory(deviceKey, category);
+        });
+
+        // ============================================
+        // RESPONSIVE DROPDOWN LABELS
+        // ============================================
+        var COMPACT_THRESHOLD = 420;
+
+        var categoryLabels = {
+            full:    { 'Billboard': '🔵 Billboard', 'Megatron': '🟠 Megatron', 'NeonBox': '🟣 Neon Box' },
+            compact: { 'Billboard': '🔵', 'Megatron': '🟠', 'NeonBox': '🟣' }
+        };
+
+        function updateDropdownLabels(cardEl, compact) {
+            var labels = compact ? 'compact' : 'full';
+            var $card = $(cardEl);
+            $card.find('.category-selector').each(function() {
+                var sel = this;
+                var currentVal = sel.value;
+                var map = categoryLabels[labels];
+                $(sel).find('option').each(function() {
+                    if (map[this.value]) this.textContent = map[this.value];
+                });
+                sel.value = currentVal;
+            });
+        }
+
+        function setupResponsiveDropdowns() {
+            var observer = new ResizeObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    var w = entry.contentRect.width;
+                    var card = entry.target;
+                    var compact = w < COMPACT_THRESHOLD;
+                    if (card._dropdownCompact !== compact) {
+                        card._dropdownCompact = compact;
+                        updateDropdownLabels(card, compact);
+                    }
+                });
+            });
+            document.querySelectorAll('.panel-grid > div, .panel-grid > .col-12').forEach(function(card) {
+                var w = card.getBoundingClientRect().width;
+                card._dropdownCompact = w < COMPACT_THRESHOLD;
+                updateDropdownLabels(card, card._dropdownCompact);
+                observer.observe(card);
+            });
+        }
+
+        $(document).ready(function() {
+            // Load settings dari database TERLEBIH DAHULU
+            loadSystemSettings().then(function() {
+                loadDeviceCategories();
+                syncProgressBars();
+                updatePanelCards();
+                updateStatistics();
+                setupResponsiveDropdowns();
+                startAutoRefresh();
+            });
+
+            // Setup filter events
+            setupFilterEvents();
+
+            // Panel card click → navigate to Details (except on collapse toggle)
+            $(document).on('click', '.panel-card-clickable', function(e) {
+                var $target = $(e.target);
+                if ($target.closest('.panel-collapse-toggle').length > 0 ||
+                    $target.closest('[data-toggle="collapse"]').length > 0 ||
+                    $target.closest('.category-selector').length > 0) {
+                    return; // Let Bootstrap handle collapse, don't navigate; category selector handled separately
+                }
+                var url = $(this).data('details-url');
+                if (url) {
+                    window.location.href = url;
+                }
+            });
+
+            // Initialize panel data from server-rendered panels for chip list
+            allPanelData = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new {
+                deviceKey = p.DeviceKey,
+                deviceId = p.DeviceId,
+                groupName = p.GroupName,
+                dayaWatt = p.Daya_Watt,
+                isThreePhase = p.IsThreePhase
+            }).ToList()));
+            renderPanelChips();
+
+            updateLastUpdate();
+
+            // Initial anomaly status load
+            updatePanelHeadersByAnomaly();
+
+            // Real-time update saat cooldown state berubah (dari anomaly service)
+            window.addEventListener('anomalyCooldownChanged', function(e) {
+                console.log('🔄 Anomaly cooldown changed:', e.detail);
+                updatePanelHeadersByAnomaly();
+            });
+
+            setTimeout(function() {
+                updatePanelCards();
+                updateStatistics();
+            }, 500);
+
+            $('#btnRefresh').click(function() {
+                updatePanelCards();
+                updateStatistics();
+            });
+
+            $('#btnRescan').click(function() {
+                $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Scanning...');
+                $.post('@Url.Action("RescanPanels", "Monitoring")', function(data) {
+                    if (data.success) { alert(`Found ${data.count} panels`); location.reload(); }
+                }).always(function() {
+                    $('#btnRescan').prop('disabled', false).html('<i class="fas fa-search"></i> Rescan');
+                });
+            });
+
+            $('#btnExport').click(function() { window.location.href = '@Url.Action("ExportCSV", "Monitoring")'; });
+
+            $('#btnSettings').click(function() {
+            window.location.href = '@Url.Action("Settings", "Monitoring")';
+        });
+        });
+
+
+        // ============================================
+        // ANOMALY DETECTION & LOGGING
+        // ============================================
+        let anomalyCooldown = {}; // Mencegah spam log
+
+        function detectAndLogAnomaly(deviceKey, powerData, ema, upperThreshold, lowerThreshold) {
+            if (!emaSettings.enableAlerts) return;
+
+            // Cek data point terakhir saja (real-time)
+            const lastIndex = powerData.length - 1;
+            if (lastIndex < 0) return;
+
+            const currentPower = powerData[lastIndex];
+            const upper = upperThreshold[lastIndex];
+            const lower = lowerThreshold[lastIndex];
+
+            if (currentPower === null || currentPower === undefined) return;
+            if (upper === undefined || lower === undefined) return;
+
+            let anomalyType = null;
+            let thresholdValue = 0;
+            let deviation = 0;
+
+            if (currentPower > upper) {
+                anomalyType = 'OVERLOAD';
+                thresholdValue = upper;
+                deviation = ((currentPower - upper) / upper * 100);
+            } else if (currentPower < lower) {
+                anomalyType = 'DROP';
+                thresholdValue = lower;
+                deviation = ((lower - currentPower) / lower * 100);
+            }
+
+            if (!anomalyType) return;
+
+            // Cooldown 60 detik per device per type
+            const cooldownKey = `${deviceKey}_${anomalyType}`;
+            const now = Date.now();
+            if (anomalyCooldown[cooldownKey] && (now - anomalyCooldown[cooldownKey]) < 60000) {
+                return;
+            }
+            anomalyCooldown[cooldownKey] = now;
+
+            // Log ke database
+            $.ajax({
+                url: '/api/Api/log-anomaly',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    deviceKey: deviceKey,
+                    deviceId: deviceKey,
+                    anomalyType: anomalyType,
+                    powerValue: currentPower,
+                    thresholdValue: thresholdValue,
+                    deviation: Math.round(deviation * 10) / 10,
+                    emaValue: ema[lastIndex],
+                    thresholdMode: emaSettings.mode
+                }),
+                success: function(response) {
+                    console.log(`Anomaly logged: ${anomalyType} for ${deviceKey}`);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error logging anomaly:', error);
+                }
+            });
+
+            // Show alert modal
+            showAnomalyAlert(deviceKey, anomalyType, currentPower, thresholdValue, deviation);
+        }
+
+        function showAnomalyAlert(deviceKey, type, power, threshold, deviation) {
+            const isOverload = type === 'OVERLOAD';
+            const content = `
+                <div class="alert alert-${isOverload ? 'danger' : 'warning'}">
+                    <h5><i class="fas ${isOverload ? 'fa-bolt' : 'fa-power-off'}"></i> ${isOverload ? 'OVERLOAD' : 'DEVICE DROP'} DETECTED</h5>
+                    <hr>
+                    <p><strong>Device:</strong> ${deviceKey}</p>
+                    <p><strong>Power:</strong> ${formatNumber(power)} W</p>
+                    <p><strong>Threshold:</strong> ${formatNumber(threshold)} W</p>
+                    <p><strong>Deviation:</strong> ${deviation.toFixed(1)}%</p>
+                    <p><strong>Time:</strong> ${new Date().toLocaleString('id-ID')}</p>
+                </div>
+            `;
+            $('#anomalyContent').html(content);
+            $('#anomalyModal').modal('show');
+        }
+
+        // Update header panel berdasarkan REAL-TIME cooldown state (bukan log 5 menit ke belakang)
+        function updatePanelHeadersByAnomaly() {
+            // Ambil cooldown state langsung dari anomaly service (real-time)
+            const cooldownState = (typeof window.getAnomalyCooldownState === 'function') 
+                ? window.getAnomalyCooldownState() 
+                : {};
+
+            // Build deviceStatus from cooldown state (real-time, bukan database log)
+            const deviceStatus = {};
+            Object.keys(cooldownState).forEach(function(deviceKey) {
+                if (cooldownState[deviceKey] && cooldownState[deviceKey].waitingForNormal) {
+                    deviceStatus[deviceKey] = cooldownState[deviceKey].type; // 'OVERLOAD' or 'DROP'
+                }
+            });
+
+            // Update anomalyStatusMap for chip coloring
+            anomalyStatusMap = {};
+            panelList.forEach(function(panel) {
+                const status = deviceStatus[panel.deviceKey];
+                if (status === 'OVERLOAD' || status === 'DROP') {
+                    anomalyStatusMap[panel.deviceKey] = status;
+                }
+            });
+
+            // Re-render chips with updated anomaly colors
+            renderPanelChips();
+
+            // Update panel card headers
+            panelList.forEach(function(panel) {
+                const safeKey = panel.safeKey;
+                const panelCard = document.getElementById(`panel_${safeKey}`);
+                const header = panelCard ? panelCard.querySelector('.card-header') : null;
+                // Get all badges, pick the LAST one (status badge, not phase badge)
+                const badges = panelCard ? panelCard.querySelectorAll('.card-header .badge') : null;
+                const badge = badges && badges.length > 1 ? badges[badges.length - 1] : badges?.[0];
+
+                if (!header || !badge) return;
+
+                const status = deviceStatus[panel.deviceKey];
+
+                // Reset color-related classes only, keep layout classes intact
+                header.classList.remove('bg-danger', 'bg-warning', 'bg-dark', 'text-white', 'text-dark');
+
+                if (status === 'OVERLOAD') {
+                    header.classList.add('bg-danger', 'text-white');
+                    badge.className = 'badge me-2 bg-danger';
+                    badge.textContent = 'OVERLOAD';
+                } else if (status === 'DROP') {
+                    header.classList.add('bg-warning', 'text-dark');
+                    badge.className = 'badge me-2 bg-warning text-dark';
+                    badge.textContent = 'DROP';
+                } else {
+                    // Normal status - reset to dark background
+                    header.classList.add('bg-dark', 'text-white');
+                    badge.className = 'badge me-2 bg-success';
+                    badge.textContent = 'NORMAL';
+                }
+            });
+
+            const anomalyCount = Object.keys(deviceStatus).length;
+            $('#anomalyBadge').text(anomalyCount);
+        }
+
+        // ============================================
+        // SYNC PROGRESS BARS (Initial Load)
+        // ============================================
+        function syncProgressBars() {
+            console.log('Syncing progress bars with settings:', systemSettings);
+
+            panelList.forEach(function(panel) {
+                const safeKey = panel.deviceKey.replace(/-/g, '_');
+                const panelCard = $(`#panel_${safeKey}`);
+                if (panelCard.length === 0) return;
+
+                // Ambil nilai dari data-value yang sudah di-render server
+                const cosPhiText = panelCard.find('[data-value="cosphi"]').text().replace(',', '.');
+                const loadText = panelCard.find('[data-label="load-value"]').text().replace(/\./g, '').replace(' W', '').replace(',', '.');
+
+                const cosPhi = parseFloat(cosPhiText) || 0;
+                const dayaWatt = parseFloat(loadText) || 0;
+
+                // Update Power Factor gauge
+                const pfPercent = (cosPhi * 100).toFixed(1);
+                const pfBar = panelCard.find('[data-gauge="power-factor"]');
+                if (pfBar.length > 0) {
+                    pfBar.css('width', pfPercent + '%');
+                    pfBar.text(pfPercent.replace('.', ',') + '%');
+                    pfBar.removeClass('bg-success bg-warning bg-danger');
+                    if (cosPhi >= 0.8) pfBar.addClass('bg-success');
+                    else if (cosPhi >= 0.6) pfBar.addClass('bg-warning');
+                    else pfBar.addClass('bg-danger');
+                }
+
+                // Update Load gauge MENGGUNAKAN systemSettings
+                const maxCap = systemSettings.maxCapacity || 30000;
+                const normalThresh = systemSettings.normalThreshold || 30;
+                const mediumThresh = systemSettings.mediumThreshold || 70;
+
+                const loadPercent = Math.min((dayaWatt / maxCap) * 100, 100);
+                const loadBar = panelCard.find('[data-gauge="load"]');
+
+                if (loadBar.length > 0) {
+                    loadBar.css('width', loadPercent.toFixed(1) + '%');
+                    loadBar.removeClass('bg-info bg-warning bg-danger');
+
+                    // Gunakan threshold dinamis dari settings
+                    if (loadPercent > mediumThresh) {
+                        loadBar.addClass('bg-danger'); // High
+                    } else if (loadPercent > normalThresh) {
+                        loadBar.addClass('bg-warning'); // Medium
+                    } else {
+                        loadBar.addClass('bg-info'); // Normal
+                    }
+                }
+            });
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        function startAutoRefresh() {
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = setInterval(function() {
+                updatePanelCards();
+                updateStatistics();
+                updatePanelHeadersByAnomaly();
+            }, 10000);
+        }
+
+        function updateStatistics() {
+            $.ajax({
+                url: '/api/Api/statistics',
+                method: 'GET',
+                dataType: 'json',
+                success: function(stats) {
+                    $('.stat-card.bg-primary .stat-value').first().text(formatNumber(stats.totalDaya) + ' W');
+                    $('.stat-card.bg-success .stat-value').first().text(formatNumber(stats.totalEnergy) + ' Wh');
+                    $('.stat-card.bg-warning .stat-value').first().text(formatNumber(stats.totalEnergiAktif) + ' Wh');
+                    $('.stat-card.bg-secondary .stat-value').first().text(stats.activePanels);
+                    $('.stat-card.bg-dark .stat-value').first().text(stats.avgPowerFactor.toFixed(3).replace('.', ','));
+                    $('#lastUpdate').text(stats.timestamp);
+                    $('#statusText').text('Online');
+                },
+                error: function() { $('#statusText').text('Offline'); }
+            });
+        }
+
+         // ============================================
+        // UPDATE PANEL CARDS (Auto-refresh)
+        // ============================================
+        function updatePanelCards() {
+            $.ajax({
+                url: '/api/Api/panels',
+                method: 'GET',
+                dataType: 'json',
+                success: function(panels) {
+                    // Update cached panel data for filtering
+                    allPanelData = panels;
+
+                    // Re-render chip list with updated data
+                    renderPanelChips();
+
+                    panels.forEach(function(panel) {
+                        const safeKey = panel.deviceKey.replace(/-/g, '_');
+                        const panelCard = $(`#panel_${safeKey}`);
+                        if (panelCard.length === 0) return;
+
+                        const cosPhi = parseFloat(panel.cosPhi) || 0;
+                        const dayaWatt = parseFloat(panel.dayaWatt) || 0;
+                        const isThreePhase = panel.isThreePhase === true;
+                        const avgVoltage = isThreePhase
+                            ? ((panel.r + panel.s + panel.t) / 3).toFixed(1)
+                            : panel.r.toFixed(1);
+
+                        // Update Header Badges
+                        const headerBadges = panelCard.find('.card-header .badge');
+                        const statusBadge = headerBadges.first();
+
+                        // Update category selector from API data
+                        if (panel.deviceCategory) {
+                            deviceCategoryMap[panel.deviceKey] = panel.deviceCategory;
+                            updateCategorySelectorUI(safeKey, panel.deviceCategory);
+                        }
+
+                        statusBadge.removeClass('bg-success bg-warning bg-danger');
+                        statusBadge.text(panel.status);
+                        if (panel.status === 'HIGH') statusBadge.addClass('bg-danger');
+                        else if (panel.status === 'MEDIUM') statusBadge.addClass('bg-warning');
+                        else statusBadge.addClass('bg-success');
+
+                        // Update phase type badge
+                        const $phaseBadge = panelCard.find('[data-phase-type]');
+                        if ($phaseBadge.length > 0) {
+                            if (isThreePhase) {
+                                $phaseBadge.text('3\u03A6').css('background-color', '#6f42c1');
+                            } else {
+                                $phaseBadge.text('1\u03A6').css('background-color', '#fd7e14');
+                            }
+                        }
+
+                        if (headerBadges.length > 1) headerBadges.eq(1).text(avgVoltage + 'V');
+
+                        // Update Voltage Badges
+                        const voltBadges = panelCard.find('[data-volt-badge]');
+                        if (voltBadges.length >= 1) {
+                            $(voltBadges[0]).find('.phase-val').text(panel.r.toFixed(1).replace('.', ','));
+                        }
+                        if (isThreePhase && voltBadges.length >= 3) {
+                            $(voltBadges[1]).find('.phase-val').text(panel.s.toFixed(1).replace('.', ','));
+                            $(voltBadges[2]).find('.phase-val').text(panel.t.toFixed(1).replace('.', ','));
+                        }
+
+                        // Update Amp Badges
+                        const ampBadges = panelCard.find('[data-amp-badge]');
+                        if (ampBadges.length >= 1) {
+                            $(ampBadges[0]).find('.phase-val').text(panel.ampR.toFixed(2).replace('.', ','));
+                        }
+                        if (isThreePhase && ampBadges.length >= 3) {
+                            $(ampBadges[1]).find('.phase-val').text(panel.ampS.toFixed(2).replace('.', ','));
+                            $(ampBadges[2]).find('.phase-val').text(panel.ampT.toFixed(2).replace('.', ','));
+                        }
+
+                        // Update Text Values
+                        panelCard.find('[data-value="power"]').text(formatNumber(dayaWatt));
+                        panelCard.find('[data-value="total-energy"]').text(formatNumber(panel.totalEnergy) + ' Wh');
+                        panelCard.find('[data-value="energi-aktif"]').text(formatNumber(panel.energiAktif));
+                        panelCard.find('[data-value="cosphi"]').text(cosPhi.toFixed(3).replace('.', ','));
+                        panelCard.find('[data-value="freq"]').text(panel.frekuensi.toFixed(2).replace('.', ',') + ' Hz');
+
+                        // Update Power Factor Gauge
+                        const pfPercent = (cosPhi * 100).toFixed(1);
+                        const pfBar = panelCard.find('[data-gauge="power-factor"]');
+                        if (pfBar.length > 0) {
+                            pfBar.css('width', pfPercent + '%').text(pfPercent.replace('.', ',') + '%');
+                            pfBar.removeClass('bg-success bg-warning bg-danger');
+                            if (cosPhi >= 0.8) pfBar.addClass('bg-success');
+                            else if (cosPhi >= 0.6) pfBar.addClass('bg-warning');
+                            else pfBar.addClass('bg-danger');
+                        }
+
+                        // Update Load Gauge MENGGUNAKAN systemSettings
+                        const maxCap = systemSettings.maxCapacity || 30000;
+                        const normalThresh = systemSettings.normalThreshold || 30;
+                        const mediumThresh = systemSettings.mediumThreshold || 70;
+
+                        const loadPercent = Math.min((dayaWatt / maxCap) * 100, 100);
+                        const loadBar = panelCard.find('[data-gauge="load"]');
+
+                        if (loadBar.length > 0) {
+                            loadBar.css('width', loadPercent.toFixed(1) + '%');
+                            loadBar.removeClass('bg-info bg-warning bg-danger');
+
+                            // Gunakan threshold dinamis dari settings
+                            if (loadPercent > mediumThresh) {
+                                loadBar.addClass('bg-danger'); // High
+                            } else if (loadPercent > normalThresh) {
+                                loadBar.addClass('bg-warning'); // Medium
+                            } else {
+                                loadBar.addClass('bg-info'); // Normal
+                            }
+                        }
+
+                        // Update Labels
+                        panelCard.find('[data-label="load-value"]').text(formatNumber(dayaWatt) + ' W');
+                        panelCard.find('[data-label="pf-percent"]').text(pfPercent.replace('.', ',') + '%');
+                    });
+
+                    // Re-apply active filter after data refresh
+                    applyPanelFilter();
+                },
+                error: function() {
+                    console.error('Error updating panel cards');
+                }
+            });
+        }
+
+        function updateLastUpdate() {
+            $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
+        }
+    </script>
+}

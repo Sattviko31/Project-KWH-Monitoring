@@ -1,0 +1,68 @@
+﻿@* Header ERP Style - konsisten di semua halaman *@
+
+<!-- Breadcrumb -->
+<div class="erp-breadcrumb">
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
+    @{
+        var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+        string pageName;
+        if (currentAction == "Index") { pageName = "Panel Monitoring"; }
+        else if (currentAction == "Charts") { pageName = "All Charts"; }
+        else if (currentAction == "UsageStatistics") { pageName = "Usage Statistics"; }
+        else if (currentAction == "AnomalyLogs") { pageName = "Anomaly Logs"; }
+        else if (currentAction == "History") { pageName = "History"; }
+        else if (currentAction == "Settings") { pageName = "Settings"; }
+        else if (currentAction == "Details") { pageName = "Details"; }
+        else { pageName = currentAction; }
+    }
+    <span class="current">@pageName</span>
+</div>
+
+<!-- Page Header -->
+<div class="erp-page-header">
+    <div>
+        <h2>
+            <i class="fas fa-bolt text-warning"></i> KWH Monitoring Dashboard
+        </h2>
+        <div class="subtitle">
+            <i class="fas fa-clock"></i> Last Update: <span id="lastUpdate">-</span>
+            <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-erp-action" id="btnRefresh">
+            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
+        </button>
+        <button class="btn btn-erp-action" id="btnRescan">
+            <i class="fas fa-search"></i> <span class="d-none d-sm-inline">Rescan</span>
+        </button>
+        <button class="btn btn-erp-action" id="btnExport">
+            <i class="fas fa-file-csv"></i> <span class="d-none d-sm-inline">Export</span>
+        </button>
+        <button class="btn btn-erp-action" id="btnSettings">
+            <i class="fas fa-cog"></i> <span class="d-none d-sm-inline">Settings</span>
+        </button>
+    </div>
+</div>
+
+<!-- Tabs Navigation (ERP Style) -->
+<div class="erp-tabs" id="dashboardTabs">
+    <a class="erp-tab @(currentAction == "Index" ? "active" : "")"
+       asp-controller="Monitoring" asp-action="Index">
+        <i class="fas fa-th"></i> <span>Panel Monitoring</span>
+    </a>
+    <a class="erp-tab @(currentAction == "Charts" ? "active" : "")"
+       asp-controller="Monitoring" asp-action="Charts">
+        <i class="fas fa-chart-line"></i> <span>All Charts</span>
+    </a>
+    <a class="erp-tab @(currentAction == "UsageStatistics" ? "active" : "")"
+       asp-controller="Monitoring" asp-action="UsageStatistics">
+        <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
+    </a>
+    <a class="erp-tab @(currentAction == "AnomalyLogs" ? "active" : "")"
+       asp-controller="Monitoring" asp-action="AnomalyLogs">
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Logs</span>
+        <span class="badge bg-danger" id="anomalyBadge">0</span>
+    </a>
+</div>

@@ -1,0 +1,4 @@
+jQuery v2.2.0
+Copyright 2015 jQuery Foundation, Inc.
+Licensed under the MIT License.
+https://jquery.org/license/

@@ -1,0 +1,1798 @@
+﻿@{
+    ViewData["Title"] = "Settings";
+    var settings = ViewBag.CurrentSettings as Dictionary<string, string> ?? new Dictionary<string, string>();
+
+    string GetSetting(string key, string defaultValue = "")
+    {
+        return settings.TryGetValue(key, out var value) ? value : defaultValue;
+    }
+}
+
+<!-- Breadcrumb -->
+<div class="erp-breadcrumb">
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
+    <span class="current">Settings</span>
+</div>
+
+<!-- Page Header -->
+<div class="erp-page-header">
+    <div>
+        <h2><i class="fas fa-cog text-primary"></i> System Settings</h2>
+        <div class="subtitle">Konfigurasi sistem KWH Monitoring — perubahan tersimpan permanen di database</div>
+    </div>
+    <div class="actions">
+        <a asp-action="Index" class="btn btn-erp-action">
+            <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Dashboard</span>
+        </a>
+    </div>
+</div>
+
+<!-- Tabs Navigation -->
+<ul class="nav nav-tabs erp-tabs settings-tabs" id="settingsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab active" id="system-tab" data-toggle="tab" href="#system" role="tab">
+            <i class="fas fa-cog"></i> <span>System</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="ema-tab" data-toggle="tab" href="#ema" role="tab">
+            <i class="fas fa-chart-line"></i> <span>EMA & Downtime</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="notification-tab" data-toggle="tab" href="#notification" role="tab">
+            <i class="fas fa-bell"></i> <span>Notifications</span>
+        </a>
+    </li>
+</ul>
+
+<div class="tab-content" id="settingsTabContent">
+
+    <!-- ==================== SYSTEM SETTINGS TAB ==================== -->
+    <div class="tab-pane fade in active" id="system" role="tabpanel" aria-labelledby="system-tab">
+        <form id="systemSettingsForm">
+        <div class="settings-section-list">
+
+            <!-- 1. DATABASE CONNECTION -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-database text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Database Connection</h5>
+                        <p>Konfigurasi koneksi ke SQL Server database</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnTestConnection">
+                            <i class="fas fa-plug"></i> Test Connection
+                        </button>
+                        <span class="ms-2" id="connectionStatus"></span>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Server IP / Host</label>
+                            <input type="text" class="form-control" id="dbServer"
+                                   value="@GetSetting("Database.Server", "192.168.6.15")"
+                                   placeholder="192.168.6.15">
+                            <small class="text-muted">IP address atau hostname database server</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Port</label>
+                            <input type="number" class="form-control" id="dbPort"
+                                   value="@GetSetting("Database.Port", "1433")"
+                                   placeholder="1433">
+                            <small class="text-muted">Default SQL Server: 1433</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="dbUser"
+                                   value="@GetSetting("Database.User", "sa")"
+                                   placeholder="sa">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" id="dbPassword"
+                                   value="@GetSetting("Database.Password", "")"
+                                   placeholder="••••••••">
+                        </div>
+                        <div class="settings-field settings-field-full">
+                            <label class="form-label">Database Name</label>
+                            <input type="text" class="form-control" id="dbName"
+                                   value="@GetSetting("Database.Name", "HaiwellElectrical")"
+                                   placeholder="HaiwellElectrical">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SAMPLING INTERVAL -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-success-soft">
+                        <i class="fas fa-clock text-success"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Sampling Interval</h5>
+                        <p>Interval refresh data untuk setiap halaman monitoring</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="btnSyncIntervals">
+                            <i class="fas fa-sync-alt"></i> Sync All
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Dashboard Refresh</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="dashboardInterval"
+                                       value="@GetSetting("Interval.Dashboard", "10")"
+                                       min="5" max="300" placeholder="10">
+                                <small class="text-muted">detik</small>
+                            </div>
+                            <small class="text-muted">Min: 5, Max: 300</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Charts Refresh</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="chartsInterval"
+                                       value="@GetSetting("Interval.Charts", "10")"
+                                       min="5" max="300" placeholder="10">
+                                <small class="text-muted">detik</small>
+                            </div>
+                            <small class="text-muted">Min: 5, Max: 300</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Details Page</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="detailsInterval"
+                                       value="@GetSetting("Interval.Details", "10")"
+                                       min="5" max="300" placeholder="10">
+                                <small class="text-muted">detik</small>
+                            </div>
+                            <small class="text-muted">Min: 5, Max: 300</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Anomaly Check</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="anomalyInterval"
+                                       value="@GetSetting("Interval.Anomaly", "10")"
+                                       min="5" max="300" placeholder="10">
+                                <small class="text-muted">detik</small>
+                            </div>
+                            <small class="text-muted">Min: 5, Max: 300</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Chart Data Points</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="chartDataPoints"
+                                       value="@GetSetting("Chart.DataPoints", "20")"
+                                       min="10" max="100" placeholder="20">
+                                <small class="text-muted">titik</small>
+                            </div>
+                            <small class="text-muted">Jumlah titik data pada grafik</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Auto-Scan</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="autoScanInterval"
+                                       value="@GetSetting("Interval.AutoScan", "60")"
+                                       min="30" max="600" placeholder="60">
+                                <small class="text-muted">detik</small>
+                            </div>
+                            <small class="text-muted">Interval scan panel baru</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. LOAD GAUGE -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-warning-soft">
+                        <i class="fas fa-tachometer-alt text-warning"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Load Gauge Capacity & Threshold</h5>
+                        <p>Konfigurasi kapasitas maksimal dan batas status beban</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Maximal Capacity (Watt)</label>
+                            <input type="number" class="form-control" id="maxCapacity"
+                                   value="@GetSetting("Load.MaxCapacity", "30000")"
+                                   min="1000" max="1000000" step="1000" placeholder="30000">
+                            <small class="text-muted">Nilai 100% pada Load Gauge</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Normal Threshold (%)</label>
+                            <input type="number" class="form-control" id="normalThreshold"
+                                   value="@GetSetting("Load.NormalThreshold", "30")"
+                                   min="10" max="50" placeholder="30">
+                            <small class="text-muted">Batas atas Normal (default: 30%)</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Medium Threshold (%)</label>
+                            <input type="number" class="form-control" id="mediumThreshold"
+                                   value="@GetSetting("Load.MediumThreshold", "70")"
+                                   min="50" max="90" placeholder="70">
+                            <small class="text-muted">Batas atas Medium (default: 70%)</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">High Threshold (%)</label>
+                            <input type="text" class="form-control" id="highThreshold"
+                                   value="> 70%" readonly>
+                            <small class="text-muted">Otomatis > Medium Threshold</small>
+                        </div>
+                    </div>
+
+                    @* <!-- Preview Load Gauge -->
+                    <div class="settings-preview-box">
+                        <div class="settings-preview-label"><i class="fas fa-eye"></i> Preview</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="settings-threshold-card settings-threshold-normal">
+                                    <div class="settings-threshold-label">Normal</div>
+                                    <div class="settings-threshold-value" id="previewNormal">9,000 W</div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: 30%"></div>
+                                    </div>
+                                    <small>≤ 30%</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="settings-threshold-card settings-threshold-medium">
+                                    <div class="settings-threshold-label">Medium</div>
+                                    <div class="settings-threshold-value" id="previewMedium">21,000 W</div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-warning" style="width: 70%"></div>
+                                    </div>
+                                    <small>31% - 70%</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="settings-threshold-card settings-threshold-high">
+                                    <div class="settings-threshold-label">High</div>
+                                    <div class="settings-threshold-value" id="previewHigh">30,000 W</div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-danger" style="width: 100%"></div>
+                                    </div>
+                                    <small>> 70%</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div> *@
+                </div>
+            </div>
+
+            <!-- 4. TARIFF -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-success-soft">
+                        <i class="fas fa-money-bill-wave text-success"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Tarif Listrik per kWh</h5>
+                        <p>Atur tarif listrik untuk menghitung estimasi biaya penggunaan energi</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Tarif per kWh (Rp)</label>
+                            <input type="number" class="form-control" id="tariffPerKWh" value="1500" min="0" step="50">
+                            <small class="text-muted">/kWh — digunakan untuk estimasi biaya di Usage Statistics</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Save Bar -->
+        <div class="settings-save-bar">
+            <div class="settings-save-bar-inner">
+                @* <div class="settings-save-bar-info">
+                    <i class="fas fa-info-circle text-muted"></i>
+                    <span>Perubahan System Settings akan tersimpan permanen di database</span>
+                </div> *@
+                <div class="settings-save-bar-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetSystemSettings">
+                        <i class="fas fa-undo"></i> Reset Default
+                    </button>
+                    @* <button type="button" class="btn btn-outline-info btn-sm" id="btnExportSettings">
+                        <i class="fas fa-download"></i> Export
+                    </button> *@
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveSystemSettings">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+        </form>
+    </div>
+
+    <!-- ==================== NOTIFICATION SETTINGS TAB ==================== -->
+    <div class="tab-pane fade" id="notification" role="tabpanel" aria-labelledby="notification-tab">
+        <form id="notificationSettingsForm">
+        <div class="settings-section-list">
+
+            <!-- Email Settings -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-envelope text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Email Notification</h5>
+                        <p>Konfigurasi SMTP untuk pengiriman email notifikasi</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enableEmail">
+                            <label class="form-check-label small">Enable</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">SMTP Server</label>
+                            <input type="text" class="form-control" id="smtpServer" value="smtp.gmail.com" placeholder="smtp.gmail.com">
+                            <small class="text-muted">Contoh: smtp.gmail.com, smtp.office365.com</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">SMTP Port</label>
+                            <input type="number" class="form-control" id="smtpPort" value="587" placeholder="587">
+                            <small class="text-muted">587 (TLS) atau 465 (SSL)</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Sender Email</label>
+                            <input type="email" class="form-control" id="senderEmail" placeholder="your.email@gmail.com">
+                            <small class="text-muted">Email pengirim notifikasi</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">App Password</label>
+                            <input type="password" class="form-control" id="senderPassword" placeholder="App Password">
+                            <small class="text-muted">Gunakan App Password jika pakai Gmail</small>
+                        </div>
+                        <div class="settings-field settings-field-full">
+                            <label class="form-label">Recipient Email</label>
+                            <input type="text" class="form-control" id="recipientEmail" placeholder="admin@pabrik.com, manager@pabrik.com">
+                            <small class="text-muted">Pisahkan dengan tanda koma (,) untuk lebih dari 1 email</small>
+                        </div>
+                    </div>
+                    <div class="settings-section-footer">
+                        <button class="btn btn-outline-primary btn-sm" id="btnTestEmail">
+                            <i class="fas fa-paper-plane"></i> Test Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WhatsApp Settings -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-success-soft">
+                        <i class="fab fa-whatsapp text-success"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>WhatsApp Notification</h5>
+                        <p>Konfigurasi Wablas API untuk pengiriman pesan WhatsApp</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enableWhatsApp">
+                            <label class="form-check-label small">Enable</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-info-banner settings-info-banner-info">
+                        <i class="fas fa-info-circle"></i>
+                        <div>
+                            <strong>Wablas</strong> — WhatsApp Gateway API untuk Indonesia.
+                            <a href="https://wablas.com" target="_blank">Daftar di wablas.com <i class="fas fa-external-link-alt"></i></a>
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Server URL</label>
+                            <input type="text" class="form-control" id="wablasServerUrl"
+                                   placeholder="https://pati.wablas.com">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">API Token</label>
+                            <input type="password" class="form-control" id="wablasToken" placeholder="Token dari dashboard Wablas">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Secret Key</label>
+                            <input type="password" class="form-control" id="wablasSecretKey" placeholder="Secret key dari dashboard Wablas">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Nomor WhatsApp Penerima</label>
+                            <input type="text" class="form-control" id="wablasPhoneNumbers"
+                                   placeholder="081234567890, 082345678901">
+                            <small class="text-muted">Pisahkan dengan koma (,) untuk beberapa nomor</small>
+                        </div>
+                    </div>
+                    <div class="settings-section-footer">
+                        <button class="btn btn-outline-success btn-sm" type="button" id="btnTestWablas">
+                            <i class="fab fa-whatsapp"></i> Test Kirim
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" type="button" id="btnCheckWablasDevice">
+                            <i class="fas fa-mobile-alt"></i> Cek Device
+                        </button>
+                        <div id="wablasStatus" class="ms-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notification Options -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-info-soft">
+                        <i class="fas fa-sliders-h text-info"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Jadwal Laporan</h5>
+                        <p>Atur jenis dan jadwal pengiriman laporan notifikasi</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <!-- Report Toggles -->
+                    <div class="settings-toggles-grid">
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="sendInstantAlert" checked>
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-bell text-danger"></i>
+                                <strong>Instant Alert</strong>
+                                <small>Notifikasi saat anomali terdeteksi</small>
+                            </div>
+                        </label>
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="sendHourlyReport" checked>
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-clock text-warning"></i>
+                                <strong>Hourly Report</strong>
+                                <small>Laporan setiap 1 jam</small>
+                            </div>
+                        </label>
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="sendDailyReport">
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-calendar-alt text-success"></i>
+                                <strong>Daily Report</strong>
+                                <small>Laporan harian</small>
+                            </div>
+                        </label>
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="sendMonthlyReport">
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-calendar-check text-primary"></i>
+                                <strong>Monthly Report</strong>
+                                <small>Laporan bulanan</small>
+                            </div>
+                        </label>
+                    </div>
+
+                    <hr class="settings-divider">
+
+                    <!-- Schedule Settings -->
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Hourly Report Schedule</label>
+                            <div class="form-control bg-light d-flex align-items-center" style="cursor: default;">
+                                <i class="fas fa-clock text-warning me-2"></i> Setiap jam tepat (00:00, 01:00, 02:00, dst)
+                            </div>
+                            <small class="form-text text-muted">Laporan dikirim otomatis setiap jam pada menit ke-0</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Daily Report Time</label>
+                            <input type="time" class="form-control" id="dailyReportTime" value="08:00">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Monthly Report Day & Time</label>
+                            <div class="input-group">
+                                <select class="form-select" id="monthlyReportDay">
+                                    <option value="1">Tgl 1</option>
+                                    <option value="2">Tgl 2</option>
+                                    <option value="3">Tgl 3</option>
+                                    <option value="4">Tgl 4</option>
+                                    <option value="5">Tgl 5</option>
+                                    <option value="6">Tgl 6</option>
+                                    <option value="7">Tgl 7</option>
+                                    <option value="8">Tgl 8</option>
+                                    <option value="9">Tgl 9</option>
+                                    <option value="10">Tgl 10</option>
+                                    <option value="11">Tgl 11</option>
+                                    <option value="12">Tgl 12</option>
+                                    <option value="13">Tgl 13</option>
+                                    <option value="14">Tgl 14</option>
+                                    <option value="15">Tgl 15</option>
+                                    <option value="16">Tgl 16</option>
+                                    <option value="17">Tgl 17</option>
+                                    <option value="18">Tgl 18</option>
+                                    <option value="19">Tgl 19</option>
+                                    <option value="20">Tgl 20</option>
+                                    <option value="21">Tgl 21</option>
+                                    <option value="22">Tgl 22</option>
+                                    <option value="23">Tgl 23</option>
+                                    <option value="24">Tgl 24</option>
+                                    <option value="25">Tgl 25</option>
+                                    <option value="26">Tgl 26</option>
+                                    <option value="27">Tgl 27</option>
+                                    <option value="28">Tgl 28</option>
+                                </select>
+                                <input type="time" class="form-control" id="monthlyReportTime" value="08:00">
+                            </div>
+                            <small class="text-muted">Hari ke-X setiap bulan & jam pengiriman</small>
+                        </div>
+                    </div>
+
+                    <hr class="settings-divider">
+
+                    <!-- Test Buttons -->
+                    <div class="settings-test-grid">
+                        <button type="button" class="btn btn-test-danger" id="btnTestInstantAlert">
+                            <i class="fas fa-bell"></i> Test Instant
+                        </button>
+                        <button type="button" class="btn btn-test-warning" id="btnTestHourlyReport">
+                            <i class="fas fa-clock"></i> Test Hourly
+                        </button>
+                        <button type="button" class="btn btn-test-success" id="btnTestDailyReport">
+                            <i class="fas fa-calendar-alt"></i> Test Daily
+                        </button>
+                        <button type="button" class="btn btn-test-info" id="btnTestMonthlyReport">
+                            <i class="fas fa-calendar-check"></i> Test Monthly
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Save Bar -->
+        <div class="settings-save-bar">
+            <div class="settings-save-bar-inner">
+                @* <div class="settings-save-bar-info">
+                    <i class="fas fa-info-circle text-muted"></i>
+                    <span>Pengaturan notifikasi akan tersimpan ke database</span>
+                </div> *@
+                <div class="settings-save-bar-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetNotificationSettings">
+                        <i class="fas fa-undo"></i> Reset Default
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveNotificationSettings">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+        </form>
+    </div>
+
+    <!-- ==================== EMA & DOWNTIME SETTINGS TAB ==================== -->
+    <div class="tab-pane fade" id="ema" role="tabpanel" aria-labelledby="ema-tab">
+        <form id="emaSettingsForm">
+        <div class="settings-section-list">
+
+            <!-- EMA Settings -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-chart-line text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>EMA (Exponential Moving Average)</h5>
+                        <p>Konfigurasi deteksi anomali pada chart Power</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <!-- Threshold Mode -->
+                    <div class="settings-field settings-field-full mb-3">
+                        <label class="form-label fw-bold">Threshold Mode</label>
+                        <div class="settings-btn-group" role="group">
+                            <input type="radio" class="btn-check" name="thresholdMode" id="emaModeManual" value="manual" checked>
+                            <label class="btn btn-outline-primary btn-sm" for="emaModeManual">
+                                <i class="fas fa-percentage"></i> Manual (%)
+                            </label>
+                            <input type="radio" class="btn-check" name="thresholdMode" id="emaModeFibonacci" value="fibonacci">
+                            <label class="btn btn-outline-primary btn-sm" for="emaModeFibonacci">
+                                <i class="fas fa-infinity"></i> Fibonacci (φ)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="emaManualSettings">
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label class="form-label">Upper Threshold Deviation (%)</label>
+                                <input type="number" class="form-control" id="emaUpperThreshold" value="30" min="1" max="1000">
+                                <small class="text-muted">Persentase di atas EMA → deteksi OVERLOAD</small>
+                            </div>
+                            <div class="settings-field">
+                                <label class="form-label">Lower Threshold Deviation (%)</label>
+                                <input type="number" class="form-control" id="emaLowerThreshold" value="50" min="1" max="100">
+                                <small class="text-muted">Persentase di bawah EMA → deteksi DEVICE DROP</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="emaFibonacciSettings" style="display: none;">
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label class="form-label">Upper Threshold (φ)</label>
+                                <select class="form-select" id="emaFibUpper">
+                                    <option value="1.272">1.272 (√φ)</option>
+                                    <option value="1.618" selected>1.618 (φ - Golden Ratio)</option>
+                                    <option value="2.000">2.000 (2×)</option>
+                                    <option value="2.618">2.618 (φ²)</option>
+                                    <option value="3.236">3.236 (2φ)</option>
+                                    <option value="4.236">4.236 (φ³)</option>
+                                </select>
+                            </div>
+                            <div class="settings-field">
+                                <label class="form-label">Lower Threshold (1/φ)</label>
+                                <select class="form-select" id="emaFibLower">
+                                    <option value="0.236">0.236</option>
+                                    <option value="0.382">0.382</option>
+                                    <option value="0.500">0.500</option>
+                                    <option value="0.618" selected>0.618 (1/φ)</option>
+                                    <option value="0.786">0.786</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="settings-divider">
+
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">EMA Period</label>
+                            <input type="number" class="form-control" id="emaPeriod" value="20" min="1" max="1000000" step="1">
+                            <small class="text-muted">Kecil = responsif, Besar = smooth</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Auto-Refresh Interval</label>
+                            <input type="number" class="form-control" id="emaRefreshInterval" value="10" min="5" max="300">
+                            <small class="text-muted">detik</small>
+                        </div>
+                    </div>
+
+                    <hr class="settings-divider">
+
+                    <!-- Toggle Options -->
+                    <div class="settings-toggles-grid">
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="emaShowLine" checked>
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-chart-line text-primary"></i>
+                                <strong>Show EMA Line</strong>
+                                <small>Tampilkan garis EMA pada Power Chart</small>
+                            </div>
+                        </label>
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="emaShowThresholds" checked>
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-arrows-alt-v text-warning"></i>
+                                <strong>Show Threshold Lines</strong>
+                                <small>Tampilkan garis Upper/Lower Threshold</small>
+                            </div>
+                        </label>
+                        <label class="settings-toggle-card">
+                            <input type="checkbox" id="useInitial100ForEma">
+                            <div class="settings-toggle-card-inner">
+                                <i class="fas fa-database text-info"></i>
+                                <strong>100 Initial Points</strong>
+                                <small>Gunakan 100 data pertama untuk EMA baseline</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Downtime Period — Per Category -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-dark-soft">
+                        <i class="fas fa-moon text-dark"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Downtime Period</h5>
+                        <p>Periode listrik sengaja dimatikan per kategori — DROP ditahan, OVERLOAD = alert</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <!-- Preset Buttons -->
+                    <div class="settings-field settings-field-full mb-3">
+                        <label class="form-label fw-bold">Preset Waktu <small class="text-muted">(kategori aktif)</small></label>
+                        <div class="settings-preset-grid">
+                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="22" data-end="6" data-desc="Shift Malam - Listrik dimatikan">
+                                <i class="fas fa-moon"></i> Malam
+                                <small>22:00-06:00</small>
+                            </button>
+                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="12" data-end="13" data-desc="Istirahat Siang - Listrik dimatikan">
+                                <i class="fas fa-utensils"></i> Istirahat
+                                <small>12:00-13:00</small>
+                            </button>
+                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="21" data-end="5" data-desc="Shift Malam Awal - Listrik dimatikan">
+                                <i class="fas fa-cloud-moon"></i> Malam Awal
+                                <small>21:00-05:00</small>
+                            </button>
+                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="0" data-end="0" data-desc="Custom downtime period">
+                                <i class="fas fa-sliders-h"></i> Custom
+                                <small>Atur manual</small>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Visual -->
+                    <div class="settings-preview-box">
+                        <div class="settings-preview-label"><i class="fas fa-clock"></i> Timeline</div>
+                        <div style="position: relative; height: 28px; background: #28a745; border-radius: 8px; overflow: hidden;">
+                            <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.7rem; color: #6c757d;">
+                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+                        </div>
+                        <div class="d-flex justify-content-between" style="font-size: 0.7rem;">
+                            <span class="text-success"><i class="fas fa-circle"></i> Normal</span>
+                            <span class="text-dark"><i class="fas fa-circle"></i> Downtime</span>
+                        </div>
+                    </div>
+
+                    <!-- Category Sub-tabs -->
+                    <ul class="nav nav-tabs mb-3" id="downtimeCategoryTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link active" data-toggle="tab" href="#settingsDowntimeBillboard" role="tab">
+                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2196f3;vertical-align:middle;margin-right:2px"></span> Billboard
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" data-toggle="tab" href="#settingsDowntimeMegatron" role="tab">
+                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff9800;vertical-align:middle;margin-right:2px"></span> Megatron
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" data-toggle="tab" href="#settingsDowntimeNeonBox" role="tab">
+                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9c27b0;vertical-align:middle;margin-right:2px"></span> Neon Box
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- Billboard Downtime -->
+                        <div class="tab-pane active" id="settingsDowntimeBillboard" role="tabpanel">
+                            <div class="settings-grid">
+                                <div class="settings-field settings-field-full">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeBillboardEnabled" data-category="Billboard" style="width: 2.5em; height: 1.3em;">
+                                        <label class="form-check-label fw-bold" for="downtimeBillboardEnabled">Aktifkan Downtime Billboard</label>
+                                    </div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Mulai</label>
+                                    <select class="form-select cat-downtime-start" id="downtimeBillboardStartHour" data-category="Billboard"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Selesai</label>
+                                    <select class="form-select cat-downtime-end" id="downtimeBillboardEndHour" data-category="Billboard"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Durasi</label>
+                                    <div class="form-control bg-light text-center" id="downtimeBillboardDuration" readonly>8 jam</div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Deskripsi</label>
+                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeBillboardDescription" data-category="Billboard" placeholder="Contoh: Billboard mati malam hari">
+                                </div>
+                            </div>
+                            <div class="card border mt-3" id="downtimeBillboardStatusCard">
+                                <div class="card-body text-center">
+                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Billboard</h6>
+                                    <div id="downtimeBillboardStatus" class="fs-5 fw-bold">
+                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Megatron Downtime -->
+                        <div class="tab-pane" id="settingsDowntimeMegatron" role="tabpanel">
+                            <div class="settings-grid">
+                                <div class="settings-field settings-field-full">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeMegatronEnabled" data-category="Megatron" style="width: 2.5em; height: 1.3em;">
+                                        <label class="form-check-label fw-bold" for="downtimeMegatronEnabled">Aktifkan Downtime Megatron</label>
+                                    </div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Mulai</label>
+                                    <select class="form-select cat-downtime-start" id="downtimeMegatronStartHour" data-category="Megatron"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Selesai</label>
+                                    <select class="form-select cat-downtime-end" id="downtimeMegatronEndHour" data-category="Megatron"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Durasi</label>
+                                    <div class="form-control bg-light text-center" id="downtimeMegatronDuration" readonly>8 jam</div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Deskripsi</label>
+                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeMegatronDescription" data-category="Megatron" placeholder="Contoh: Megatron mati malam hari">
+                                </div>
+                            </div>
+                            <div class="card border mt-3" id="downtimeMegatronStatusCard">
+                                <div class="card-body text-center">
+                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Megatron</h6>
+                                    <div id="downtimeMegatronStatus" class="fs-5 fw-bold">
+                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- NeonBox Downtime -->
+                        <div class="tab-pane" id="settingsDowntimeNeonBox" role="tabpanel">
+                            <div class="settings-grid">
+                                <div class="settings-field settings-field-full">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeNeonBoxEnabled" data-category="NeonBox" style="width: 2.5em; height: 1.3em;">
+                                        <label class="form-check-label fw-bold" for="downtimeNeonBoxEnabled">Aktifkan Downtime Neon Box</label>
+                                    </div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Mulai</label>
+                                    <select class="form-select cat-downtime-start" id="downtimeNeonBoxStartHour" data-category="NeonBox"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Jam Selesai</label>
+                                    <select class="form-select cat-downtime-end" id="downtimeNeonBoxEndHour" data-category="NeonBox"></select>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Durasi</label>
+                                    <div class="form-control bg-light text-center" id="downtimeNeonBoxDuration" readonly>8 jam</div>
+                                </div>
+                                <div class="settings-field">
+                                    <label class="form-label">Deskripsi</label>
+                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeNeonBoxDescription" data-category="NeonBox" placeholder="Contoh: Neon Box mati malam hari">
+                                </div>
+                            </div>
+                            <div class="card border mt-3" id="downtimeNeonBoxStatusCard">
+                                <div class="card-body text-center">
+                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Neon Box</h6>
+                                    <div id="downtimeNeonBoxStatus" class="fs-5 fw-bold">
+                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Save Bar -->
+        <div class="settings-save-bar">
+            <div class="settings-save-bar-inner">
+                @* <div class="settings-save-bar-info">
+                    <i class="fas fa-info-circle text-muted"></i>
+                    <span>Pengaturan EMA & Downtime akan tersimpan ke database</span>
+                </div> *@
+                <div class="settings-save-bar-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetEmaSettings">
+                        <i class="fas fa-undo"></i> Reset Default
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSettings">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+        </form>
+    </div>
+
+
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Check if we should open a specific tab
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab')) {
+                const tabId = urlParams.get('tab') + '-tab';
+                $('#' + tabId).tab('show');
+            }
+
+            updatePreview();
+
+            // Update preview saat nilai berubah
+            $('#maxCapacity, #normalThreshold, #mediumThreshold').on('input change', function() {
+                updatePreview();
+            });
+
+            // Sync all intervals
+            $('#btnSyncIntervals').click(function() {
+                var dashboardValue = $('#dashboardInterval').val();
+                $('#chartsInterval').val(dashboardValue);
+                $('#detailsInterval').val(dashboardValue);
+                $('#anomalyInterval').val(dashboardValue);
+                showNotification('All intervals synced to ' + dashboardValue + ' seconds', 'success');
+            });
+
+            // Test database connection
+            $('#btnTestConnection').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
+                $('#connectionStatus').html('').removeClass('text-success text-danger');
+
+                var connectionData = {
+                    server: $('#dbServer').val(),
+                    port: $('#dbPort').val(),
+                    user: $('#dbUser').val(),
+                    password: $('#dbPassword').val(),
+                    database: $('#dbName').val()
+                };
+
+                $.ajax({
+                    url: '/api/Api/test-database-connection',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(connectionData),
+                    success: function(response) {
+                        $('#connectionStatus').html('<i class="fas fa-check-circle text-success"></i> Connection successful!').addClass('text-success');
+                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
+                        showNotification('Database connection successful!', 'success');
+                    },
+                    error: function(xhr) {
+                        var errorMsg = 'Connection failed';
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            errorMsg = response.error || errorMsg;
+                        } catch(e) {}
+                        $('#connectionStatus').html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg).addClass('text-danger');
+                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
+                        showNotification('Database connection failed: ' + errorMsg, 'danger');
+                    }
+                });
+            });
+
+            // Save System Settings
+            $('#btnSaveSystemSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+                var settings = {
+                    'Database.Server': $('#dbServer').val(),
+                    'Database.Port': $('#dbPort').val(),
+                    'Database.User': $('#dbUser').val(),
+                    'Database.Password': $('#dbPassword').val(),
+                    'Database.Name': $('#dbName').val(),
+                    'Interval.Dashboard': $('#dashboardInterval').val(),
+                    'Interval.Charts': $('#chartsInterval').val(),
+                    'Interval.Details': $('#detailsInterval').val(),
+                    'Interval.Anomaly': $('#anomalyInterval').val(),
+                    'Chart.DataPoints': $('#chartDataPoints').val(),
+                    'Interval.AutoScan': $('#autoScanInterval').val(),
+                    'Load.MaxCapacity': $('#maxCapacity').val(),
+                    'Load.NormalThreshold': $('#normalThreshold').val(),
+                    'Load.MediumThreshold': $('#mediumThreshold').val(),
+                    'Tariff.PerKWh': $('#tariffPerKWh').val()
+                };
+
+                $.ajax({
+                    url: '/api/Api/save-system-settings',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(settings),
+                    success: function(response) {
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                        showNotification('All settings saved successfully!', 'success');
+                        setTimeout(function() { location.reload(); }, 1000);
+                    },
+                    error: function(xhr) {
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                        showNotification('Error saving settings', 'danger');
+                    }
+                });
+            });
+
+            // Reset System Settings
+            $('#btnResetSystemSettings').click(function() {
+                if (confirm('Reset semua settings ke default?')) {
+                    $('#dbServer').val('192.168.6.15');
+                    $('#dbPort').val('1433');
+                    $('#dbUser').val('kwhapp');
+                    $('#dbPassword').val('kwhapp1234');
+                    $('#dbName').val('HaiwellElectrical');
+                    $('#dashboardInterval').val('10');
+                    $('#chartsInterval').val('10');
+                    $('#detailsInterval').val('10');
+                    $('#anomalyInterval').val('10');
+                    $('#chartDataPoints').val('20');
+                    $('#autoScanInterval').val('60');
+                    $('#maxCapacity').val('30000');
+                    $('#normalThreshold').val('30');
+                    $('#mediumThreshold').val('70');
+                    $('#tariffPerKWh').val('1500');
+                    updatePreview();
+                    showNotification('Settings reset to default. Click Save to apply.', 'info');
+                }
+            });
+
+            // Export settings
+            $('#btnExportSettings').click(function() {
+                var settings = {
+                    Database: {
+                        Server: $('#dbServer').val(),
+                        Port: $('#dbPort').val(),
+                        User: $('#dbUser').val(),
+                        Name: $('#dbName').val()
+                    },
+                    Intervals: {
+                        Dashboard: $('#dashboardInterval').val(),
+                        Charts: $('#chartsInterval').val(),
+                        Details: $('#detailsInterval').val(),
+                        Anomaly: $('#anomalyInterval').val(),
+                        DataPoints: $('#chartDataPoints').val(),
+                        AutoScan: $('#autoScanInterval').val()
+                    },
+                    LoadGauge: {
+                        MaxCapacity: $('#maxCapacity').val(),
+                        NormalThreshold: $('#normalThreshold').val(),
+                        MediumThreshold: $('#mediumThreshold').val()
+                    },
+                    Tariff: {
+                        PerKWh: $('#tariffPerKWh').val()
+                    }
+                };
+
+                var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
+                var downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "kwh_monitoring_settings_" + new Date().toISOString().slice(0,10) + ".json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                showNotification('Settings exported successfully!', 'success');
+            });
+
+            // ============================================
+            // NOTIFICATION SETTINGS
+            // ============================================
+
+            loadNotificationSettings();
+
+            $('#btnSaveNotificationSettings').click(function() {
+                saveNotificationSettings();
+            });
+
+            $('#btnTestEmail').click(function() {
+                testEmail();
+            });
+
+            $('#btnTestWablas').click(function () {
+                testWablas();
+            });
+
+            $('#btnCheckWablasDevice').click(function () {
+                checkWablasDevice();
+            });
+
+            $('#btnResetNotificationSettings').click(function() {
+                if (confirm('Reset notification settings ke default?')) {
+                    resetNotificationSettings();
+                }
+            });
+
+            $('#btnTestInstantAlert').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                $.ajax({
+                    url: '/api/Api/test-instant-alert',
+                    method: 'POST',
+                    success: function(response) {
+                        showNotification(response.message || 'Test instant alert sent successfully!', 'success');
+                    },
+                    error: function(xhr, status, error) {
+                        showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-bell"></i> Test Instant');
+                    }
+                });
+            });
+
+            $('#btnTestHourlyReport').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                $.ajax({
+                    url: '/api/Api/test-hourly-report',
+                    method: 'POST',
+                    success: function(response) {
+                        showNotification(response.message || 'Test hourly report sent successfully!', 'success');
+                    },
+                    error: function(xhr, status, error) {
+                        showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-clock"></i> Test Hourly');
+                    }
+                });
+            });
+
+            $('#btnTestDailyReport').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                $.ajax({
+                    url: '/api/Api/test-daily-report',
+                    method: 'POST',
+                    success: function(response) {
+                        showNotification(response.message || 'Test daily report sent successfully!', 'success');
+                    },
+                    error: function(xhr, status, error) {
+                        showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-calendar-alt"></i> Test Daily');
+                    }
+                });
+            });
+
+            $('#btnTestMonthlyReport').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                $.ajax({
+                    url: '/api/Api/test-monthly-report',
+                    method: 'POST',
+                    success: function(response) {
+                        showNotification(response.message || 'Test monthly report sent successfully!', 'success');
+                    },
+                    error: function(xhr, status, error) {
+                        showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-calendar-check"></i> Test Monthly');
+                    }
+                });
+            });
+        });
+
+        function loadNotificationSettings() {
+            $.ajax({
+                url: '/api/Api/get-notification-settings',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    console.log('[LOAD-NOTIF] API returned:', data);
+                    $('#smtpServer').val(data.smtpServer || 'smtp.gmail.com');
+                    $('#smtpPort').val(data.smtpPort || 587);
+                    $('#senderEmail').val(data.senderEmail || '');
+                    $('#senderPassword').val(data.senderPassword || '');
+                    $('#recipientEmail').val(data.recipientEmail || '');
+                    $('#enableEmail').prop('checked', data.enableEmail || false);
+                    $('#enableWhatsApp').prop('checked', data.enableWhatsApp || false);
+                    $('#sendInstantAlert').prop('checked', data.sendInstantAlert !== false);
+                    $('#sendHourlyReport').prop('checked', data.sendHourlyReport !== false);
+                    $('#sendDailyReport').prop('checked', data.sendDailyReport || false);
+                    $('#sendMonthlyReport').prop('checked', data.sendMonthlyReport || false);
+                    // Hourly report schedule is fixed at every hour :00 — no time picker to populate
+                    $('#dailyReportTime').val(data.dailyReportTime || '08:00');
+                    $('#monthlyReportDay').val(data.monthlyReportDay || 1);
+                    $('#monthlyReportTime').val(data.monthlyReportTime || '08:00');
+                },
+                error: function() {
+                    console.log('Using default notification settings');
+                }
+            });
+
+            $.ajax({
+                url: '/api/Api/wablas/settings',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    $('#wablasServerUrl').val(data.serverUrl || '');
+                    $('#wablasToken').val(data.token || '');
+                    $('#wablasSecretKey').val(data.secretKey || '');
+                    $('#wablasPhoneNumbers').val(data.phoneNumbers || '');
+                    $('#enableWhatsApp').prop('checked', data.enableWhatsApp || false);
+                },
+                error: function() {
+                    console.log('Wablas settings not yet configured');
+                }
+            });
+        }
+
+        function saveNotificationSettings() {
+            var btn = $('#btnSaveNotificationSettings');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+            var settings = {
+                smtpServer: $('#smtpServer').val(),
+                smtpPort: parseInt($('#smtpPort').val()),
+                senderEmail: $('#senderEmail').val(),
+                senderPassword: $('#senderPassword').val(),
+                recipientEmail: $('#recipientEmail').val(),
+                enableEmail: $('#enableEmail').is(':checked'),
+                enableWhatsApp: $('#enableWhatsApp').is(':checked'),
+                sendInstantAlert: $('#sendInstantAlert').is(':checked'),
+                sendHourlyReport: $('#sendHourlyReport').is(':checked'),
+                sendDailyReport: $('#sendDailyReport').is(':checked'),
+                sendMonthlyReport: $('#sendMonthlyReport').is(':checked'),
+                hourlyReportTime: 0, // Fixed: every hour at :00
+                dailyReportTime: $('#dailyReportTime').val(),
+                monthlyReportDay: parseInt($('#monthlyReportDay').val()),
+                monthlyReportTime: $('#monthlyReportTime').val()
+            };
+
+            // DEBUG: Log what is being sent
+            console.log('[SAVE-NOTIF] Sending:', JSON.stringify(settings, null, 2));
+
+            $.ajax({
+                url: '/api/Api/save-notification-settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(settings),
+                success: function(response) {
+                    console.log('[SAVE-NOTIF] API response:', response);
+                    saveWablasSettings();
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                    showNotification('Notification settings saved successfully!', 'success');
+                },
+                error: function(xhr, status, error) {
+                    console.error('[SAVE-NOTIF] API error:', error, xhr.responseText);
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                    showNotification('Error saving notification settings: ' + error, 'danger');
+                }
+            });
+        }
+
+        function saveWablasSettings() {
+            var wablasSettings = {
+                serverUrl: $('#wablasServerUrl').val(),
+                token: $('#wablasToken').val(),
+                secretKey: $('#wablasSecretKey').val(),
+                phoneNumbers: ($('#wablasPhoneNumbers').val() || '').split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; }),
+                enableWhatsApp: $('#enableWhatsApp').is(':checked')
+            };
+
+            $.ajax({
+                url: '/api/Api/wablas/settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(wablasSettings),
+                success: function(response) {
+                    console.log('Wablas settings saved');
+                },
+                error: function(xhr) {
+                    console.log('Error saving Wablas settings:', xhr.responseJSON?.error);
+                }
+            });
+        }
+
+        function testEmail() {
+            var btn = $('#btnTestEmail');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+
+            $.ajax({
+                url: '/api/Api/test-email-notification',
+                method: 'POST',
+                success: function(response) {
+                    showNotification('Test email sent successfully! Check your inbox.', 'success');
+                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Test Email');
+                },
+                error: function(xhr, status, error) {
+                    showNotification('Error sending test email: ' + (xhr.responseJSON?.error || error), 'danger');
+                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Test Email');
+                }
+            });
+        }
+
+        function testWablas() {
+            var btn = $('#btnTestWablas');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+
+            var phone = $('#wablasPhoneNumbers').val().split(',')[0].trim();
+            if (!phone) {
+                showNotification('Masukkan nomor WhatsApp tujuan terlebih dahulu!', 'danger');
+                btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/Api/wablas/test',
+                method: 'POST',
+                data: JSON.stringify({
+                    phone: phone,
+                    message: 'Test message dari KWH Monitoring System - ' + new Date().toLocaleString('id-ID')
+                }),
+                success: function (response) {
+                    $('#wablasStatus').html('<div class="alert alert-success py-1 px-2 mb-0"><i class="fas fa-check-circle"></i> ' + response.message + '</div>');
+                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                },
+                error: function (xhr) {
+                    $('#wablasStatus').html('<div class="alert alert-danger py-1 px-2 mb-0"><i class="fas fa-exclamation-circle"></i> ' + (xhr.responseJSON?.error || 'Gagal mengirim') + '</div>');
+                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                }
+            });
+        }
+
+        function checkWablasDevice() {
+            var btn = $('#btnCheckWablasDevice');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
+
+            $.ajax({
+                url: '/api/Api/wablas/device-status',
+                method: 'GET',
+                dataType: 'json',
+                success: function (response) {
+                    if (response.data && response.data.connected) {
+                        var info = response.data;
+                        $('#wablasStatus').html(
+                            '<div class="alert alert-success py-1 px-2 mb-0">' +
+                            '<i class="fas fa-check-circle"></i> <strong>Connected!</strong> ' +
+                            'Phone: ' + (info.phone || 'N/A') +
+                            (info.name ? ' | Name: ' + info.name : '') +
+                            (info.battery ? ' | Battery: ' + info.battery + '%' : '') +
+                            '</div>'
+                        );
+                    } else {
+                        $('#wablasStatus').html(
+                            '<div class="alert alert-warning py-1 px-2 mb-0">' +
+                            '<i class="fas fa-exclamation-triangle"></i> Device not connected. ' +
+                            'Pastikan WhatsApp sudah terhubung di dashboard Wablas.' +
+                            '</div>'
+                        );
+                    }
+                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Cek Device');
+                },
+                error: function (xhr) {
+                    $('#wablasStatus').html('<div class="alert alert-danger py-1 px-2 mb-0"><i class="fas fa-exclamation-circle"></i> ' + (xhr.responseJSON?.error || 'Gagal cek status') + '</div>');
+                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Cek Device');
+                }
+            });
+        }
+
+        function resetNotificationSettings() {
+            $('#smtpServer').val('smtp.gmail.com');
+            $('#smtpPort').val(587);
+            $('#senderEmail').val('');
+            $('#senderPassword').val('');
+            $('#recipientEmail').val('');
+            $('#wablasServerUrl').val('');
+            $('#wablasToken').val('');
+            $('#wablasSecretKey').val('');
+            $('#wablasPhoneNumbers').val('');
+            $('#enableEmail').prop('checked', false);
+            $('#enableWhatsApp').prop('checked', false);
+            $('#sendInstantAlert').prop('checked', true);
+            $('#sendHourlyReport').prop('checked', true);
+            $('#sendDailyReport').prop('checked', false);
+            $('#dailyReportTime').val('08:00');
+            showNotification('Notification settings reset to default. Click Save to apply.', 'info');
+        }
+
+        function updatePreview() {
+            var maxCapacity = parseInt($('#maxCapacity').val()) || 30000;
+            var normalThreshold = parseInt($('#normalThreshold').val()) || 30;
+            var mediumThreshold = parseInt($('#mediumThreshold').val()) || 70;
+
+            var normalWatt = Math.round(maxCapacity * (normalThreshold / 100));
+            var mediumWatt = Math.round(maxCapacity * (mediumThreshold / 100));
+
+            $('#previewNormal').text(formatNumber(normalWatt) + ' W');
+            $('#previewMedium').text(formatNumber(mediumWatt) + ' W');
+            $('#previewHigh').text(formatNumber(maxCapacity) + ' W');
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        function showNotification(message, type) {
+            var alertClass = type === 'success' ? 'alert-success' : type === 'danger' ? 'alert-danger' : 'alert-info';
+            var icon = type === 'success' ? 'fa-check-circle' : type === 'danger' ? 'fa-exclamation-circle' : 'fa-info-circle';
+
+            var notification = $('<div class="alert ' + alertClass + ' alert-dismissible fade in position-fixed" style="top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">' +
+                '<i class="fas ' + icon + '"></i> ' + message +
+                '<button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>' +
+                '</div>');
+
+            $('body').append(notification);
+            setTimeout(function() { notification.alert('close'); }, 3000);
+        }
+
+        // ============================================
+        // EMA SETTINGS
+        // ============================================
+
+        loadEmaSettings();
+
+        $('input[name="thresholdMode"]').change(function() {
+            if ($(this).val() === 'manual') {
+                $('#emaManualSettings').show();
+                $('#emaFibonacciSettings').hide();
+            } else {
+                $('#emaManualSettings').hide();
+                $('#emaFibonacciSettings').show();
+            }
+        });
+
+        $('#btnSaveEmaSettings').click(function() {
+            saveEmaSettings();
+        });
+
+        $('#btnResetEmaSettings').click(function() {
+            if (confirm('Reset EMA settings ke default?')) {
+                resetEmaSettings();
+            }
+        });
+
+        function loadEmaSettings() {
+            $.ajax({
+                url: '/api/Api/get-ema-settings',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    $('#emaPeriod').val(data.emaPeriod || 20);
+                    $('#emaUpperThreshold').val(data.emaUpperThreshold || 30);
+                    $('#emaLowerThreshold').val(data.emaLowerThreshold || 50);
+                    $('#emaFibUpper').val(data.emaFibUpper || 1.618);
+                    $('#emaFibLower').val(data.emaFibLower || 0.618);
+                    $('#emaRefreshInterval').val(data.refreshInterval || 10);
+                    $('#emaShowLine').prop('checked', data.emaShowLine !== false);
+                    $('#emaShowThresholds').prop('checked', data.emaShowThresholds !== false);
+                    $('#useInitial100ForEma').prop('checked', data.useInitial100ForEma || false);
+
+                    if (data.emaMode === 'fibonacci') {
+                        $('#emaModeFibonacci').prop('checked', true);
+                        $('#emaManualSettings').hide();
+                        $('#emaFibonacciSettings').show();
+                    } else {
+                        $('#emaModeManual').prop('checked', true);
+                        $('#emaManualSettings').show();
+                        $('#emaFibonacciSettings').hide();
+                    }
+
+                    loadAllCategoryDowntimeSettings();
+                },
+                error: function() {
+                    console.log('Using default EMA settings');
+                    loadAllCategoryDowntimeSettings();
+                }
+            });
+        }
+
+        function saveEmaSettings() {
+            var btn = $('#btnSaveEmaSettings');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+            var emaSettingsData = {
+                emaPeriod: parseInt($('#emaPeriod').val()),
+                emaMode: $('input[name="thresholdMode"]:checked').val(),
+                emaUpperThreshold: parseInt($('#emaUpperThreshold').val()),
+                emaLowerThreshold: parseInt($('#emaLowerThreshold').val()),
+                emaFibUpper: parseFloat($('#emaFibUpper').val()),
+                emaFibLower: parseFloat($('#emaFibLower').val()),
+                emaShowLine: $('#emaShowLine').is(':checked'),
+                emaShowThresholds: $('#emaShowThresholds').is(':checked'),
+                useInitial100ForEma: $('#useInitial100ForEma').is(':checked'),
+                refreshInterval: parseInt($('#emaRefreshInterval').val())
+            };
+
+            var emaReq = $.ajax({
+                url: '/api/Api/save-ema-settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(emaSettingsData)
+            });
+
+            // Per-category downtime save
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var catDowntimeRequests = categories.map(function(cat) {
+                var catData = {
+                    enabled: $('#downtime' + cat + 'Enabled').is(':checked'),
+                    startHour: parseInt($('#downtime' + cat + 'StartHour').val()) || 22,
+                    endHour: parseInt($('#downtime' + cat + 'EndHour').val()) || 6,
+                    description: $('#downtime' + cat + 'Description').val() || ''
+                };
+                categoryDowntimeSettings[cat] = catData;
+                return $.ajax({
+                    url: '/api/Api/downtime-settings/' + cat,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(catData)
+                });
+            });
+
+            var allRequests = [emaReq].concat(catDowntimeRequests);
+
+            $.when.apply($, allRequests).done(function() {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                showNotification('EMA & Downtime settings saved successfully!', 'success');
+                loadAllCategoryDowntimeStatus();
+            }).fail(function() {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                showNotification('Error saving settings', 'danger');
+            });
+        }
+
+        function resetEmaSettings() {
+            $('#emaPeriod').val(20);
+            $('#emaUpperThreshold').val(30);
+            $('#emaLowerThreshold').val(50);
+            $('#emaFibUpper').val(1.618);
+            $('#emaFibLower').val(0.618);
+            $('#emaRefreshInterval').val(10);
+            $('#emaShowLine').prop('checked', true);
+            $('#emaShowThresholds').prop('checked', true);
+            $('#useInitial100ForEma').prop('checked', false);
+            $('#emaModeManual').prop('checked', true);
+            $('#emaManualSettings').show();
+            $('#emaFibonacciSettings').hide();
+
+            // Reset per-category downtime
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            categories.forEach(function(cat) {
+                $('#downtime' + cat + 'Enabled').prop('checked', false);
+                $('#downtime' + cat + 'StartHour').val(22);
+                $('#downtime' + cat + 'EndHour').val(6);
+                $('#downtime' + cat + 'Description').val('');
+                updateCategoryDuration(cat);
+            });
+            clearPresetHighlight();
+            updateDowntimeTimeline();
+
+            showNotification('EMA & Downtime settings reset to default. Click Save to apply.', 'info');
+        }
+
+        // ============================================
+        // TARIFF SETTINGS (loaded into System tab)
+        // ============================================
+
+        loadTariffSettings();
+
+        function loadTariffSettings() {
+            $.ajax({
+                url: '/api/Api/get-tariff',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    var tariffNumber = data.tariffPerKWh || 1500;
+                    if (typeof tariffNumber === 'string') {
+                        tariffNumber = parseFloat(tariffNumber) || 1500;
+                    }
+                    $('#tariffPerKWh').val(tariffNumber);
+                },
+                error: function() {
+                    console.log('Using default tariff: 1500');
+                }
+            });
+        }
+
+        // ============================================
+        // PER-CATEGORY DOWNTIME SETTINGS
+        // ============================================
+
+        var categoryDowntimeSettings = {
+            Billboard: { enabled: false, startHour: 22, endHour: 6, description: '' },
+            Megatron: { enabled: false, startHour: 22, endHour: 6, description: '' },
+            NeonBox: { enabled: false, startHour: 22, endHour: 6, description: '' }
+        };
+
+        var categoryDowntimeMap = {};
+
+        function populateCategoryHourDropdowns() {
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            categories.forEach(function(cat) {
+                var $start = $('#downtime' + cat + 'StartHour');
+                var $end = $('#downtime' + cat + 'EndHour');
+                $start.empty();
+                $end.empty();
+                for (var h = 0; h < 24; h++) {
+                    var label = (h < 10 ? '0' : '') + h + ':00';
+                    $start.append('<option value="' + h + '">' + label + '</option>');
+                    $end.append('<option value="' + h + '">' + label + '</option>');
+                }
+                var s = categoryDowntimeSettings[cat];
+                $start.val(s.startHour);
+                $end.val(s.endHour);
+            });
+        }
+
+        function updateCategoryDuration(cat) {
+            var start = parseInt($('#downtime' + cat + 'StartHour').val());
+            var end = parseInt($('#downtime' + cat + 'EndHour').val());
+            var duration;
+            if (start === end) duration = 24;
+            else if (start < end) duration = end - start;
+            else duration = (24 - start) + end;
+            $('#downtime' + cat + 'Duration').text(duration + ' jam');
+        }
+
+        function loadCategoryDowntimeSettings() {
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var promises = categories.map(function(cat) {
+                return $.ajax({
+                    url: '/api/Api/downtime-settings/' + cat,
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        categoryDowntimeSettings[cat] = {
+                            enabled: data.enabled || false,
+                            startHour: data.startHour != null ? data.startHour : 22,
+                            endHour: data.endHour != null ? data.endHour : 6,
+                            description: data.description || ''
+                        };
+                    }
+                });
+            });
+            return $.when.apply($, promises);
+        }
+
+        function loadAllCategoryDowntimeSettings() {
+            populateCategoryHourDropdowns();
+            loadCategoryDowntimeSettings().then(function() {
+                var categories = ['Billboard', 'Megatron', 'NeonBox'];
+                categories.forEach(function(cat) {
+                    var s = categoryDowntimeSettings[cat];
+                    $('#downtime' + cat + 'Enabled').prop('checked', s.enabled);
+                    $('#downtime' + cat + 'StartHour').val(s.startHour);
+                    $('#downtime' + cat + 'EndHour').val(s.endHour);
+                    $('#downtime' + cat + 'Description').val(s.description);
+                    updateCategoryDuration(cat);
+                });
+                // Update timeline from first enabled category or Billboard
+                updateDowntimeTimeline();
+                loadAllCategoryDowntimeStatus();
+            });
+        }
+
+        function loadAllCategoryDowntimeStatus() {
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            categories.forEach(function(cat) {
+                checkCategoryDowntimeStatus(cat);
+            });
+        }
+
+        function checkCategoryDowntimeStatus(cat) {
+            $.ajax({
+                url: '/api/Api/downtime-status?category=' + encodeURIComponent(cat),
+                method: 'GET',
+                dataType: 'json',
+                timeout: 5000,
+                success: function(data) {
+                    categoryDowntimeMap[cat] = data.isDowntime || false;
+                    updateCategoryDowntimeStatusUI(cat);
+                },
+                error: function() {
+                    categoryDowntimeMap[cat] = false;
+                    updateCategoryDowntimeStatusUI(cat);
+                }
+            });
+        }
+
+        function updateCategoryDowntimeStatusUI(cat) {
+            var $status = $('#downtime' + cat + 'Status');
+            var $card = $('#downtime' + cat + 'StatusCard');
+            var isDowntime = categoryDowntimeMap[cat] || false;
+            var s = categoryDowntimeSettings[cat];
+            var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
+            var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
+            if (isDowntime) {
+                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">Downtime period active (' + startLabel + '–' + endLabel + ') - Lower threshold disabled</small>');
+                $card.removeClass('border-success').addClass('border-danger');
+            } else {
+                $status.html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">Normal operation - All thresholds active</small>');
+                $card.removeClass('border-danger').addClass('border-success');
+            }
+        }
+
+        // Preset buttons — apply to all categories
+        $('.preset-btn').click(function() {
+            var start = parseInt($(this).data('start'));
+            var end = parseInt($(this).data('end'));
+            var desc = $(this).data('desc');
+
+            clearPresetHighlight();
+            $(this).addClass('preset-active');
+
+            // Find currently active category
+            var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
+            var href = $activeTab.attr('href') || '#settingsDowntimeBillboard';
+            var cat = href.replace('#settingsDowntime', '');
+
+            if (start === 0 && end === 0) {
+                // Custom — focus on the currently visible category's start hour
+                $('#downtime' + cat + 'StartHour').focus();
+            } else {
+                $('#downtime' + cat + 'StartHour').val(start);
+                $('#downtime' + cat + 'EndHour').val(end);
+                $('#downtime' + cat + 'Description').val(desc);
+                updateCategoryDuration(cat);
+            }
+
+            updateDowntimeTimeline();
+        });
+
+        // Category sub-tab switch — update timeline and clear preset highlight
+        $(document).on('shown.bs.tab', '#downtimeCategoryTabs .nav-link', function() {
+            updateDowntimeTimeline();
+            clearPresetHighlight();
+        });
+
+        // Per-category downtime hour change — update duration + timeline
+        $(document).on('change', '.cat-downtime-start, .cat-downtime-end', function() {
+            var cat = $(this).data('category');
+            updateCategoryDuration(cat);
+            updateDowntimeTimeline();
+        });
+
+        function clearPresetHighlight() {
+            $('.preset-btn').removeClass('preset-active');
+        }
+
+        function updateDowntimeTimeline() {
+            // Use the currently active category tab for timeline
+            var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
+            var href = $activeTab.attr('href') || '#settingsDowntimeBillboard';
+            var activeCat = href.replace('#settingsDowntime', '');
+
+            var start = parseInt($('#downtime' + activeCat + 'StartHour').val()) || 22;
+            var end = parseInt($('#downtime' + activeCat + 'EndHour').val()) || 6;
+            var bar = $('#downtimeTimelineBar');
+
+            var pctPerHour = 100 / 24;
+
+            if (start === end) {
+                bar.css({
+                    left: '0%',
+                    width: '100%',
+                    borderRadius: '8px',
+                    background: '#343a40'
+                });
+            } else if (start < end) {
+                bar.css({
+                    left: (start * pctPerHour) + '%',
+                    width: ((end - start) * pctPerHour) + '%',
+                    borderRadius: '0',
+                    background: '#343a40'
+                });
+            } else {
+                var startPct = start * pctPerHour;
+                var endPct = end * pctPerHour;
+                bar.css({
+                    left: '0%',
+                    width: '100%',
+                    borderRadius: '0',
+                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
+                });
+                return;
+            }
+        }
+
+        function highlightMatchingPreset(startHour, endHour) {
+            clearPresetHighlight();
+            $('.preset-btn').each(function() {
+                var btnStart = parseInt($(this).data('start'));
+                var btnEnd = parseInt($(this).data('end'));
+                if (btnStart === startHour && btnEnd === endHour) {
+                    $(this).addClass('preset-active');
+                }
+            });
+        }
+    </script>
+}

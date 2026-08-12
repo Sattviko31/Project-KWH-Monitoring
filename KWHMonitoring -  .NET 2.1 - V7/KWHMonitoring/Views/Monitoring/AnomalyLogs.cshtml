@@ -1,0 +1,802 @@
+﻿@{
+    ViewData["Title"] = "Anomaly Logs";
+}
+
+<!-- Breadcrumb -->
+<div class="erp-breadcrumb">
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
+    <span class="current">Anomaly Logs</span>
+</div>
+
+<!-- Page Header -->
+<div class="erp-page-header">
+    <div>
+        <h2><i class="fas fa-exclamation-triangle text-warning"></i> Anomaly Logs</h2>
+        <div class="subtitle">
+            <i class="fas fa-clock"></i> Last Update: <span class="last-update">-</span>
+            <span class="ms-2"><i class="fas fa-circle text-success" id="statusDot" style="font-size:0.5rem"></i> <span class="status-text" id="statusText">Online</span></span>
+        </div>
+    </div>
+    <div class="actions">
+        <label class="form-check mb-0 d-none d-sm-flex align-items-center me-2">
+            <input type="checkbox" id="autoRefreshCheck" checked class="form-check-input me-1">
+            <small class="text-muted">Auto Refresh</small>
+        </label>
+        <button class="btn btn-erp-action" id="btnRefresh">
+            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
+        </button>
+        <a asp-action="Settings" class="btn btn-erp-action">
+            <i class="fas fa-cog"></i> <span class="d-none d-sm-inline">Settings</span>
+        </a>
+    </div>
+</div>
+
+<!-- Tabs (ERP Style) -->
+<div class="erp-tabs">
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="Index">
+        <i class="fas fa-th"></i> <span>Panel Monitoring</span>
+    </a>
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="Charts">
+        <i class="fas fa-chart-line"></i> <span>All Charts</span>
+    </a>
+    <a class="erp-tab" asp-controller="Monitoring" asp-action="UsageStatistics">
+        <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
+    </a>
+    <a class="erp-tab active" asp-controller="Monitoring" asp-action="AnomalyLogs">
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Logs</span>
+    </a>
+</div>
+
+    <!-- Summary Cards -->
+    <div class="stats-row mb-3 mb-md-4">
+        <div>
+            <div class="stat-card bg-danger h-100">
+                <div class="stat-label">Overload</div>
+                <div class="stat-value" id="totalOverload">0</div>
+                <i class="fas fa-bolt stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-warning h-100">
+                <div class="stat-label">Device Drop</div>
+                <div class="stat-value" id="totalDrop">0</div>
+                <i class="fas fa-power-off stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-info h-100">
+                <div class="stat-label">Total Logs</div>
+                <div class="stat-value" id="totalLogs">0</div>
+                <i class="fas fa-list stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card bg-success h-100">
+                <div class="stat-label">Active Devices</div>
+                <div class="stat-value" id="activeDevices">0</div>
+                <i class="fas fa-check-circle stat-icon"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomaly Logs Table Card -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+            <h6 class="mb-0"><i class="fas fa-list"></i> All Anomaly Logs</h6>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-danger" id="btnClearAll">
+                    <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Clear All</span>
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="anomaly-grid-scroll-wrapper">
+                <div id="anomalyDataGrid" style="width:100%;"></div>
+            </div>
+        </div>
+    </div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteMessage">Are you sure you want to delete this log?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmDelete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear All Confirmation Modal -->
+<div class="modal fade" id="clearAllModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Clear All Logs</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <strong>Warning!</strong> This action will permanently delete ALL anomaly logs. This cannot be undone!
+                </div>
+                <p>Are you sure you want to clear all anomaly logs?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmClearAll">
+                    <i class="fas fa-trash-alt"></i> Clear All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Force full width grid */
+    #anomalyDataGrid {
+        width: 100% !important;
+    }
+    #anomalyDataGrid .dx-datagrid {
+        width: 100% !important;
+        border: none !important;
+    }
+    #anomalyDataGrid .dx-datagrid-headers {
+        border-top: none !important;
+    }
+    #anomalyDataGrid .card:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Center all data cells */
+    #anomalyDataGrid .dx-datagrid .dx-data-row td {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* Center header cells */
+    #anomalyDataGrid .dx-datagrid .dx-header-row td {
+        text-align: center;
+    }
+
+    .dx-datagrid .badge {
+        font-size: 0.7rem;
+        padding: 0.3em 0.55em;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+
+    /* Consistent font for all cells */
+    #anomalyDataGrid .dx-datagrid .dx-data-row td {
+        font-size: 12px;
+    }
+
+    .btn-delete-row {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.7rem;
+    }
+
+    /* Horizontal scroll wrapper for DataGrid */
+    .anomaly-grid-scroll-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Mobile: horizontal scroll */
+    @@media (max-width: 768px) {
+        .anomaly-grid-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #anomalyDataGrid .dx-datagrid {
+            min-width: 700px !important;
+        }
+
+        #anomalyDataGrid .dx-datagrid .dx-data-row td {
+            font-size: 11px;
+            padding: 4px 3px !important;
+        }
+        #anomalyDataGrid .dx-datagrid .dx-header-row td {
+            font-size: 11px;
+            padding: 4px 3px !important;
+            white-space: nowrap !important;
+        }
+        #anomalyDataGrid .dx-datagrid .badge {
+            font-size: 0.6rem;
+            padding: 0.2em 0.4em;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script>
+        var autoRefreshTimer = null;
+        var autoRefreshEnabled = true;
+        var deleteLogId = null;
+        var dataGrid = null;
+
+        $(document).ready(function() {
+            console.log('Anomaly Logs page initialized');
+
+            updateLastUpdate();
+            setInterval(updateLastUpdate, 60000);
+
+            initDataGrid();
+            setupAutoRefresh();
+
+            // Refresh button
+            $('#btnRefresh').click(function() {
+                reloadGridData();
+            });
+
+            // Auto-refresh toggle
+            $('#autoRefreshCheck').change(function() {
+                autoRefreshEnabled = $(this).is(':checked');
+                if (autoRefreshEnabled) {
+                    setupAutoRefresh();
+                    $('#statusDot').removeClass('text-danger').addClass('text-success');
+                    $('#statusText').text('Online');
+                } else {
+                    stopAutoRefresh();
+                    $('#statusDot').removeClass('text-success').addClass('text-danger');
+                    $('#statusText').text('Paused');
+                }
+            });
+
+            // Clear All button
+            $('#btnClearAll').click(function() {
+                $('#clearAllModal').modal('show');
+            });
+
+            // Confirm Clear All
+            $('#btnConfirmClearAll').click(function() {
+                clearAllLogs();
+            });
+
+            // Confirm Delete single log
+            $('#btnConfirmDelete').click(function() {
+                if (deleteLogId) {
+                    deleteSingleLog(deleteLogId);
+                }
+            });
+        });
+
+        // ============================================
+        // AUTO REFRESH
+        // ============================================
+        function setupAutoRefresh() {
+            stopAutoRefresh();
+            if (autoRefreshEnabled) {
+                autoRefreshTimer = setInterval(function() {
+                    if (dataGrid) reloadGridData();
+                }, 30000);
+            }
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+        }
+
+        // ============================================
+        // FORMAT HELPERS
+        // ============================================
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                var d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                var dd = String(d.getDate()).padStart(2, '0');
+                var MM = String(d.getMonth() + 1).padStart(2, '0');
+                var yyyy = d.getFullYear();
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mm = String(d.getMinutes()).padStart(2, '0');
+                var ss = String(d.getSeconds()).padStart(2, '0');
+                return dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
+            } catch(e) {
+                return isoStr;
+            }
+        }
+
+        function fmt(value, precision) {
+            if (value == null) return '-';
+            return value.toLocaleString('id-ID', {
+                minimumFractionDigits: precision,
+                maximumFractionDigits: precision
+            });
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        // ============================================
+        // INIT DATA GRID
+        // ============================================
+        function initDataGrid() {
+            dataGrid = $('#anomalyDataGrid').dxDataGrid({
+                dataSource: new DevExpress.data.DataSource({
+                    store: new DevExpress.data.CustomStore({
+                        key: 'id',
+                        load: function() {
+                            var d = $.Deferred();
+
+                            $.ajax({
+                                url: '/api/Api/anomaly-logs/ALL?page=1&pageSize=10000',
+                                method: 'GET',
+                                dataType: 'json',
+                                success: function(response) {
+                                    var rawData = response.logs || [];
+                                    var mapped = rawData.map(function(item) {
+                                        return {
+                                            id: item.id || item.Id || 0,
+                                            deviceKey: item.deviceKey || item.DeviceKey || '',
+                                            deviceId: item.deviceId || item.DeviceId || '',
+                                            anomalyType: item.anomalyType || item.AnomalyType || '',
+                                            powerValue: item.powerValue || item.PowerValue || 0,
+                                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
+                                            deviation: item.deviation || item.Deviation || 0,
+                                            detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
+                                            emaValue: item.emaValue || item.EMAValue,
+                                            thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
+                                            acknowledged: item.acknowledged || item.Acknowledged || false,
+                                            acknowledgedTime: item.acknowledgedTime || item.AcknowledgedTime,
+                                            notes: item.notes || item.Notes || ''
+                                        };
+                                    });
+
+                                    // Update summary cards
+                                    var overloadCount = 0;
+                                    var dropCount = 0;
+                                    var uniqueDevices = {};
+                                    for (var i = 0; i < mapped.length; i++) {
+                                        if (mapped[i].anomalyType === 'OVERLOAD') overloadCount++;
+                                        else if (mapped[i].anomalyType === 'DROP' || mapped[i].anomalyType === 'DEVICE_DROP') dropCount++;
+                                        uniqueDevices[mapped[i].deviceKey] = true;
+                                    }
+                                    $('#totalOverload').text(overloadCount);
+                                    $('#totalDrop').text(dropCount);
+                                    $('#totalLogs').text(response.totalCount || mapped.length);
+                                    $('#activeDevices').text(Object.keys(uniqueDevices).length);
+
+                                    d.resolve(mapped);
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error loading anomaly logs:', error);
+                                    d.reject(error);
+                                }
+                            });
+                            return d.promise();
+                        },
+                        remove: function(key) {
+                            var d = $.Deferred();
+                            $.ajax({
+                                url: '/api/Api/anomaly-logs/' + key,
+                                method: 'DELETE',
+                                success: function() { d.resolve(); },
+                                error: function(xhr) { d.reject(xhr.responseText || 'Delete failed'); }
+                            });
+                            return d.promise();
+                        }
+                    })
+                }),
+
+                // Paging
+                paging: { pageSize: 50 },
+                pager: {
+                    showPageSizeSelector: true,
+                    allowedPageSizes: [25, 50, 100, 200],
+                    showInfo: true,
+                    showNavigationButtons: true
+                },
+
+                // Scrolling
+                scrolling: {
+                    mode: 'standard',
+                    showScrollbar: 'always',
+                    useNative: true
+                },
+
+                // Search
+                searchPanel: {
+                    visible: true,
+                    width: 180,
+                    placeholder: 'Cari anomali...'
+                },
+
+                // Column Chooser
+                columnChooser: { enabled: true, mode: 'select' },
+
+                // Column Fixing
+                columnFixing: { enabled: true },
+
+                // Grouping
+                grouping: { autoExpandAll: false },
+                groupPanel: { visible: false },
+
+                // Header Filter
+                headerFilter: { visible: true },
+
+                // Filter Row
+                filterRow: { visible: true },
+
+                // Sorting
+                sorting: { mode: 'single' },
+
+                // Selection
+                selection: { mode: 'none' },
+
+                // State Storing
+                stateStoring: { enabled: false },
+
+                // Row Alternation
+                rowAlternationEnabled: true,
+
+                // Borders
+                showBorders: true,
+                showColumnLines: true,
+                showRowLines: false,
+
+                // Resize/reorder
+                allowColumnResizing: true,
+                allowColumnReordering: true,
+                columnAutoWidth: true,
+
+                // Load panel
+                loadPanel: { enabled: true, text: 'Memuat data...' },
+
+                // No data text
+                noDataText: 'Tidak ada data anomali',
+
+                // Toolbar
+                onToolbarPreparing: function(e) {
+                    var items = e.toolbarOptions.items;
+                    items.push({
+                        location: 'after',
+                        widget: 'dxButton',
+                        options: {
+                            text: 'Columns',
+                            hint: 'Show/Hide Columns',
+                            onClick: function() { dataGrid.showColumnChooser(); }
+                        }
+                    });
+                    items.push({
+                        location: 'after',
+                        widget: 'dxButton',
+                        options: {
+                            text: 'Clear',
+                            hint: 'Clear all filters',
+                            onClick: function() {
+                                dataGrid.clearFilter();
+                                reloadGridData();
+                            }
+                        }
+                    });
+                },
+
+                // Cell customization
+                onCellPrepared: function(e) {
+                    if (e.rowType !== 'data') return;
+                    if (e.column.dataField === 'powerValue' && e.value > 20000) {
+                        e.cellElement.css('background-color', 'rgba(220,53,69,0.10)');
+                    } else if (e.column.dataField === 'powerValue' && e.value > 10000) {
+                        e.cellElement.css('background-color', 'rgba(253,126,20,0.07)');
+                    }
+                },
+
+                // Row customization
+                onRowPrepared: function(e) {
+                    if (e.rowType !== 'data') return;
+                    var t = e.data.anomalyType;
+                    if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
+                    else if (t === 'DROP' || t === 'DEVICE_DROP' || t === 'DEVICE DROP') e.rowElement.css('border-left', '3px solid #fd7e14');
+                    else e.rowElement.css('border-left', '3px solid #0d6efd');
+                },
+
+                // Columns
+                columns: [
+                    {
+                        dataField: 'id',
+                        caption: '#',
+                        width: 50,
+                        allowGrouping: false,
+                        allowFiltering: false,
+                        allowHeaderFiltering: false,
+                        alignment: 'center'
+                    },
+                    {
+                        dataField: 'detectedTime',
+                        caption: 'Time',
+                        dataType: 'datetime',
+                        sortOrder: 'desc',
+                        alignment: 'center',
+                        allowHeaderFiltering: false,
+                        filterOperations: ['between', '>=', '<=', '>', '<', '='],
+                        selectedFilterOperation: 'between',
+                        format: { type: 'dd/MM/yyyy HH:mm:ss' },
+                        editorOptions: {
+                            type: 'datetime',
+                            displayFormat: 'dd/MM/yyyy HH:mm:ss'
+                        },
+                        cellTemplate: function(container, options) {
+                            var val = options.value;
+                            var text = '-';
+                            if (val) {
+                                if (val instanceof Date && !isNaN(val.getTime())) {
+                                    var dd = String(val.getDate()).padStart(2, '0');
+                                    var MM = String(val.getMonth() + 1).padStart(2, '0');
+                                    var yyyy = val.getFullYear();
+                                    var hh = String(val.getHours()).padStart(2, '0');
+                                    var mm = String(val.getMinutes()).padStart(2, '0');
+                                    var ss = String(val.getSeconds()).padStart(2, '0');
+                                    text = dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
+                                } else {
+                                    text = formatDateTime(val);
+                                }
+                            }
+                            $('<span>').text(text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'deviceKey',
+                        caption: 'Device',
+                        alignment: 'center',
+                        headerFilter: { allowSelectAll: true }
+                    },
+                    {
+                        dataField: 'anomalyType',
+                        caption: 'Type',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'OVERLOAD', value: 'OVERLOAD' },
+                                { text: 'DEVICE DROP', value: 'DROP' },
+                                { text: 'DEVICE DROP', value: 'DEVICE_DROP' }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls, icon, text;
+                            if (v === 'OVERLOAD') {
+                                cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD';
+                            } else if (v === 'DROP' || v === 'DEVICE_DROP' || v === 'DEVICE DROP') {
+                                cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP';
+                            } else {
+                                cls = 'bg-info'; icon = 'fa-question'; text = v;
+                            }
+                            $('<span>').addClass('badge ' + cls).html('<i class="fas ' + icon + '"></i> ' + text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'powerValue',
+                        caption: 'Power (W)',
+                        dataType: 'number',
+                        alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls = v > 20000 ? 'text-danger' : v > 10000 ? 'text-warning' : 'text-dark';
+                            $('<span>').addClass('anomaly-power ' + cls).text(formatNumber(v) + ' W').appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'thresholdValue',
+                        caption: 'Threshold (W)',
+                        dataType: 'number',
+                        alignment: 'center',
+                        format: { type: 'fixedPoint', precision: 0 }
+                    },
+                    {
+                        dataField: 'deviation',
+                        caption: 'Deviation',
+                        dataType: 'number',
+                        alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls = v > 100 ? 'text-danger' : v > 50 ? 'text-warning' : 'text-success';
+                            $('<span>').addClass('anomaly-deviation ' + cls).text(fmt(v, 1) + '%').appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'thresholdMode',
+                        caption: 'Mode',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'MANUAL', value: 'manual' },
+                                { text: 'EMA', value: 'ema' }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'acknowledged',
+                        caption: 'Status',
+                        dataType: 'boolean',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'New', value: false },
+                                { text: 'Acknowledged', value: true }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            if (options.value) {
+                                $('<span>').addClass('badge bg-success').text('Acknowledged').appendTo(container);
+                            } else {
+                                $('<span>').addClass('badge bg-secondary').text('New').appendTo(container);
+                            }
+                        }
+                    },
+                    {
+                        caption: 'Action',
+                        width: 60,
+                        alignment: 'center',
+                        allowFiltering: false,
+                        allowSorting: false,
+                        allowGrouping: false,
+                        allowHeaderFiltering: false,
+                        cellTemplate: function(container, options) {
+                            var data = options.data;
+                            $('<button>')
+                                .addClass('btn btn-sm btn-outline-danger btn-delete-row')
+                                .attr('title', 'Delete log')
+                                .html('<i class="fas fa-trash"></i>')
+                                .on('click', function() {
+                                    confirmDelete(data.id, data.deviceKey, data.anomalyType);
+                                })
+                                .appendTo(container);
+                        }
+                    }
+                ]
+            });
+        }
+
+        // ============================================
+        // DELETE SINGLE LOG
+        // ============================================
+        function confirmDelete(logId, deviceKey, anomalyType) {
+            deleteLogId = logId;
+            $('#deleteMessage').html('Are you sure you want to delete this log?<br><br>' +
+                '<strong>Device:</strong> ' + deviceKey + '<br>' +
+                '<strong>Type:</strong> ' + anomalyType + '<br>' +
+                '<strong>ID:</strong> ' + logId);
+            $('#deleteModal').modal('show');
+        }
+
+        function reloadGridData() {
+            $.ajax({
+                url: '/api/Api/anomaly-logs/ALL?page=1&pageSize=10000',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    var rawData = response.logs || [];
+                    var mapped = rawData.map(function(item) {
+                        return {
+                            id: item.id || item.Id || 0,
+                            deviceKey: item.deviceKey || item.DeviceKey || '',
+                            deviceId: item.deviceId || item.DeviceId || '',
+                            anomalyType: item.anomalyType || item.AnomalyType || '',
+                            powerValue: item.powerValue || item.PowerValue || 0,
+                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
+                            deviation: item.deviation || item.Deviation || 0,
+                            detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
+                            emaValue: item.emaValue || item.EMAValue,
+                            thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
+                            acknowledged: item.acknowledged || item.Acknowledged || false,
+                            acknowledgedTime: item.acknowledgedTime || item.AcknowledgedTime,
+                            notes: item.notes || item.Notes || ''
+                        };
+                    });
+
+                    // Update summary cards
+                    var overloadCount = 0;
+                    var dropCount = 0;
+                    var uniqueDevices = {};
+                    for (var i = 0; i < mapped.length; i++) {
+                        if (mapped[i].anomalyType === 'OVERLOAD') overloadCount++;
+                        else if (mapped[i].anomalyType === 'DROP' || mapped[i].anomalyType === 'DEVICE_DROP') dropCount++;
+                        uniqueDevices[mapped[i].deviceKey] = true;
+                    }
+                    $('#totalOverload').text(overloadCount);
+                    $('#totalDrop').text(dropCount);
+                    $('#totalLogs').text(response.totalCount || mapped.length);
+                    $('#activeDevices').text(Object.keys(uniqueDevices).length);
+
+                    dataGrid.option('dataSource', mapped);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error reloading data:', error);
+                }
+            });
+        }
+
+        function deleteSingleLog(logId) {
+            $('#btnConfirmDelete').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Deleting...');
+
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + logId,
+                method: 'DELETE',
+                timeout: 10000,
+                success: function(response) {
+                    $('#deleteModal').modal('hide');
+                    $('#btnConfirmDelete').prop('disabled', false).html('<i class="fas fa-trash"></i> Delete');
+                    reloadGridData();
+                    showNotification('Log deleted successfully', 'success');
+                },
+                error: function(xhr, status, error) {
+                    $('#deleteModal').modal('hide');
+                    $('#btnConfirmDelete').prop('disabled', false).html('<i class="fas fa-trash"></i> Delete');
+                    showNotification('Error deleting log', 'danger');
+                }
+            });
+        }
+
+        // ============================================
+        // CLEAR ALL LOGS
+        // ============================================
+        function clearAllLogs() {
+            $('#btnConfirmClearAll').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Clearing...');
+
+            $.ajax({
+                url: '/api/Api/anomaly-logs/clear-all',
+                method: 'DELETE',
+                timeout: 30000,
+                success: function(response) {
+                    $('#clearAllModal').modal('hide');
+                    $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
+                    reloadGridData();
+                    showNotification('Cleared ' + (response.message || 'all logs'), 'success');
+                },
+                error: function(xhr, status, error) {
+                    $('#clearAllModal').modal('hide');
+                    $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
+                    showNotification('Error clearing logs: ' + error, 'danger');
+                }
+            });
+        }
+
+        // ============================================
+        // NOTIFICATION HELPER
+        // ============================================
+        function showNotification(message, type) {
+            var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+            var icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            var notification = $(
+                '<div class="alert ' + alertClass + ' alert-dismissible fade in position-fixed"' +
+                ' style="top:20px;right:20px;z-index:9999;min-width:300px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
+                '<i class="fas ' + icon + '"></i> ' + message +
+                '<button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>' +
+                '</div>'
+            );
+            $('body').append(notification);
+            setTimeout(function() { notification.alert('close'); }, 3000);
+        }
+
+        // ============================================
+        // LAST UPDATE
+        // ============================================
+        function updateLastUpdate() {
+            $('.last-update').text(new Date().toLocaleString('id-ID'));
+        }
+    </script>
+}

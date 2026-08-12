@@ -1,0 +1,183 @@
+﻿@model KWHMonitoring.Models.UsageStatistics
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h4 class="mb-3"><i class="fas fa-chart-bar text-primary"></i> Usage Statistics</h4>
+    </div>
+</div>
+
+<div class="stats-row mb-4">
+    <div>
+        <div class="card border-start border-4 border-primary shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Hari Ini</div>
+                <div class="h4 mb-1 text-primary">@Model.TotalToday.ToString("N0") <small class="fs-6">Wh</small></div>
+                <div class="text-muted small">Rata-rata: @Model.AvgPerHour.ToString("N0") Wh/jam</div>
+                <div class="text-muted small">Puncak: @Model.PeakHour.ToString("N0") Wh (@Model.PeakHourTime)</div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card border-start border-4 border-success shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Bulan Ini</div>
+                <div class="h4 mb-1 text-success">@Model.TotalThisMonth.ToString("N0") <small class="fs-6">Wh</small></div>
+                <div class="text-muted small">Rata-rata: @Model.AvgPerDay.ToString("N0") Wh/hari</div>
+                <div class="text-muted small">Puncak: @Model.PeakDay.ToString("N0") Wh (@Model.PeakDayDate)</div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card border-start border-4 border-info shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Tahun Ini</div>
+                <div class="h4 mb-1 text-info">@Model.TotalThisYear.ToString("N0") <small class="fs-6">Wh</small></div>
+                <div class="text-muted small">Rata-rata: @Model.AvgPerMonth.ToString("N0") Wh/bulan</div>
+                <div class="text-muted small">Puncak: @Model.PeakMonth.ToString("N0") Wh (@Model.PeakMonthName)</div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card border-start border-4 border-warning shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Estimasi Biaya</div>
+                <div class="h4 mb-1 text-warning">Rp @Model.Recap.TotalCost.ToString("N0")</div>
+                <div class="text-muted small">Tarif: Rp @Model.Recap.CostPerKWh.ToString("N0")/kWh</div>
+                <div class="text-muted small">Power Factor: @Model.Recap.AvgPowerFactor.ToString("P2") (@Model.Recap.Efficiency)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="chart-row mb-4">
+    <div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-clock"></i> Penggunaan Per Jam (Hari Ini)</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="hourlyChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Penggunaan Per Hari (Bulan Ini)</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="dailyChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Penggunaan Per Bulan (Tahun Ini)</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function() {
+        loadUsageCharts();
+        });
+
+        function loadUsageCharts() {
+        $.ajax({
+        url: '/api/Api/usage-statistics',
+        method: 'GET',
+        dataType: 'json',
+        success: function(data) {
+        initUsageCharts(data);
+        },
+        error: function() {
+        console.error('Failed to load usage statistics');
+        }
+        });
+        }
+
+        function initUsageCharts(data) {
+        if (data && data.hourlyData) {
+        const hourlyCtx = document.getElementById('hourlyChart');
+        if (hourlyCtx) {
+        new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+        labels: data.hourlyData.map(h => h.timeLabel),
+        datasets: [{
+        label: 'Energy (Wh)',
+        data: data.hourlyData.map(h => h.energy),
+        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+        borderColor: 'rgba(13, 110, 253, 1)',
+        borderWidth: 1
+        }]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+        }
+        });
+        }
+        }
+
+        if (data && data.dailyData) {
+        const dailyCtx = document.getElementById('dailyChart');
+        if (dailyCtx) {
+        new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+        labels: data.dailyData.map(d => d.dateLabel),
+        datasets: [{
+        label: 'Energy (Wh)',
+        data: data.dailyData.map(d => d.energy),
+        backgroundColor: 'rgba(25, 135, 84, 0.7)',
+        borderColor: 'rgba(25, 135, 84, 1)',
+        borderWidth: 1
+        }]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+        }
+        });
+        }
+        }
+
+        if (data && data.monthlyData) {
+        const monthlyCtx = document.getElementById('monthlyChart');
+        if (monthlyCtx) {
+        new Chart(monthlyCtx, {
+        type: 'bar',
+        data: {
+        labels: data.monthlyData.map(m => m.monthName),
+        datasets: [{
+        label: 'Energy (Wh)',
+        data: data.monthlyData.map(m => m.energy),
+        backgroundColor: 'rgba(13, 202, 240, 0.7)',
+        borderColor: 'rgba(13, 202, 240, 1)',
+        borderWidth: 1
+        }]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+        }
+        });
+        }
+        }
+        }
+    </script>
+}

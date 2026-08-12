@@ -1,0 +1,2633 @@
+﻿@model KWHMonitoring.Models.PanelViewModel
+@{
+    ViewData["Title"] = $"Details - {Model.GroupName}";
+    var deviceKey = Model.DeviceKey;
+    var safeKey = deviceKey.Replace("-", "_");
+    var isThreePhase = Model.IsThreePhase;
+    // Define maximum capacity for load calculations (in Watts)
+    // This value should ideally come from the model or database
+    var maxCapacity = 30000m; // Default to 30,000W - should be loaded from configuration
+}
+
+<!-- Breadcrumb -->
+<div class="erp-breadcrumb">
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
+    <span class="current">Details - @Model.GroupName</span>
+</div>
+
+<!-- Page Header -->
+<div class="erp-page-header">
+    <div>
+        <h2><i class="fas fa-info-circle text-primary"></i> Details - @Model.GroupName</h2>
+        <div class="subtitle">
+            <i class="fas fa-microchip"></i> Device: <strong>@deviceKey</strong>
+            <span class="d-none d-md-inline">
+                <span class="mx-2">|</span>
+                <i class="fas fa-server"></i> ID: @Model.DeviceId
+            </span>
+            <span class="ms-2">
+                @if (isThreePhase)
+                {
+                    <span class="badge" style="background-color: #6f42c1; font-size: 0.75rem;">3&#934; Three Phase</span>
+                }
+                else
+                {
+                    <span class="badge" style="background-color: #fd7e14; font-size: 0.75rem;">1&#934; Single Phase</span>
+                }
+            </span>
+            <span class="ms-2" id="detailCategoryBadge">
+                <span class="badge cat-Billboard" style="font-size: 0.75rem;">🔵 Billboard</span>
+            </span>
+            <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-erp-action" id="btnRefresh">
+            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
+        </button>
+        <button class="btn btn-erp-action" id="btnSettings">
+            <i class="fas fa-cog"></i> <span class="d-none d-sm-inline">EMA</span>
+        </button>
+        <a asp-action="Index" class="btn btn-erp-action">
+            <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Dashboard</span>
+        </a>
+        <a asp-action="ExportCSV" asp-route-deviceKey="@deviceKey" class="btn btn-erp-action">
+            <i class="fas fa-file-csv"></i> <span class="d-none d-sm-inline">Export</span>
+        </a>
+    </div>
+</div>
+
+<!-- Category & Downtime Info Bar -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <span id="detailCategoryIcon" style="font-size: 1.3rem;">🔵</span>
+                <select class="category-selector cat-Billboard" id="detailCategorySelect" data-device-key="@deviceKey" title="Pilih kategori device" style="font-size:0.8rem;">
+                    <option value="Billboard" selected>🔵 Billboard</option>
+                    <option value="Megatron">🟠 Megatron</option>
+                    <option value="NeonBox">🟣 Neon Box</option>
+                </select>
+            </div>
+            <div class="vr d-none d-md-block"></div>
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-clock text-muted" style="font-size:0.8rem;"></i>
+                <small class="text-muted">Downtime:</small>
+                <span class="badge bg-secondary" id="detailDowntimeLabel" style="font-size: 0.75rem;">Tidak Aktif</span>
+            </div>
+            <div class="vr d-none d-md-block"></div>
+            <div class="d-flex align-items-center gap-2" id="detailDowntimeStatusCard">
+                <span id="detailDowntimeStatus" class="fw-bold" style="font-size: 0.8rem;">
+                    <i class="fas fa-spinner fa-spin"></i> Memuat...
+                </span>
+                <small class="text-muted" id="detailDowntimeTime"></small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs Navigation (ERP Style) -->
+<ul class="nav nav-tabs erp-tabs" id="detailsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab active" id="monitoring-tab" data-toggle="tab" href="#tabMonitoring" role="tab">
+            <i class="fas fa-tachometer-alt"></i> <span>Monitoring</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="charts-tab" data-toggle="tab" href="#tabCharts" role="tab">
+            <i class="fas fa-chart-line"></i> <span>Charts</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="usage-tab" data-toggle="tab" href="#tabUsage" role="tab">
+            <i class="fas fa-chart-bar"></i> <span>Usage</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="logs-tab" data-toggle="tab" href="#tabAnomalyLogs" role="tab">
+            <i class="fas fa-exclamation-triangle"></i> <span>Anomaly</span>
+            <span class="badge bg-danger" id="anomalyCount">0</span>
+        </a>
+    </li>
+</ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="detailsTabContent">
+
+        <!-- TAB 1: MONITORING -->
+        <div class="tab-pane fade in active" id="tabMonitoring" role="tabpanel">
+            <div class="card shadow-sm mb-3 mb-md-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2 py-md-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plug"></i> <span id="panelGroupName">@Model.GroupName</span>
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (isThreePhase)
+                        {
+                            <span class="badge me-2" style="background-color: #6f42c1;" id="phaseTypeBadge">3&#934;</span>
+                        }
+                        else
+                        {
+                            <span class="badge me-2" style="background-color: #fd7e14;" id="phaseTypeBadge">1&#934;</span>
+                        }
+                        <span class="badge bg-success me-2" id="panelStatus">NORMAL</span>
+                        <span class="badge bg-secondary" id="panelAvgVoltage">@Model.AvgVoltage.ToString("N1")V</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Row 1: 3 cards -->
+                    <div class="detail-stats-row mb-3">
+                        <!-- Voltage Section -->
+                        <div>
+                            <div class="card h-100 border-start border-primary border-4">
+                                <div class="card-body p-3">
+                                    @if (isThreePhase)
+                                    {
+                                        <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                            <i class="fas fa-bolt text-warning"></i> Voltage (R/S/T)
+                                        </h6>
+                                        <div class="d-flex justify-content-between gap-2 mb-3">
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-success w-100 py-2 px-1 fs-6" id="voltR">@Model.Volt_R.ToString("N1")V</div>
+                                                <small class="text-muted d-block mt-1">R</small>
+                                            </div>
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-success w-100 py-2 px-1 fs-6" id="voltS">@(Model.Volt_S?.ToString("N1") ?? "0.0")V</div>
+                                                <small class="text-muted d-block mt-1">S</small>
+                                            </div>
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-success w-100 py-2 px-1 fs-6" id="voltT">@(Model.Volt_T?.ToString("N1") ?? "0.0")V</div>
+                                                <small class="text-muted d-block mt-1">T</small>
+                                            </div>
+                                        </div>
+                                        <div class="text-center pt-2 border-top">
+                                            <small class="text-muted">Average</small>
+                                            <h5 class="text-primary mb-0 fw-bold" id="avgVoltageDisplay">@Model.AvgVoltage.ToString("N1") V</h5>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                            <i class="fas fa-bolt text-warning"></i> Voltage
+                                        </h6>
+                                        <div class="text-center mb-3">
+                                            <div class="badge bg-success py-2 px-3 fs-5" id="voltR">@Model.Volt_R.ToString("N1")V</div>
+                                            <small class="text-muted d-block mt-1">R</small>
+                                        </div>
+                                        <div class="text-center pt-2 border-top">
+                                            <small class="text-muted">Voltage</small>
+                                            <h5 class="text-primary mb-0 fw-bold" id="avgVoltageDisplay">@Model.Volt_R.ToString("N1") V</h5>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Section -->
+                        <div>
+                            <div class="card h-100 border-start border-info border-4">
+                                <div class="card-body p-3">
+                                    @if (isThreePhase)
+                                    {
+                                        <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                            <i class="fas fa-wave-square text-info"></i> Current (R/S/T)
+                                        </h6>
+                                        <div class="d-flex justify-content-between gap-2 mb-3">
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-secondary w-100 py-2 px-1 fs-6" id="ampR">@Model.Amp_R.ToString("N2")A</div>
+                                                <small class="text-muted d-block mt-1">R</small>
+                                            </div>
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-secondary w-100 py-2 px-1 fs-6" id="ampS">@(Model.Amp_S?.ToString("N2") ?? "0.00")A</div>
+                                                <small class="text-muted d-block mt-1">S</small>
+                                            </div>
+                                            <div class="text-center flex-fill">
+                                                <div class="badge bg-secondary w-100 py-2 px-1 fs-6" id="ampT">@(Model.Amp_T?.ToString("N2") ?? "0.00")A</div>
+                                                <small class="text-muted d-block mt-1">T</small>
+                                            </div>
+                                        </div>
+                                        <div class="text-center pt-2 border-top">
+                                            <small class="text-muted">Average</small>
+                                            <h5 class="text-success mb-0 fw-bold" id="avgCurrentDisplay">@Model.AvgAmpere.ToString("N2") A</h5>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                            <i class="fas fa-wave-square text-info"></i> Current
+                                        </h6>
+                                        <div class="text-center mb-3">
+                                            <div class="badge bg-secondary py-2 px-3 fs-5" id="ampR">@Model.Amp_R.ToString("N2")A</div>
+                                            <small class="text-muted d-block mt-1">R</small>
+                                        </div>
+                                        <div class="text-center pt-2 border-top">
+                                            <small class="text-muted">Current</small>
+                                            <h5 class="text-success mb-0 fw-bold" id="avgCurrentDisplay">@Model.Amp_R.ToString("N2") A</h5>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Power & Energy Section -->
+                        <div>
+                            <div class="card h-100 border-start border-danger border-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                        <i class="fas fa-fire text-danger"></i> Power & Energy
+                                    </h6>
+                                    <div class="d-flex gap-3 mb-3">
+                                        <div class="flex-fill text-center p-2 bg-primary bg-opacity-10 rounded-3">
+                                            <small class="text-primary fw-semibold d-block mb-1">Power</small>
+                                            <strong class="text-primary fs-5" id="powerDisplay">@Model.Daya_Watt.ToString("N0") W</strong>
+                                        </div>
+                                        <div class="flex-fill text-center p-2 bg-warning bg-opacity-10 rounded-3">
+                                            <small class="text-warning fw-semibold d-block mb-1">Aktif</small>
+                                            <strong class="text-warning fs-5" id="aktifDisplay">@Model.Energi_Aktif_Wh.ToString("N0") Wh</strong>
+                                        </div>
+                                    </div>
+                                    <div class="text-center pt-2 border-top">
+                                        <small class="text-muted">Status</small>
+                                        <h5 class="mb-0 fw-bold" id="loadStatusDisplay">
+                                            @{
+                                                var loadStatusPercent = Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100);
+                                            }
+                                            @if (loadStatusPercent > 70) { <span class="text-danger">HIGH</span> }
+                                            else if (loadStatusPercent > 30) { <span class="text-warning">MEDIUM</span> }
+                                            else { <span class="text-success">NORMAL</span> }
+                                        </h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: 3 cards -->
+                    <div class="detail-stats-row">
+                        <!-- Cos Phi & Frequency -->
+                        <div>
+                            <div class="card h-100 border-start border-warning border-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                        <i class="fas fa-percentage text-info"></i> Power Factor & Freq
+                                    </h6>
+                                    <div class="d-flex gap-3 mb-3">
+                                        <div class="flex-fill text-center p-2">
+                                            <small class="text-muted fw-semibold d-block mb-1">Cos Phi</small>
+                                            <strong class="text-info fs-5" id="cosPhiDisplay">@Model.Cos_Phi.ToString("N3")</strong>
+                                        </div>
+                                        <div class="flex-fill text-center p-2">
+                                            <small class="text-muted fw-semibold d-block mb-1">Frequency</small>
+                                            <strong class="text-warning fs-5" id="freqDisplay">@Model.Frekuensi_Hz.ToString("N2") Hz</strong>
+                                        </div>
+                                    </div>
+                                    <div class="text-center pt-2 border-top">
+                                        <small class="text-muted">PF Status</small>
+                                        <h5 class="mb-0 fw-bold" id="pfStatusText">
+                                            @if (Model.Cos_Phi >= 0.8m) { <span class="text-success">Excellent</span> }
+                                            else if (Model.Cos_Phi >= 0.6m) { <span class="text-warning">Good</span> }
+                                            else { <span class="text-danger">Poor</span> }
+                                        </h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Power Factor Gauge -->
+                        <div>
+                            <div class="card h-100 border-start border-success border-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                        <i class="fas fa-tachometer-alt text-success"></i> Power Factor
+                                    </h6>
+                                    <div class="text-center mb-3">
+                                        <h3 class="mb-1 fw-bold" id="pfPercentDisplay">@((Model.Cos_Phi * 100).ToString("N1"))%</h3>
+                                        <span class="badge bg-@(Model.Cos_Phi >= 0.8m ? "success" : Model.Cos_Phi >= 0.6m ? "warning" : "danger") fs-6" id="pfStatusDisplay">
+                                            @(Model.Cos_Phi >= 0.8m ? "Excellent" : Model.Cos_Phi >= 0.6m ? "Good" : "Poor")
+                                        </span>
+                                    </div>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar @(Model.Cos_Phi >= 0.8m ? "bg-success" : Model.Cos_Phi >= 0.6m ? "bg-warning" : "bg-danger")"
+                                             id="pfGauge"
+                                             role="progressbar"
+                                             style="width: @((Model.Cos_Phi * 100).ToString("F0"))%; font-size: 0.85rem; font-weight: bold;">
+                                            @((Model.Cos_Phi * 100).ToString("N0"))%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Load Gauge -->
+                        <div>
+                            <div class="card h-100 border-start border-primary border-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted mb-3 pb-2 border-bottom">
+                                        <i class="fas fa-chart-line text-primary"></i> Load
+                                    </h6>
+                                    <div class="text-center mb-3">
+                                        <h3 class="mb-1 fw-bold" id="loadDisplay">@Model.Daya_Watt.ToString("N0") W</h3>
+                                        <small class="text-muted">of <span id="loadCapacityLabel">@maxCapacity.ToString("N0")</span> W capacity</small>
+                                    </div>
+                                    @{
+                                        var loadPercent = Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100);
+                                        var loadColor = loadPercent > 70 ? "bg-danger" : loadPercent > 30 ? "bg-warning" : "bg-info";
+                                    }
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar @loadColor"
+                                             id="loadGauge"
+                                             role="progressbar"
+                                             style="width: @loadPercent%; font-size: 0.85rem; font-weight: bold;">
+                                            @loadPercent.ToString("N0")%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category & Downtime Info Card moved to header bar -->
+
+        </div>
+
+        <!-- TAB 2: USAGE STATISTICS -->
+        <div class="tab-pane fade" id="tabUsage" role="tabpanel">
+            <!-- Date Navigation -->
+            <div class="row mb-2 mb-md-3">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-body py-2">
+                            <div class="row align-items-center date-nav-row">
+                                <div class="col-auto">
+                                    <label class="form-label mb-0 fw-bold"><i class="fas fa-calendar"></i></label>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-outline-primary btn-sm" id="btnDevicePrevDay">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </button>
+                                </div>
+                                <div class="col-auto">
+                                    <input type="date" class="form-control form-control-sm" id="deviceFilterDate" style="min-width: 140px;">
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-outline-primary btn-sm" id="btnDeviceNextDay">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-outline-secondary btn-sm" id="btnDeviceToday">
+                                        <i class="fas fa-calendar-day"></i> <span class="d-none d-sm-inline">Hari Ini</span>
+                                    </button>
+                                </div>
+                                <div class="col">
+                                    <span class="text-muted ms-2" id="deviceSelectedDayName">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="stats-row mb-3 mb-md-4">
+                <div>
+                    <div class="stat-card bg-primary h-100">
+                        <div class="stat-label">Hari Ini</div>
+                        <div class="stat-value" id="usageToday">0 kWh</div>
+                        <small style="opacity:0.75">Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
+                        <i class="fas fa-calendar-day stat-icon"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-card bg-success h-100">
+                        <div class="stat-label">Bulan Ini</div>
+                        <div class="stat-value" id="usageMonth">0 kWh</div>
+                        <small style="opacity:0.75">Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
+                        <i class="fas fa-calendar-week stat-icon"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-card bg-info h-100">
+                        <div class="stat-label">Tahun Ini</div>
+                        <div class="stat-value" id="usageYear">0 kWh</div>
+                        <small style="opacity:0.75">Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
+                        <i class="fas fa-calendar stat-icon"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-card bg-warning h-100">
+                        <div class="stat-label">Estimasi Biaya</div>
+                        <div class="stat-value" id="usageCost">Rp 0</div>
+                        <small style="opacity:0.75">Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
+                        <i class="fas fa-money-bill-wave stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="chart-row mb-3 mb-md-4">
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-primary text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-clock"></i> Per Jam</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="deviceHourlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-success text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Per Hari</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="deviceDailyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-info text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Per Bulan</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="deviceMonthlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Peak Info -->
+            <div class="peak-row">
+                <div>
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <h6 class="text-muted mb-1"><i class="fas fa-bolt text-warning"></i> Peak Hour</h6>
+                            <h5 class="text-primary mb-1" id="peakHourValue">0 kWh</h5>
+                            <p class="text-muted mb-0">Jam: <span id="peakHourTime">-</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <h6 class="text-muted mb-1"><i class="fas fa-calendar-day text-success"></i> Peak Day</h6>
+                            <h5 class="text-success mb-1" id="peakDayValue">0 kWh</h5>
+                            <p class="text-muted mb-0">Tanggal: <span id="peakDayDate">-</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <h6 class="text-muted mb-1"><i class="fas fa-calendar-alt text-info"></i> Peak Month</h6>
+                            <h5 class="text-info mb-1" id="peakMonthValue">0 kWh</h5>
+                            <p class="text-muted mb-0">Bulan: <span id="peakMonthName">-</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: CHARTS -->
+        <div class="tab-pane fade" id="tabCharts" role="tabpanel">
+            <div class="chart-row">
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-primary text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-bolt"></i> Voltage (V)</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="detailVoltageChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-success text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-wave-square"></i> Current (A)</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="detailCurrentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-info text-white py-2">
+                            <h6 class="mb-0"><i class="fas fa-fire"></i> Power (W)</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="detailPowerChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: ANOMALY LOGS -->
+        <div class="tab-pane fade" id="tabAnomalyLogs" role="tabpanel">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2">
+                    <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Anomaly Logs</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="anomaly-grid-scroll-wrapper">
+                        <div id="detailAnomalyGrid" style="width:100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EMA & Chart Settings Modal -->
+<div class="modal fade" id="emaSettingsModal" tabindex="-1">
+    <div class="modal-dialog ema-modal-dialog">
+        <div class="modal-content ema-modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title mb-0"><i class="fas fa-cog"></i> EMA & Chart Settings</h6>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body ema-modal-body">
+                <ul class="nav nav-tabs nav-tabs-sm mb-2" id="emaModalTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link active" id="ema-tab-inner" data-toggle="tab" href="#emaTabContent" role="tab">
+                            <i class="fas fa-chart-line"></i> EMA
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link" id="downtime-tab-inner" data-toggle="tab" href="#downtimeTabContent" role="tab">
+                            <i class="fas fa-moon"></i> Downtime
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link" id="display-tab-inner" data-toggle="tab" href="#displayTabContent" role="tab">
+                            <i class="fas fa-th"></i> Display
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <!-- EMA TAB -->
+                    <div class="tab-pane fade in active" id="emaTabContent" role="tabpanel">
+                        <div class="ema-info-banner">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>EMA</strong> — Exponential Moving Average untuk deteksi anomali pada chart Power.
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label ema-label">Threshold Mode</label>
+                            <div class="btn-group w-100 ema-btn-group" role="group">
+                                <input type="radio" class="btn-check" name="thresholdMode" id="modeManual" value="manual" checked>
+                                <label class="btn btn-outline-primary ema-btn-sm" for="modeManual"><i class="fas fa-percentage"></i> Manual (%)</label>
+                                <input type="radio" class="btn-check" name="thresholdMode" id="modeFibonacci" value="fibonacci">
+                                <label class="btn btn-outline-primary ema-btn-sm" for="modeFibonacci"><i class="fas fa-infinity"></i> Fibonacci (φ)</label>
+                            </div>
+                        </div>
+                        <div id="manualSettings">
+                            <div class="ema-grid-2 mb-2">
+                                <div>
+                                    <label class="form-label ema-label">Upper Threshold (%)</label>
+                                    <input type="number" class="form-control form-control-sm" id="upperThreshold" value="30" min="1" max="1000">
+                                    <small class="text-muted ema-hint">Di atas EMA → OVERLOAD</small>
+                                </div>
+                                <div>
+                                    <label class="form-label ema-label">Lower Threshold (%)</label>
+                                    <input type="number" class="form-control form-control-sm" id="lowerThreshold" value="50" min="1" max="100">
+                                    <small class="text-muted ema-hint">Di bawah EMA → DEVICE DROP</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="fibonacciSettings" style="display: none;">
+                            <div class="ema-grid-2 mb-2">
+                                <div>
+                                    <label class="form-label ema-label text-danger">Upper (φ)</label>
+                                    <select class="form-select form-select-sm" id="fibUpper">
+                                        <option value="1.272">1.272 (√φ)</option>
+                                        <option value="1.618" selected>1.618 (φ)</option>
+                                        <option value="2.000">2.000 (2×)</option>
+                                        <option value="2.618">2.618 (φ²)</option>
+                                        <option value="3.236">3.236 (2φ)</option>
+                                        <option value="4.236">4.236 (φ³)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label ema-label text-warning">Lower (1/φ)</label>
+                                    <select class="form-select form-select-sm" id="fibLower">
+                                        <option value="0.236">0.236</option>
+                                        <option value="0.382">0.382</option>
+                                        <option value="0.500">0.500</option>
+                                        <option value="0.618" selected>0.618 (1/φ)</option>
+                                        <option value="0.786">0.786</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ema-grid-2 mb-2">
+                            <div>
+                                <label class="form-label ema-label">EMA Period</label>
+                                <input type="number" class="form-control form-control-sm" id="emaPeriod" value="20" min="1" max="1000000" step="1">
+                                <small class="text-muted ema-hint">Kecil = responsif, Besar = smooth</small>
+                            </div>
+                            <div>
+                                <label class="form-label ema-label">Auto-Refresh (sec)</label>
+                                <input type="number" class="form-control form-control-sm" id="refreshInterval" value="10" min="5" max="300">
+                            </div>
+                        </div>
+                        <div class="ema-check-group">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showEMA" checked>
+                                <label class="form-check-label">Show EMA Line</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showThresholds" checked>
+                                <label class="form-check-label">Show Threshold Lines</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="useInitial100ForEma">
+                                <label class="form-check-label">Use 100 Initial Points Baseline</label>
+                            </div>
+                        </div>
+                        <small class="text-muted ema-hint">Baseline: EMA diambil dari 100 data pertama device. Jika off, gunakan EMA biasa.</small>
+                    </div>
+                    <!-- DOWNTIME TAB -->
+                    <div class="tab-pane fade" id="downtimeTabContent" role="tabpanel">
+                        <div class="ema-info-banner">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Downtime</strong> — periode listrik dimatikan. <span class="badge bg-secondary">DROP</span> ditahan,
+                            <span class="badge bg-danger">OVERLOAD</span> → alert "listrik menyala saat jam mati",
+                            <span class="badge bg-warning text-dark">Lower Line</span> disembunyikan.
+                        </div>
+                        <div class="mb-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="downtimeEnabled" style="width: 2.5em; height: 1.3em;">
+                                <label class="form-check-label ema-label" for="downtimeEnabled">Aktifkan Downtime Period</label>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label ema-label">Preset Waktu</label>
+                            <div class="ema-grid-presets">
+                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="22" data-end="6" data-desc="Shift Malam">
+                                    <i class="fas fa-moon"></i><br><small>22:00-06:00</small>
+                                </button>
+                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="12" data-end="13" data-desc="Istirahat Siang">
+                                    <i class="fas fa-utensils"></i><br><small>12:00-13:00</small>
+                                </button>
+                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="21" data-end="5" data-desc="Malam Awal">
+                                    <i class="fas fa-cloud-moon"></i><br><small>21:00-05:00</small>
+                                </button>
+                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="0" data-end="0" data-desc="Custom">
+                                    <i class="fas fa-sliders-h"></i><br><small>Atur manual</small>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ema-grid-3 mb-2">
+                            <div>
+                                <label class="form-label ema-label">Jam Mulai</label>
+                                <select class="form-select form-select-sm" id="downtimeStartHour"></select>
+                            </div>
+                            <div>
+                                <label class="form-label ema-label">Jam Selesai</label>
+                                <select class="form-select form-select-sm" id="downtimeEndHour"></select>
+                            </div>
+                            <div>
+                                <label class="form-label ema-label">Durasi</label>
+                                <div class="form-control form-control-sm bg-light text-center" id="downtimeDuration" readonly>8 jam</div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label ema-label">Deskripsi</label>
+                            <input type="text" class="form-control form-control-sm" id="downtimeDescription" placeholder="Contoh: Periode listrik sengaja dimatikan">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label ema-label"><i class="fas fa-clock"></i> Timeline</label>
+                            <div class="position-relative" style="height: 24px; background: #28a745; border-radius: 4px; overflow: hidden;">
+                                <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">
+                                <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+                            </div>
+                        </div>
+                        <div class="card border" id="downtimeStatusCard">
+                            <div class="card-body text-center py-1">
+                                <div id="downtimeCurrentStatus" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- DISPLAY TAB -->
+                    <div class="tab-pane fade" id="displayTabContent" role="tabpanel">
+                        <div class="ema-grid-2 mb-2">
+                            <div>
+                                <label class="form-label ema-label">Chart Data Points</label>
+                                <input type="number" class="form-control form-control-sm" id="chartDataPoints" value="20" min="10" max="100">
+                                <small class="text-muted ema-hint">Jumlah titik data (10-100)</small>
+                            </div>
+                            <div>
+                                <label class="form-label ema-label">Grid Color</label>
+                                <input type="color" class="form-control form-control-color form-control-sm" id="chartGridColor" value="#e0e0e0">
+                            </div>
+                        </div>
+                        <div class="ema-check-group">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chartShowGrid" checked>
+                                <label class="form-check-label">Show Grid Lines</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chartShowLegend" checked>
+                                <label class="form-check-label">Show Legend</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSettings">
+                    <i class="fas fa-save"></i> Save All Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+<style>
+    #detailAnomalyGrid { width: 100% !important; }
+    #detailAnomalyGrid .dx-datagrid { width: 100% !important; border: none !important; }
+    #detailAnomalyGrid .dx-datagrid-headers { border-top: none !important; }
+    #detailAnomalyGrid .dx-datagrid .dx-data-row td { text-align: center; vertical-align: middle; font-size: 12px; }
+    #detailAnomalyGrid .dx-datagrid .dx-header-row td { text-align: center; }
+    #detailAnomalyGrid .dx-datagrid .badge { font-size: 0.7rem; padding: 0.3em 0.55em; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+
+    /* Horizontal scroll wrapper for DataGrid */
+    .anomaly-grid-scroll-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tabs-scroll-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .tabs-scroll-wrapper .nav-tabs {
+        flex-wrap: nowrap;
+        white-space: nowrap;
+    }
+    .tabs-scroll-wrapper .nav-tabs .nav-link {
+        white-space: nowrap;
+    }
+
+    @@media (max-width: 768px) {
+        .anomaly-grid-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #detailAnomalyGrid .dx-datagrid {
+            min-width: 700px !important;
+        }
+
+        .tabs-scroll-wrapper .nav-tabs .nav-link {
+            font-size: 13px;
+            padding: 0.5rem 0.75rem;
+        }
+        #detailAnomalyGrid .dx-datagrid .dx-data-row td {
+            font-size: 11px;
+            padding: 4px 3px !important;
+        }
+        #detailAnomalyGrid .dx-datagrid .dx-header-row td {
+            font-size: 11px;
+            padding: 4px 3px !important;
+            white-space: nowrap !important;
+        }
+        #detailAnomalyGrid .dx-datagrid .badge {
+            font-size: 0.6rem;
+            padding: 0.2em 0.4em;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        var deviceKey = '@deviceKey';
+        var safeKey = '@safeKey';
+        var isThreePhaseDevice = @Model.IsThreePhase.ToString().ToLower();
+        var charts = {};
+        var currentAnomalyPage = 1;
+        var anomalyPageSize = 20;
+        var refreshTimer = null;
+        var anomalyTimer = null;
+        var anomalyCooldown = {};
+        
+        // Konfirmasi anomali: butuh 5 data berturut-turut yang anomali
+        var anomalyConfirmation = {
+            counts: {}, // deviceKey_anomalyType -> count
+            maxConfirmations: 5,
+            cooldownTime: 60000
+        };
+        
+        var deviceUsageDate = new Date();
+
+        // EMA Settings - akan di-load dari database
+        var emaSettings = {
+            period: 20,
+            mode: 'manual',
+            upperThreshold: 30,
+            lowerThreshold: 50,
+            fibUpper: 1.618,
+            fibLower: 0.618,
+            showEMA: true,
+            showThresholds: true,
+            useInitial100ForEma: false,
+            refreshInterval: 10,
+            enableAlerts: true
+        };
+
+        // System/Display Settings
+        var systemSettings = {
+            chartDataPoints: 20,
+            refreshInterval: 10,
+            showGrid: true,
+            showGridX: true,
+            showGridY: true,
+            gridColor: '#e0e0e0',
+            showLegend: false,
+            maxCapacity: 30000,
+            normalThreshold: 30,
+            mediumThreshold: 70
+        };
+
+        // Downtime Settings
+        var downtimeSettings = {
+            enabled: false,
+            startHour: 22,
+            endHour: 6,
+            description: ''
+        };
+
+        var isDowntimeNow = false;
+
+        // ============================================
+        // DEVICE CATEGORY MANAGEMENT
+        // ============================================
+        var deviceCategoryMap = {};
+        var currentCategory = 'Billboard';
+
+        var categoryMeta = {
+            Billboard: { icon: '🔵', color: '#2196f3', desc: 'Perangkat kategori Billboard — Digunakan untuk panel iklan billboard.' },
+            Megatron:  { icon: '🟠', color: '#ff9800', desc: 'Perangkat kategori Megatron — Digunakan untuk panel megatron / LED display.' },
+            NeonBox:   { icon: '🟣', color: '#9c27b0', desc: 'Perangkat kategori Neon Box — Digunakan untuk box neon sign.' }
+        };
+
+        var categoryDowntimeSettings = {
+            Billboard: { enabled: false, startHour: 22, endHour: 6, description: '' },
+            Megatron:  { enabled: false, startHour: 22, endHour: 6, description: '' },
+            NeonBox:   { enabled: false, startHour: 22, endHour: 6, description: '' }
+        };
+
+        var categoryDowntimeMap = {};
+
+        function loadDeviceCategory() {
+            return $.ajax({
+                url: '/api/Api/device-categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    if (data.devices) {
+                        deviceCategoryMap = data.devices;
+                    }
+                    currentCategory = deviceCategoryMap[deviceKey] || 'Billboard';
+                    updateCategoryUI(currentCategory);
+                    console.log('Device category loaded:', deviceCategoryMap);
+                },
+                error: function() { console.warn('Failed to load device categories'); }
+            });
+        }
+
+        function updateCategoryUI(category) {
+            currentCategory = category;
+            var meta = categoryMeta[category] || categoryMeta['Billboard'];
+
+            // Update header badge
+            $('#detailCategoryBadge').html('<span class="badge cat-' + category + '" style="font-size: 0.75rem;">' + meta.icon + ' ' + category + '</span>');
+
+            // Update selector in header bar
+            var $sel = $('#detailCategorySelect');
+            $sel.val(category);
+            $sel.removeClass('cat-Billboard cat-Megatron cat-NeonBox').addClass('cat-' + category);
+
+            // Update icon in header bar
+            $('#detailCategoryIcon').text(meta.icon);
+
+            // Update downtime info for this category
+            updateCategoryDowntimeUI(category);
+        }
+
+        function saveDeviceCategory(deviceKey, category) {
+            return $.ajax({
+                url: '/api/Api/device-category',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ deviceKey: deviceKey, category: category }),
+                success: function(data) {
+                    if (data.success) {
+                        deviceCategoryMap[deviceKey] = category;
+                        updateCategoryUI(category);
+                        // Reload downtime for new category
+                        checkCategoryDowntime(category).then(function() {
+                            updateCategoryDowntimeUI(category);
+                            loadDetailChartData();
+                        });
+                    }
+                },
+                error: function() { alert('Gagal menyimpan kategori device'); }
+            });
+        }
+
+        // Category selector change handler
+        $(document).on('change', '#detailCategorySelect', function(e) {
+            e.stopPropagation();
+            var category = $(this).val();
+            saveDeviceCategory(deviceKey, category);
+        });
+
+        function loadCategoryDowntimeSettings() {
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var promises = categories.map(function(cat) {
+                return $.ajax({
+                    url: '/api/Api/downtime-settings/' + cat,
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        categoryDowntimeSettings[cat] = {
+                            enabled: data.enabled || false,
+                            startHour: data.startHour != null ? data.startHour : 22,
+                            endHour: data.endHour != null ? data.endHour : 6,
+                            description: data.description || ''
+                        };
+                    }
+                });
+            });
+            return $.when.apply($, promises);
+        }
+
+        function checkCategoryDowntime(category) {
+            if (!category) category = 'Billboard';
+            return $.ajax({
+                url: '/api/Api/downtime-status?category=' + encodeURIComponent(category),
+                method: 'GET',
+                dataType: 'json',
+                timeout: 5000,
+                success: function(data) {
+                    categoryDowntimeMap[category] = data.isDowntime || false;
+                },
+                error: function() { console.warn('Failed to check downtime for ' + category); }
+            });
+        }
+
+        function loadAllCategoryDowntime() {
+            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var promises = categories.map(function(cat) {
+                return checkCategoryDowntime(cat);
+            });
+            return $.when.apply($, promises);
+        }
+
+        function updateCategoryDowntimeUI(category) {
+            var s = categoryDowntimeSettings[category] || categoryDowntimeSettings['Billboard'];
+            var isDowntime = categoryDowntimeMap[category] || false;
+
+            var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
+            var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
+
+            // Update downtime label in header bar
+            if (s.enabled) {
+                $('#detailDowntimeLabel')
+                    .text(startLabel + '–' + endLabel)
+                    .removeClass('bg-secondary bg-success bg-danger')
+                    .addClass(isDowntime ? 'bg-danger' : 'bg-success');
+            } else {
+                $('#detailDowntimeLabel')
+                    .text('Tidak Aktif')
+                    .removeClass('bg-success bg-danger')
+                    .addClass('bg-secondary');
+            }
+
+            // Update downtime status in header bar
+            var $status = $('#detailDowntimeStatus');
+            var $time = $('#detailDowntimeTime');
+
+            if (isDowntime) {
+                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME</span>');
+                $time.text(startLabel + '–' + endLabel);
+            } else if (s.enabled) {
+                $status.html('<span class="text-success"><i class="fas fa-sun"></i> NORMAL</span>');
+                $time.text(startLabel + '–' + endLabel);
+            } else {
+                $status.html('<span class="text-muted"><i class="fas fa-minus-circle"></i> Nonaktif</span>');
+                $time.text('');
+            }
+        }
+
+        function isDowntimeForDevice() {
+            return categoryDowntimeMap[currentCategory] || false;
+        }
+
+        // ============================================
+        // USAGE STATISTICS CHARTS
+        // ============================================
+        var deviceUsageCharts = {};
+
+        function updateDeviceDateInput() {
+            var y = deviceUsageDate.getFullYear();
+            var m = String(deviceUsageDate.getMonth() + 1).padStart(2, '0');
+            var d = String(deviceUsageDate.getDate()).padStart(2, '0');
+            $('#deviceFilterDate').val(y + '-' + m + '-' + d);
+        }
+
+        function updateDeviceDayName() {
+            var days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            var months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+            var dayName = days[deviceUsageDate.getDay()];
+            var dateStr = deviceUsageDate.getDate() + ' ' + months[deviceUsageDate.getMonth()] + ' ' + deviceUsageDate.getFullYear();
+
+            var today = new Date();
+            var isToday = deviceUsageDate.toDateString() === today.toDateString();
+
+            $('#deviceSelectedDayName').text(dayName + ' - ' + dateStr + (isToday ? ' (Hari Ini)' : ''));
+        }
+
+        function loadDeviceUsageStatistics() {
+            console.log('Loading device usage statistics for', deviceKey);
+
+            var startDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate());
+            var endDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate(), 23, 59, 59);
+
+            $.ajax({
+                url: '/api/Api/usage-statistics/' + deviceKey,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString()
+                }),
+                dataType: 'json',
+                timeout: 15000,
+                success: function(data) {
+                    if (!data.success) {
+                        console.error('Error loading usage statistics');
+                        return;
+                    }
+
+                    // Update summary cards (dalam kWh)
+                    $('#usageToday').text(formatDecimal(data.today.total) + ' kWh');
+                    $('#usageTodayAvg').text(formatDecimal(data.today.avgPerHour));
+                    $('#usageMonth').text(formatDecimal(data.month.total) + ' kWh');
+                    $('#usageMonthAvg').text(formatDecimal(data.month.avgPerDay));
+                    $('#usageYear').text(formatDecimal(data.year.total) + ' kWh');
+                    $('#usageYearAvg').text(formatDecimal(data.year.avgPerMonth));
+
+                    var tariff = data.tariffPerKWh || 1500;
+                    $('#tariffDisplay').text('Rp ' + formatNumber(tariff));
+                    var cost = data.estimatedCost || (data.month.total * tariff);
+                    $('#usageCost').text('Rp ' + formatNumber(cost));
+
+                    // Update peak information (dalam kWh)
+                    $('#peakHourValue').text(formatDecimal(data.today.peakHour) + ' kWh');
+                    $('#peakHourTime').text(data.today.peakHourTime);
+                    $('#peakDayValue').text(formatDecimal(data.month.peakDay) + ' kWh');
+                    $('#peakDayDate').text(data.month.peakDayDate);
+                    $('#peakMonthValue').text(formatDecimal(data.year.peakMonth) + ' kWh');
+                    $('#peakMonthName').text(data.year.peakMonthName);
+
+                    // Update charts
+                    updateDeviceUsageCharts(data);
+
+                    console.log('Device usage statistics loaded');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading device usage statistics:', error);
+                }
+            });
+        }
+
+        function updateDeviceUsageCharts(data) {
+            var commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            };
+
+            var today = new Date();
+            var isToday = deviceUsageDate.toDateString() === today.toDateString();
+
+            // Hourly Chart - SORT BY HOUR
+            var hourlyCtx = document.getElementById('deviceHourlyChart');
+            if (hourlyCtx && data.today.hourlyData.length > 0) {
+                if (deviceUsageCharts.hourly) deviceUsageCharts.hourly.destroy();
+
+                var sortedHourly = data.today.hourlyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
+                var currentHour = today.getHours();
+
+                var hourlyColors = sortedHourly.map(function(h) {
+                    if (!isToday) return 'rgba(13, 110, 253, 0.7)';
+                    if (h.sortKey === currentHour) return 'rgba(255, 165, 0, 0.9)';
+                    if (h.sortKey < currentHour) return 'rgba(13, 110, 253, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                deviceUsageCharts.hourly = new Chart(hourlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedHourly.map(function(h) { return h.timeLabel; }),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: sortedHourly.map(function(h) { return h.energy; }),
+                            backgroundColor: hourlyColors,
+                            borderColor: hourlyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: Object.assign({}, commonOptions, {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 9 }, callback: function(v) { return v.toFixed(2) + ' kWh'; } }
+                            },
+                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                        }
+                    })
+                });
+            }
+
+            // Daily Chart - SORT BY DAY
+            var dailyCtx = document.getElementById('deviceDailyChart');
+            if (dailyCtx && data.month.dailyData.length > 0) {
+                if (deviceUsageCharts.daily) deviceUsageCharts.daily.destroy();
+
+                var sortedDaily = data.month.dailyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
+                var isThisMonth = deviceUsageDate.getMonth() === today.getMonth() && deviceUsageDate.getFullYear() === today.getFullYear();
+                var currentDay = today.getDate();
+
+                var dailyColors = sortedDaily.map(function(d) {
+                    if (!isThisMonth) return 'rgba(25, 135, 84, 0.7)';
+                    if (d.sortKey === currentDay) return 'rgba(255, 165, 0, 0.9)';
+                    if (d.sortKey < currentDay) return 'rgba(25, 135, 84, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                deviceUsageCharts.daily = new Chart(dailyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedDaily.map(function(d) { return d.dateLabel; }),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: sortedDaily.map(function(d) { return d.energy; }),
+                            backgroundColor: dailyColors,
+                            borderColor: dailyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: Object.assign({}, commonOptions, {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 9 }, callback: function(v) { return v.toFixed(2) + ' kWh'; } }
+                            },
+                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                        }
+                    })
+                });
+            }
+
+            // Monthly Chart - SORT BY MONTH
+            var monthlyCtx = document.getElementById('deviceMonthlyChart');
+            if (monthlyCtx && data.year.monthlyData.length > 0) {
+                if (deviceUsageCharts.monthly) deviceUsageCharts.monthly.destroy();
+
+                var sortedMonthly = data.year.monthlyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
+                var isThisYear = deviceUsageDate.getFullYear() === today.getFullYear();
+                var currentMonth = today.getMonth() + 1;
+
+                var monthlyColors = sortedMonthly.map(function(m) {
+                    if (!isThisYear) return 'rgba(13, 202, 240, 0.7)';
+                    if (m.sortKey === currentMonth) return 'rgba(255, 165, 0, 0.9)';
+                    if (m.sortKey < currentMonth) return 'rgba(13, 202, 240, 0.7)';
+                    return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                deviceUsageCharts.monthly = new Chart(monthlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedMonthly.map(function(m) { return m.monthName; }),
+                        datasets: [{
+                            label: 'Energy (kWh)',
+                            data: sortedMonthly.map(function(m) { return m.energy; }),
+                            backgroundColor: monthlyColors,
+                            borderColor: monthlyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: Object.assign({}, commonOptions, {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 9 }, callback: function(v) { return v.toFixed(2) + ' kWh'; } }
+                            },
+                            x: { ticks: { font: { size: 9 } } }
+                        }
+                    })
+                });
+            }
+        }
+
+        // Helper untuk format decimal (2 angka di belakang koma)
+        function formatDecimal(num) {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Number(num).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // ============================================
+        // LOAD SETTINGS FROM DATABASE
+        // ============================================
+        function loadEmaSettings() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    url: '/api/Api/get-ema-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        emaSettings = {
+                            period: data.emaPeriod || 20,
+                            mode: data.emaMode || 'manual',
+                            upperThreshold: data.emaUpperThreshold || 30,
+                            lowerThreshold: data.emaLowerThreshold || 50,
+                            fibUpper: data.emaFibUpper || 1.618,
+                            fibLower: data.emaFibLower || 0.618,
+                            showEMA: data.emaShowLine !== false,
+                            showThresholds: data.emaShowThresholds !== false,
+                            useInitial100ForEma: data.useInitial100ForEma || false,
+                            refreshInterval: data.refreshInterval || 10,
+                            enableAlerts: true
+                        };
+                        console.log('EMA Settings loaded:', emaSettings);
+                        resolve();
+                    },
+                    error: function() { resolve(); }
+                });
+            });
+        }
+
+        function loadSystemSettings() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    url: '/api/Api/get-system-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        if (data.success && data.settings) {
+                            systemSettings.chartDataPoints = parseInt(data.settings['Chart.DataPoints']) || 20;
+                            systemSettings.refreshInterval = parseInt(data.settings['RefreshInterval']) || emaSettings.refreshInterval || 10;
+                            systemSettings.showGrid = data.settings['Chart.ShowGrid'] !== 'false';
+                            systemSettings.showGridX = data.settings['Chart.ShowGridX'] !== 'false';
+                            systemSettings.showGridY = data.settings['Chart.ShowGridY'] !== 'false';
+                            systemSettings.gridColor = data.settings['Chart.GridColor'] || '#e0e0e0';
+                            systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
+                            systemSettings.maxCapacity = parseInt(data.settings['Load.MaxCapacity']) || 30000;
+                            systemSettings.normalThreshold = parseInt(data.settings['Load.NormalThreshold']) || 30;
+                            systemSettings.mediumThreshold = parseInt(data.settings['Load.MediumThreshold']) || 70;
+                        }
+                        console.log('System Settings loaded:', systemSettings);
+                        resolve();
+                    },
+                    error: function() { resolve(); }
+                });
+            });
+        }
+
+        function loadDowntimeSettings() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    url: '/api/Api/get-downtime-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        downtimeSettings.enabled = data.enabled || false;
+                        downtimeSettings.startHour = data.startHour != null ? data.startHour : 22;
+                        downtimeSettings.endHour = data.endHour != null ? data.endHour : 6;
+                        downtimeSettings.description = data.description || '';
+                        console.log('Downtime Settings loaded:', downtimeSettings);
+                        resolve();
+                    },
+                    error: function() { resolve(); }
+                });
+            });
+        }
+
+        function checkDowntimeStatus() {
+            return checkCategoryDowntime(currentCategory).then(function() {
+                isDowntimeNow = isDowntimeForDevice();
+                console.log('Downtime status (' + currentCategory + '):', isDowntimeNow ? 'DOWNTIME' : 'NORMAL');
+            });
+        }
+
+        // ============================================
+        // SAVE SETTINGS TO DATABASE
+        // ============================================
+        function saveEmaSettings() {
+            var emaData = {
+                emaPeriod: emaSettings.period,
+                emaMode: emaSettings.mode,
+                emaUpperThreshold: emaSettings.upperThreshold,
+                emaLowerThreshold: emaSettings.lowerThreshold,
+                emaFibUpper: emaSettings.fibUpper,
+                emaFibLower: emaSettings.fibLower,
+                emaShowLine: emaSettings.showEMA,
+                emaShowThresholds: emaSettings.showThresholds,
+                useInitial100ForEma: emaSettings.useInitial100ForEma || false,
+                refreshInterval: emaSettings.refreshInterval,
+                chartDataPoints: systemSettings.chartDataPoints
+            };
+
+            var systemData = {
+                'Chart.DataPoints': String(systemSettings.chartDataPoints),
+                'RefreshInterval': String(emaSettings.refreshInterval),
+                'Chart.ShowGrid': String(systemSettings.showGrid),
+                'Chart.ShowLegend': String(systemSettings.showLegend),
+                'Chart.GridColor': systemSettings.gridColor || '#e0e0e0'
+            };
+
+            return new Promise(function(resolve, reject) {
+                $.when(
+                    $.ajax({
+                        url: '/api/Api/save-ema-settings',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(emaData)
+                    }),
+                    $.ajax({
+                        url: '/api/Api/save-system-settings',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(systemData)
+                    })
+                ).done(function() {
+                    systemSettings.refreshInterval = emaSettings.refreshInterval;
+                    console.log('EMA & System Settings saved');
+                    resolve();
+                }).fail(function(xhr, status, error) {
+                    console.error('Error saving settings:', error);
+                    reject(error);
+                });
+            });
+        }
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        function formatNumber(num) {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        function calculateEMA(data, period) {
+            if (!data || data.length === 0) return [];
+            var k = 2 / (period + 1);
+            var ema = [data[0] || 0];
+            for (var i = 1; i < data.length; i++) {
+                var value = data[i] !== null && data[i] !== undefined ? data[i] : ema[i - 1];
+                ema.push(value * k + ema[i - 1] * (1 - k));
+            }
+            return ema;
+        }
+
+        // Fungsi untuk menghitung EMA dengan baseline SMA dari 100 data pertama
+        // Baseline = rata-rata sederhana (SMA), membentuk garis horizontal datar
+        // Threshold dihitung dari baseline ini, bukan dari EMA yang berubah-ubah
+        function calculateEMAWithBaseline(data, period, baselineValue) {
+            if (!data || data.length === 0) return [];
+            if (baselineValue === null || baselineValue === undefined) {
+                return calculateEMA(data, period);
+            }
+
+            // Garis horizontal datar pada nilai baseline (SMA 100 data pertama)
+            // Setiap titik data memiliki nilai yang sama = baseline
+            return data.map(function() { return baselineValue; });
+        }
+
+        function calculateThresholds(ema, mode, upperValue, lowerValue) {
+            var upper = [], lower = [];
+            try {
+                var uv = upperValue != null && !isNaN(upperValue) ? upperValue : 1;
+                var lv = lowerValue != null && !isNaN(lowerValue) ? lowerValue : 1;
+                if (mode === 'fibonacci') {
+                    upper = ema.map(function(v) { return (v != null ? v : 0) * uv; });
+                    lower = ema.map(function(v) { return (v != null ? v : 0) * lv; });
+                } else {
+                    upper = ema.map(function(v) { return (v != null ? v : 0) * (1 + uv / 100); });
+                    lower = ema.map(function(v) { return (v != null ? v : 0) * (1 - lv / 100); });
+                }
+            } catch(e) { console.error('Error calculating thresholds:', e); }
+            return { upper: upper, lower: lower };
+        }
+
+        // ============================================
+        // GRID CONFIG HELPERS
+        // ============================================
+        function getGridConfig() {
+            return {
+                display: systemSettings.showGrid,
+                drawOnChartArea: systemSettings.showGrid,
+                drawTicks: systemSettings.showGrid,
+                color: systemSettings.gridColor,
+                lineWidth: 1
+            };
+        }
+
+        function getScaleConfig(beginAtZero, yCallback) {
+            return {
+                x: {
+                    ticks: { font: { size: 9 }, maxRotation: 45 },
+                    grid: getGridConfig()
+                },
+                y: {
+                    beginAtZero: beginAtZero,
+                    ticks: { font: { size: 9 }, callback: yCallback },
+                    grid: getGridConfig()
+                }
+            };
+        }
+
+        // ============================================
+        // ANOMALY DETECTION & LOGGING (AKTIF)
+        // ============================================
+        function detectAndLogAnomaly(deviceKey, powerData, ema, upperThreshold, lowerThreshold) {
+            if (!emaSettings.enableAlerts) {
+                console.log('Anomaly alerts disabled');
+                return;
+            }
+
+            // Cek data point terakhir (real-time)
+            var lastIndex = powerData.length - 1;
+            if (lastIndex < 0) {
+                console.log('No power data');
+                return;
+            }
+
+            var currentPower = powerData[lastIndex];
+            var upper = upperThreshold[lastIndex];
+            var lower = lowerThreshold[lastIndex];
+            var emaValue = ema[lastIndex];
+
+            console.log('=== ANOMALY CHECK ===');
+            console.log('Current Power:', currentPower);
+            console.log('Upper Threshold:', upper);
+            console.log('Lower Threshold:', lower);
+            console.log('EMA Value:', emaValue);
+
+            if (currentPower === null || currentPower === undefined) {
+                console.log('Current power is null/undefined');
+                return;
+            }
+            if (upper === undefined || lower === undefined) {
+                console.log('Thresholds are undefined');
+                return;
+            }
+
+            var anomalyType = null;
+            var thresholdValue = 0;
+            var deviation = 0;
+
+            // DOWNTIME LOGIC: Use EMA as trigger (not upper line)
+            // This indicates power is still ON normally during downtime, not overload
+            if (isDowntimeForDevice() && currentPower > emaValue) {
+                anomalyType = 'OVERLOAD';
+                thresholdValue = emaValue;
+                deviation = ((currentPower - emaValue) / emaValue * 100);
+                console.log('⚠️ LISTRIK MENYALA SAAT JAM MATI! Power:', currentPower.toFixed(1), 'W | EMA:', emaValue.toFixed(1), 'W | Deviation:', deviation.toFixed(1) + '%');
+            }
+            // NORMAL LOGIC: Use upper line as trigger
+            else if (currentPower > upper) {
+                anomalyType = 'OVERLOAD';
+                thresholdValue = upper;
+                deviation = ((currentPower - upper) / upper * 100);
+                console.log('⚠️ OVERLOAD DETECTED! Deviation:', deviation.toFixed(1) + '%');
+            }
+            // DROP detection (normal operation only, suppressed during downtime)
+            else if (!isDowntimeForDevice() && currentPower < lower) {
+                anomalyType = 'DROP';
+                thresholdValue = lower;
+                deviation = ((lower - currentPower) / lower * 100);
+                console.log('⚠️ DEVICE DROP DETECTED! Deviation:', deviation.toFixed(1) + '%');
+            } else {
+                console.log('✓ Power within normal range');
+                return;
+            }
+
+            // CONFIRMATION LOGIC: Need 5 consecutive data points to confirm anomaly
+            var cooldownKey = deviceKey + '_' + anomalyType;
+            var now = Date.now();
+            
+            // Check cooldown first
+            if (anomalyCooldown[cooldownKey] && (now - anomalyCooldown[cooldownKey]) < anomalyConfirmation.cooldownTime) {
+                console.log('❌ Anomaly ' + anomalyType + ' for ' + deviceKey + ' in cooldown period');
+                return;
+            }
+
+            let confirmedCount = anomalyConfirmation.counts[cooldownKey] || 0;
+            
+            // Increment confirmation count
+            confirmedCount++;
+            anomalyConfirmation.counts[cooldownKey] = confirmedCount;
+            
+            // Log confirmation progress
+            const statusMessage = isDowntimeForDevice() ? '[DOWNTIME]' : '[NORMAL]';
+            console.log(`⚠️ ANOMALY CHECK: ${anomalyType} for ${deviceKey} ${statusMessage} - Threshold: ${thresholdValue.toFixed(2)}, Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`);
+            
+            // Only send log after 5 confirmed samples
+            if (confirmedCount >= anomalyConfirmation.maxConfirmations) {
+                console.log(`✅ ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/5 samples met`);
+                
+                // Log ke database
+                console.log('Posting anomaly log to database...');
+                $.ajax({
+                    url: '/api/Api/log-anomaly',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        deviceKey: deviceKey,
+                        deviceId: deviceKey,
+                        anomalyType: anomalyType,
+                        powerValue: currentPower,
+                        thresholdValue: thresholdValue,
+                        deviation: Math.round(deviation * 10) / 10,
+                        emaValue: emaValue,
+                        thresholdMode: emaSettings.mode
+                    }),
+                    timeout: 10000,
+                    success: function(response) {
+                        console.log('✅ Anomaly logged successfully:', response);
+                        // Update badge counter
+                        loadAnomalyLogs();
+                        // Reset confirmation count and set cooldown
+                        anomalyConfirmation.counts[cooldownKey] = 0;
+                        anomalyCooldown[cooldownKey] = now;
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('❌ Error logging anomaly:', error);
+                        console.error('Response:', xhr.responseText);
+                        // Reset confirmation count on error so it can retry
+                        anomalyConfirmation.counts[cooldownKey] = 0;
+                    }
+                });
+
+                // Show alert modal
+                showAnomalyAlert(deviceKey, anomalyType, currentPower, thresholdValue, deviation);
+            } else {
+                console.log(`📊 Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`);
+                // Continue checking without sending notification yet
+            }
+        }
+
+        function showAnomalyAlert(deviceKey, type, power, threshold, deviation) {
+            var isOverload = type === 'OVERLOAD';
+            var content = '<div class="alert alert-' + (isOverload ? 'danger' : 'warning') + '">' +
+                '<h5><i class="fas ' + (isOverload ? 'fa-bolt' : 'fa-power-off') + '"></i> ' + (isOverload ? 'OVERLOAD' : 'DEVICE DROP') + ' DETECTED</h5>' +
+                '<hr>' +
+                '<p><strong>Device:</strong> ' + deviceKey + '</p>' +
+                '<p><strong>Power:</strong> ' + formatNumber(power) + ' W</p>' +
+                '<p><strong>Threshold:</strong> ' + formatNumber(threshold) + ' W</p>' +
+                '<p><strong>Deviation:</strong> ' + deviation.toFixed(1) + '%</p>' +
+                '<p><strong>Time:</strong> ' + new Date().toLocaleString('id-ID') + '</p>' +
+                '</div>';
+            $('#anomalyContent').html(content);
+            $('#anomalyModal').modal('show');
+        }
+
+        // ============================================
+        // UPDATE PANEL MONITORING
+        // ============================================
+        function updatePanelMonitoring() {
+            console.log('Updating panel monitoring...');
+
+            $.ajax({
+                url: '/api/Api/panels',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(panels) {
+                    var panel = panels.find(function(p) { return p.deviceKey === deviceKey; });
+                    if (!panel) {
+                        console.log('Panel not found');
+                        return;
+                    }
+
+                    var voltR = parseFloat(panel.r) || 0;
+                    var voltS = panel.s != null ? parseFloat(panel.s) : null;
+                    var voltT = panel.t != null ? parseFloat(panel.t) : null;
+                    var ampR = parseFloat(panel.ampR) || 0;
+                    var ampS = panel.ampS != null ? parseFloat(panel.ampS) : null;
+                    var ampT = panel.ampT != null ? parseFloat(panel.ampT) : null;
+                    var cosPhi = parseFloat(panel.cosPhi) || 0;
+                    var dayaWatt = parseFloat(panel.dayaWatt) || 0;
+                    var aktif = parseFloat(panel.energiAktif) || 0;
+                    var freq = parseFloat(panel.frekuensi) || 0;
+
+                    var isThreePhase = panel.isThreePhase === true;
+                    var avgVoltage = isThreePhase ? (voltR + voltS + voltT) / 3 : voltR;
+                    var avgCurrent = isThreePhase ? (ampR + ampS + ampT) / 3 : ampR;
+                    var pfPercent = (cosPhi * 100);
+                    var maxCap = systemSettings.maxCapacity || 30000;
+                    var normalThresh = systemSettings.normalThreshold || 30;
+                    var mediumThresh = systemSettings.mediumThreshold || 70;
+                    var loadPercent = Math.min((dayaWatt / maxCap) * 100, 100);
+
+                    $('#panelStatus').text(panel.status);
+                    $('#panelStatus').removeClass('bg-success bg-warning bg-danger');
+                    if (panel.status === 'HIGH') $('#panelStatus').addClass('bg-danger');
+                    else if (panel.status === 'MEDIUM') $('#panelStatus').addClass('bg-warning');
+                    else $('#panelStatus').addClass('bg-success');
+
+                    $('#panelAvgVoltage').text(avgVoltage.toFixed(1) + 'V');
+
+                    // Phase type badge
+                    var $phaseBadge = $('#phaseTypeBadge');
+                    if (isThreePhase) {
+                        $phaseBadge.text('3\u03A6').css('background-color', '#6f42c1');
+                    } else {
+                        $phaseBadge.text('1\u03A6').css('background-color', '#fd7e14');
+                    }
+
+                    // Update category from API data
+                    if (panel.deviceCategory) {
+                        deviceCategoryMap[deviceKey] = panel.deviceCategory;
+                        if (panel.deviceCategory !== currentCategory) {
+                            updateCategoryUI(panel.deviceCategory);
+                        }
+                    }
+
+                    // Voltage badges - warna dinamis
+                    function getVoltColor(v) { return v < 200 ? 'bg-danger' : v < 220 ? 'bg-warning' : 'bg-success'; }
+                    $('#voltR').text(voltR.toFixed(1).replace('.', ',') + 'V').removeClass('bg-success bg-warning bg-danger').addClass(getVoltColor(voltR));
+
+                    if (isThreePhase) {
+                        $('#voltS').text(voltS.toFixed(1).replace('.', ',') + 'V').removeClass('bg-success bg-warning bg-danger').addClass(getVoltColor(voltS));
+                        $('#voltT').text(voltT.toFixed(1).replace('.', ',') + 'V').removeClass('bg-success bg-warning bg-danger').addClass(getVoltColor(voltT));
+                    }
+
+                    $('#avgVoltageDisplay').text(avgVoltage.toFixed(1) + ' V');
+
+                    // Current badges - warna dinamis
+                    function getAmpColor(a) { return a > 80 ? 'bg-danger' : a > 70 ? 'bg-warning' : 'bg-secondary'; }
+                    $('#ampR').text(ampR.toFixed(2).replace('.', ',') + 'A').removeClass('bg-secondary bg-warning bg-danger').addClass(getAmpColor(ampR));
+
+                    if (isThreePhase) {
+                        $('#ampS').text(ampS.toFixed(2).replace('.', ',') + 'A').removeClass('bg-secondary bg-warning bg-danger').addClass(getAmpColor(ampS));
+                        $('#ampT').text(ampT.toFixed(2).replace('.', ',') + 'A').removeClass('bg-secondary bg-warning bg-danger').addClass(getAmpColor(ampT));
+                    }
+
+                    $('#avgCurrentDisplay').text(avgCurrent.toFixed(2) + ' A');
+                    $('#powerDisplay').text(formatNumber(dayaWatt) + ' W');
+                    $('#aktifDisplay').text(formatNumber(aktif) + ' Wh');
+                    $('#cosPhiDisplay').text(cosPhi.toFixed(3).replace('.', ','));
+                    $('#freqDisplay').text(freq.toFixed(2).replace('.', ',') + ' Hz');
+
+                    $('#pfPercentDisplay').text(pfPercent.toFixed(1).replace('.', ',') + '%');
+                    var pfStatus = 'Poor';
+                    var pfColor = 'bg-danger';
+                    var pfTextColor = 'text-danger';
+                    if (cosPhi >= 0.8) { pfStatus = 'Excellent'; pfColor = 'bg-success'; pfTextColor = 'text-success'; }
+                    else if (cosPhi >= 0.6) { pfStatus = 'Good'; pfColor = 'bg-warning'; pfTextColor = 'text-warning'; }
+                    $('#pfStatusDisplay').text(pfStatus).removeClass('bg-success bg-warning bg-danger').addClass(pfColor);
+                    $('#pfStatusText').html('<span class="' + pfTextColor + '">' + pfStatus + '</span>');
+                    $('#pfGauge').css('width', pfPercent + '%').text(pfPercent.toFixed(0) + '%');
+                    $('#pfGauge').removeClass('bg-success bg-warning bg-danger').addClass(pfColor);
+
+                    $('#loadDisplay').text(formatNumber(dayaWatt) + ' W');
+                    $('#loadCapacityLabel').text(formatNumber(maxCap));
+                    var loadColor = 'bg-info';
+                    var loadStatus = 'NORMAL';
+                    var loadStatusColor = 'text-success';
+                    if (loadPercent > mediumThresh) { loadColor = 'bg-danger'; loadStatus = 'HIGH LOAD'; loadStatusColor = 'text-danger'; }
+                    else if (loadPercent > normalThresh) { loadColor = 'bg-warning'; loadStatus = 'MEDIUM LOAD'; loadStatusColor = 'text-warning'; }
+                    $('#loadStatusDisplay').html('<span class="' + loadStatusColor + '">' + loadStatus + '</span>');
+                    $('#loadGauge').css('width', loadPercent + '%').text(loadPercent.toFixed(0) + '%');
+                    $('#loadGauge').removeClass('bg-info bg-warning bg-danger').addClass(loadColor);
+
+                    $('#statusText').text('Online');
+                    console.log('Panel monitoring updated');
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error updating monitoring:', error);
+                    $('#statusText').text('Offline');
+                }
+            });
+        }
+
+        // ============================================
+        // CHART INITIALIZATION WITH EMA
+        // ============================================
+        function initDetailCharts() {
+            console.log('Initializing detail charts...');
+
+            var commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    title: { display: false }
+                }
+            };
+
+            // Voltage Chart
+            var voltageCtx = document.getElementById('detailVoltageChart');
+            if (voltageCtx) {
+                var voltageDatasets = [
+                    { label: 'Volt R', data: [], borderColor: '#ff4444', backgroundColor: 'rgba(255,68,68,0.1)', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 }
+                ];
+                if (isThreePhaseDevice) {
+                    voltageDatasets.push(
+                        { label: 'Volt S', data: [], borderColor: '#ffaa00', backgroundColor: 'rgba(255,170,0,0.1)', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 },
+                        { label: 'Volt T', data: [], borderColor: '#4444ff', backgroundColor: 'rgba(68,68,255,0.1)', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 }
+                    );
+                }
+                charts.voltage = new Chart(voltageCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: voltageDatasets
+                    },
+                    options: Object.assign({}, commonOptions, {
+                        scales: getScaleConfig(false, function(v) { return v + 'V'; }),
+                        plugins: Object.assign({}, commonOptions.plugins, { title: { display: false } })
+                    })
+                });
+            }
+
+            // Current Chart
+            var currentCtx = document.getElementById('detailCurrentChart');
+            if (currentCtx) {
+                var currentDatasets = [
+                    { label: 'Amp R', data: [], borderColor: '#ff4444', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 }
+                ];
+                if (isThreePhaseDevice) {
+                    currentDatasets.push(
+                        { label: 'Amp S', data: [], borderColor: '#ffaa00', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 },
+                        { label: 'Amp T', data: [], borderColor: '#4444ff', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5 }
+                    );
+                }
+                charts.current = new Chart(currentCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: currentDatasets
+                    },
+                    options: Object.assign({}, commonOptions, {
+                        scales: getScaleConfig(true, function(v) { return v + 'A'; }),
+                        plugins: Object.assign({}, commonOptions.plugins, { title: { display: false } })
+                    })
+                });
+            }
+
+            // Power Chart WITH EMA AND THRESHOLDS
+            var powerCtx = document.getElementById('detailPowerChart');
+            if (powerCtx) {
+                var powerDatasets = [{
+                    label: 'Power (W)',
+                    data: [],
+                    borderColor: '#00cc66',
+                    backgroundColor: 'rgba(0,204,102,0.2)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    order: 3
+                }];
+
+                if (emaSettings.showEMA) {
+                    powerDatasets.push({
+                        label: 'EMA ' + emaSettings.period,
+                        data: [],
+                        borderColor: '#ff6600',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        order: 2
+                    });
+                }
+
+                if (emaSettings.showThresholds) {
+                    powerDatasets.push({
+                        label: 'Upper Threshold',
+                        data: [],
+                        borderColor: '#ff0000',
+                        backgroundColor: 'rgba(255,0,0,0.05)',
+                        fill: '+1',
+                        tension: 0,
+                        borderWidth: 2,
+                        borderDash: [10, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        order: 1
+                    });
+                    powerDatasets.push({
+                        label: 'Lower Threshold',
+                        data: [],
+                        borderColor: '#ff9900',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0,
+                        borderWidth: 2,
+                        borderDash: [10, 5],
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        order: 1
+                    });
+                }
+
+                charts.power = new Chart(powerCtx, {
+                    type: 'line',
+                    data: { labels: [], datasets: powerDatasets },
+                    options: Object.assign({}, commonOptions, {
+                        scales: getScaleConfig(false, function(v) { return v.toLocaleString('id-ID') + 'W'; }),
+                        plugins: Object.assign({}, commonOptions.plugins, { title: { display: false } })
+                    })
+                });
+            }
+        }
+
+        // ============================================
+        // EMA CALCULATION HELPER (Promise-based, non-blocking)
+        // ============================================
+        function fetchAndApplyEma(devKey, powerData) {
+            if (!devKey) {
+                console.warn('fetchAndApplyEma: deviceKey is missing, using regular EMA');
+                return $.Deferred().resolve(calculateEMA(powerData, emaSettings.period)).promise();
+            }
+
+            if (emaSettings.useInitial100ForEma) {
+                return $.ajax({
+                    url: '/api/Api/get-initial-ema/' + encodeURIComponent(devKey),
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000
+                }).then(function(initialData) {
+                    if (initialData.success && initialData.emaBaseline != null) {
+                        var emaBaseline = initialData.emaBaseline;
+                        console.log('Using EMA Baseline:', emaBaseline);
+                        return calculateEMAWithBaseline(powerData, emaSettings.period, emaBaseline);
+                    } else {
+                        console.log('No EMA baseline found, using regular EMA');
+                        return calculateEMA(powerData, emaSettings.period);
+                    }
+                }).fail(function() {
+                    console.log('Error fetching EMA baseline, using regular EMA');
+                    return calculateEMA(powerData, emaSettings.period);
+                });
+            } else {
+                return $.Deferred().resolve(calculateEMA(powerData, emaSettings.period)).promise();
+            }
+        }
+
+        // ============================================
+        // DATA LOADING WITH EMA & ANOMALY DETECTION
+        // ============================================
+        function loadDetailChartData() {
+            console.log('Loading chart data for', deviceKey);
+
+            var points = systemSettings.chartDataPoints || 20;
+            $.ajax({
+                url: '/api/Api/panels/' + deviceKey + '/chart?points=' + points,
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    try {
+                        if (charts.voltage && data.voltage) {
+                            charts.voltage.data.labels = data.labels || [];
+                            charts.voltage.data.datasets[0].data = data.voltage.r || [];
+                            if (isThreePhaseDevice && charts.voltage.data.datasets.length > 1) {
+                                charts.voltage.data.datasets[1].data = data.voltage.s || [];
+                                if (charts.voltage.data.datasets.length > 2) {
+                                    charts.voltage.data.datasets[2].data = data.voltage.t || [];
+                                }
+                            }
+                            charts.voltage.update('none');
+                        }
+
+                        if (charts.current && data.current) {
+                            charts.current.data.labels = data.labels || [];
+                            charts.current.data.datasets[0].data = data.current.r || [];
+                            if (isThreePhaseDevice && charts.current.data.datasets.length > 1) {
+                                charts.current.data.datasets[1].data = data.current.s || [];
+                                if (charts.current.data.datasets.length > 2) {
+                                    charts.current.data.datasets[2].data = data.current.t || [];
+                                }
+                            }
+                            charts.current.update('none');
+                        }
+
+                        if (charts.power && data.power) {
+                            var powerData = data.power || [];
+                            charts.power.data.labels = data.labels || [];
+                            charts.power.data.datasets[0].data = powerData;
+
+                            if (emaSettings.showEMA && charts.power.data.datasets[1]) {
+                                fetchAndApplyEma(deviceKey, powerData).done(function(ema) {
+                                    try {
+                                        charts.power.data.datasets[1].data = ema;
+                                        charts.power.data.datasets[1].label = emaSettings.useInitial100ForEma ? 'SMA 100 (Baseline)' : 'EMA ' + emaSettings.period;
+                                        charts.power.data.datasets[1].tension = emaSettings.useInitial100ForEma ? 0 : 0.3;
+
+                                        if (emaSettings.showThresholds && charts.power.data.datasets[2]) {
+                                            var upperValue = emaSettings.mode === 'fibonacci' ? emaSettings.fibUpper : emaSettings.upperThreshold;
+                                            var lowerValue = emaSettings.mode === 'fibonacci' ? emaSettings.fibLower : emaSettings.lowerThreshold;
+
+                                            var thresholds = calculateThresholds(ema, emaSettings.mode, upperValue, lowerValue);
+                                            charts.power.data.datasets[2].data = thresholds.upper;
+                                            charts.power.data.datasets[2].label = 'Upper (' + (emaSettings.mode === 'fibonacci' ? '×' + upperValue : '+' + upperValue + '%') + ')';
+
+                                            // Lower threshold: hide during downtime
+                                            if (charts.power.data.datasets[3]) {
+                                            if (isDowntimeForDevice()) {
+                                                    charts.power.data.datasets[3].data = [];
+                                                    charts.power.data.datasets[3].borderColor = 'transparent';
+                                                    charts.power.data.datasets[3].label = 'Lower (Downtime)';
+                                                } else {
+                                                    charts.power.data.datasets[3].data = thresholds.lower;
+                                                    charts.power.data.datasets[3].borderColor = '#ff9900';
+                                                    charts.power.data.datasets[3].label = 'Lower (' + (emaSettings.mode === 'fibonacci' ? '×' + lowerValue : '-' + lowerValue + '%') + ')';
+                                                }
+                                            }
+
+                                            // DETEKSI DAN LOG ANOMALI
+                                            detectAndLogAnomaly(deviceKey, powerData, ema, thresholds.upper, thresholds.lower);
+                                        }
+
+                                        charts.power.update('none');
+                                    } catch(err) {
+                                        console.error('Error applying EMA to chart:', err);
+                                    }
+                                });
+                            } else {
+                                charts.power.update('none');
+                            }
+                        }
+
+                        console.log('Charts updated');
+                    } catch(e) {
+                        console.error('Error updating charts:', e);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading chart data:', error);
+                }
+            });
+        }
+
+        // ============================================
+        // ANOMALY LOGS (DevExtreme DataGrid)
+        // ============================================
+        var detailAnomalyGrid = null;
+
+        function initDetailAnomalyGrid() {
+            detailAnomalyGrid = $('#detailAnomalyGrid').dxDataGrid({
+                dataSource: new DevExpress.data.DataSource({
+                    store: new DevExpress.data.CustomStore({
+                        key: 'id',
+                        load: function() {
+                            var d = $.Deferred();
+                            $.ajax({
+                                url: '/api/Api/anomaly-logs/' + deviceKey + '?page=1&pageSize=10000',
+                                method: 'GET',
+                                dataType: 'json',
+                                success: function(response) {
+                                    var rawData = response.logs || [];
+                                    var mapped = rawData.map(function(item) {
+                                        return {
+                                            id: item.id || item.Id || 0,
+                                            deviceKey: item.deviceKey || item.DeviceKey || '',
+                                            anomalyType: item.anomalyType || item.AnomalyType || '',
+                                            powerValue: item.powerValue || item.PowerValue || 0,
+                                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
+                                            deviation: item.deviation || item.Deviation || 0,
+                                            detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
+                                            thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
+                                            acknowledged: item.acknowledged || item.Acknowledged || false
+                                        };
+                                    });
+                                    $('#anomalyCount').text(response.totalCount || mapped.length);
+                                    d.resolve(mapped);
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error loading anomaly logs:', error);
+                                    d.reject(error);
+                                }
+                            });
+                            return d.promise();
+                        }
+                    })
+                }),
+
+                paging: { pageSize: 20 },
+                pager: {
+                    showPageSizeSelector: true,
+                    allowedPageSizes: [10, 20, 50],
+                    showInfo: true,
+                    showNavigationButtons: true
+                },
+
+                scrolling: {
+                    mode: 'standard',
+                    showScrollbar: 'always',
+                    useNative: true
+                },
+
+                searchPanel: { visible: true, width: 180, placeholder: 'Cari anomali...' },
+                headerFilter: { visible: true },
+                filterRow: { visible: true },
+                sorting: { mode: 'single' },
+                rowAlternationEnabled: true,
+                showBorders: true,
+                showColumnLines: true,
+                showRowLines: false,
+                allowColumnResizing: true,
+                columnAutoWidth: true,
+                loadPanel: { enabled: true, text: 'Memuat data...' },
+                noDataText: 'Tidak ada data anomali',
+
+                onRowPrepared: function(e) {
+                    if (e.rowType !== 'data') return;
+                    var t = e.data.anomalyType;
+                    if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
+                    else if (t === 'DROP' || t === 'DEVICE_DROP') e.rowElement.css('border-left', '3px solid #fd7e14');
+                    else e.rowElement.css('border-left', '3px solid #0d6efd');
+                },
+
+                columns: [
+                    {
+                        dataField: 'id',
+                        caption: '#',
+                        width: 50,
+                        allowGrouping: false,
+                        allowFiltering: false,
+                        allowHeaderFiltering: false,
+                        alignment: 'center'
+                    },
+                    {
+                        dataField: 'detectedTime',
+                        caption: 'Time',
+                        dataType: 'datetime',
+                        sortOrder: 'desc',
+                        alignment: 'center',
+                        allowHeaderFiltering: false,
+                        filterOperations: ['between', '>=', '<=', '>', '<', '='],
+                        selectedFilterOperation: 'between',
+                        editorOptions: {
+                            type: 'datetime',
+                            displayFormat: 'dd/MM/yyyy HH:mm:ss'
+                        },
+                        cellTemplate: function(container, options) {
+                            var val = options.value;
+                            var text = '-';
+                            if (val) {
+                                if (val instanceof Date && !isNaN(val.getTime())) {
+                                    var dd = String(val.getDate()).padStart(2, '0');
+                                    var MM = String(val.getMonth() + 1).padStart(2, '0');
+                                    var yyyy = val.getFullYear();
+                                    var hh = String(val.getHours()).padStart(2, '0');
+                                    var mm = String(val.getMinutes()).padStart(2, '0');
+                                    var ss = String(val.getSeconds()).padStart(2, '0');
+                                    text = dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
+                                } else {
+                                    text = formatDateTimeShort(val);
+                                }
+                            }
+                            $('<span>').text(text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'anomalyType',
+                        caption: 'Type',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'OVERLOAD', value: 'OVERLOAD' },
+                                { text: 'DEVICE DROP', value: 'DROP' },
+                                { text: 'DEVICE DROP', value: 'DEVICE_DROP' }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls, icon, text;
+                            if (v === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD'; }
+                            else if (v === 'DROP' || v === 'DEVICE_DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else { cls = 'bg-info'; icon = 'fa-question'; text = v; }
+                            $('<span>').addClass('badge ' + cls).html('<i class="fas ' + icon + '"></i> ' + text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'powerValue',
+                        caption: 'Power (W)',
+                        dataType: 'number',
+                        alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls = v > 20000 ? 'text-danger' : v > 10000 ? 'text-warning' : 'text-dark';
+                            $('<span>').addClass(cls).text(formatNumber(v) + ' W').appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'thresholdValue',
+                        caption: 'Threshold (W)',
+                        dataType: 'number',
+                        alignment: 'center',
+                        format: { type: 'fixedPoint', precision: 0 }
+                    },
+                    {
+                        dataField: 'deviation',
+                        caption: 'Deviation',
+                        dataType: 'number',
+                        alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            var cls = v > 100 ? 'text-danger' : v > 50 ? 'text-warning' : 'text-success';
+                            $('<span>').addClass(cls).text(fmtDev(v) + '%').appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'thresholdMode',
+                        caption: 'Mode',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'MANUAL', value: 'manual' },
+                                { text: 'EMA', value: 'ema' }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'acknowledged',
+                        caption: 'Status',
+                        dataType: 'boolean',
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'New', value: false },
+                                { text: 'Acknowledged', value: true }
+                            ]
+                        },
+                        cellTemplate: function(container, options) {
+                            if (options.value) {
+                                $('<span>').addClass('badge bg-success').text('Acknowledged').appendTo(container);
+                            } else {
+                                $('<span>').addClass('badge bg-secondary').text('New').appendTo(container);
+                            }
+                        }
+                    }
+                ]
+            });
+        }
+
+        function loadAnomalyLogs() {
+            if (detailAnomalyGrid) {
+                detailAnomalyGrid.getDataSource().reload();
+            }
+        }
+
+        function fmtDev(value) {
+            if (value == null) return '-';
+            return value.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        }
+
+        function formatDateTimeShort(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                var d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                var dd = String(d.getDate()).padStart(2, '0');
+                var MM = String(d.getMonth() + 1).padStart(2, '0');
+                var yyyy = d.getFullYear();
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mm = String(d.getMinutes()).padStart(2, '0');
+                var ss = String(d.getSeconds()).padStart(2, '0');
+                return dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
+            } catch(e) { return isoStr; }
+        }
+
+        // ============================================
+        // AUTO REFRESH
+        // ============================================
+        function startAutoRefresh() {
+            console.log('Starting auto-refresh...');
+
+            if (refreshTimer) clearInterval(refreshTimer);
+            if (anomalyTimer) clearInterval(anomalyTimer);
+
+            refreshTimer = setInterval(function() {
+                console.log('=== Auto-refresh triggered at', new Date().toLocaleTimeString(), '===');
+                loadDetailChartData();
+                updatePanelMonitoring();
+            }, systemSettings.refreshInterval * 1000);
+
+            anomalyTimer = setInterval(function() {
+                loadAnomalyLogs();
+            }, 30000);
+
+            console.log('Auto-refresh started, interval:', systemSettings.refreshInterval, 'seconds');
+        }
+
+        // ============================================
+        // DOWNTIME UI HELPERS
+        // ============================================
+        function populateDowntimeHourDropdowns() {
+            var startSel = $('#downtimeStartHour');
+            var endSel = $('#downtimeEndHour');
+            startSel.empty();
+            endSel.empty();
+            for (var h = 0; h < 24; h++) {
+                var label = (h < 10 ? '0' : '') + h + ':00';
+                startSel.append('<option value="' + h + '">' + label + '</option>');
+                endSel.append('<option value="' + h + '">' + label + '</option>');
+            }
+            startSel.val(downtimeSettings.startHour);
+            endSel.val(downtimeSettings.endHour);
+        }
+
+        function updateDowntimeDuration() {
+            var start = parseInt($('#downtimeStartHour').val());
+            var end = parseInt($('#downtimeEndHour').val());
+            var duration;
+            if (start === end) duration = 24;
+            else if (start < end) duration = end - start;
+            else duration = (24 - start) + end;
+            $('#downtimeDuration').text(duration + ' jam');
+        }
+
+        function updateDowntimeTimeline() {
+            var start = parseInt($('#downtimeStartHour').val());
+            var end = parseInt($('#downtimeEndHour').val());
+            var bar = $('#downtimeTimelineBar');
+            var pct = 100 / 24;
+
+            if (start === end) {
+                bar.css({ left: '0%', width: '100%', borderRadius: '6px', background: '#343a40' });
+            } else if (start < end) {
+                bar.css({ left: (start * pct) + '%', width: ((end - start) * pct) + '%', borderRadius: '0', background: '#343a40' });
+            } else {
+                var startPct = start * pct;
+                var endPct = end * pct;
+                bar.css({ left: '0%', width: '100%', borderRadius: '0',
+                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
+                });
+                return;
+            }
+            bar.css('background', '#343a40');
+        }
+
+        function updateDowntimeStatusUI() {
+            $.ajax({
+                url: '/api/Api/downtime-status',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    if (data.isDowntime) {
+                        $('#downtimeCurrentStatus').html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">' + data.message + '</small>');
+                        $('#downtimeStatusCard').removeClass('border-success').addClass('border-danger');
+                    } else {
+                        $('#downtimeCurrentStatus').html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">' + data.message + '</small>');
+                        $('#downtimeStatusCard').removeClass('border-danger').addClass('border-success');
+                    }
+                },
+                error: function() {
+                    $('#downtimeCurrentStatus').html('<span class="text-muted">Tidak dapat memuat status</span>');
+                }
+            });
+        }
+
+        function highlightMatchingPreset(startHour, endHour) {
+            $('.preset-btn').removeClass('ema-preset-active');
+            $('.preset-btn').each(function() {
+                if (parseInt($(this).data('start')) === startHour && parseInt($(this).data('end')) === endHour) {
+                    $(this).addClass('ema-preset-active');
+                }
+            });
+        }
+
+        // ============================================
+        // UPDATE SETTINGS MODAL UI FROM LOADED SETTINGS
+        // ============================================
+        function updateSettingsModalUI() {
+            // EMA
+            $('#emaPeriod').val(emaSettings.period);
+            $('#upperThreshold').val(emaSettings.upperThreshold);
+            $('#lowerThreshold').val(emaSettings.lowerThreshold);
+            $('#fibUpper').val(emaSettings.fibUpper);
+            $('#fibLower').val(emaSettings.fibLower);
+            $('#refreshInterval').val(systemSettings.refreshInterval);
+            $('#showEMA').prop('checked', emaSettings.showEMA);
+            $('#showThresholds').prop('checked', emaSettings.showThresholds);
+            $('#useInitial100ForEma').prop('checked', emaSettings.useInitial100ForEma || false);
+            if (emaSettings.mode === 'manual') {
+                $('#modeManual').prop('checked', true);
+                $('#manualSettings').show();
+                $('#fibonacciSettings').hide();
+            } else {
+                $('#modeFibonacci').prop('checked', true);
+                $('#manualSettings').hide();
+                $('#fibonacciSettings').show();
+            }
+
+            // Downtime
+            populateDowntimeHourDropdowns();
+            $('#downtimeEnabled').prop('checked', downtimeSettings.enabled);
+            $('#downtimeStartHour').val(downtimeSettings.startHour);
+            $('#downtimeEndHour').val(downtimeSettings.endHour);
+            $('#downtimeDescription').val(downtimeSettings.description);
+            highlightMatchingPreset(downtimeSettings.startHour, downtimeSettings.endHour);
+            updateDowntimeDuration();
+            updateDowntimeTimeline();
+            updateDowntimeStatusUI();
+
+            // Display
+            $('#chartDataPoints').val(systemSettings.chartDataPoints);
+            $('#chartShowGrid').prop('checked', systemSettings.showGrid);
+            $('#chartShowLegend').prop('checked', systemSettings.showLegend);
+            $('#chartGridColor').val(systemSettings.gridColor);
+        }
+
+        // ============================================
+        // REBUILD CHARTS
+        // ============================================
+        function rebuildCharts() {
+            console.log('Rebuilding charts...');
+            if (charts.voltage) charts.voltage.destroy();
+            if (charts.current) charts.current.destroy();
+            if (charts.power) charts.power.destroy();
+
+            initDetailCharts();
+            loadDetailChartData();
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        $(document).ready(function() {
+            console.log('========================================');
+            console.log('Details Page Initialized');
+            console.log('Device Key:', deviceKey);
+            console.log('========================================');
+
+            // Load all settings in parallel, then init charts
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), checkDowntimeStatus()]).then(function() {
+                console.log('All settings loaded, loading categories...');
+
+                // Load device category and category downtime, then init
+                loadDeviceCategory().then(function() {
+                    return loadCategoryDowntimeSettings();
+                }).then(function() {
+                    return loadAllCategoryDowntime();
+                }).then(function() {
+                    console.log('All settings + categories loaded, initializing charts...');
+
+                    updateSettingsModalUI();
+                    initDetailCharts();
+                    loadDetailChartData();
+                    updatePanelMonitoring();
+                    initDetailAnomalyGrid();
+                    startAutoRefresh();
+
+                    // Periodically re-check downtime status
+                    setInterval(function() {
+                        loadAllCategoryDowntime().then(function() {
+                            updateCategoryDowntimeUI(currentCategory);
+                            checkDowntimeStatus().then(function() {
+                                loadDetailChartData();
+                            });
+                        });
+                    }, 60000);
+                });
+            });
+
+            $('#statusText').text('Online');
+
+            // Load usage statistics when tab is shown
+            $('#usage-tab').on('shown.bs.tab', function() {
+                console.log('Usage Statistics tab shown');
+                updateDeviceDateInput();
+                updateDeviceDayName();
+                loadDeviceUsageStatistics();
+            });
+
+            // Date navigation handlers for usage tab
+            $('#btnDevicePrevDay').click(function() {
+                deviceUsageDate.setDate(deviceUsageDate.getDate() - 1);
+                updateDeviceDateInput();
+                updateDeviceDayName();
+                loadDeviceUsageStatistics();
+            });
+
+            $('#btnDeviceNextDay').click(function() {
+                deviceUsageDate.setDate(deviceUsageDate.getDate() + 1);
+                updateDeviceDateInput();
+                updateDeviceDayName();
+                loadDeviceUsageStatistics();
+            });
+
+            $('#btnDeviceToday').click(function() {
+                deviceUsageDate = new Date();
+                updateDeviceDateInput();
+                updateDeviceDayName();
+                loadDeviceUsageStatistics();
+            });
+
+            $('#deviceFilterDate').change(function() {
+                var dateVal = $(this).val();
+                if (dateVal) {
+                    var parts = dateVal.split('-');
+                    deviceUsageDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    updateDeviceDayName();
+                    loadDeviceUsageStatistics();
+                }
+            });
+
+            // Button handlers
+            $('#btnRefresh').click(function() {
+                console.log('Manual refresh clicked');
+                loadDetailChartData();
+                updatePanelMonitoring();
+                loadAnomalyLogs();
+            });
+
+            // Settings button — open modal
+            $('#btnSettings').click(function() {
+                Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), checkDowntimeStatus()]).then(function() {
+                    updateSettingsModalUI();
+                    $('#emaSettingsModal').modal('show');
+                });
+            });
+
+            // Mode toggle
+            $('input[name="thresholdMode"]').change(function() {
+                if ($(this).val() === 'manual') {
+                    $('#manualSettings').show();
+                    $('#fibonacciSettings').hide();
+                } else {
+                    $('#manualSettings').hide();
+                    $('#fibonacciSettings').show();
+                }
+            });
+
+            // Preset button click
+            $('.preset-btn').click(function() {
+                var start = parseInt($(this).data('start'));
+                var end = parseInt($(this).data('end'));
+                var desc = $(this).data('desc');
+                $('.preset-btn').removeClass('ema-preset-active');
+                $(this).addClass('ema-preset-active');
+                if (start === 0 && end === 0) {
+                    $('#downtimeStartHour').focus();
+                } else {
+                    $('#downtimeStartHour').val(start);
+                    $('#downtimeEndHour').val(end);
+                    $('#downtimeDescription').val(desc);
+                }
+                updateDowntimeDuration();
+                updateDowntimeTimeline();
+            });
+
+            // Downtime hour change
+            $('#downtimeStartHour, #downtimeEndHour').change(function() {
+                $('.preset-btn').removeClass('ema-preset-active');
+                updateDowntimeDuration();
+                updateDowntimeTimeline();
+            });
+
+            // Save All Settings
+            $('#btnSaveEmaSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+                // Collect EMA settings
+                var emaData = {
+                    emaPeriod: parseInt($('#emaPeriod').val()) || 20,
+                    emaMode: $('input[name="thresholdMode"]:checked').val() || 'manual',
+                    emaUpperThreshold: parseInt($('#upperThreshold').val()) || 30,
+                    emaLowerThreshold: parseInt($('#lowerThreshold').val()) || 50,
+                    emaFibUpper: parseFloat($('#fibUpper').val()) || 1.618,
+                    emaFibLower: parseFloat($('#fibLower').val()) || 0.618,
+                    emaShowLine: $('#showEMA').is(':checked'),
+                    emaShowThresholds: $('#showThresholds').is(':checked'),
+                    useInitial100ForEma: $('#useInitial100ForEma').is(':checked'),
+                    refreshInterval: parseInt($('#refreshInterval').val()) || 10,
+                    chartDataPoints: parseInt($('#chartDataPoints').val()) || 20,
+                    tariffPerKWh: 1500
+                };
+
+                // Collect downtime settings
+                var downtimeData = {
+                    enabled: $('#downtimeEnabled').is(':checked'),
+                    startHour: parseInt($('#downtimeStartHour').val()),
+                    endHour: parseInt($('#downtimeEndHour').val()),
+                    description: $('#downtimeDescription').val() || ''
+                };
+
+                // Collect system/display settings
+                var systemData = {
+                    'Chart.DataPoints': $('#chartDataPoints').val() || '20',
+                    'Chart.ShowGrid': $('#chartShowGrid').is(':checked').toString(),
+                    'Chart.ShowLegend': $('#chartShowLegend').is(':checked').toString(),
+                    'Chart.GridColor': $('#chartGridColor').val() || '#e0e0e0'
+                };
+
+                // Save all in parallel
+                var requests = [
+                    $.ajax({ url: '/api/Api/save-ema-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(emaData) }),
+                    $.ajax({ url: '/api/Api/save-downtime-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(downtimeData) }),
+                    $.ajax({ url: '/api/Api/save-system-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(systemData) })
+                ];
+
+                $.when.apply($, requests).done(function() {
+                    // Update local settings
+                    emaSettings.period = emaData.emaPeriod;
+                    emaSettings.mode = emaData.emaMode;
+                    emaSettings.upperThreshold = emaData.emaUpperThreshold;
+                    emaSettings.lowerThreshold = emaData.emaLowerThreshold;
+                    emaSettings.fibUpper = emaData.emaFibUpper;
+                    emaSettings.fibLower = emaData.emaFibLower;
+                    emaSettings.showEMA = emaData.emaShowLine;
+                    emaSettings.showThresholds = emaData.emaShowThresholds;
+                    emaSettings.useInitial100ForEma = emaData.useInitial100ForEma || false;
+                    emaSettings.refreshInterval = emaData.refreshInterval;
+
+                    systemSettings.chartDataPoints = parseInt(systemData['Chart.DataPoints']) || 20;
+                    systemSettings.showGrid = systemData['Chart.ShowGrid'] !== 'false';
+                    systemSettings.showLegend = systemData['Chart.ShowLegend'] !== 'false';
+                    systemSettings.gridColor = systemData['Chart.GridColor'] || '#e0e0e0';
+                    systemSettings.maxCapacity = parseInt(systemData['Load.MaxCapacity']) || 30000;
+                    systemSettings.normalThreshold = parseInt(systemData['Load.NormalThreshold']) || 30;
+                    systemSettings.mediumThreshold = parseInt(systemData['Load.MediumThreshold']) || 70;
+
+                    downtimeSettings.enabled = downtimeData.enabled;
+                    downtimeSettings.startHour = downtimeData.startHour;
+                    downtimeSettings.endHour = downtimeData.endHour;
+                    downtimeSettings.description = downtimeData.description;
+
+                    // Re-check downtime status and rebuild charts
+                    checkDowntimeStatus().then(function() {
+                        startAutoRefresh();
+                        rebuildCharts();
+                        updateDowntimeStatusUI();
+                    });
+
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save All Settings');
+                    $('#emaSettingsModal').modal('hide');
+                    alert('Settings saved!\nEMA Period: ' + emaSettings.period + '\nData Points: ' + systemSettings.chartDataPoints + '\nDowntime: ' + (downtimeSettings.enabled ? 'Active' : 'Disabled'));
+                }).fail(function() {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save All Settings');
+                    alert('Error saving settings. Please try again.');
+                });
+            });
+
+            console.log('Initialization Complete');
+        });
+    </script>
+    <!-- Anomaly Alert Modal -->
+    <div class="modal fade" id="anomalyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Anomaly Detected</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body" id="anomalyContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
