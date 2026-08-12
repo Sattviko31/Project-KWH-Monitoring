@@ -1,0 +1,40 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+build/
+*.exe
+*.dll
+*.pdb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.log
+
+# NuGet
+packages/
+*.nupkg
+**/[Pp]ackages/*
+
+# IntelliSense
+*.DotSettings.user
+
+# Misc
+*.tmp
+*.bak
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# Obsidian (opsional - hapus jika ingin sync)
+# .obsidian/
+
+# Qwen
+.qwen/
