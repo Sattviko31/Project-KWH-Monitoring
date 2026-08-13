@@ -36,9 +36,7 @@
                     <span class="badge" style="background-color: #fd7e14; font-size: 0.75rem;">1&#934; Single Phase</span>
                 }
             </span>
-            <span class="ms-2" id="detailCategoryBadge">
-                <span class="badge cat-Billboard" style="font-size: 0.75rem;">🔵 Billboard</span>
-            </span>
+            <span class="ms-2" id="detailCategoryBadge" style="font-size: 1.1rem;">🔵</span>
             <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
         </div>
     </div>
@@ -64,11 +62,6 @@
         <div class="d-flex align-items-center flex-wrap gap-3">
             <div class="d-flex align-items-center gap-2">
                 <span id="detailCategoryIcon" style="font-size: 1.3rem;">🔵</span>
-                <select class="category-selector cat-Billboard" id="detailCategorySelect" data-device-key="@deviceKey" title="Pilih kategori device" style="font-size:0.8rem;">
-                    <option value="Billboard" selected>🔵 Billboard</option>
-                    <option value="Megatron">🟠 Megatron</option>
-                    <option value="NeonBox">🟣 Neon Box</option>
-                </select>
             </div>
             <div class="vr d-none d-md-block"></div>
             <div class="d-flex align-items-center gap-2">
@@ -360,30 +353,21 @@
                 <div class="col-12">
                     <div class="card shadow-sm">
                         <div class="card-body py-2">
-                            <div class="row align-items-center date-nav-row">
-                                <div class="col-auto">
-                                    <label class="form-label mb-0 fw-bold"><i class="fas fa-calendar"></i></label>
-                                </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-outline-primary btn-sm" id="btnDevicePrevDay">
+                            <div class="date-nav-row">
+                                <div class="date-nav-group">
+                                    <button class="btn btn-outline-primary btn-sm" id="btnDevicePrevDay" title="Hari sebelumnya">
                                         <i class="fas fa-chevron-left"></i>
                                     </button>
-                                </div>
-                                <div class="col-auto">
-                                    <input type="date" class="form-control form-control-sm" id="deviceFilterDate" style="min-width: 140px;">
-                                </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-outline-primary btn-sm" id="btnDeviceNextDay">
+                                    <input type="date" class="form-control form-control-sm" id="deviceFilterDate">
+                                    <button class="btn btn-outline-primary btn-sm" id="btnDeviceNextDay" title="Hari berikutnya">
                                         <i class="fas fa-chevron-right"></i>
                                     </button>
                                 </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-outline-secondary btn-sm" id="btnDeviceToday">
-                                        <i class="fas fa-calendar-day"></i> <span class="d-none d-sm-inline">Hari Ini</span>
+                                <div class="date-nav-info">
+                                    <button class="btn btn-outline-secondary btn-sm" id="btnDeviceToday" title="Hari ini">
+                                        <i class="fas fa-calendar-day"></i> <span>Hari Ini</span>
                                     </button>
-                                </div>
-                                <div class="col">
-                                    <span class="text-muted ms-2" id="deviceSelectedDayName">-</span>
+                                    <span class="text-muted" id="deviceSelectedDayName">-</span>
                                 </div>
                             </div>
                         </div>
@@ -574,10 +558,10 @@
                 <div class="tab-content">
                     <!-- EMA TAB -->
                     <div class="tab-pane fade in active" id="emaTabContent" role="tabpanel">
-                        <div class="ema-info-banner">
+                        @* <div class="ema-info-banner">
                             <i class="fas fa-info-circle"></i>
                             <strong>EMA</strong> — Exponential Moving Average untuk deteksi anomali pada chart Power.
-                        </div>
+                        </div> *@
                         <div class="mb-2">
                             <label class="form-label ema-label">Threshold Mode</label>
                             <div class="btn-group w-100 ema-btn-group" role="group">
@@ -653,69 +637,30 @@
                         </div>
                         <small class="text-muted ema-hint">Baseline: EMA diambil dari 100 data pertama device. Jika off, gunakan EMA biasa.</small>
                     </div>
-                    <!-- DOWNTIME TAB -->
+                    <!-- DOWNTIME TAB — Per Category (Dynamic) -->
                     <div class="tab-pane fade" id="downtimeTabContent" role="tabpanel">
-                        <div class="ema-info-banner">
-                            <i class="fas fa-info-circle"></i>
-                            <strong>Downtime</strong> — periode listrik dimatikan. <span class="badge bg-secondary">DROP</span> ditahan,
-                            <span class="badge bg-danger">OVERLOAD</span> → alert "listrik menyala saat jam mati",
-                            <span class="badge bg-warning text-dark">Lower Line</span> disembunyikan.
-                        </div>
+                        <!-- Preset Buttons — per kategori aktif -->
                         <div class="mb-2">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="downtimeEnabled" style="width: 2.5em; height: 1.3em;">
-                                <label class="form-check-label ema-label" for="downtimeEnabled">Aktifkan Downtime Period</label>
-                            </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label ema-label">Preset Waktu</label>
-                            <div class="ema-grid-presets">
-                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="22" data-end="6" data-desc="Shift Malam">
-                                    <i class="fas fa-moon"></i><br><small>22:00-06:00</small>
+                            <label class="form-label ema-label">Preset Waktu <small class="text-muted">(kategori aktif)</small></label>
+                            <div class="d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-outline-dark btn-sm ema-preset-btn" data-start="22" data-end="6" data-desc="Shift Malam - Listrik dimatikan">
+                                    <i class="fas fa-moon"></i> Malam <small>22:00-06:00</small>
                                 </button>
-                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="12" data-end="13" data-desc="Istirahat Siang">
-                                    <i class="fas fa-utensils"></i><br><small>12:00-13:00</small>
+                                <button type="button" class="btn btn-outline-dark btn-sm ema-preset-btn" data-start="12" data-end="13" data-desc="Istirahat Siang - Listrik dimatikan">
+                                    <i class="fas fa-utensils"></i> Istirahat <small>12:00-13:00</small>
                                 </button>
-                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="21" data-end="5" data-desc="Malam Awal">
-                                    <i class="fas fa-cloud-moon"></i><br><small>21:00-05:00</small>
+                                <button type="button" class="btn btn-outline-dark btn-sm ema-preset-btn" data-start="21" data-end="5" data-desc="Shift Malam Awal - Listrik dimatikan">
+                                    <i class="fas fa-cloud-moon"></i> Malam Awal <small>21:00-05:00</small>
                                 </button>
-                                <button type="button" class="btn w-100 preset-btn ema-preset-btn" data-start="0" data-end="0" data-desc="Custom">
-                                    <i class="fas fa-sliders-h"></i><br><small>Atur manual</small>
+                                <button type="button" class="btn btn-outline-dark btn-sm ema-preset-btn" data-start="0" data-end="0" data-desc="Custom downtime period">
+                                    <i class="fas fa-sliders-h"></i> Custom <small>Atur manual</small>
                                 </button>
                             </div>
                         </div>
-                        <div class="ema-grid-3 mb-2">
-                            <div>
-                                <label class="form-label ema-label">Jam Mulai</label>
-                                <select class="form-select form-select-sm" id="downtimeStartHour"></select>
-                            </div>
-                            <div>
-                                <label class="form-label ema-label">Jam Selesai</label>
-                                <select class="form-select form-select-sm" id="downtimeEndHour"></select>
-                            </div>
-                            <div>
-                                <label class="form-label ema-label">Durasi</label>
-                                <div class="form-control form-control-sm bg-light text-center" id="downtimeDuration" readonly>8 jam</div>
-                            </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label ema-label">Deskripsi</label>
-                            <input type="text" class="form-control form-control-sm" id="downtimeDescription" placeholder="Contoh: Periode listrik sengaja dimatikan">
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label ema-label"><i class="fas fa-clock"></i> Timeline</label>
-                            <div class="position-relative" style="height: 24px; background: #28a745; border-radius: 4px; overflow: hidden;">
-                                <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div>
-                            </div>
-                            <div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">
-                                <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-                            </div>
-                        </div>
-                        <div class="card border" id="downtimeStatusCard">
-                            <div class="card-body text-center py-1">
-                                <div id="downtimeCurrentStatus" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>
-                            </div>
-                        </div>
+
+                        <!-- Category sub-tabs — built dynamically, horizontally scrollable -->
+                        <ul class="nav nav-tabs nav-tabs-sm mb-2" id="downtimeCategoryTabs" role="tablist"></ul>
+                        <div class="tab-content" id="downtimeCategoryTabContent"></div>
                     </div>
                     <!-- DISPLAY TAB -->
                     <div class="tab-pane fade" id="displayTabContent" role="tabpanel">
@@ -865,14 +810,6 @@
             mediumThreshold: 70
         };
 
-        // Downtime Settings
-        var downtimeSettings = {
-            enabled: false,
-            startHour: 22,
-            endHour: 6,
-            description: ''
-        };
-
         var isDowntimeNow = false;
 
         // ============================================
@@ -881,19 +818,37 @@
         var deviceCategoryMap = {};
         var currentCategory = 'Billboard';
 
-        var categoryMeta = {
-            Billboard: { icon: '🔵', color: '#2196f3', desc: 'Perangkat kategori Billboard — Digunakan untuk panel iklan billboard.' },
-            Megatron:  { icon: '🟠', color: '#ff9800', desc: 'Perangkat kategori Megatron — Digunakan untuk panel megatron / LED display.' },
-            NeonBox:   { icon: '🟣', color: '#9c27b0', desc: 'Perangkat kategori Neon Box — Digunakan untuk box neon sign.' }
-        };
+        var categoryMeta = {}; // Populated dynamically from API
 
-        var categoryDowntimeSettings = {
-            Billboard: { enabled: false, startHour: 22, endHour: 6, description: '' },
-            Megatron:  { enabled: false, startHour: 22, endHour: 6, description: '' },
-            NeonBox:   { enabled: false, startHour: 22, endHour: 6, description: '' }
-        };
+        var categoryDowntimeSettings = {};
 
         var categoryDowntimeMap = {};
+
+        // Load categories metadata from API
+        function loadCategoriesMeta() {
+            return $.ajax({
+                url: '/api/Api/categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    categoryMeta = {};
+                    (data || []).forEach(function(cat) {
+                        categoryMeta[cat.name] = { icon: cat.icon, color: cat.color, desc: cat.description };
+                    });
+                    // Inject dynamic CSS for category colors
+                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
+                    // Expose globally for partial views like _AnomalyService
+                    window._categoryMetaMap = categoryMeta;
+                    // Populate category badge in header
+                    updateCategoryUI(currentCategory);
+                    // Build downtime category tabs in modal
+                    buildDowntimeCategoryTabs();
+                    console.log('Categories meta loaded:', categoryMeta);
+                },
+                error: function() { console.warn('Failed to load categories meta'); }
+            });
+        }
 
         function loadDeviceCategory() {
             return $.ajax({
@@ -915,18 +870,12 @@
 
         function updateCategoryUI(category) {
             currentCategory = category;
-            var meta = categoryMeta[category] || categoryMeta['Billboard'];
+            var meta = categoryMeta[category] || { icon: '⚪', color: '#607d8b', desc: '' };
 
-            // Update header badge
-            $('#detailCategoryBadge').html('<span class="badge cat-' + category + '" style="font-size: 0.75rem;">' + meta.icon + ' ' + category + '</span>');
-
-            // Update selector in header bar
-            var $sel = $('#detailCategorySelect');
-            $sel.val(category);
-            $sel.removeClass('cat-Billboard cat-Megatron cat-NeonBox').addClass('cat-' + category);
-
-            // Update icon in header bar
+            // Update icon in info bar
             $('#detailCategoryIcon').text(meta.icon);
+            // Update icon in page header
+            $('#detailCategoryBadge').text(meta.icon);
 
             // Update downtime info for this category
             updateCategoryDowntimeUI(category);
@@ -953,16 +902,11 @@
             });
         }
 
-        // Category selector change handler
-        $(document).on('change', '#detailCategorySelect', function(e) {
-            e.stopPropagation();
-            var category = $(this).val();
-            saveDeviceCategory(deviceKey, category);
-        });
-
         function loadCategoryDowntimeSettings() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
-            var promises = categories.map(function(cat) {
+            // Get categories dynamically from API
+            var cats = Object.keys(categoryMeta);
+            if (cats.length === 0) cats = ['Billboard'];
+            var promises = cats.map(function(cat) {
                 return $.ajax({
                     url: '/api/Api/downtime-settings/' + cat,
                     method: 'GET',
@@ -996,15 +940,146 @@
         }
 
         function loadAllCategoryDowntime() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
-            var promises = categories.map(function(cat) {
+            var cats = Object.keys(categoryMeta);
+            if (cats.length === 0) cats = ['Billboard'];
+            var promises = cats.map(function(cat) {
                 return checkCategoryDowntime(cat);
             });
             return $.when.apply($, promises);
         }
 
+        // ============================================
+        // MODAL DOWNTIME TABS — Dynamic per category
+        // ============================================
+        function buildDowntimeCategoryTabs() {
+            var $tabs = $('#downtimeCategoryTabs');
+            var $content = $('#downtimeCategoryTabContent');
+            $tabs.empty();
+            $content.empty();
+
+            var categories = Object.keys(categoryMeta || {}).length > 0 ? Object.keys(categoryMeta) : ['Billboard'];
+            if (categories.length === 0) {
+                $content.html('<div class="text-center py-4 text-muted"><i class="fas fa-info-circle"></i> Tidak ada kategori</div>');
+                return;
+            }
+
+            categories.forEach(function(cat, idx) {
+                var meta = categoryMeta[cat] || {};
+                var icon = meta.icon || '⚪';
+                var color = meta.color || '#607d8b';
+                var active = idx === 0;
+
+                // Tab nav
+                var tabHtml = '<li class="nav-item" role="presentation">' +
+                    '<a class="nav-link' + (active ? ' active' : '') + '" data-toggle="tab" href="#downtime' + cat + '" role="tab">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';vertical-align:middle;margin-right:2px"></span> ' + cat +
+                    '</a></li>';
+                $tabs.append(tabHtml);
+
+                // Tab content
+                var paneHtml = '<div class="tab-pane' + (active ? ' active' : '') + '" id="downtime' + cat + '" role="tabpanel">' +
+                    '<div class="mb-2"><div class="form-check form-switch">' +
+                    '<input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtime' + cat + 'Enabled" data-category="' + cat + '" style="width: 2.5em; height: 1.3em;">' +
+                    '<label class="form-check-label ema-label" for="downtime' + cat + 'Enabled">Aktifkan Downtime ' + cat + '</label>' +
+                    '</div></div>' +
+                    '<div class="ema-grid-3 mb-2">' +
+                    '<div><label class="form-label ema-label">Jam Mulai</label><select class="form-select form-select-sm cat-downtime-start" id="downtime' + cat + 'StartHour" data-category="' + cat + '"></select></div>' +
+                    '<div><label class="form-label ema-label">Jam Selesai</label><select class="form-select form-select-sm cat-downtime-end" id="downtime' + cat + 'EndHour" data-category="' + cat + '"></select></div>' +
+                    '<div><label class="form-label ema-label">Durasi</label><div class="form-control form-control-sm bg-light text-center" id="downtime' + cat + 'Duration" readonly>8 jam</div></div>' +
+                    '</div>' +
+                    '<div class="mb-2"><label class="form-label ema-label">Deskripsi</label>' +
+                    '<input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtime' + cat + 'Description" data-category="' + cat + '" placeholder="Contoh: ' + cat + ' mati malam hari"></div>' +
+                    '<div class="mb-2"><label class="form-label ema-label"><i class="fas fa-clock"></i> Timeline</label>' +
+                    '<div class="position-relative" style="height: 24px; background: #28a745; border-radius: 4px; overflow: hidden;">' +
+                    '<div id="downtime' + cat + 'TimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div></div>' +
+                    '<div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">' +
+                    '<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div></div>' +
+                    '<div class="card border" id="downtime' + cat + 'StatusCard"><div class="card-body text-center py-1">' +
+                    '<div id="downtime' + cat + 'Status" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>' +
+                    '</div></div></div>';
+                $content.append(paneHtml);
+
+                // Init default downtime settings if not exists
+                if (!categoryDowntimeSettings[cat]) {
+                    categoryDowntimeSettings[cat] = { enabled: false, startHour: 22, endHour: 6, description: '' };
+                }
+            });
+        }
+
+        function populateCategoryHourDropdowns() {
+            var categories = Object.keys(categoryMeta || {}).length > 0 ? Object.keys(categoryMeta) : ['Billboard'];
+            categories.forEach(function(cat) {
+                var $start = $('#downtime' + cat + 'StartHour');
+                var $end = $('#downtime' + cat + 'EndHour');
+                $start.empty();
+                $end.empty();
+                for (var h = 0; h < 24; h++) {
+                    var label = (h < 10 ? '0' : '') + h + ':00';
+                    $start.append('<option value="' + h + '">' + label + '</option>');
+                    $end.append('<option value="' + h + '">' + label + '</option>');
+                }
+                var s = categoryDowntimeSettings[cat];
+                if (s) {
+                    $start.val(s.startHour);
+                    $end.val(s.endHour);
+                }
+            });
+        }
+
+        function updateCategoryDuration(cat) {
+            var start = parseInt($('#downtime' + cat + 'StartHour').val());
+            var end = parseInt($('#downtime' + cat + 'EndHour').val());
+            var duration;
+            if (start === end) duration = 24;
+            else if (start < end) duration = end - start;
+            else duration = (24 - start) + end;
+            $('#downtime' + cat + 'Duration').text(duration + ' jam');
+        }
+
+        function updateDowntimeTimelineForCategory(cat) {
+            var start = parseInt($('#downtime' + cat + 'StartHour').val()) || 22;
+            var end = parseInt($('#downtime' + cat + 'EndHour').val()) || 6;
+            var bar = $('#downtime' + cat + 'TimelineBar');
+            if (!bar.length) return;
+            var pctPerHour = 100 / 24;
+            if (start === end) {
+                bar.css({ left: '0%', width: '100%', borderRadius: '4px', background: '#343a40' });
+            } else if (start < end) {
+                bar.css({ left: (start * pctPerHour) + '%', width: ((end - start) * pctPerHour) + '%', borderRadius: '0', background: '#343a40' });
+            } else {
+                var startPct = start * pctPerHour;
+                var endPct = end * pctPerHour;
+                bar.css({ left: '0%', width: '100%', borderRadius: '0',
+                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
+                });
+            }
+        }
+
+        function updateCategoryDowntimeStatusUIModal(cat) {
+            var $status = $('#downtime' + cat + 'Status');
+            var $card = $('#downtime' + cat + 'StatusCard');
+            var isDowntime = categoryDowntimeMap[cat] || false;
+            var s = categoryDowntimeSettings[cat] || { enabled: false, startHour: 22, endHour: 6 };
+            var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
+            var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
+            if (isDowntime) {
+                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">' + startLabel + '–' + endLabel + ' - Lower threshold disabled</small>');
+                $card.removeClass('border-success').addClass('border-danger');
+            } else {
+                $status.html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">All thresholds active</small>');
+                $card.removeClass('border-danger').addClass('border-success');
+            }
+        }
+
         function updateCategoryDowntimeUI(category) {
-            var s = categoryDowntimeSettings[category] || categoryDowntimeSettings['Billboard'];
+            // Don't update UI if downtime settings haven't been loaded yet
+            var firstCat = Object.keys(categoryDowntimeSettings)[0];
+            if (!categoryDowntimeSettings[category] && !categoryDowntimeSettings[firstCat]) {
+                console.log('⏳ Downtime settings not loaded yet, skipping UI update for ' + category);
+                return;
+            }
+
+            var s = categoryDowntimeSettings[category] || categoryDowntimeSettings[firstCat] || { enabled: false, startHour: 22, endHour: 6 };
             var isDowntime = categoryDowntimeMap[category] || false;
 
             var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
@@ -1311,26 +1386,6 @@
                             systemSettings.mediumThreshold = parseInt(data.settings['Load.MediumThreshold']) || 70;
                         }
                         console.log('System Settings loaded:', systemSettings);
-                        resolve();
-                    },
-                    error: function() { resolve(); }
-                });
-            });
-        }
-
-        function loadDowntimeSettings() {
-            return new Promise(function(resolve) {
-                $.ajax({
-                    url: '/api/Api/get-downtime-settings',
-                    method: 'GET',
-                    dataType: 'json',
-                    timeout: 10000,
-                    success: function(data) {
-                        downtimeSettings.enabled = data.enabled || false;
-                        downtimeSettings.startHour = data.startHour != null ? data.startHour : 22;
-                        downtimeSettings.endHour = data.endHour != null ? data.endHour : 6;
-                        downtimeSettings.description = data.description || '';
-                        console.log('Downtime Settings loaded:', downtimeSettings);
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -2261,77 +2316,13 @@
         }
 
         // ============================================
-        // DOWNTIME UI HELPERS
+        // DOWNTIME UI HELPERS (per-category)
         // ============================================
-        function populateDowntimeHourDropdowns() {
-            var startSel = $('#downtimeStartHour');
-            var endSel = $('#downtimeEndHour');
-            startSel.empty();
-            endSel.empty();
-            for (var h = 0; h < 24; h++) {
-                var label = (h < 10 ? '0' : '') + h + ':00';
-                startSel.append('<option value="' + h + '">' + label + '</option>');
-                endSel.append('<option value="' + h + '">' + label + '</option>');
-            }
-            startSel.val(downtimeSettings.startHour);
-            endSel.val(downtimeSettings.endHour);
-        }
-
-        function updateDowntimeDuration() {
-            var start = parseInt($('#downtimeStartHour').val());
-            var end = parseInt($('#downtimeEndHour').val());
-            var duration;
-            if (start === end) duration = 24;
-            else if (start < end) duration = end - start;
-            else duration = (24 - start) + end;
-            $('#downtimeDuration').text(duration + ' jam');
-        }
-
-        function updateDowntimeTimeline() {
-            var start = parseInt($('#downtimeStartHour').val());
-            var end = parseInt($('#downtimeEndHour').val());
-            var bar = $('#downtimeTimelineBar');
-            var pct = 100 / 24;
-
-            if (start === end) {
-                bar.css({ left: '0%', width: '100%', borderRadius: '6px', background: '#343a40' });
-            } else if (start < end) {
-                bar.css({ left: (start * pct) + '%', width: ((end - start) * pct) + '%', borderRadius: '0', background: '#343a40' });
-            } else {
-                var startPct = start * pct;
-                var endPct = end * pct;
-                bar.css({ left: '0%', width: '100%', borderRadius: '0',
-                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
-                });
-                return;
-            }
-            bar.css('background', '#343a40');
-        }
-
-        function updateDowntimeStatusUI() {
-            $.ajax({
-                url: '/api/Api/downtime-status',
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    if (data.isDowntime) {
-                        $('#downtimeCurrentStatus').html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">' + data.message + '</small>');
-                        $('#downtimeStatusCard').removeClass('border-success').addClass('border-danger');
-                    } else {
-                        $('#downtimeCurrentStatus').html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">' + data.message + '</small>');
-                        $('#downtimeStatusCard').removeClass('border-danger').addClass('border-success');
-                    }
-                },
-                error: function() {
-                    $('#downtimeCurrentStatus').html('<span class="text-muted">Tidak dapat memuat status</span>');
-                }
-            });
-        }
-
-        function highlightMatchingPreset(startHour, endHour) {
+        function highlightMatchingPresetForCategory(cat) {
+            var s = categoryDowntimeSettings[cat] || { startHour: 22, endHour: 6 };
             $('.preset-btn').removeClass('ema-preset-active');
             $('.preset-btn').each(function() {
-                if (parseInt($(this).data('start')) === startHour && parseInt($(this).data('end')) === endHour) {
+                if (parseInt($(this).data('start')) === s.startHour && parseInt($(this).data('end')) === s.endHour) {
                     $(this).addClass('ema-preset-active');
                 }
             });
@@ -2361,16 +2352,26 @@
                 $('#fibonacciSettings').show();
             }
 
-            // Downtime
-            populateDowntimeHourDropdowns();
-            $('#downtimeEnabled').prop('checked', downtimeSettings.enabled);
-            $('#downtimeStartHour').val(downtimeSettings.startHour);
-            $('#downtimeEndHour').val(downtimeSettings.endHour);
-            $('#downtimeDescription').val(downtimeSettings.description);
-            highlightMatchingPreset(downtimeSettings.startHour, downtimeSettings.endHour);
-            updateDowntimeDuration();
-            updateDowntimeTimeline();
-            updateDowntimeStatusUI();
+            // Downtime (per-category)
+            populateCategoryHourDropdowns();
+            var cats = Object.keys(categoryMeta).length > 0 ? Object.keys(categoryMeta) : ['Billboard'];
+            cats.forEach(function(cat) {
+                var s = categoryDowntimeSettings[cat] || { enabled: false, startHour: 22, endHour: 6, description: '' };
+                var $enabled = $('#downtime' + cat + 'Enabled');
+                var $start = $('#downtime' + cat + 'StartHour');
+                var $end = $('#downtime' + cat + 'EndHour');
+                var $desc = $('#downtime' + cat + 'Description');
+                if ($enabled.length) $enabled.prop('checked', s.enabled);
+                if ($start.length) $start.val(s.startHour);
+                if ($end.length) $end.val(s.endHour);
+                if ($desc.length) $desc.val(s.description);
+                updateCategoryDuration(cat);
+                updateDowntimeTimelineForCategory(cat);
+                updateCategoryDowntimeStatusUIModal(cat);
+            });
+            // Highlight preset for first/active category
+            var activeCat = ($('#downtimeCategoryTabs .nav-link.active').text().trim()) || cats[0];
+            highlightMatchingPresetForCategory(activeCat);
 
             // Display
             $('#chartDataPoints').val(systemSettings.chartDataPoints);
@@ -2402,16 +2403,27 @@
             console.log('========================================');
 
             // Load all settings in parallel, then init charts
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), checkDowntimeStatus()]).then(function() {
+            // NOTE: checkDowntimeStatus is NOT called here because currentCategory
+            // is not yet known. It will be called after loadDeviceCategory() completes.
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadCategoryDowntimeSettings()]).then(function() {
                 console.log('All settings loaded, loading categories...');
 
-                // Load device category and category downtime, then init
-                loadDeviceCategory().then(function() {
+                // Load categories meta first, then device category, then downtime
+                loadCategoriesMeta().then(function() {
+                    return loadDeviceCategory();
+                }).then(function() {
                     return loadCategoryDowntimeSettings();
                 }).then(function() {
                     return loadAllCategoryDowntime();
                 }).then(function() {
-                    console.log('All settings + categories loaded, initializing charts...');
+                    // Now that category downtime data is loaded, check the actual
+                    // downtime status for the current device category and update UI
+                    return checkDowntimeStatus();
+                }).then(function() {
+                    // Update header downtime display with actual data
+                    updateCategoryDowntimeUI(currentCategory);
+
+                    console.log('All settings + categories + downtime loaded, initializing charts...');
 
                     updateSettingsModalUI();
                     initDetailCharts();
@@ -2484,7 +2496,7 @@
 
             // Settings button — open modal
             $('#btnSettings').click(function() {
-                Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), checkDowntimeStatus()]).then(function() {
+                Promise.all([loadEmaSettings(), loadSystemSettings(), loadCategoryDowntimeSettings(), loadAllCategoryDowntime()]).then(function() {
                     updateSettingsModalUI();
                     $('#emaSettingsModal').modal('show');
                 });
@@ -2501,29 +2513,38 @@
                 }
             });
 
-            // Preset button click
-            $('.preset-btn').click(function() {
+            // Preset button click — applies to active category tab
+            $(document).on('click', '.preset-btn', function() {
                 var start = parseInt($(this).data('start'));
                 var end = parseInt($(this).data('end'));
                 var desc = $(this).data('desc');
+                var activeCat = $('#downtimeCategoryTabs .nav-link.active').text().trim() || Object.keys(categoryMeta)[0] || 'Billboard';
                 $('.preset-btn').removeClass('ema-preset-active');
                 $(this).addClass('ema-preset-active');
                 if (start === 0 && end === 0) {
-                    $('#downtimeStartHour').focus();
+                    $('#downtime' + activeCat + 'StartHour').focus();
                 } else {
-                    $('#downtimeStartHour').val(start);
-                    $('#downtimeEndHour').val(end);
-                    $('#downtimeDescription').val(desc);
+                    $('#downtime' + activeCat + 'StartHour').val(start);
+                    $('#downtime' + activeCat + 'EndHour').val(end);
+                    $('#downtime' + activeCat + 'Description').val(desc);
                 }
-                updateDowntimeDuration();
-                updateDowntimeTimeline();
+                updateCategoryDuration(activeCat);
+                updateDowntimeTimelineForCategory(activeCat);
             });
 
-            // Downtime hour change
-            $('#downtimeStartHour, #downtimeEndHour').change(function() {
+            // Downtime hour change — delegated for per-category fields
+            $(document).on('change', '.cat-downtime-start, .cat-downtime-end', function() {
+                var cat = $(this).data('category');
+                if (!cat) return;
                 $('.preset-btn').removeClass('ema-preset-active');
-                updateDowntimeDuration();
-                updateDowntimeTimeline();
+                updateCategoryDuration(cat);
+                updateDowntimeTimelineForCategory(cat);
+            });
+
+            // Category downtime tab switch — update preset highlights
+            $(document).on('shown.bs.tab', '#downtimeCategoryTabs a[data-toggle="tab"]', function() {
+                var cat = $(this).text().trim();
+                highlightMatchingPresetForCategory(cat);
             });
 
             // Save All Settings
@@ -2547,13 +2568,21 @@
                     tariffPerKWh: 1500
                 };
 
-                // Collect downtime settings
-                var downtimeData = {
-                    enabled: $('#downtimeEnabled').is(':checked'),
-                    startHour: parseInt($('#downtimeStartHour').val()),
-                    endHour: parseInt($('#downtimeEndHour').val()),
-                    description: $('#downtimeDescription').val() || ''
-                };
+                // Collect per-category downtime settings
+                var catDowntimeData = {};
+                var catDowntimeRequests = [];
+                var allCats = Object.keys(categoryMeta).length > 0 ? Object.keys(categoryMeta) : ['Billboard'];
+                allCats.forEach(function(cat) {
+                    catDowntimeData[cat] = {
+                        enabled: $('#downtime' + cat + 'Enabled').is(':checked'),
+                        startHour: parseInt($('#downtime' + cat + 'StartHour').val()) || 22,
+                        endHour: parseInt($('#downtime' + cat + 'EndHour').val()) || 6,
+                        description: $('#downtime' + cat + 'Description').val() || ''
+                    };
+                    catDowntimeRequests.push(
+                        $.ajax({ url: '/api/Api/downtime-settings/' + encodeURIComponent(cat), method: 'POST', contentType: 'application/json', data: JSON.stringify(catDowntimeData[cat]) })
+                    );
+                });
 
                 // Collect system/display settings
                 var systemData = {
@@ -2563,12 +2592,11 @@
                     'Chart.GridColor': $('#chartGridColor').val() || '#e0e0e0'
                 };
 
-                // Save all in parallel
+                // Save all in parallel (EMA + system + per-category downtime)
                 var requests = [
                     $.ajax({ url: '/api/Api/save-ema-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(emaData) }),
-                    $.ajax({ url: '/api/Api/save-downtime-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(downtimeData) }),
                     $.ajax({ url: '/api/Api/save-system-settings', method: 'POST', contentType: 'application/json', data: JSON.stringify(systemData) })
-                ];
+                ].concat(catDowntimeRequests);
 
                 $.when.apply($, requests).done(function() {
                     // Update local settings
@@ -2591,21 +2619,27 @@
                     systemSettings.normalThreshold = parseInt(systemData['Load.NormalThreshold']) || 30;
                     systemSettings.mediumThreshold = parseInt(systemData['Load.MediumThreshold']) || 70;
 
-                    downtimeSettings.enabled = downtimeData.enabled;
-                    downtimeSettings.startHour = downtimeData.startHour;
-                    downtimeSettings.endHour = downtimeData.endHour;
-                    downtimeSettings.description = downtimeData.description;
+                    // Update local category downtime settings
+                    allCats.forEach(function(cat) {
+                        categoryDowntimeSettings[cat] = catDowntimeData[cat];
+                    });
 
                     // Re-check downtime status and rebuild charts
-                    checkDowntimeStatus().then(function() {
+                    loadAllCategoryDowntime().then(function() {
+                        return checkDowntimeStatus();
+                    }).then(function() {
+                        updateCategoryDowntimeUI(currentCategory);
+                        allCats.forEach(function(cat) {
+                            updateCategoryDowntimeStatusUIModal(cat);
+                        });
                         startAutoRefresh();
                         rebuildCharts();
-                        updateDowntimeStatusUI();
                     });
 
                     btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save All Settings');
                     $('#emaSettingsModal').modal('hide');
-                    alert('Settings saved!\nEMA Period: ' + emaSettings.period + '\nData Points: ' + systemSettings.chartDataPoints + '\nDowntime: ' + (downtimeSettings.enabled ? 'Active' : 'Disabled'));
+                    var activeCats = allCats.filter(function(c) { return catDowntimeData[c].enabled; });
+                    alert('Settings saved!\nEMA Period: ' + emaSettings.period + '\nData Points: ' + systemSettings.chartDataPoints + '\nDowntime active: ' + (activeCats.length > 0 ? activeCats.join(', ') : 'None'));
                 }).fail(function() {
                     btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save All Settings');
                     alert('Error saving settings. Please try again.');

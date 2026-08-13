@@ -65,9 +65,6 @@
                 </div>
                 <select id="chartCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
                     <option value="all">🏷️ Semua Kategori</option>
-                    <option value="Billboard">🔵 Billboard</option>
-                    <option value="Megatron">🟠 Megatron</option>
-                    <option value="NeonBox">🟣 Neon Box</option>
                 </select>
                 <button id="btnClearChartFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
                     <i class="fas fa-times"></i>
@@ -89,10 +86,8 @@
                         <i class="fas fa-chart-area"></i> @panel.GroupName
                     </h6>
                     <div class="d-flex align-items-center flex-shrink-0 chart-controls" style="gap: 4px;" data-card-id="chartCard_@safeKey">
-                        <select class="category-selector" id="categorySelect_@safeKey" data-device-key="@panel.DeviceKey" data-safe-key="@safeKey" title="Pilih kategori device">
+                        <select class="category-selector cat-Billboard" id="categorySelect_@safeKey" data-device-key="@panel.DeviceKey" data-safe-key="@safeKey" title="Pilih kategori device">
                             <option value="Billboard" selected>🔵 Billboard</option>
-                            <option value="Megatron">🟠 Megatron</option>
-                            <option value="NeonBox">🟣 Neon Box</option>
                         </select>
                         <select class="chart-type-selector" id="chartTypeSelect_@safeKey" data-safe-key="@safeKey">
                             <option value="power" selected>⚡ Power (W)</option>
@@ -238,7 +233,7 @@
                         <small class="text-muted ema-hint">Baseline: EMA diambil dari 100 data pertama device. Jika off, gunakan EMA biasa.</small>
                     </div>
 
-                    <!-- DOWNTIME TAB — Per Category -->
+                    <!-- DOWNTIME TAB — Per Category (Dynamic) -->
                     <div class="tab-pane" id="downtimeTabContent" role="tabpanel">
                         <!-- Preset Buttons — per kategori aktif -->
                         <div class="mb-2">
@@ -259,131 +254,9 @@
                             </div>
                         </div>
 
-                        <!-- Category sub-tabs -->
-                        <ul class="nav nav-tabs nav-tabs-sm mb-2" id="downtimeCategoryTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link active" data-toggle="tab" href="#downtimeBillboard" role="tab">
-                                    <span class="cat-dot dot-Billboard" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2196f3;vertical-align:middle;margin-right:2px"></span> Billboard
-                                </a>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link" data-toggle="tab" href="#downtimeMegatron" role="tab">
-                                    <span class="cat-dot dot-Megatron" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff9800;vertical-align:middle;margin-right:2px"></span> Megatron
-                                </a>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link" data-toggle="tab" href="#downtimeNeonBox" role="tab">
-                                    <span class="cat-dot dot-NeonBox" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9c27b0;vertical-align:middle;margin-right:2px"></span> Neon Box
-                                </a>
-                            </li>
-                        </ul>
-
-                        <div class="tab-content">
-                            <!-- Billboard Downtime -->
-                            <div class="tab-pane active" id="downtimeBillboard" role="tabpanel">
-                                <div class="mb-2">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeBillboardEnabled" data-category="Billboard" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label ema-label" for="downtimeBillboardEnabled">Aktifkan Downtime Billboard</label>
-                                    </div>
-                                </div>
-                                <div class="ema-grid-3 mb-2">
-                                    <div>
-                                        <label class="form-label ema-label">Jam Mulai</label>
-                                        <select class="form-select form-select-sm cat-downtime-start" id="downtimeBillboardStartHour" data-category="Billboard"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Jam Selesai</label>
-                                        <select class="form-select form-select-sm cat-downtime-end" id="downtimeBillboardEndHour" data-category="Billboard"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Durasi</label>
-                                        <div class="form-control form-control-sm bg-light text-center" id="downtimeBillboardDuration" readonly>8 jam</div>
-                                    </div>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label ema-label">Deskripsi</label>
-                                    <input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtimeBillboardDescription" data-category="Billboard" placeholder="Contoh: Billboard mati malam hari">
-                                </div>
-                                <div class="card border" id="downtimeBillboardStatusCard">
-                                    <div class="card-body text-center py-1">
-                                        <div id="downtimeBillboardStatus" class="fw-bold" style="font-size: 0.85rem;">
-                                            <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Megatron Downtime -->
-                            <div class="tab-pane" id="downtimeMegatron" role="tabpanel">
-                                <div class="mb-2">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeMegatronEnabled" data-category="Megatron" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label ema-label" for="downtimeMegatronEnabled">Aktifkan Downtime Megatron</label>
-                                    </div>
-                                </div>
-                                <div class="ema-grid-3 mb-2">
-                                    <div>
-                                        <label class="form-label ema-label">Jam Mulai</label>
-                                        <select class="form-select form-select-sm cat-downtime-start" id="downtimeMegatronStartHour" data-category="Megatron"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Jam Selesai</label>
-                                        <select class="form-select form-select-sm cat-downtime-end" id="downtimeMegatronEndHour" data-category="Megatron"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Durasi</label>
-                                        <div class="form-control form-control-sm bg-light text-center" id="downtimeMegatronDuration" readonly>8 jam</div>
-                                    </div>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label ema-label">Deskripsi</label>
-                                    <input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtimeMegatronDescription" data-category="Megatron" placeholder="Contoh: Megatron mati malam hari">
-                                </div>
-                                <div class="card border" id="downtimeMegatronStatusCard">
-                                    <div class="card-body text-center py-1">
-                                        <div id="downtimeMegatronStatus" class="fw-bold" style="font-size: 0.85rem;">
-                                            <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- NeonBox Downtime -->
-                            <div class="tab-pane" id="downtimeNeonBox" role="tabpanel">
-                                <div class="mb-2">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeNeonBoxEnabled" data-category="NeonBox" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label ema-label" for="downtimeNeonBoxEnabled">Aktifkan Downtime Neon Box</label>
-                                    </div>
-                                </div>
-                                <div class="ema-grid-3 mb-2">
-                                    <div>
-                                        <label class="form-label ema-label">Jam Mulai</label>
-                                        <select class="form-select form-select-sm cat-downtime-start" id="downtimeNeonBoxStartHour" data-category="NeonBox"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Jam Selesai</label>
-                                        <select class="form-select form-select-sm cat-downtime-end" id="downtimeNeonBoxEndHour" data-category="NeonBox"></select>
-                                    </div>
-                                    <div>
-                                        <label class="form-label ema-label">Durasi</label>
-                                        <div class="form-control form-control-sm bg-light text-center" id="downtimeNeonBoxDuration" readonly>8 jam</div>
-                                    </div>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label ema-label">Deskripsi</label>
-                                    <input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtimeNeonBoxDescription" data-category="NeonBox" placeholder="Contoh: Neon Box mati malam hari">
-                                </div>
-                                <div class="card border" id="downtimeNeonBoxStatusCard">
-                                    <div class="card-body text-center py-1">
-                                        <div id="downtimeNeonBoxStatus" class="fw-bold" style="font-size: 0.85rem;">
-                                            <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Category sub-tabs — built dynamically -->
+                        <ul class="nav nav-tabs nav-tabs-sm mb-2" id="downtimeCategoryTabs" role="tablist"></ul>
+                        <div class="tab-content" id="downtimeCategoryTabContent"></div>
                     </div>
 
                     <!-- DISPLAY TAB -->
@@ -457,6 +330,29 @@
         var refreshTimer = null;
         var deviceCategoryMap = {};
         var categoryDowntimeMap = {};
+        var categoryMetaMap = {};
+        function loadCategoriesMetaForCharts() {
+            return $.ajax({
+                url: '/api/Api/categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    categoryMetaMap = {};
+                    (data || []).forEach(function(cat) {
+                        categoryMetaMap[cat.name] = { icon: cat.icon, color: cat.color, description: cat.description };
+                    });
+                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
+                    categoryLabels = buildCategoryLabels();
+                    populateChartCategoryFilter();
+                    populateAllCategorySelectors();
+                    buildDowntimeCategoryTabs();
+                    // Expose globally for _AnomalyService
+                    window._categoryMetaMap = categoryMetaMap;
+                },
+                error: function() { console.warn('Failed to load categories meta'); }
+            });
+        }
         var panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new {
             deviceKey = p.DeviceKey,
             safeKey = p.DeviceKey.Replace("-", "_"),
@@ -497,8 +393,10 @@
             if ($sel.length === 0) return;
 
             $sel.val(category);
-            $sel.removeClass('cat-Billboard cat-Megatron cat-NeonBox')
-                .addClass('cat-' + category);
+            // Remove any existing cat-* class dynamically
+            var existingClasses = ($sel.attr('class') || '').split(/\s+/).filter(function(c) { return c.startsWith('cat-'); });
+            if (existingClasses.length) $sel.removeClass(existingClasses.join(' '));
+            $sel.addClass('cat-' + category);
 
             var $card = $('#chartCard_' + safeKey);
             if ($card.length) {
@@ -553,7 +451,7 @@
         }
 
         function loadAllCategoryDowntime() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
             var promises = categories.map(function(cat) {
                 return checkCategoryDowntime(cat);
             });
@@ -1250,14 +1148,94 @@
         // ============================================
         // PER-CATEGORY DOWNTIME UI HELPERS
         // ============================================
-        var categoryDowntimeSettings = {
-            Billboard: { enabled: false, startHour: 22, endHour: 6, description: '' },
-            Megatron: { enabled: false, startHour: 22, endHour: 6, description: '' },
-            NeonBox: { enabled: false, startHour: 22, endHour: 6, description: '' }
-        };
+        var categoryDowntimeSettings = {};
+
+        function buildDowntimeCategoryTabs() {
+            var $tabs = $('#downtimeCategoryTabs');
+            var $content = $('#downtimeCategoryTabContent');
+            $tabs.empty();
+            $content.empty();
+
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
+            if (categories.length === 0) {
+                $content.html('<div class="text-center py-4 text-muted"><i class="fas fa-info-circle"></i> Tidak ada kategori</div>');
+                return;
+            }
+
+            categories.forEach(function(cat, idx) {
+                var meta = categoryMetaMap[cat] || {};
+                var icon = meta.icon || '⚪';
+                var color = meta.color || '#607d8b';
+                var active = idx === 0;
+
+                // Tab nav
+                var tabHtml = '<li class="nav-item" role="presentation">' +
+                    '<a class="nav-link' + (active ? ' active' : '') + '" data-toggle="tab" href="#downtime' + cat + '" role="tab">' +
+                    '<span class="cat-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';vertical-align:middle;margin-right:2px"></span> ' + cat +
+                    '</a></li>';
+                $tabs.append(tabHtml);
+
+                // Tab content
+                var paneHtml = '<div class="tab-pane' + (active ? ' active' : '') + '" id="downtime' + cat + '" role="tabpanel">' +
+                    '<div class="mb-2"><div class="form-check form-switch">' +
+                    '<input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtime' + cat + 'Enabled" data-category="' + cat + '" style="width: 2.5em; height: 1.3em;">' +
+                    '<label class="form-check-label ema-label" for="downtime' + cat + 'Enabled">Aktifkan Downtime ' + cat + '</label>' +
+                    '</div></div>' +
+                    '<div class="ema-grid-3 mb-2">' +
+                    '<div><label class="form-label ema-label">Jam Mulai</label><select class="form-select form-select-sm cat-downtime-start" id="downtime' + cat + 'StartHour" data-category="' + cat + '"></select></div>' +
+                    '<div><label class="form-label ema-label">Jam Selesai</label><select class="form-select form-select-sm cat-downtime-end" id="downtime' + cat + 'EndHour" data-category="' + cat + '"></select></div>' +
+                    '<div><label class="form-label ema-label">Durasi</label><div class="form-control form-control-sm bg-light text-center" id="downtime' + cat + 'Duration" readonly>8 jam</div></div>' +
+                    '</div>' +
+                    '<div class="mb-2"><label class="form-label ema-label">Deskripsi</label>' +
+                    '<input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtime' + cat + 'Description" data-category="' + cat + '" placeholder="Contoh: ' + cat + ' mati malam hari"></div>' +
+                    '<div class="card border" id="downtime' + cat + 'StatusCard"><div class="card-body text-center py-1">' +
+                    '<div id="downtime' + cat + 'Status" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>' +
+                    '</div></div></div>';
+                $content.append(paneHtml);
+
+                // Init default downtime settings if not exists
+                if (!categoryDowntimeSettings[cat]) {
+                    categoryDowntimeSettings[cat] = { enabled: false, startHour: 22, endHour: 6, description: '' };
+                }
+            });
+        }
+
+        function populateChartCategoryFilter() {
+            var $sel = $('#chartCategoryFilter');
+            var currentVal = $sel.val();
+            $sel.find('option:not(:first)').remove();
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
+            categories.forEach(function(cat) {
+                var meta = categoryMetaMap[cat] || {};
+                var icon = meta.icon || '⚪';
+                $sel.append('<option value="' + cat + '">' + icon + ' ' + cat + '</option>');
+            });
+            if (currentVal && $sel.find('option[value="' + currentVal + '"]').length) {
+                $sel.val(currentVal);
+            }
+        }
+
+        function populateAllCategorySelectors() {
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
+            $('.category-selector').each(function() {
+                var $sel = $(this);
+                var currentVal = $sel.val() || 'Billboard';
+                $sel.find('option').remove();
+                categories.forEach(function(cat) {
+                    var meta = categoryMetaMap[cat] || {};
+                    var icon = meta.icon || '⚪';
+                    $sel.append('<option value="' + cat + '">' + icon + ' ' + cat + '</option>');
+                });
+                if ($sel.find('option[value="' + currentVal + '"]').length) {
+                    $sel.val(currentVal);
+                } else {
+                    $sel.val('Billboard');
+                }
+            });
+        }
 
         function populateCategoryHourDropdowns() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
             categories.forEach(function(cat) {
                 var $start = $('#downtime' + cat + 'StartHour');
                 var $end = $('#downtime' + cat + 'EndHour');
@@ -1285,7 +1263,7 @@
         }
 
         function loadCategoryDowntimeSettings() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
             var promises = categories.map(function(cat) {
                 return $.ajax({
                     url: '/api/Api/downtime-settings/' + cat,
@@ -1347,7 +1325,7 @@
 
             // Per-Category Downtime
             populateCategoryHourDropdowns();
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
             categories.forEach(function(cat) {
                 var s = categoryDowntimeSettings[cat];
                 $('#downtime' + cat + 'Enabled').prop('checked', s.enabled);
@@ -1370,10 +1348,16 @@
         // ============================================
         var COMPACT_THRESHOLD = 420; // px — card width below which dropdowns use compact labels
 
-        var categoryLabels = {
-            full:    { 'Billboard': '🔵 Billboard', 'Megatron': '🟠 Megatron', 'NeonBox': '🟣 Neon Box' },
-            compact: { 'Billboard': '🔵', 'Megatron': '🟠', 'NeonBox': '🟣' }
-        };
+        function buildCategoryLabels() {
+            var full = {}, compact = {};
+            Object.keys(categoryMetaMap).forEach(function(name) {
+                var meta = categoryMetaMap[name];
+                full[name] = (meta.icon || '⚪') + ' ' + name;
+                compact[name] = meta.icon || '⚪';
+            });
+            return { full: full, compact: compact };
+        }
+        var categoryLabels = buildCategoryLabels();
         var chartTypeLabels = {
             full:    { 'power': '⚡ Power (W)', 'voltage': '🔌 Voltage (V)', 'current': '⚡ Current (A)' },
             compact: { 'power': '⚡W', 'voltage': '🔌V', 'current': '⚡A' }
@@ -1447,7 +1431,7 @@
             });
 
             // Load all settings in parallel, then init charts
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings()]).then(function() {
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), loadCategoriesMetaForCharts()]).then(function() {
                 console.log('Settings loaded, loading categories...');
                 // Load device categories, then category downtime settings, then init
                 loadDeviceCategories().then(function() {
@@ -1508,7 +1492,7 @@
                     var $activeSub = $('#downtimeCategoryTabs .nav-link.active');
                     var targetId = $activeSub.attr('href') || '#downtimeBillboard';
                     // Force show sub-tab content
-                    $('#downtimeTabContent .tab-content .tab-pane').removeClass('active');
+                    $('#downtimeCategoryTabContent .tab-pane').removeClass('active');
                     $(targetId).addClass('active');
                 }, 50);
             });
@@ -1591,7 +1575,7 @@
                 };
 
                 // Collect per-category downtime settings
-                var categories = ['Billboard', 'Megatron', 'NeonBox'];
+                var categories = Object.keys(categoryMetaMap || {}).length > 0 ? Object.keys(categoryMetaMap) : ['Billboard'];
                 var catDowntimeRequests = categories.map(function(cat) {
                     var catData = {
                         enabled: $('#downtime' + cat + 'Enabled').is(':checked'),

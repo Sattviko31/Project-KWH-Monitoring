@@ -36,6 +36,11 @@
         </a>
     </li>
     <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="categories-tab" data-toggle="tab" href="#categories" role="tab">
+            <i class="fas fa-tags"></i> <span>Categories</span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="ema-tab" data-toggle="tab" href="#ema" role="tab">
             <i class="fas fa-chart-line"></i> <span>EMA & Downtime</span>
         </a>
@@ -317,6 +322,78 @@
             </div>
         </div>
         </form>
+    </div>
+
+    <!-- ==================== CATEGORIES SETTINGS TAB ==================== -->
+    <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
+        <div class="settings-section-list">
+
+            <!-- Add New Category -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-success-soft">
+                        <i class="fas fa-plus-circle text-success"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Tambah Kategori Baru</h5>
+                        <p>Buat kategori device baru dengan konfigurasi icon, warna, dan deskripsi</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Nama Kategori</label>
+                            <input type="text" class="form-control" id="newCategoryName" placeholder="Contoh: Videotron" maxlength="50">
+                            <small class="text-muted">Nama unik tanpa spasi (maks 50 karakter)</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Icon Emoji</label>
+                            <input type="text" class="form-control" id="newCategoryIcon" placeholder="🟢" maxlength="4" style="font-size:1.2rem;">
+                            <small class="text-muted">Emoji untuk identifikasi visual</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Warna</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" id="newCategoryColor" value="#607d8b" title="Pilih warna kategori">
+                                <input type="text" class="form-control" id="newCategoryColorHex" value="#607d8b" placeholder="#607d8b" maxlength="7">
+                            </div>
+                            <small class="text-muted">Warna badge dan selector kategori</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Deskripsi</label>
+                            <input type="text" class="form-control" id="newCategoryDescription" placeholder="Deskripsi singkat kategori ini">
+                            <small class="text-muted">Opsional — penjelasan kegunaan kategori</small>
+                        </div>
+                    </div>
+                    <div class="settings-section-footer">
+                        <button type="button" class="btn btn-success btn-sm" id="btnAddCategory">
+                            <i class="fas fa-plus"></i> Tambah Kategori
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Categories List -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-tags text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Daftar Kategori</h5>
+                        <p>Semua kategori yang tersedia — klik edit untuk mengubah, hapus untuk menghapus</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div id="categoriesListContainer">
+                        <div class="text-center py-4">
+                            <i class="fas fa-spinner fa-spin text-muted"></i> Memuat daftar kategori...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
 
     <!-- ==================== NOTIFICATION SETTINGS TAB ==================== -->
@@ -749,132 +826,13 @@
                         </div>
                     </div>
 
-                    <!-- Category Sub-tabs -->
+                    <!-- Category Sub-tabs (dynamically populated) -->
                     <ul class="nav nav-tabs mb-3" id="downtimeCategoryTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <a class="nav-link active" data-toggle="tab" href="#settingsDowntimeBillboard" role="tab">
-                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2196f3;vertical-align:middle;margin-right:2px"></span> Billboard
-                            </a>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <a class="nav-link" data-toggle="tab" href="#settingsDowntimeMegatron" role="tab">
-                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff9800;vertical-align:middle;margin-right:2px"></span> Megatron
-                            </a>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <a class="nav-link" data-toggle="tab" href="#settingsDowntimeNeonBox" role="tab">
-                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#9c27b0;vertical-align:middle;margin-right:2px"></span> Neon Box
-                            </a>
-                        </li>
                     </ul>
 
-                    <div class="tab-content">
-                        <!-- Billboard Downtime -->
-                        <div class="tab-pane active" id="settingsDowntimeBillboard" role="tabpanel">
-                            <div class="settings-grid">
-                                <div class="settings-field settings-field-full">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeBillboardEnabled" data-category="Billboard" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label fw-bold" for="downtimeBillboardEnabled">Aktifkan Downtime Billboard</label>
-                                    </div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Mulai</label>
-                                    <select class="form-select cat-downtime-start" id="downtimeBillboardStartHour" data-category="Billboard"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Selesai</label>
-                                    <select class="form-select cat-downtime-end" id="downtimeBillboardEndHour" data-category="Billboard"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Durasi</label>
-                                    <div class="form-control bg-light text-center" id="downtimeBillboardDuration" readonly>8 jam</div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Deskripsi</label>
-                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeBillboardDescription" data-category="Billboard" placeholder="Contoh: Billboard mati malam hari">
-                                </div>
-                            </div>
-                            <div class="card border mt-3" id="downtimeBillboardStatusCard">
-                                <div class="card-body text-center">
-                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Billboard</h6>
-                                    <div id="downtimeBillboardStatus" class="fs-5 fw-bold">
-                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Megatron Downtime -->
-                        <div class="tab-pane" id="settingsDowntimeMegatron" role="tabpanel">
-                            <div class="settings-grid">
-                                <div class="settings-field settings-field-full">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeMegatronEnabled" data-category="Megatron" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label fw-bold" for="downtimeMegatronEnabled">Aktifkan Downtime Megatron</label>
-                                    </div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Mulai</label>
-                                    <select class="form-select cat-downtime-start" id="downtimeMegatronStartHour" data-category="Megatron"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Selesai</label>
-                                    <select class="form-select cat-downtime-end" id="downtimeMegatronEndHour" data-category="Megatron"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Durasi</label>
-                                    <div class="form-control bg-light text-center" id="downtimeMegatronDuration" readonly>8 jam</div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Deskripsi</label>
-                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeMegatronDescription" data-category="Megatron" placeholder="Contoh: Megatron mati malam hari">
-                                </div>
-                            </div>
-                            <div class="card border mt-3" id="downtimeMegatronStatusCard">
-                                <div class="card-body text-center">
-                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Megatron</h6>
-                                    <div id="downtimeMegatronStatus" class="fs-5 fw-bold">
-                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- NeonBox Downtime -->
-                        <div class="tab-pane" id="settingsDowntimeNeonBox" role="tabpanel">
-                            <div class="settings-grid">
-                                <div class="settings-field settings-field-full">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtimeNeonBoxEnabled" data-category="NeonBox" style="width: 2.5em; height: 1.3em;">
-                                        <label class="form-check-label fw-bold" for="downtimeNeonBoxEnabled">Aktifkan Downtime Neon Box</label>
-                                    </div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Mulai</label>
-                                    <select class="form-select cat-downtime-start" id="downtimeNeonBoxStartHour" data-category="NeonBox"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Jam Selesai</label>
-                                    <select class="form-select cat-downtime-end" id="downtimeNeonBoxEndHour" data-category="NeonBox"></select>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Durasi</label>
-                                    <div class="form-control bg-light text-center" id="downtimeNeonBoxDuration" readonly>8 jam</div>
-                                </div>
-                                <div class="settings-field">
-                                    <label class="form-label">Deskripsi</label>
-                                    <input type="text" class="form-control cat-downtime-desc" id="downtimeNeonBoxDescription" data-category="NeonBox" placeholder="Contoh: Neon Box mati malam hari">
-                                </div>
-                            </div>
-                            <div class="card border mt-3" id="downtimeNeonBoxStatusCard">
-                                <div class="card-body text-center">
-                                    <h6 class="mb-1"><i class="fas fa-signal"></i> Status Neon Box</h6>
-                                    <div id="downtimeNeonBoxStatus" class="fs-5 fw-bold">
-                                        <i class="fas fa-spinner fa-spin"></i> Memuat...
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="tab-content" id="downtimeCategoryTabContent">
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Memuat kategori...
                         </div>
                     </div>
                 </div>
@@ -1415,6 +1373,187 @@
         }
 
         // ============================================
+        // CATEGORY MANAGEMENT
+        // ============================================
+
+        var allCategories = [];
+
+        // Sync color picker with hex input
+        $('#newCategoryColor').on('input', function() {
+            $('#newCategoryColorHex').val($(this).val());
+        });
+        $('#newCategoryColorHex').on('input', function() {
+            var val = $(this).val();
+            if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                $('#newCategoryColor').val(val);
+            }
+        });
+
+        // Add new category
+        $('#btnAddCategory').click(function() {
+            var name = $('#newCategoryName').val().trim();
+            var icon = $('#newCategoryIcon').val().trim() || '⚪';
+            var color = $('#newCategoryColorHex').val().trim() || '#607d8b';
+            var description = $('#newCategoryDescription').val().trim();
+
+            if (!name) {
+                showNotification('Nama kategori wajib diisi', 'danger');
+                return;
+            }
+
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
+
+            $.ajax({
+                url: '/api/Api/categories',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ name: name, icon: icon, color: color, description: description }),
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('Kategori "' + name + '" berhasil ditambahkan!', 'success');
+                        $('#newCategoryName').val('');
+                        $('#newCategoryIcon').val('');
+                        $('#newCategoryColor').val('#607d8b');
+                        $('#newCategoryColorHex').val('#607d8b');
+                        $('#newCategoryDescription').val('');
+                        loadCategoriesList();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Gagal menambahkan kategori';
+                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
+                    showNotification(msg, 'danger');
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('<i class="fas fa-plus"></i> Tambah Kategori');
+                }
+            });
+        });
+
+        // Load categories list
+        function loadCategoriesList() {
+            $.ajax({
+                url: '/api/Api/categories',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    allCategories = data || [];
+                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
+                    renderCategoriesList();
+                },
+                error: function() {
+                    $('#categoriesListContainer').html('<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle"></i> Gagal memuat daftar kategori</div>');
+                }
+            });
+        }
+
+        function renderCategoriesList() {
+            if (allCategories.length === 0) {
+                $('#categoriesListContainer').html('<div class="text-center py-4 text-muted"><i class="fas fa-tags"></i> Belum ada kategori</div>');
+                return;
+            }
+
+            var html = '<div class="list-group">';
+            allCategories.forEach(function(cat) {
+                html += '<div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-category="' + cat.name + '">';
+                html += '  <div class="d-flex align-items-center gap-3">';
+                html += '    <span class="cat-dot" style="display:inline-block;width:24px;height:24px;border-radius:50%;background:' + cat.color + ';text-align:center;line-height:24px;font-size:0.8rem;">' + cat.icon + '</span>';
+                html += '    <div>';
+                html += '      <strong>' + cat.name + '</strong>';
+                html += '      <div class="text-muted small">' + (cat.description || 'Tidak ada deskripsi') + '</div>';
+                html += '    </div>';
+                html += '  </div>';
+                html += '  <div class="d-flex gap-2 align-items-center">';
+                html += '    <span class="badge" style="background:' + cat.color + ';color:#fff;font-size:0.7rem;">' + cat.icon + ' ' + cat.name + '</span>';
+                html += '    <button class="btn btn-outline-primary btn-sm btn-edit-category" data-name="' + cat.name + '" data-icon="' + cat.icon + '" data-color="' + cat.color + '" data-desc="' + (cat.description || '') + '" title="Edit"><i class="fas fa-pen"></i></button>';
+                html += '    <button class="btn btn-outline-danger btn-sm btn-delete-category" data-name="' + cat.name + '" title="Hapus"><i class="fas fa-trash"></i></button>';
+                html += '  </div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            $('#categoriesListContainer').html(html);
+        }
+
+        // Edit category
+        $(document).on('click', '.btn-edit-category', function() {
+            var name = $(this).data('name');
+            var icon = $(this).data('icon');
+            var color = $(this).data('color');
+            var desc = $(this).data('desc');
+
+            var $item = $(this).closest('.list-group-item');
+            var html = '<div class="d-flex align-items-center gap-2 flex-wrap w-100">';
+            html += '  <input type="text" class="form-control form-control-sm" id="editCatIcon" value="' + icon + '" style="width:60px;font-size:1.1rem;" placeholder="Icon">';
+            html += '  <input type="color" class="form-control form-control-sm form-control-color" id="editCatColor" value="' + color + '" style="width:40px;padding:2px;">';
+            html += '  <input type="text" class="form-control form-control-sm" id="editCatDesc" value="' + desc + '" style="flex:1;min-width:150px;" placeholder="Deskripsi">';
+            html += '  <button class="btn btn-success btn-sm btn-save-edit" data-name="' + name + '"><i class="fas fa-check"></i></button>';
+            html += '  <button class="btn btn-secondary btn-sm btn-cancel-edit"><i class="fas fa-times"></i></button>';
+            html += '</div>';
+
+            $item.html(html);
+        });
+
+        $(document).on('click', '.btn-save-edit', function() {
+            var name = $(this).data('name');
+            var icon = $('#editCatIcon').val().trim() || '⚪';
+            var color = $('#editCatColor').val() || '#607d8b';
+            var desc = $('#editCatDesc').val().trim();
+
+            $.ajax({
+                url: '/api/Api/categories/' + encodeURIComponent(name),
+                method: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ name: name, icon: icon, color: color, description: desc }),
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('Kategori "' + name + '" berhasil diperbarui', 'success');
+                        loadCategoriesList();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Gagal memperbarui kategori';
+                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
+                    showNotification(msg, 'danger');
+                }
+            });
+        });
+
+        $(document).on('click', '.btn-cancel-edit', function() {
+            renderCategoriesList();
+        });
+
+        // Delete category
+        $(document).on('click', '.btn-delete-category', function() {
+            var name = $(this).data('name');
+            if (!confirm('Hapus kategori "' + name + '"?\n\nSemua device dengan kategori ini akan dipindahkan ke "Billboard".')) return;
+
+            $.ajax({
+                url: '/api/Api/categories/' + encodeURIComponent(name),
+                method: 'DELETE',
+                success: function(response) {
+                    if (response.success) {
+                        showNotification(response.message, 'success');
+                        loadCategoriesList();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Gagal menghapus kategori';
+                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
+                    showNotification(msg, 'danger');
+                }
+            });
+        });
+
+        // Load categories when tab is shown
+        $(document).on('shown.bs.tab', '#categories-tab', function() {
+            loadCategoriesList();
+        });
+
+        // Also load on page init in case tab is already visible
+        loadCategoriesList();
+
+        // ============================================
         // EMA SETTINGS
         // ============================================
 
@@ -1500,7 +1639,7 @@
             });
 
             // Per-category downtime save
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
             var catDowntimeRequests = categories.map(function(cat) {
                 var catData = {
                     enabled: $('#downtime' + cat + 'Enabled').is(':checked'),
@@ -1544,7 +1683,7 @@
             $('#emaFibonacciSettings').hide();
 
             // Reset per-category downtime
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
             categories.forEach(function(cat) {
                 $('#downtime' + cat + 'Enabled').prop('checked', false);
                 $('#downtime' + cat + 'StartHour').val(22);
@@ -1583,22 +1722,78 @@
         }
 
         // ============================================
-        // PER-CATEGORY DOWNTIME SETTINGS
+        // PER-CATEGORY DOWNTIME SETTINGS (Dynamic)
         // ============================================
 
-        var categoryDowntimeSettings = {
-            Billboard: { enabled: false, startHour: 22, endHour: 6, description: '' },
-            Megatron: { enabled: false, startHour: 22, endHour: 6, description: '' },
-            NeonBox: { enabled: false, startHour: 22, endHour: 6, description: '' }
-        };
-
+        var categoryDowntimeSettings = {};
         var categoryDowntimeMap = {};
+        var downtimeCategoriesMeta = []; // [{name, icon, color, description}]
+
+        function buildDowntimeCategoryTabs() {
+            var $tabs = $('#downtimeCategoryTabs');
+            var $content = $('#downtimeCategoryTabContent');
+            $tabs.empty();
+            $content.empty();
+
+            if (downtimeCategoriesMeta.length === 0) {
+                $content.html('<div class="text-center py-4 text-muted"><i class="fas fa-tags"></i> Tidak ada kategori. Tambahkan kategori di tab Categories.</div>');
+                return;
+            }
+
+            downtimeCategoriesMeta.forEach(function(cat, idx) {
+                var isActive = idx === 0;
+                var tabId = 'settingsDowntime' + cat.name;
+
+                // Build tab link
+                var $li = $('<li class="nav-item" role="presentation"></li>');
+                var $a = $('<a class="nav-link' + (isActive ? ' active' : '') + '" data-toggle="tab" href="#' + tabId + '" role="tab"></a>');
+                $a.html('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + cat.color + ';vertical-align:middle;margin-right:2px"></span> ' + cat.name);
+                $li.append($a);
+                $tabs.append($li);
+
+                // Build tab pane
+                var $pane = $('<div class="tab-pane' + (isActive ? ' active' : '') + '" id="' + tabId + '" role="tabpanel"></div>');
+                var html = '<div class="settings-grid">';
+                html += '<div class="settings-field settings-field-full">';
+                html += '  <div class="form-check form-switch">';
+                html += '    <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtime' + cat.name + 'Enabled" data-category="' + cat.name + '" style="width: 2.5em; height: 1.3em;">';
+                html += '    <label class="form-check-label fw-bold" for="downtime' + cat.name + 'Enabled">Aktifkan Downtime ' + cat.name + '</label>';
+                html += '  </div>';
+                html += '</div>';
+                html += '<div class="settings-field">';
+                html += '  <label class="form-label">Jam Mulai</label>';
+                html += '  <select class="form-select cat-downtime-start" id="downtime' + cat.name + 'StartHour" data-category="' + cat.name + '"></select>';
+                html += '</div>';
+                html += '<div class="settings-field">';
+                html += '  <label class="form-label">Jam Selesai</label>';
+                html += '  <select class="form-select cat-downtime-end" id="downtime' + cat.name + 'EndHour" data-category="' + cat.name + '"></select>';
+                html += '</div>';
+                html += '<div class="settings-field">';
+                html += '  <label class="form-label">Durasi</label>';
+                html += '  <div class="form-control bg-light text-center" id="downtime' + cat.name + 'Duration" readonly>8 jam</div>';
+                html += '</div>';
+                html += '<div class="settings-field">';
+                html += '  <label class="form-label">Deskripsi</label>';
+                html += '  <input type="text" class="form-control cat-downtime-desc" id="downtime' + cat.name + 'Description" data-category="' + cat.name + '" placeholder="Contoh: ' + cat.name + ' mati malam hari">';
+                html += '</div>';
+                html += '</div>';
+                html += '<div class="card border mt-3" id="downtime' + cat.name + 'StatusCard">';
+                html += '  <div class="card-body text-center">';
+                html += '    <h6 class="mb-1"><i class="fas fa-signal"></i> Status ' + cat.name + '</h6>';
+                html += '    <div id="downtime' + cat.name + 'Status" class="fs-5 fw-bold">';
+                html += '      <i class="fas fa-spinner fa-spin"></i> Memuat...';
+                html += '    </div>';
+                html += '  </div>';
+                html += '</div>';
+                $pane.html(html);
+                $content.append($pane);
+            });
+        }
 
         function populateCategoryHourDropdowns() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
-            categories.forEach(function(cat) {
-                var $start = $('#downtime' + cat + 'StartHour');
-                var $end = $('#downtime' + cat + 'EndHour');
+            downtimeCategoriesMeta.forEach(function(cat) {
+                var $start = $('#downtime' + cat.name + 'StartHour');
+                var $end = $('#downtime' + cat.name + 'EndHour');
                 $start.empty();
                 $end.empty();
                 for (var h = 0; h < 24; h++) {
@@ -1606,9 +1801,11 @@
                     $start.append('<option value="' + h + '">' + label + '</option>');
                     $end.append('<option value="' + h + '">' + label + '</option>');
                 }
-                var s = categoryDowntimeSettings[cat];
-                $start.val(s.startHour);
-                $end.val(s.endHour);
+                var s = categoryDowntimeSettings[cat.name];
+                if (s) {
+                    $start.val(s.startHour);
+                    $end.val(s.endHour);
+                }
             });
         }
 
@@ -1623,7 +1820,7 @@
         }
 
         function loadCategoryDowntimeSettings() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
             var promises = categories.map(function(cat) {
                 return $.ajax({
                     url: '/api/Api/downtime-settings/' + cat,
@@ -1644,27 +1841,45 @@
         }
 
         function loadAllCategoryDowntimeSettings() {
-            populateCategoryHourDropdowns();
-            loadCategoryDowntimeSettings().then(function() {
-                var categories = ['Billboard', 'Megatron', 'NeonBox'];
-                categories.forEach(function(cat) {
-                    var s = categoryDowntimeSettings[cat];
-                    $('#downtime' + cat + 'Enabled').prop('checked', s.enabled);
-                    $('#downtime' + cat + 'StartHour').val(s.startHour);
-                    $('#downtime' + cat + 'EndHour').val(s.endHour);
-                    $('#downtime' + cat + 'Description').val(s.description);
-                    updateCategoryDuration(cat);
-                });
-                // Update timeline from first enabled category or Billboard
-                updateDowntimeTimeline();
-                loadAllCategoryDowntimeStatus();
+            // Load categories from API first
+            $.ajax({
+                url: '/api/Api/categories',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    downtimeCategoriesMeta = data || [];
+                    // Expose globally for _AnomalyService
+                    window._categoryMetaMap = {};
+                    (data || []).forEach(function(cat) {
+                        window._categoryMetaMap[cat.name] = { icon: cat.icon, color: cat.color, description: cat.description };
+                    });
+                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
+                    buildDowntimeCategoryTabs();
+                    populateCategoryHourDropdowns();
+                    loadCategoryDowntimeSettings().then(function() {
+                        downtimeCategoriesMeta.forEach(function(cat) {
+                            var s = categoryDowntimeSettings[cat.name];
+                            if (s) {
+                                $('#downtime' + cat.name + 'Enabled').prop('checked', s.enabled);
+                                $('#downtime' + cat.name + 'StartHour').val(s.startHour);
+                                $('#downtime' + cat.name + 'EndHour').val(s.endHour);
+                                $('#downtime' + cat.name + 'Description').val(s.description);
+                                updateCategoryDuration(cat.name);
+                            }
+                        });
+                        updateDowntimeTimeline();
+                        loadAllCategoryDowntimeStatus();
+                    });
+                },
+                error: function() {
+                    $('#downtimeCategoryTabContent').html('<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle"></i> Gagal memuat kategori</div>');
+                }
             });
         }
 
         function loadAllCategoryDowntimeStatus() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
-            categories.forEach(function(cat) {
-                checkCategoryDowntimeStatus(cat);
+            downtimeCategoriesMeta.forEach(function(cat) {
+                checkCategoryDowntimeStatus(cat.name);
             });
         }
 
@@ -1686,10 +1901,16 @@
         }
 
         function updateCategoryDowntimeStatusUI(cat) {
+            var firstCat = Object.keys(categoryDowntimeSettings)[0];
+            if (!categoryDowntimeSettings[cat] && !categoryDowntimeSettings[firstCat]) {
+                console.log('⏳ Downtime settings not loaded yet, skipping UI update for ' + cat);
+                return;
+            }
+
             var $status = $('#downtime' + cat + 'Status');
             var $card = $('#downtime' + cat + 'StatusCard');
             var isDowntime = categoryDowntimeMap[cat] || false;
-            var s = categoryDowntimeSettings[cat];
+            var s = categoryDowntimeSettings[cat] || categoryDowntimeSettings[firstCat] || { enabled: false, startHour: 22, endHour: 6 };
             var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
             var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
             if (isDowntime) {
@@ -1701,7 +1922,7 @@
             }
         }
 
-        // Preset buttons — apply to all categories
+        // Preset buttons — apply to active category
         $('.preset-btn').click(function() {
             var start = parseInt($(this).data('start'));
             var end = parseInt($(this).data('end'));
@@ -1712,11 +1933,12 @@
 
             // Find currently active category
             var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
-            var href = $activeTab.attr('href') || '#settingsDowntimeBillboard';
+            var href = $activeTab.attr('href') || '';
             var cat = href.replace('#settingsDowntime', '');
 
+            if (!cat) return;
+
             if (start === 0 && end === 0) {
-                // Custom — focus on the currently visible category's start hour
                 $('#downtime' + cat + 'StartHour').focus();
             } else {
                 $('#downtime' + cat + 'StartHour').val(start);
@@ -1746,10 +1968,11 @@
         }
 
         function updateDowntimeTimeline() {
-            // Use the currently active category tab for timeline
             var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
-            var href = $activeTab.attr('href') || '#settingsDowntimeBillboard';
+            var href = $activeTab.attr('href') || '';
             var activeCat = href.replace('#settingsDowntime', '');
+
+            if (!activeCat) return;
 
             var start = parseInt($('#downtime' + activeCat + 'StartHour').val()) || 22;
             var end = parseInt($('#downtime' + activeCat + 'EndHour').val()) || 6;

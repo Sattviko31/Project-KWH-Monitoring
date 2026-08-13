@@ -78,8 +78,6 @@
                 <select id="panelCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
                     <option value="all">🏷️ Semua Kategori</option>
                     <option value="Billboard">🔵 Billboard</option>
-                    <option value="Megatron">🟠 Megatron</option>
-                    <option value="NeonBox">🟣 Neon Box</option>
                 </select>
                 <button id="btnClearFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
                     <i class="fas fa-times"></i>
@@ -314,6 +312,59 @@
         // DEVICE CATEGORY MANAGEMENT
         // ============================================
         var deviceCategoryMap = {};
+        var categoryMetaMap = {}; // { name: { icon, color, description } }
+
+        // Load categories metadata first, then device categories
+        function loadCategoriesMeta() {
+            return $.ajax({
+                url: '/api/Api/categories',
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000,
+                success: function(data) {
+                    categoryMetaMap = {};
+                    (data || []).forEach(function(cat) {
+                        categoryMetaMap[cat.name] = { icon: cat.icon, color: cat.color, description: cat.description };
+                    });
+                    // Inject dynamic CSS for category colors
+                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
+                    // Expose globally for partial views like _AnomalyService
+                    window._categoryMetaMap = categoryMetaMap;
+                    // Populate category filter dropdown
+                    populateCategoryFilter();
+                    // Populate all category selectors
+                    populateAllCategoryIcons();
+                    console.log('Categories meta loaded:', categoryMetaMap);
+                },
+                error: function() { console.warn('Failed to load categories meta'); }
+            });
+        }
+
+        function populateCategoryFilter() {
+            var $filter = $('#panelCategoryFilter');
+            var currentVal = $filter.val();
+            $filter.find('option:not(:first)').remove();
+            Object.keys(categoryMetaMap).forEach(function(name) {
+                var meta = categoryMetaMap[name];
+                $filter.append('<option value="' + name + '">' + meta.icon + ' ' + name + '</option>');
+            });
+            $filter.val(currentVal);
+        }
+
+        function populateAllCategoryIcons() {
+            $('.category-icon').each(function() {
+                var $icon = $(this);
+                var deviceKey = $icon.data('device-key');
+                var category = deviceCategoryMap[deviceKey] || 'Billboard';
+                var meta = categoryMetaMap[category] || { icon: '⚪', color: '#607d8b' };
+                $icon.text(meta.icon);
+                var classesToRemove = [];
+                $.each(this.classList, function(i, cls) {
+                    if (cls.startsWith('cat-')) classesToRemove.push(cls);
+                });
+                $icon.removeClass(classesToRemove.join(' ')).addClass('cat-' + category);
+            });
+        }
 
         function loadDeviceCategories() {
             return $.ajax({
@@ -325,11 +376,8 @@
                     if (data.devices) {
                         deviceCategoryMap = data.devices;
                     }
-                    // Update all category selectors
-                    Object.keys(deviceCategoryMap).forEach(function(deviceKey) {
-                        var safeKey = deviceKey.replace(/-/g, '_');
-                        updateCategorySelectorUI(safeKey, deviceCategoryMap[deviceKey]);
-                    });
+                    // Update all category icons with loaded device categories
+                    populateAllCategoryIcons();
                     // Re-apply filter after categories are loaded
                     applyPanelFilter();
                     console.log('Device categories loaded:', deviceCategoryMap);
@@ -338,12 +386,17 @@
             });
         }
 
-        function updateCategorySelectorUI(safeKey, category) {
-            var $sel = $('#categorySelect_' + safeKey);
-            if ($sel.length === 0) return;
-            $sel.val(category);
-            $sel.removeClass('cat-Billboard cat-Megatron cat-NeonBox')
-                .addClass('cat-' + category);
+        function updateCategoryIconUI(safeKey, category) {
+            var $icon = $('#categoryIcon_' + safeKey);
+            if ($icon.length === 0) return;
+            var meta = categoryMetaMap[category] || { icon: '⚪', color: '#607d8b' };
+            $icon.text(meta.icon);
+            // Remove all cat- classes and add the current one
+            var classesToRemove = [];
+            $.each($icon[0].classList, function(i, cls) {
+                if (cls.startsWith('cat-')) classesToRemove.push(cls);
+            });
+            $icon.removeClass(classesToRemove.join(' ')).addClass('cat-' + category);
         }
 
         function saveDeviceCategory(deviceKey, category) {
@@ -356,42 +409,25 @@
                     if (data.success) {
                         deviceCategoryMap[deviceKey] = category;
                         var safeKey = deviceKey.replace(/-/g, '_');
-                        updateCategorySelectorUI(safeKey, category);
+                        updateCategoryIconUI(safeKey, category);
                     }
                 },
                 error: function() { alert('Gagal menyimpan kategori device'); }
             });
         }
 
-        // Category selector change → save
-        $(document).on('change', '.category-selector', function(e) {
-            e.stopPropagation();
-            var deviceKey = $(this).data('device-key');
-            var category = $(this).val();
-            saveDeviceCategory(deviceKey, category);
-        });
-
         // ============================================
-        // RESPONSIVE DROPDOWN LABELS
+        // RESPONSIVE BADGE LABELS
         // ============================================
         var COMPACT_THRESHOLD = 420;
 
-        var categoryLabels = {
-            full:    { 'Billboard': '🔵 Billboard', 'Megatron': '🟠 Megatron', 'NeonBox': '🟣 Neon Box' },
-            compact: { 'Billboard': '🔵', 'Megatron': '🟠', 'NeonBox': '🟣' }
-        };
-
-        function updateDropdownLabels(cardEl, compact) {
-            var labels = compact ? 'compact' : 'full';
+        function updateIconLabels(cardEl, compact) {
             var $card = $(cardEl);
-            $card.find('.category-selector').each(function() {
-                var sel = this;
-                var currentVal = sel.value;
-                var map = categoryLabels[labels];
-                $(sel).find('option').each(function() {
-                    if (map[this.value]) this.textContent = map[this.value];
-                });
-                sel.value = currentVal;
+            $card.find('.category-icon').each(function() {
+                var deviceKey = $(this).data('device-key');
+                var category = deviceCategoryMap[deviceKey] || 'Billboard';
+                var meta = categoryMetaMap[category] || { icon: '⚪' };
+                $(this).text(meta.icon);
             });
         }
 
@@ -403,14 +439,14 @@
                     var compact = w < COMPACT_THRESHOLD;
                     if (card._dropdownCompact !== compact) {
                         card._dropdownCompact = compact;
-                        updateDropdownLabels(card, compact);
+                        updateIconLabels(card, compact);
                     }
                 });
             });
             document.querySelectorAll('.panel-grid > div, .panel-grid > .col-12').forEach(function(card) {
                 var w = card.getBoundingClientRect().width;
                 card._dropdownCompact = w < COMPACT_THRESHOLD;
-                updateDropdownLabels(card, card._dropdownCompact);
+                updateIconLabels(card, card._dropdownCompact);
                 observer.observe(card);
             });
         }
@@ -418,7 +454,9 @@
         $(document).ready(function() {
             // Load settings dari database TERLEBIH DAHULU
             loadSystemSettings().then(function() {
-                loadDeviceCategories();
+                loadCategoriesMeta().then(function() {
+                    loadDeviceCategories();
+                });
                 syncProgressBars();
                 updatePanelCards();
                 updateStatistics();
@@ -433,9 +471,8 @@
             $(document).on('click', '.panel-card-clickable', function(e) {
                 var $target = $(e.target);
                 if ($target.closest('.panel-collapse-toggle').length > 0 ||
-                    $target.closest('[data-toggle="collapse"]').length > 0 ||
-                    $target.closest('.category-selector').length > 0) {
-                    return; // Let Bootstrap handle collapse, don't navigate; category selector handled separately
+                    $target.closest('[data-toggle="collapse"]').length > 0) {
+                    return; // Let Bootstrap handle collapse, don't navigate
                 }
                 var url = $(this).data('details-url');
                 if (url) {
@@ -761,7 +798,7 @@
                         // Update category selector from API data
                         if (panel.deviceCategory) {
                             deviceCategoryMap[panel.deviceKey] = panel.deviceCategory;
-                            updateCategorySelectorUI(safeKey, panel.deviceCategory);
+                            updateCategoryIconUI(safeKey, panel.deviceCategory);
                         }
 
                         statusBadge.removeClass('bg-success bg-warning bg-danger');

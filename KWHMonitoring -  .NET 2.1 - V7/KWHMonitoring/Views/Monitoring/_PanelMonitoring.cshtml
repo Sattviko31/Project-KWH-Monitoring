@@ -15,11 +15,7 @@
             <i class="fas fa-plug"></i> @Model.GroupName
         </h6>
         <div class="d-flex gap-1">
-            <select class="category-selector cat-Billboard" id="categorySelect_@(Model.DeviceKey.Replace("-", "_"))" data-device-key="@Model.DeviceKey" title="Pilih kategori device">
-                <option value="Billboard" selected>🔵 Billboard</option>
-                <option value="Megatron">🟠 Megatron</option>
-                <option value="NeonBox">🟣 Neon Box</option>
-            </select>
+            <span class="category-icon cat-Billboard" id="categoryIcon_@(Model.DeviceKey.Replace("-", "_"))" data-device-key="@Model.DeviceKey" style="font-size: 1rem; cursor: default;">🔵</span>
             @if (Model.IsThreePhase)
             {
                 <span class="badge" style="background-color: #6f42c1; font-size: 0.75rem;" data-phase-type="3-phase">3&#934;</span>

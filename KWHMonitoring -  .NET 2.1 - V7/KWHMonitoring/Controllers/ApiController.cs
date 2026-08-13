@@ -1813,8 +1813,7 @@ namespace KWHMonitoring.Controllers
 
             try
             {
-                // Valid categories: Billboard, Megatron, NeonBox
-                var validCategories = new[] { "Billboard", "Megatron", "NeonBox" };
+                var validCategories = await GetValidCategoriesAsync();
 
                 // If category is specified, check per-category downtime first
                 if (!string.IsNullOrWhiteSpace(category) && validCategories.Contains(category))
@@ -1842,10 +1841,15 @@ namespace KWHMonitoring.Controllers
                     }
                 }
 
-                // Fallback: check global downtime settings
-                var settings = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Downtime") && !x.SettingKey.StartsWith("Downtime.Billboard") && !x.SettingKey.StartsWith("Downtime.Megatron") && !x.SettingKey.StartsWith("Downtime.NeonBox"))
-                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+                // Fallback: check global downtime settings (exclude per-category keys)
+                var globalQuery = _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Downtime"));
+                foreach (var cat in validCategories)
+                {
+                    var catPrefix = "Downtime." + cat;
+                    globalQuery = globalQuery.Where(x => !x.SettingKey.StartsWith(catPrefix));
+                }
+                var settings = await globalQuery.ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
                 string enabledVal;
                 if (!settings.TryGetValue("Downtime.Enabled", out enabledVal))
@@ -2171,9 +2175,9 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var validCategories = new[] { "Billboard", "Megatron", "NeonBox" };
+                var validCategories = await GetValidCategoriesAsync();
                 if (!validCategories.Contains(category))
-                    return BadRequest(new { error = "Invalid category. Valid: Billboard, Megatron, NeonBox" });
+                    return BadRequest(new { error = "Invalid category. Valid: " + string.Join(", ", validCategories) });
 
                 var prefix = "Downtime." + category + ".";
                 var settings = await _context.AppSettingsRecords
@@ -2203,9 +2207,9 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var validCategories = new[] { "Billboard", "Megatron", "NeonBox" };
+                var validCategories = await GetValidCategoriesAsync();
                 if (!validCategories.Contains(category))
-                    return BadRequest(new { error = "Invalid category. Valid: Billboard, Megatron, NeonBox" });
+                    return BadRequest(new { error = "Invalid category. Valid: " + string.Join(", ", validCategories) });
 
                 var prefix = "Downtime." + category + ".";
                 var settingsToSave = new Dictionary<string, string>
@@ -2254,13 +2258,18 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var categories = new[] { "Billboard", "Megatron", "NeonBox" };
+                var categories = await GetValidCategoriesAsync();
                 var result = new Dictionary<string, object>();
 
-                // Global settings
-                var globalSettings = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Downtime") && !x.SettingKey.StartsWith("Downtime.Billboard") && !x.SettingKey.StartsWith("Downtime.Megatron") && !x.SettingKey.StartsWith("Downtime.NeonBox"))
-                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+                // Global settings (exclude per-category keys)
+                var globalQuery = _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Downtime"));
+                foreach (var cat in categories)
+                {
+                    var catPrefix = "Downtime." + cat;
+                    globalQuery = globalQuery.Where(x => !x.SettingKey.StartsWith(catPrefix));
+                }
+                var globalSettings = await globalQuery.ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
                 result["global"] = new
                 {
@@ -2326,9 +2335,9 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var validCategories = new[] { "Billboard", "Megatron", "NeonBox" };
+                var validCategories = await GetValidCategoriesAsync();
                 if (!validCategories.Contains(data.category))
-                    return BadRequest(new { error = "Invalid category. Valid: Billboard, Megatron, NeonBox" });
+                    return BadRequest(new { error = "Invalid category. Valid: " + string.Join(", ", validCategories) });
 
                 var key = "DeviceCategory." + data.deviceKey;
                 var existing = await _context.AppSettingsRecords
@@ -2359,6 +2368,208 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
+        // HELPER: Get all valid categories from database
+        // ============================================
+        private async Task<List<string>> GetValidCategoriesAsync()
+        {
+            var catSettings = await _context.AppSettingsRecords
+                .Where(x => x.SettingKey.StartsWith("Category."))
+                .OrderBy(x => x.SettingKey)
+                .ToListAsync();
+
+            if (catSettings.Count == 0)
+            {
+                // Seed default categories if none exist
+                var defaults = new[] {
+                    new AppSettingsRecord { SettingKey = "Category.Billboard", SettingValue = "{\"icon\":\"🔵\",\"color\":\"#2196f3\",\"description\":\"Perangkat kategori Billboard — Digunakan untuk panel iklan billboard.\"}", UpdatedAt = DateTime.Now },
+                    new AppSettingsRecord { SettingKey = "Category.Megatron", SettingValue = "{\"icon\":\"🟠\",\"color\":\"#ff9800\",\"description\":\"Perangkat kategori Megatron — Digunakan untuk panel megatron / LED display.\"}", UpdatedAt = DateTime.Now },
+                    new AppSettingsRecord { SettingKey = "Category.NeonBox", SettingValue = "{\"icon\":\"🟣\",\"color\":\"#9c27b0\",\"description\":\"Perangkat kategori Neon Box — Digunakan untuk box neon sign.\"}", UpdatedAt = DateTime.Now }
+                };
+                _context.AppSettingsRecords.AddRange(defaults);
+                await _context.SaveChangesAsync();
+                return new List<string> { "Billboard", "Megatron", "NeonBox" };
+            }
+
+            return catSettings
+                .Select(x => x.SettingKey.Replace("Category.", ""))
+                .ToList();
+        }
+
+        // ============================================
+        // CATEGORIES - GET ALL (with metadata)
+        // ============================================
+        [HttpGet("categories")]
+        public async Task<IActionResult> GetAllCategories()
+        {
+            try
+            {
+                var catSettings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Category."))
+                    .OrderBy(x => x.SettingKey)
+                    .ToListAsync();
+
+                // Seed defaults if empty
+                if (catSettings.Count == 0)
+                {
+                    await GetValidCategoriesAsync();
+                    catSettings = await _context.AppSettingsRecords
+                        .Where(x => x.SettingKey.StartsWith("Category."))
+                        .OrderBy(x => x.SettingKey)
+                        .ToListAsync();
+                }
+
+                var result = catSettings.Select(x =>
+                {
+                    var name = x.SettingKey.Replace("Category.", "");
+                    string icon = "⚪", color = "#607d8b", description = "";
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(x.SettingValue))
+                        {
+                            var parsed = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(x.SettingValue);
+                            icon = parsed.icon?.ToString() ?? "⚪";
+                            color = parsed.color?.ToString() ?? "#607d8b";
+                            description = parsed.description?.ToString() ?? "";
+                        }
+                    }
+                    catch { }
+
+                    return new { name, icon, color, description };
+                }).ToList();
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // CATEGORY - ADD
+        // ============================================
+        [HttpPost("categories")]
+        public async Task<IActionResult> AddCategory([FromBody] CategoryData data)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(data.name))
+                    return BadRequest(new { error = "Category name is required" });
+
+                // Clean name: remove spaces, keep alphanumeric
+                var cleanName = data.name.Trim();
+                if (cleanName.Length > 50)
+                    return BadRequest(new { error = "Category name too long (max 50 chars)" });
+
+                var key = "Category." + cleanName;
+                var existing = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == key);
+
+                if (existing != null)
+                    return BadRequest(new { error = "Category '" + cleanName + "' already exists" });
+
+                var meta = new
+                {
+                    icon = string.IsNullOrWhiteSpace(data.icon) ? "⚪" : data.icon,
+                    color = string.IsNullOrWhiteSpace(data.color) ? "#607d8b" : data.color,
+                    description = data.description ?? ""
+                };
+
+                _context.AppSettingsRecords.Add(new AppSettingsRecord
+                {
+                    SettingKey = key,
+                    SettingValue = Newtonsoft.Json.JsonConvert.SerializeObject(meta),
+                    UpdatedAt = DateTime.Now
+                });
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Category '" + cleanName + "' added successfully", name = cleanName, icon = meta.icon, color = meta.color, description = meta.description });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // CATEGORY - UPDATE
+        // ============================================
+        [HttpPut("categories/{name}")]
+        public async Task<IActionResult> UpdateCategory(string name, [FromBody] CategoryData data)
+        {
+            try
+            {
+                var key = "Category." + name;
+                var existing = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == key);
+
+                if (existing == null)
+                    return NotFound(new { error = "Category '" + name + "' not found" });
+
+                var meta = new
+                {
+                    icon = string.IsNullOrWhiteSpace(data.icon) ? "⚪" : data.icon,
+                    color = string.IsNullOrWhiteSpace(data.color) ? "#607d8b" : data.color,
+                    description = data.description ?? ""
+                };
+
+                existing.SettingValue = Newtonsoft.Json.JsonConvert.SerializeObject(meta);
+                existing.UpdatedAt = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Category '" + name + "' updated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // CATEGORY - DELETE
+        // ============================================
+        [HttpDelete("categories/{name}")]
+        public async Task<IActionResult> DeleteCategory(string name)
+        {
+            try
+            {
+                var key = "Category." + name;
+                var existing = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == key);
+
+                if (existing == null)
+                    return NotFound(new { error = "Category '" + name + "' not found" });
+
+                // Reassign devices from this category to Billboard
+                var deviceCategoryKeys = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("DeviceCategory.") && x.SettingValue == name)
+                    .ToListAsync();
+
+                foreach (var dc in deviceCategoryKeys)
+                {
+                    dc.SettingValue = "Billboard";
+                    dc.UpdatedAt = DateTime.Now;
+                }
+
+                // Delete downtime settings for this category
+                var downtimeSettings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Downtime." + name + "."))
+                    .ToListAsync();
+                _context.AppSettingsRecords.RemoveRange(downtimeSettings);
+
+                // Delete the category itself
+                _context.AppSettingsRecords.Remove(existing);
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Category '" + name + "' deleted. " + deviceCategoryKeys.Count + " device(s) reassigned to Billboard.", reassignedCount = deviceCategoryKeys.Count });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
         // DEVICE CATEGORIES - GET ALL
         // ============================================
         [HttpGet("device-categories")]
@@ -2366,13 +2577,15 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
+                var validCategories = await GetValidCategoriesAsync();
+
                 var settings = await _context.AppSettingsRecords
                     .Where(x => x.SettingKey.StartsWith("DeviceCategory."))
                     .ToDictionaryAsync(x => x.SettingKey.Replace("DeviceCategory.", ""), x => x.SettingValue);
 
                 return Ok(new
                 {
-                    categories = new[] { "Billboard", "Megatron", "NeonBox" },
+                    categories = validCategories,
                     devices = settings
                 });
             }
@@ -3448,6 +3661,14 @@ namespace KWHMonitoring.Controllers
     {
         public string deviceKey { get; set; } = string.Empty;
         public string category { get; set; } = "Billboard";
+    }
+
+    public class CategoryData
+    {
+        public string name { get; set; } = string.Empty;
+        public string icon { get; set; } = "⚪";
+        public string color { get; set; } = "#607d8b";
+        public string description { get; set; } = "";
     }
 
     public class ResetAnomalyAlertRequest

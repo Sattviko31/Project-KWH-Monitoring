@@ -41,7 +41,7 @@
 
         // Device category mapping & per-category downtime cache
         // Updated periodically alongside settings reload
-        let deviceCategoryMap = {};             // deviceKey -> 'Billboard'|'Megatron'|'NeonBox'
+        let deviceCategoryMap = {};             // deviceKey -> category name (dynamic from API)
         let categoryDowntimeCache = {};         // category -> boolean (isDowntime)
 
         // ============================================
@@ -373,7 +373,7 @@
         }
 
         function loadCategoryDowntimeStatus() {
-            var categories = ['Billboard', 'Megatron', 'NeonBox'];
+            var categories = Object.keys(window._categoryMetaMap || {}).length > 0 ? Object.keys(window._categoryMetaMap) : ['Billboard'];
             var requests = categories.map(function(cat) {
                 return $.ajax({
                     url: '/api/Api/downtime-status?category=' + encodeURIComponent(cat),
