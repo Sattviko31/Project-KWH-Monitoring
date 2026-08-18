@@ -4,8 +4,6 @@ namespace KWHMonitoring.Models
 {
     public class NotificationSettings
     {
-        // [UNUSED] Property WhatsAppApiKey dan WhatsAppPhoneNumber di bawah
-        // adalah legacy - tidak digunakan dalam pengiriman Wablas yang aktif.
         // Email Settings
         public string SmtpServer { get; set; } = "smtp.gmail.com";
         public int SmtpPort { get; set; } = 587;
@@ -20,11 +18,6 @@ namespace KWHMonitoring.Models
         public string WablasSecretKey { get; set; }
         public List<string> WablasPhoneNumbers { get; set; } = new List<string>();
         public bool EnableWhatsAppNotification { get; set; } = false;
-
-        // [UNUSED] Legacy - tidak digunakan dalam pengiriman Wablas
-        public string WhatsAppApiKey { get; set; }
-        // [UNUSED] Legacy - tidak digunakan dalam pengiriman Wablas
-        public string WhatsAppPhoneNumber { get; set; }
 
         // Alert Settings
         public bool SendInstantAlert { get; set; } = true;

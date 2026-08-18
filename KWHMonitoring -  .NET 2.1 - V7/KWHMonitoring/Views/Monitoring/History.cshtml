@@ -1,5 +1,4 @@
-﻿@model List<KWHMonitoring.Models.KWHData>
-@{
+﻿@{
     ViewData["Title"] = "History";
 }
 
@@ -155,6 +154,8 @@
         var autoRefreshEnabled = true;
         var dataGrid = null;
         var allData = [];
+        var lastReceivedTimeCursor = null;
+        var currentPage = 0;
 
         $(function() {
             try { localStorage.removeItem('kwhHistoryGrid_v2'); } catch(e) {}
@@ -165,11 +166,11 @@
             setupEventHandlers();
         });
 
-        function formatDateTime(isoStr) {
-            if (!isoStr) return '-';
+        function formatDateTime(val) {
+            if (!val) return '-';
             try {
-                var d = new Date(isoStr);
-                if (isNaN(d.getTime())) return isoStr;
+                var d = (val instanceof Date) ? val : new Date(val);
+                if (isNaN(d.getTime())) return typeof val === 'string' ? val : '-';
                 var dd = String(d.getDate()).padStart(2, '0');
                 var MM = String(d.getMonth() + 1).padStart(2, '0');
                 var yyyy = d.getFullYear();
@@ -178,7 +179,7 @@
                 var ss = String(d.getSeconds()).padStart(2, '0');
                 return dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
             } catch(e) {
-                return isoStr;
+                return '-';
             }
         }
 
@@ -191,67 +192,106 @@
         }
 
         function initDataGrid() {
-            dataGrid = $('#historyDataGrid').dxDataGrid({
+            $('#historyDataGrid').dxDataGrid({
                 dataSource: new DevExpress.data.DataSource({
                     store: new DevExpress.data.CustomStore({
-                        key: 'id',
-                        load: function() {
+                        key: 'historyId',
+                        load: function(loadOptions) {
                             var d = $.Deferred();
+                            var params = {
+                                take: loadOptions.take || 10,
+                                lastReceivedTime: lastReceivedTimeCursor
+                            };
+
+                            // Reset cursor jika sort atau filter berubah
+                            if (loadOptions.sort || loadOptions.filter) {
+                                lastReceivedTimeCursor = null;
+                            }
+
+                            if (loadOptions.sort) {
+                                params.sort = JSON.stringify(loadOptions.sort);
+                            }
+
+                            if (loadOptions.filter) {
+                                params.filter = JSON.stringify(loadOptions.filter);
+                            }
+
                             $.ajax({
-                                url: '/api/Api/history?page=1&pageSize=10000',
+                                url: '/api/Api/history-archive',
                                 method: 'GET',
+                                data: params,
                                 dataType: 'json',
+                                timeout: 30000,
                                 success: function(response) {
-                                    var rawData = response.data || [];
-                                    var mapped = rawData.map(function(item) {
+                                    currentPage++;
+                                    console.log('History API page:', currentPage, '- loaded:', (response.data||[]).length, 'hasMore:', response.hasMore);
+                                    var mapped = (response.data || []).map(function(item) {
                                         return {
-                                            id: item.id || item.Id || 0,
-                                            deviceKey: item.deviceKey || item.DeviceKey || '',
-                                            deviceId: item.deviceId || item.DeviceId || '',
-                                            groupName: item.groupName || item.GroupName || '',
-                                            waktuDevice: item.waktu_Device || item.Waktu_Device || '',
-                                            waktuServer: item.waktu_Server || item.Waktu_Server || '',
-                                            voltR: item.volt_R || item.Volt_R || 0,
-                                            voltS: item.volt_S || item.Volt_S,
-                                            voltT: item.volt_T || item.Volt_T,
-                                            ampR: item.amp_R || item.Amp_R || 0,
-                                            ampS: item.amp_S || item.Amp_S,
-                                            ampT: item.amp_T || item.Amp_T,
-                                            cosPhi: item.cos_Phi || item.Cos_Phi || 0,
-                                            dayaWatt: item.daya_Watt || item.Daya_Watt || 0,
-                                            totalW1M: item.totalW1M_Wh || item.TotalW1M_Wh || 0,
-                                            energiAktif: item.energi_Aktif_Wh || item.Energi_Aktif_Wh || 0,
-                                            totalEnergy: item.total_Energy_Wh || item.Total_Energy_Wh || 0,
-                                            frekuensi: item.frekuensi_Hz || item.Frekuensi_Hz || 0,
-                                            status: (item.daya_Watt || item.Daya_Watt || 0) > 20000 ? 'HIGH LOAD' : (item.daya_Watt || item.Daya_Watt || 0) > 10000 ? 'MEDIUM LOAD' : 'NORMAL'
+                                            historyId: item.historyId || 0,
+                                            originalId: item.originalId || 0,
+                                            deviceKey: item.deviceKey || '',
+                                            deviceId: item.deviceId || '',
+                                            groupName: item.groupName || '',
+                                            terminalTime: item.terminalTime,
+                                            receivedTime: item.receivedTime,
+                                            phaseR: item.phaseR || 0,
+                                            phaseS: item.phaseS,
+                                            phaseT: item.phaseT,
+                                            ampereR: item.ampereR || 0,
+                                            ampereS: item.ampereS,
+                                            ampereT: item.ampereT,
+                                            w: item.w || 0,
+                                            cosPhi: item.cosPhi || 0,
+                                            f: item.f || 0,
+                                            aktifPower: item.aktifPower || 0,
+                                            totalW: item.totalW || 0,
+                                            totalW1M: item.totalW1M || 0,
+                                            archivedAt: item.archivedAt,
+                                            status: (item.w || 0) > 20000 ? 'HIGH LOAD' : (item.w || 0) > 10000 ? 'MEDIUM LOAD' : 'NORMAL'
                                         };
                                     });
                                     allData = mapped;
-                                    $('#totalRecords').text(response.totalCount || mapped.length);
-                                    d.resolve(mapped);
+
+                                    // Update cursor ke row terakhir agar bisa lanjut page berikutnya
+                                    if (mapped.length > 0) {
+                                        lastReceivedTimeCursor = mapped[mapped.length - 1].receivedTime;
+                                    }
+
+                                    d.resolve(mapped, mapped.length);
                                 },
                                 error: function(xhr, status, error) {
-                                    console.error('Error loading data:', error);
+                                    console.error('Error loading data:', status, error);
                                     d.reject(error);
                                 }
                             });
                             return d.promise();
                         }
-                    })
+                    }),
+                    paginate: true,
+                    pageSize: 10
                 }),
 
+                remoteOperations: {
+                    sorting: true,
+                    paging: true,
+                    filtering: true
+                },
+                
                 // Paging
-                paging: { pageSize: 50 },
+                paging: { pageSize: 10 },
                 pager: {
                     showPageSizeSelector: true,
-                    allowedPageSizes: [25, 50, 100, 200],
+                    allowedPageSizes: [10, 50, 100, 500],
                     showInfo: true,
-                    showNavigationButtons: true
+                    showNavigationButtons: true,
+                    visible: true
                 },
 
                 // Scrolling
                 scrolling: {
-                    mode: 'virtual'
+                    mode: 'standard',
+                    showScrollbar: 'always',
+                    useNative: true
                 },
 
                 // Search
@@ -275,10 +315,10 @@
                 groupPanel: { visible: false },
 
                 // Header Filter
-                headerFilter: { visible: false },
+                headerFilter: { visible: true },
 
                 // Filter Row
-                filterRow: { visible: false },
+                filterRow: { visible: true },
 
                 // Sorting
                 sorting: { mode: 'single' },
@@ -321,15 +361,15 @@
                             + '</div></div></div>'
                             + '<div class="col-md-3 col-6"><div class="card border-info h-100"><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-bolt"></i> Voltage</small><br>'
-                            + '<small>R: ' + fmt(d.voltR,1) + 'V' + (d.voltS != null ? ' | S: ' + fmt(d.voltS,1) + 'V' : '') + (d.voltT != null ? ' | T: ' + fmt(d.voltT,1) + 'V' : '') + '</small>'
+                            + '<small>R: ' + fmt(d.phaseR,1) + 'V' + (d.phaseS != null ? ' | S: ' + fmt(d.phaseS,1) + 'V' : '') + (d.phaseT != null ? ' | T: ' + fmt(d.phaseT,1) + 'V' : '') + '</small>'
                             + '</div></div></div>'
                             + '<div class="col-md-3 col-6"><div class="card border-warning h-100"><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-wave-square"></i> Current</small><br>'
-                            + '<small>R: ' + fmt(d.ampR,3) + 'A' + (d.ampS != null ? ' | S: ' + fmt(d.ampS,3) + 'A' : '') + (d.ampT != null ? ' | T: ' + fmt(d.ampT,3) + 'A' : '') + '</small>'
+                            + '<small>R: ' + fmt(d.ampereR,3) + 'A' + (d.ampereS != null ? ' | S: ' + fmt(d.ampereS,3) + 'A' : '') + (d.ampereT != null ? ' | T: ' + fmt(d.ampereT,3) + 'A' : '') + '</small>'
                             + '</div></div></div>'
                             + '<div class="col-md-3 col-6"><div class="card border-primary h-100"><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-plug"></i> Power</small><br>'
-                            + '<small>' + fmt(d.dayaWatt,0) + ' W | Cos&phi;: ' + fmt(d.cosPhi,3) + ' | ' + fmt(d.frekuensi,2) + ' Hz</small>'
+                            + '<small>' + fmt(d.w,0) + ' W | Cos&phi;: ' + fmt(d.cosPhi,3) + ' | ' + fmt(d.f,2) + ' Hz</small>'
                             + '</div></div></div>'
                             + '</div>';
                         container.append(html);
@@ -339,15 +379,10 @@
                 // Summary
                 summary: {
                     totalItems: [
-                        { column: 'id', summaryType: 'count', displayFormat: '{0} records' },
-                        { column: 'dayaWatt', summaryType: 'sum', displayFormat: 'Sum: {0} W', valueFormat: { type: 'fixedPoint', precision: 0 } },
-                        { column: 'dayaWatt', summaryType: 'avg', displayFormat: 'Avg: {0} W', valueFormat: { type: 'fixedPoint', precision: 0 } },
-                        { column: 'totalEnergy', summaryType: 'sum', displayFormat: 'Sum: {0} Wh', valueFormat: { type: 'fixedPoint', precision: 0 } }
+                        { column: 'historyId', summaryType: 'count', displayFormat: '{0} records' }
                     ],
                     groupItems: [
-                        { column: 'id', summaryType: 'count', displayFormat: '{0}' },
-                        { column: 'dayaWatt', summaryType: 'sum', displayFormat: 'Sum: {0} W', valueFormat: { type: 'fixedPoint', precision: 0 }, alignByColumn: true },
-                        { column: 'totalEnergy', summaryType: 'sum', displayFormat: 'Sum: {0} Wh', valueFormat: { type: 'fixedPoint', precision: 0 }, alignByColumn: true }
+                        { column: 'historyId', summaryType: 'count', displayFormat: '{0}' }
                     ]
                 },
 
@@ -380,10 +415,10 @@
                 // Cell customization
                 onCellPrepared: function(e) {
                     if (e.rowType !== 'data') return;
-                    if (e.column.dataField === 'dayaWatt' && e.value > 20000) {
+                    if (e.column.dataField === 'w' && e.value > 20000) {
                         e.cellElement.css('background-color', 'rgba(220,53,69,0.10)');
-                    } else if (e.column.dataField === 'dayaWatt' && e.value > 10000) {
-                        e.cellElement.css('background-color', 'rgba(253,126,20,0.07)');
+                    } else if (e.column.dataField === 'w' && e.value > 10000) {
+                        e.cellElement.css('background-color', 'rgba(255,193,7,0.1)');
                     }
                 },
 
@@ -392,22 +427,29 @@
                     if (e.rowType !== 'data') return;
                     var s = e.data.status;
                     if (s === 'HIGH LOAD') e.rowElement.css('border-left', '3px solid #dc3545');
-                    else if (s === 'MEDIUM LOAD') e.rowElement.css('border-left', '3px solid #fd7e14');
+                    else if (s === 'MEDIUM LOAD') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #198754');
                 },
 
                 // Columns
                 columns: [
                     {
-                        dataField: 'id',
-                        caption: 'ID',
-                        width: 60,
+                        dataField: 'historyId',
+                        caption: 'History ID',
+                        width: 80,
                         fixed: true,
                         fixedPosition: 'left',
                         allowGrouping: false,
                         allowFiltering: false,
                         allowHeaderFiltering: false,
-                        cssClass: 'text-center'
+                        alignment: 'center'
+                    },
+                    {
+                        dataField: 'originalId',
+                        caption: 'Original ID',
+                        width: 80,
+                        visible: false,
+                        alignment: 'center'
                     },
                     {
                         dataField: 'deviceKey',
@@ -415,36 +457,51 @@
                         width: 100,
                         fixed: true,
                         fixedPosition: 'left',
+                        alignment: 'center',
+                        headerFilter: { allowSelectAll: true },
                         cellTemplate: function(container, options) {
                             $('<span>').addClass('history-device').text(options.value).appendTo(container);
                         }
                     },
                     {
                         dataField: 'groupName',
-                        caption: 'Group'
+                        caption: 'Group',
+                        alignment: 'center',
+                        headerFilter: { allowSelectAll: true }
                     },
                     {
-                        dataField: 'waktuServer',
-                        caption: 'Waktu Server',
-                        allowFiltering: false,
+                        dataField: 'receivedTime',
+                        caption: 'Received Time',
+                        dataType: 'datetime',
                         sortOrder: 'desc',
+                        alignment: 'center',
+                        format: { type: 'dd/MM/yyyy HH:mm:ss' },
+                        filterOperations: ['between', '>=', '<=', '>', '<', '='],
+                        selectedFilterOperation: 'between',
+                        editorOptions: {
+                            type: 'datetime',
+                            displayFormat: 'dd/MM/yyyy HH:mm:ss'
+                        },
                         cellTemplate: function(container, options) {
                             $('<span>').addClass('history-time').text(formatDateTime(options.value)).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'waktuDevice',
-                        caption: 'Waktu Device',
-                        allowFiltering: false,
+                        dataField: 'terminalTime',
+                        caption: 'Terminal Time',
+                        dataType: 'datetime',
                         visible: false,
+                        alignment: 'center',
+                        format: { type: 'dd/MM/yyyy HH:mm:ss' },
                         cellTemplate: function(container, options) {
                             $('<span>').addClass('history-time').text(formatDateTime(options.value)).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'voltR',
+                        dataField: 'phaseR',
                         caption: 'V R',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls = v < 200 ? 'text-danger' : v < 220 ? 'text-warning' : 'text-success';
@@ -452,9 +509,10 @@
                         }
                     },
                     {
-                        dataField: 'voltS',
+                        dataField: 'phaseS',
                         caption: 'V S',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             if (options.value != null) {
                                 var v = options.value;
@@ -466,9 +524,10 @@
                         }
                     },
                     {
-                        dataField: 'voltT',
+                        dataField: 'phaseT',
                         caption: 'V T',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             if (options.value != null) {
                                 var v = options.value;
@@ -480,9 +539,10 @@
                         }
                     },
                     {
-                        dataField: 'ampR',
+                        dataField: 'ampereR',
                         caption: 'A R',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls = v > 80 ? 'text-danger' : v > 70 ? 'text-warning' : 'text-success';
@@ -490,9 +550,10 @@
                         }
                     },
                     {
-                        dataField: 'ampS',
+                        dataField: 'ampereS',
                         caption: 'A S',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             if (options.value != null) {
                                 var v = options.value;
@@ -504,9 +565,10 @@
                         }
                     },
                     {
-                        dataField: 'ampT',
+                        dataField: 'ampereT',
                         caption: 'A T',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             if (options.value != null) {
                                 var v = options.value;
@@ -521,50 +583,73 @@
                         dataField: 'cosPhi',
                         caption: 'Cos\u03C6',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             $('<span>').text(fmt(options.value, 2)).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'dayaWatt',
+                        dataField: 'w',
                         caption: 'Daya (W)',
                         dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
                             $('<span>').addClass('history-power').text(fmt(options.value, 0)).appendTo(container);
                         }
                     },
                     {
+                        dataField: 'aktifPower',
+                        caption: 'Aktif Power',
+                        dataType: 'number',
+                        visible: false,
+                        alignment: 'center'
+                    },
+                    {
+                        dataField: 'totalW',
+                        caption: 'Total W',
+                        dataType: 'number',
+                        visible: false,
+                        alignment: 'center'
+                    },
+                    {
                         dataField: 'totalW1M',
                         caption: 'TotalW1M',
                         dataType: 'number',
-                        visible: false
+                        visible: false,
+                        alignment: 'center'
                     },
                     {
-                        dataField: 'energiAktif',
-                        caption: 'Energi Aktif',
+                        dataField: 'f',
+                        caption: 'Freq (Hz)',
                         dataType: 'number',
-                        visible: false
-                    },
-                    {
-                        dataField: 'totalEnergy',
-                        caption: 'Energy (Wh)',
-                        dataType: 'number',
+                        alignment: 'center',
                         cellTemplate: function(container, options) {
-                            $('<span>').addClass('text-primary fw-bold').text(fmt(options.value, 0)).appendTo(container);
+                            $('<span>').text(fmt(options.value, 1)).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'frekuensi',
-                        caption: 'Freq',
-                        dataType: 'number',
+                        dataField: 'archivedAt',
+                        caption: 'Archived At',
+                        dataType: 'datetime',
+                        visible: false,
+                        alignment: 'center',
+                        format: { type: 'dd/MM/yyyy HH:mm:ss' },
                         cellTemplate: function(container, options) {
-                            $('<span>').text(fmt(options.value, 1)).appendTo(container);
+                            $('<span>').addClass('history-time').text(formatDateTime(options.value)).appendTo(container);
                         }
                     },
                     {
                         dataField: 'status',
                         caption: 'Status',
                         width: 90,
+                        alignment: 'center',
+                        headerFilter: {
+                            dataSource: [
+                                { text: 'NORMAL', value: 'NORMAL' },
+                                { text: 'MEDIUM LOAD', value: 'MEDIUM LOAD' },
+                                { text: 'HIGH LOAD', value: 'HIGH LOAD' }
+                            ]
+                        },
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls, symbol;
@@ -576,19 +661,25 @@
                     }
                 ]
             });
-        }
 
-        function loadData() {
-            if (dataGrid) {
-                dataGrid.refresh();
-            }
+            dataGrid = $('#historyDataGrid').dxDataGrid('instance');
+
+            // Update total records on data load
+            dataGrid.on('contentReady', function() {
+                var totalCount = dataGrid.totalCount();
+                if (totalCount !== undefined) {
+                    $('#totalRecords').text(totalCount);
+                }
+            });
         }
 
         function setupAutoRefresh() {
             stopAutoRefresh();
             if (autoRefreshEnabled) {
                 autoRefreshTimer = setInterval(function() {
-                    loadData();
+                    if (dataGrid) {
+                        dataGrid.refresh();
+                    }
                 }, 10000);
             }
         }
@@ -602,7 +693,7 @@
 
         function setupEventHandlers() {
             $('#btnRefresh').click(function() {
-                loadData();
+                if (dataGrid) dataGrid.refresh();
             });
 
             $('#autoRefreshCheck').change(function() {
@@ -629,21 +720,22 @@
 
         function copyRowToClipboard(data) {
             var lines = [
-                'ID: ' + data.id,
+                'History ID: ' + data.historyId,
                 'Device: ' + data.deviceKey,
                 'Group: ' + data.groupName,
-                'Waktu Device: ' + formatDateTime(data.waktuDevice),
-                'Waktu Server: ' + formatDateTime(data.waktuServer),
-                'Volt R: ' + fmt(data.voltR, 1) + 'V',
-                'Volt S: ' + (data.voltS != null ? fmt(data.voltS, 1) + 'V' : '-'),
-                'Volt T: ' + (data.voltT != null ? fmt(data.voltT, 1) + 'V' : '-'),
-                'Amp R: ' + fmt(data.ampR, 3) + 'A',
-                'Amp S: ' + (data.ampS != null ? fmt(data.ampS, 3) + 'A' : '-'),
-                'Amp T: ' + (data.ampT != null ? fmt(data.ampT, 3) + 'A' : '-'),
+                'Terminal Time: ' + formatDateTime(data.terminalTime),
+                'Received Time: ' + formatDateTime(data.receivedTime),
+                'Volt R: ' + fmt(data.phaseR, 1) + 'V',
+                'Volt S: ' + (data.phaseS != null ? fmt(data.phaseS, 1) + 'V' : '-'),
+                'Volt T: ' + (data.phaseT != null ? fmt(data.phaseT, 1) + 'V' : '-'),
+                'Amp R: ' + fmt(data.ampereR, 3) + 'A',
+                'Amp S: ' + (data.ampereS != null ? fmt(data.ampereS, 3) + 'A' : '-'),
+                'Amp T: ' + (data.ampereT != null ? fmt(data.ampereT, 3) + 'A' : '-'),
                 'Cos Phi: ' + fmt(data.cosPhi, 3),
-                'Daya: ' + fmt(data.dayaWatt, 0) + ' W',
-                'Total Energy: ' + fmt(data.totalEnergy, 0) + ' Wh',
-                'Frekuensi: ' + fmt(data.frekuensi, 2) + ' Hz',
+                'Daya: ' + fmt(data.w, 0) + ' W',
+                'Aktif Power: ' + fmt(data.aktifPower, 0) + ' Wh',
+                'Total W: ' + fmt(data.totalW, 0) + ' Wh',
+                'Frekuensi: ' + fmt(data.f, 2) + ' Hz',
                 'Status: ' + data.status
             ];
             var text = lines.join('\n');

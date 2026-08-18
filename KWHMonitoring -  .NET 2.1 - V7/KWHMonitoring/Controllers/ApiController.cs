@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -504,13 +503,7 @@ namespace KWHMonitoring.Controllers
                 var tariffPerKWh = await GetTariffPerKWh();
                 var estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2);
 
-                // Real-time kWh if viewing today
-                // [BUG] Timezone tidak konsisten: GetUsageStatistics() pakai UTC+7 (Jakarta offset),
-                // tapi GetDeviceUsageStatistics() pakai DateTime.Now untuk real-time section.
-                // Jika server tidak di timezone Jakarta, hasil akan berbeda.
-                var serverNowDev = DateTime.Now;
-                var serverTodayDev = serverNowDev.Date;
-                var isTodayDevice = startDate.Date == serverTodayDev;
+                var isTodayDevice = startDate.Date == serverToday.Date;
                 decimal realtimeKWh = 0;
                 int secondsToNextHour = 0;
                 string currentHourLabel = "";
@@ -609,8 +602,8 @@ namespace KWHMonitoring.Controllers
                     currentHourLabel = currentHourLabel,
                     secondsToNextHour = secondsToNextHour,
                     isToday = isTodayDevice,
-                    serverDate = serverTodayDev.ToString("yyyy-MM-dd"),
-                    serverHour = serverNowDev.Hour
+                    serverDate = serverToday.ToString("yyyy-MM-dd"),
+                    serverHour = serverNow.Hour
                 });
             }
             catch (Exception ex)
@@ -818,10 +811,7 @@ namespace KWHMonitoring.Controllers
                     messages.Add(string.Format("Monthly aggregated for {0}-{1:D2}", request.Year.Value, request.Month.Value));
                 }
 
-                // [BUG] Jika Year != null DAN Month != null, AggregateYearlyAsync dipanggil 2x:
-                // sekali dari blok if(Year != null && Month != null) di atas, dan sekali lagi di sini.
-                // Seharusnya pakai else if.
-                if (request?.Year != null)
+                else if (request?.Year != null)
                 {
                     await EnergyAggregationBackgroundService.AggregateYearlyAsync(context, request.Year.Value);
                     messages.Add(string.Format("Yearly aggregated for {0}", request.Year.Value));
@@ -835,10 +825,9 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        // [BUG] Tidak ada bounds check. Jika month < 1 atau month > 12 akan throw IndexOutOfRangeException.
-        // Model UsageStatistics.GetMonthName() punya bounds check, tapi method ini tidak.
         private string GetMonthName(int month)
         {
+            if (month < 1 || month > 12) return "";
             var months = new[] { "", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des" };
             return months[month];
         }
@@ -905,27 +894,12 @@ namespace KWHMonitoring.Controllers
 
         // ============================================
         // SAVE TARIFF PER KWH
-        // [BUG] Request.Body stream mungkin sudah dibaca oleh [FromBody] model binding,
-        // sehingga ReadToEndAsync() bisa return empty string.
         // ============================================
         [HttpPost("save-tariff")]
         public async Task<IActionResult> SaveTariff([FromBody] Dictionary<string, string> data)
         {
             try
             {
-                string body = null;
-                if (data == null || data.Count == 0)
-                {
-                    using (var reader = new StreamReader(Request.Body))
-                    {
-                        body = await reader.ReadToEndAsync();
-                    }
-                    if (!string.IsNullOrEmpty(body))
-                    {
-                        data = JsonConvert.DeserializeObject<Dictionary<string, string>>(body);
-                    }
-                }
-
                 string tariffValue = null;
                 if (data != null)
                 {
@@ -997,7 +971,7 @@ namespace KWHMonitoring.Controllers
         // HISTORY DATA API
         // ============================================
         [HttpGet("history")]
-        public async Task<IActionResult> GetHistory(string deviceKey, string fromDate, string toDate, int page = 1, int pageSize = 100)
+        public async Task<IActionResult> GetHistory(string deviceKey, string fromDate, string toDate, int page = 1, int pageSize = 10)
         {
             try
             {
@@ -1162,9 +1136,10 @@ namespace KWHMonitoring.Controllers
                 if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var parsedTo))
                     query = query.Where(x => x.Waktu_Server < parsedTo.AddDays(1));
 
+                // Limit untuk export - maksimal 1000 data untuk mencegah overload
                 var data = await query
                     .OrderByDescending(x => x.Waktu_Server)
-                    .Take(100000)
+                    .Take(1000)
                     .ToListAsync();
 
                 if (format == "excel")
@@ -1249,6 +1224,305 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        // ============================================
+        // HISTORY DATA FROM ARCHIVE TABLE (KWHData_History)
+        // Keyset/Seek Pagination — TANPA COUNT(*) untuk efisiensi
+        // Menggunakan cursor timestamp agar cepat di tabel ratusan ribu
+        // ============================================
+        [HttpGet("history-archive")]
+        public async Task<IActionResult> GetHistoryArchive(
+            [FromQuery] string deviceKey,
+            [FromQuery] string fromDate,
+            [FromQuery] string toDate,
+            [FromQuery] int take = 50,
+            [FromQuery] string lastReceivedTime = null,
+            [FromQuery] string sort = null,
+            [FromQuery] string filter = null,
+            [FromQuery] string group = null)
+        {
+            try
+            {
+                if (take < 1) take = 10;
+                if (take > 500) take = 500;
+
+                var query = _context.KWHData_History.AsQueryable();
+
+                // Apply device key filter
+                if (!string.IsNullOrEmpty(deviceKey))
+                    query = query.Where(x => x.DeviceKey == deviceKey);
+
+                // Apply date range filter
+                if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var parsedFrom))
+                    query = query.Where(x => x.ReceivedTime >= parsedFrom);
+
+                if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var parsedTo))
+                    query = query.Where(x => x.ReceivedTime < parsedTo.AddDays(1));
+
+                // KEYSET PAGINATION: gunakan cursor timestamp
+                // Lebih cepat dari OFFSET karena tidak perlu scan dan discard ribuan row
+                if (!string.IsNullOrEmpty(lastReceivedTime) && DateTime.TryParse(lastReceivedTime, out var lastTime))
+                {
+                    query = query.Where(x => x.ReceivedTime < lastTime);
+                }
+
+                // Apply sorting (default: ReceivedTime DESC untuk seek descending)
+                if (!string.IsNullOrEmpty(sort))
+                {
+                    query = ApplyHistorySort(query, sort);
+                }
+                else
+                {
+                    query = query.OrderByDescending(x => x.ReceivedTime);
+                }
+
+                // Ambil data LANGSUNG tanpa COUNT(*) — jauh lebih cepat
+                var data = await query
+                    .Take(take)
+                    .ToListAsync();
+
+                var result = new
+                {
+                    data = data.Select(item => new
+                    {
+                        historyId = item.HistoryId,
+                        originalId = item.OriginalId,
+                        deviceKey = item.DeviceKey,
+                        deviceId = item.DeviceId,
+                        groupName = item.GroupName,
+                        terminalTime = item.TerminalTime,
+                        receivedTime = item.ReceivedTime,
+                        phaseR = item.PhaseR,
+                        phaseS = item.PhaseS,
+                        phaseT = item.PhaseT,
+                        ampereR = item.AmpereR,
+                        ampereS = item.AmpereS,
+                        ampereT = item.AmpereT,
+                        w = item.W,
+                        cosPhi = item.CosPhi,
+                        f = item.F,
+                        aktifPower = item.AktifPower,
+                        totalW = item.TotalW,
+                        totalW1M = item.TotalW1M,
+                        archivedAt = item.ArchivedAt
+                    }).ToList(),
+                    hasMore = data.Count >= take,
+                    pageSize = take
+                };
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching history archive data. Message: {Message}, Inner: {Inner}", 
+                    ex.Message, ex.InnerException?.Message ?? "none");
+                var innerMsg = ex.InnerException?.Message ?? "";
+                return StatusCode(500, new { error = ex.Message, detail = innerMsg, stackTrace = ex.StackTrace });
+            }
+        }
+
+        private IQueryable<KWHDataHistory> ApplyHistorySort(IQueryable<KWHDataHistory> query, string sortJson)
+        {
+            try
+            {
+                var sortItems = JsonConvert.DeserializeObject<List<DevExtremeSortItem>>(sortJson);
+                if (sortItems == null || sortItems.Count == 0)
+                    return query.OrderByDescending(x => x.ReceivedTime);
+
+                bool first = true;
+                IOrderedQueryable<KWHDataHistory> orderedQuery = null;
+
+                foreach (var item in sortItems)
+                {
+                    bool desc = item.Desc;
+                    switch (item.Selector?.ToLower())
+                    {
+                        case "historyid": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.HistoryId) : query.OrderBy(x => x.HistoryId)) : (desc ? orderedQuery.ThenByDescending(x => x.HistoryId) : orderedQuery.ThenBy(x => x.HistoryId)); break;
+                        case "originalid": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.OriginalId) : query.OrderBy(x => x.OriginalId)) : (desc ? orderedQuery.ThenByDescending(x => x.OriginalId) : orderedQuery.ThenBy(x => x.OriginalId)); break;
+                        case "devicekey": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.DeviceKey) : query.OrderBy(x => x.DeviceKey)) : (desc ? orderedQuery.ThenByDescending(x => x.DeviceKey) : orderedQuery.ThenBy(x => x.DeviceKey)); break;
+                        case "deviceid": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.DeviceId) : query.OrderBy(x => x.DeviceId)) : (desc ? orderedQuery.ThenByDescending(x => x.DeviceId) : orderedQuery.ThenBy(x => x.DeviceId)); break;
+                        case "groupname": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.GroupName) : query.OrderBy(x => x.GroupName)) : (desc ? orderedQuery.ThenByDescending(x => x.GroupName) : orderedQuery.ThenBy(x => x.GroupName)); break;
+                        case "terminaltime": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.TerminalTime) : query.OrderBy(x => x.TerminalTime)) : (desc ? orderedQuery.ThenByDescending(x => x.TerminalTime) : orderedQuery.ThenBy(x => x.TerminalTime)); break;
+                        case "receivedtime": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.ReceivedTime) : query.OrderBy(x => x.ReceivedTime)) : (desc ? orderedQuery.ThenByDescending(x => x.ReceivedTime) : orderedQuery.ThenBy(x => x.ReceivedTime)); break;
+                        case "phaser": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.PhaseR) : query.OrderBy(x => x.PhaseR)) : (desc ? orderedQuery.ThenByDescending(x => x.PhaseR) : orderedQuery.ThenBy(x => x.PhaseR)); break;
+                        case "phases": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.PhaseS) : query.OrderBy(x => x.PhaseS)) : (desc ? orderedQuery.ThenByDescending(x => x.PhaseS) : orderedQuery.ThenBy(x => x.PhaseS)); break;
+                        case "phaset": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.PhaseT) : query.OrderBy(x => x.PhaseT)) : (desc ? orderedQuery.ThenByDescending(x => x.PhaseT) : orderedQuery.ThenBy(x => x.PhaseT)); break;
+                        case "amperer": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.AmpereR) : query.OrderBy(x => x.AmpereR)) : (desc ? orderedQuery.ThenByDescending(x => x.AmpereR) : orderedQuery.ThenBy(x => x.AmpereR)); break;
+                        case "amperes": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.AmpereS) : query.OrderBy(x => x.AmpereS)) : (desc ? orderedQuery.ThenByDescending(x => x.AmpereS) : orderedQuery.ThenBy(x => x.AmpereS)); break;
+                        case "amperet": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.AmpereT) : query.OrderBy(x => x.AmpereT)) : (desc ? orderedQuery.ThenByDescending(x => x.AmpereT) : orderedQuery.ThenBy(x => x.AmpereT)); break;
+                        case "w": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.W) : query.OrderBy(x => x.W)) : (desc ? orderedQuery.ThenByDescending(x => x.W) : orderedQuery.ThenBy(x => x.W)); break;
+                        case "cosphi": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.CosPhi) : query.OrderBy(x => x.CosPhi)) : (desc ? orderedQuery.ThenByDescending(x => x.CosPhi) : orderedQuery.ThenBy(x => x.CosPhi)); break;
+                        case "f": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.F) : query.OrderBy(x => x.F)) : (desc ? orderedQuery.ThenByDescending(x => x.F) : orderedQuery.ThenBy(x => x.F)); break;
+                        case "aktifpower": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.AktifPower) : query.OrderBy(x => x.AktifPower)) : (desc ? orderedQuery.ThenByDescending(x => x.AktifPower) : orderedQuery.ThenBy(x => x.AktifPower)); break;
+                        case "totalw": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.TotalW) : query.OrderBy(x => x.TotalW)) : (desc ? orderedQuery.ThenByDescending(x => x.TotalW) : orderedQuery.ThenBy(x => x.TotalW)); break;
+                        case "totalw1m": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.TotalW1M) : query.OrderBy(x => x.TotalW1M)) : (desc ? orderedQuery.ThenByDescending(x => x.TotalW1M) : orderedQuery.ThenBy(x => x.TotalW1M)); break;
+                        case "archivedat": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.ArchivedAt) : query.OrderBy(x => x.ArchivedAt)) : (desc ? orderedQuery.ThenByDescending(x => x.ArchivedAt) : orderedQuery.ThenBy(x => x.ArchivedAt)); break;
+                        default: break;
+                    }
+                    first = false;
+                }
+
+                return orderedQuery ?? query.OrderByDescending(x => x.ReceivedTime);
+            }
+            catch
+            {
+                return query.OrderByDescending(x => x.ReceivedTime);
+            }
+        }
+
+        private IQueryable<AnomalyLog> ApplyAnomalySort(IQueryable<AnomalyLog> query, string sortJson)
+        {
+            try
+            {
+                var sortItems = JsonConvert.DeserializeObject<List<DevExtremeSortItem>>(sortJson);
+                if (sortItems == null || sortItems.Count == 0)
+                    return query.OrderByDescending(x => x.DetectedTime);
+
+                bool first = true;
+                IOrderedQueryable<AnomalyLog> orderedQuery = null;
+
+                foreach (var item in sortItems)
+                {
+                    bool desc = item.Desc;
+                    switch (item.Selector?.ToLower())
+                    {
+                        case "id": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.Id) : query.OrderBy(x => x.Id)) : (desc ? orderedQuery.ThenByDescending(x => x.Id) : orderedQuery.ThenBy(x => x.Id)); break;
+                        case "devicekey": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.DeviceKey) : query.OrderBy(x => x.DeviceKey)) : (desc ? orderedQuery.ThenByDescending(x => x.DeviceKey) : orderedQuery.ThenBy(x => x.DeviceKey)); break;
+                        case "anomalytype": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.AnomalyType) : query.OrderBy(x => x.AnomalyType)) : (desc ? orderedQuery.ThenByDescending(x => x.AnomalyType) : orderedQuery.ThenBy(x => x.AnomalyType)); break;
+                        case "powervalue": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.PowerValue) : query.OrderBy(x => x.PowerValue)) : (desc ? orderedQuery.ThenByDescending(x => x.PowerValue) : orderedQuery.ThenBy(x => x.PowerValue)); break;
+                        case "thresholdvalue": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.ThresholdValue) : query.OrderBy(x => x.ThresholdValue)) : (desc ? orderedQuery.ThenByDescending(x => x.ThresholdValue) : orderedQuery.ThenBy(x => x.ThresholdValue)); break;
+                        case "deviation": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.Deviation) : query.OrderBy(x => x.Deviation)) : (desc ? orderedQuery.ThenByDescending(x => x.Deviation) : orderedQuery.ThenBy(x => x.Deviation)); break;
+                        case "detectedtime": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.DetectedTime) : query.OrderBy(x => x.DetectedTime)) : (desc ? orderedQuery.ThenByDescending(x => x.DetectedTime) : orderedQuery.ThenBy(x => x.DetectedTime)); break;
+                        case "acknowledged": orderedQuery = first ? (desc ? query.OrderByDescending(x => x.Acknowledged) : query.OrderBy(x => x.Acknowledged)) : (desc ? orderedQuery.ThenByDescending(x => x.Acknowledged) : orderedQuery.ThenBy(x => x.Acknowledged)); break;
+                        default: break;
+                    }
+                    first = false;
+                }
+
+                return orderedQuery ?? query.OrderByDescending(x => x.DetectedTime);
+            }
+            catch
+            {
+                return query.OrderByDescending(x => x.DetectedTime);
+            }
+        }
+
+        // ============================================
+        // HISTORY ARCHIVE EXPORT
+        // ============================================
+        [HttpGet("history-archive-export")]
+        public async Task<IActionResult> ExportHistoryArchive(
+            [FromQuery] string deviceKey,
+            [FromQuery] string fromDate,
+            [FromQuery] string toDate,
+            [FromQuery] string format = "csv")
+        {
+            try
+            {
+                var query = _context.KWHData_History.AsQueryable();
+
+                if (!string.IsNullOrEmpty(deviceKey))
+                    query = query.Where(x => x.DeviceKey == deviceKey);
+
+                if (!string.IsNullOrEmpty(fromDate) && DateTime.TryParse(fromDate, out var parsedFrom))
+                    query = query.Where(x => x.ReceivedTime >= parsedFrom);
+
+                if (!string.IsNullOrEmpty(toDate) && DateTime.TryParse(toDate, out var parsedTo))
+                    query = query.Where(x => x.ReceivedTime < parsedTo.AddDays(1));
+
+                // Limit untuk export archive - maksimal на 1000 data untuk mencegah overload
+                var data = await query
+                    .OrderByDescending(x => x.ReceivedTime)
+                    .Take(1000)
+                    .ToListAsync();
+
+                if (format == "excel")
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("<?xml version=\"1.0\"?>");
+                    sb.AppendLine("<?mso-application progid=\"Excel.Sheet\"?>");
+                    sb.AppendLine("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\"");
+                    sb.AppendLine(" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">");
+                    sb.AppendLine("<Worksheet ss:Name=\"KWH History Archive\"><Table>");
+                    sb.AppendLine("<Row>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">HistoryId</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">OriginalId</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">DeviceKey</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">DeviceId</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">GroupName</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">TerminalTime</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">ReceivedTime</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">PHASE_R</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">PHASE_S</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">PHASE_T</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">AMPERE_R</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">AMPERE_S</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">AMPERE_T</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">W</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">CosPhi</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">F</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">Aktif_Power</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">TotalW</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">TotalW1M</Data></Cell>");
+                    sb.AppendLine("<Cell><Data ss:Type=\"String\">ArchivedAt</Data></Cell>");
+                    sb.AppendLine("</Row>");
+
+                    foreach (var item in data)
+                    {
+                        sb.AppendLine("<Row>");
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.HistoryId);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.OriginalId);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.DeviceKey);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.DeviceId);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.GroupName);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.TerminalTime);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.ReceivedTime);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseR);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseS ?? 0);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseT ?? 0);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereR);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereS ?? 0);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereT ?? 0);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.W);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.CosPhi);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.F);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AktifPower);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW1M);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.ArchivedAt);
+                        sb.AppendLine("</Row>");
+                    }
+
+                    sb.AppendLine("</Table></Worksheet></Workbook>");
+
+                    var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+                    return File(bytes, "application/vnd.ms-excel", string.Format("KWH_History_Archive_{0:yyyyMMdd_HHmmss}.xls", DateTime.Now));
+                }
+
+                // CSV format
+                var csv = new StringBuilder();
+                csv.AppendLine("HistoryId,OriginalId,DeviceKey,DeviceId,GroupName,TerminalTime,ReceivedTime,PHASE_R,PHASE_S,PHASE_T,AMPERE_R,AMPERE_S,AMPERE_T,W,CosPhi,F,Aktif_Power,TotalW,TotalW1M,ArchivedAt");
+
+                foreach (var item in data)
+                {
+                    csv.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0},{1},{2},{3},{4},{5:yyyy-MM-dd HH:mm:ss},{6:yyyy-MM-dd HH:mm:ss},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19}",
+                        item.HistoryId, item.OriginalId, item.DeviceKey, item.DeviceId, item.GroupName,
+                        item.TerminalTime, item.ReceivedTime,
+                        item.PhaseR, item.PhaseS, item.PhaseT,
+                        item.AmpereR, item.AmpereS, item.AmpereT,
+                        item.W, item.CosPhi, item.F, item.AktifPower, item.TotalW, item.TotalW1M, item.ArchivedAt));
+                }
+
+                var csvBytes = Encoding.UTF8.GetBytes(csv.ToString());
+                return File(csvBytes, "text/csv", string.Format("KWH_History_Archive_{0:yyyyMMdd_HHmmss}.csv", DateTime.Now));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting history archive data");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         private IQueryable<KWHData> ApplyDataGridFilter(IQueryable<KWHData> query, string filterJson)
         {
             try
@@ -1322,8 +1596,20 @@ namespace KWHMonitoring.Controllers
                     if (op == "contains") query = query.Where(x => x.GroupName.Contains(strValue));
                     else if (op == "=") query = query.Where(x => x.GroupName == strValue);
                     break;
+                case "receivedTime":
+                case "Waktu_Server":
+                    if (DateTime.TryParse(strValue, out var dateVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Waktu_Server >= dateVal && x.Waktu_Server < dateVal.AddSeconds(1));
+                        else if (op == ">") query = query.Where(x => x.Waktu_Server > dateVal);
+                        else if (op == "<") query = query.Where(x => x.Waktu_Server < dateVal);
+                        else if (op == ">=") query = query.Where(x => x.Waktu_Server >= dateVal);
+                        else if (op == "<=") query = query.Where(x => x.Waktu_Server <= dateVal);
+                    }
+                    break;
                 case "dayaWatt":
                 case "Daya_Watt":
+                case "w":
                     if (decimal.TryParse(strValue, out var wattVal))
                     {
                         if (op == "=") query = query.Where(x => x.Daya_Watt == wattVal);
@@ -1335,6 +1621,7 @@ namespace KWHMonitoring.Controllers
                     break;
                 case "totalEnergy":
                 case "Total_Energy_Wh":
+                case "totalW":
                     if (decimal.TryParse(strValue, out var energyVal))
                     {
                         if (op == "=") query = query.Where(x => x.Total_Energy_Wh == energyVal);
@@ -1346,15 +1633,37 @@ namespace KWHMonitoring.Controllers
                     break;
                 case "voltR":
                 case "Volt_R":
-                    if (decimal.TryParse(strValue, out var voltVal))
+                case "phaseR":
+                    if (decimal.TryParse(strValue, out var voltRVal))
                     {
-                        if (op == "=") query = query.Where(x => x.Volt_R == voltVal);
-                        else if (op == ">") query = query.Where(x => x.Volt_R > voltVal);
-                        else if (op == "<") query = query.Where(x => x.Volt_R < voltVal);
+                        if (op == "=") query = query.Where(x => x.Volt_R == voltRVal);
+                        else if (op == ">") query = query.Where(x => x.Volt_R > voltRVal);
+                        else if (op == "<") query = query.Where(x => x.Volt_R < voltRVal);
+                    }
+                    break;
+                case "voltS":
+                case "Volt_S":
+                case "phaseS":
+                    if (decimal.TryParse(strValue, out var voltSVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Volt_S == voltSVal);
+                        else if (op == ">") query = query.Where(x => x.Volt_S > voltSVal);
+                        else if (op == "<") query = query.Where(x => x.Volt_S < voltSVal);
+                    }
+                    break;
+                case "voltT":
+                case "Volt_T":
+                case "phaseT":
+                    if (decimal.TryParse(strValue, out var voltTVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Volt_T == voltTVal);
+                        else if (op == ">") query = query.Where(x => x.Volt_T > voltTVal);
+                        else if (op == "<") query = query.Where(x => x.Volt_T < voltTVal);
                     }
                     break;
                 case "ampR":
                 case "Amp_R":
+                case "ampereR":
                     if (decimal.TryParse(strValue, out var ampVal))
                     {
                         if (op == "=") query = query.Where(x => x.Amp_R == ampVal);
@@ -1362,13 +1671,49 @@ namespace KWHMonitoring.Controllers
                         else if (op == "<") query = query.Where(x => x.Amp_R < ampVal);
                     }
                     break;
+                case "ampS":
+                case "Amp_S":
+                case "ampereS":
+                    if (decimal.TryParse(strValue, out var ampSVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Amp_S == ampSVal);
+                        else if (op == ">") query = query.Where(x => x.Amp_S > ampSVal);
+                        else if (op == "<") query = query.Where(x => x.Amp_S < ampSVal);
+                    }
+                    break;
+                case "ampT":
+                case "Amp_T":
+                case "ampereT":
+                    if (decimal.TryParse(strValue, out var ampTVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Amp_T == ampTVal);
+                        else if (op == ">") query = query.Where(x => x.Amp_T > ampTVal);
+                        else if (op == "<") query = query.Where(x => x.Amp_T < ampTVal);
+                    }
+                    break;
+                case "cosPhi":
+                case "Cos_Phi":
+                    if (decimal.TryParse(strValue, out var cosVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Cos_Phi == cosVal);
+                        else if (op == ">") query = query.Where(x => x.Cos_Phi > cosVal);
+                        else if (op == "<") query = query.Where(x => x.Cos_Phi < cosVal);
+                    }
+                    break;
+                case "f":
+                case "Frekuensi_Hz":
+                    if (decimal.TryParse(strValue, out var freqVal))
+                    {
+                        if (op == "=") query = query.Where(x => x.Frekuensi_Hz == freqVal);
+                        else if (op == ">") query = query.Where(x => x.Frekuensi_Hz > freqVal);
+                        else if (op == "<") query = query.Where(x => x.Frekuensi_Hz < freqVal);
+                    }
+                    break;
             }
 
             return query;
         }
 
-        // [BUG] EF.Property<object> bisa gagal saat runtime karena type harus diketahui
-        // saat compile time untuk ordering. Sorting decimal vs string akan error.
         private IQueryable<KWHData> ApplyDataGridSort(IQueryable<KWHData> query, string sortJson)
         {
             try
@@ -1383,14 +1728,14 @@ namespace KWHMonitoring.Controllers
                     if (orderedQuery == null)
                     {
                         orderedQuery = sort.Desc
-                            ? query.OrderByDescending(x => EF.Property<object>(x, propName))
-                            : query.OrderBy(x => EF.Property<object>(x, propName));
+                            ? ApplySortDescending(query, propName)
+                            : ApplySortAscending(query, propName);
                     }
                     else
                     {
                         orderedQuery = sort.Desc
-                            ? orderedQuery.ThenByDescending(x => EF.Property<object>(x, propName))
-                            : orderedQuery.ThenBy(x => EF.Property<object>(x, propName));
+                            ? ApplyThenByDescending(orderedQuery, propName)
+                            : ApplyThenByAscending(orderedQuery, propName);
                     }
                 }
 
@@ -1399,6 +1744,110 @@ namespace KWHMonitoring.Controllers
             catch
             {
                 return query.OrderByDescending(x => x.Waktu_Server);
+            }
+        }
+
+        private static IOrderedQueryable<KWHData> ApplySortAscending(IQueryable<KWHData> query, string propName)
+        {
+            switch (propName)
+            {
+                case "Id": return query.OrderBy(x => x.Id);
+                case "DeviceKey": return query.OrderBy(x => x.DeviceKey);
+                case "DeviceId": return query.OrderBy(x => x.DeviceId);
+                case "GroupName": return query.OrderBy(x => x.GroupName);
+                case "Waktu_Device": return query.OrderBy(x => x.Waktu_Device);
+                case "Waktu_Server": return query.OrderBy(x => x.Waktu_Server);
+                case "Volt_R": return query.OrderBy(x => x.Volt_R);
+                case "Volt_S": return query.OrderBy(x => x.Volt_S);
+                case "Volt_T": return query.OrderBy(x => x.Volt_T);
+                case "Amp_R": return query.OrderBy(x => x.Amp_R);
+                case "Amp_S": return query.OrderBy(x => x.Amp_S);
+                case "Amp_T": return query.OrderBy(x => x.Amp_T);
+                case "Cos_Phi": return query.OrderBy(x => x.Cos_Phi);
+                case "Daya_Watt": return query.OrderBy(x => x.Daya_Watt);
+                case "TotalW1M_Wh": return query.OrderBy(x => x.TotalW1M_Wh);
+                case "Energi_Aktif_Wh": return query.OrderBy(x => x.Energi_Aktif_Wh);
+                case "Total_Energy_Wh": return query.OrderBy(x => x.Total_Energy_Wh);
+                case "Frekuensi_Hz": return query.OrderBy(x => x.Frekuensi_Hz);
+                default: return query.OrderBy(x => x.Waktu_Server);
+            }
+        }
+
+        private static IOrderedQueryable<KWHData> ApplySortDescending(IQueryable<KWHData> query, string propName)
+        {
+            switch (propName)
+            {
+                case "Id": return query.OrderByDescending(x => x.Id);
+                case "DeviceKey": return query.OrderByDescending(x => x.DeviceKey);
+                case "DeviceId": return query.OrderByDescending(x => x.DeviceId);
+                case "GroupName": return query.OrderByDescending(x => x.GroupName);
+                case "Waktu_Device": return query.OrderByDescending(x => x.Waktu_Device);
+                case "Waktu_Server": return query.OrderByDescending(x => x.Waktu_Server);
+                case "Volt_R": return query.OrderByDescending(x => x.Volt_R);
+                case "Volt_S": return query.OrderByDescending(x => x.Volt_S);
+                case "Volt_T": return query.OrderByDescending(x => x.Volt_T);
+                case "Amp_R": return query.OrderByDescending(x => x.Amp_R);
+                case "Amp_S": return query.OrderByDescending(x => x.Amp_S);
+                case "Amp_T": return query.OrderByDescending(x => x.Amp_T);
+                case "Cos_Phi": return query.OrderByDescending(x => x.Cos_Phi);
+                case "Daya_Watt": return query.OrderByDescending(x => x.Daya_Watt);
+                case "TotalW1M_Wh": return query.OrderByDescending(x => x.TotalW1M_Wh);
+                case "Energi_Aktif_Wh": return query.OrderByDescending(x => x.Energi_Aktif_Wh);
+                case "Total_Energy_Wh": return query.OrderByDescending(x => x.Total_Energy_Wh);
+                case "Frekuensi_Hz": return query.OrderByDescending(x => x.Frekuensi_Hz);
+                default: return query.OrderByDescending(x => x.Waktu_Server);
+            }
+        }
+
+        private static IOrderedQueryable<KWHData> ApplyThenByAscending(IOrderedQueryable<KWHData> query, string propName)
+        {
+            switch (propName)
+            {
+                case "Id": return query.ThenBy(x => x.Id);
+                case "DeviceKey": return query.ThenBy(x => x.DeviceKey);
+                case "DeviceId": return query.ThenBy(x => x.DeviceId);
+                case "GroupName": return query.ThenBy(x => x.GroupName);
+                case "Waktu_Device": return query.ThenBy(x => x.Waktu_Device);
+                case "Waktu_Server": return query.ThenBy(x => x.Waktu_Server);
+                case "Volt_R": return query.ThenBy(x => x.Volt_R);
+                case "Volt_S": return query.ThenBy(x => x.Volt_S);
+                case "Volt_T": return query.ThenBy(x => x.Volt_T);
+                case "Amp_R": return query.ThenBy(x => x.Amp_R);
+                case "Amp_S": return query.ThenBy(x => x.Amp_S);
+                case "Amp_T": return query.ThenBy(x => x.Amp_T);
+                case "Cos_Phi": return query.ThenBy(x => x.Cos_Phi);
+                case "Daya_Watt": return query.ThenBy(x => x.Daya_Watt);
+                case "TotalW1M_Wh": return query.ThenBy(x => x.TotalW1M_Wh);
+                case "Energi_Aktif_Wh": return query.ThenBy(x => x.Energi_Aktif_Wh);
+                case "Total_Energy_Wh": return query.ThenBy(x => x.Total_Energy_Wh);
+                case "Frekuensi_Hz": return query.ThenBy(x => x.Frekuensi_Hz);
+                default: return query.ThenBy(x => x.Waktu_Server);
+            }
+        }
+
+        private static IOrderedQueryable<KWHData> ApplyThenByDescending(IOrderedQueryable<KWHData> query, string propName)
+        {
+            switch (propName)
+            {
+                case "Id": return query.ThenByDescending(x => x.Id);
+                case "DeviceKey": return query.ThenByDescending(x => x.DeviceKey);
+                case "DeviceId": return query.ThenByDescending(x => x.DeviceId);
+                case "GroupName": return query.ThenByDescending(x => x.GroupName);
+                case "Waktu_Device": return query.ThenByDescending(x => x.Waktu_Device);
+                case "Waktu_Server": return query.ThenByDescending(x => x.Waktu_Server);
+                case "Volt_R": return query.ThenByDescending(x => x.Volt_R);
+                case "Volt_S": return query.ThenByDescending(x => x.Volt_S);
+                case "Volt_T": return query.ThenByDescending(x => x.Volt_T);
+                case "Amp_R": return query.ThenByDescending(x => x.Amp_R);
+                case "Amp_S": return query.ThenByDescending(x => x.Amp_S);
+                case "Amp_T": return query.ThenByDescending(x => x.Amp_T);
+                case "Cos_Phi": return query.ThenByDescending(x => x.Cos_Phi);
+                case "Daya_Watt": return query.ThenByDescending(x => x.Daya_Watt);
+                case "TotalW1M_Wh": return query.ThenByDescending(x => x.TotalW1M_Wh);
+                case "Energi_Aktif_Wh": return query.ThenByDescending(x => x.Energi_Aktif_Wh);
+                case "Total_Energy_Wh": return query.ThenByDescending(x => x.Total_Energy_Wh);
+                case "Frekuensi_Hz": return query.ThenByDescending(x => x.Frekuensi_Hz);
+                default: return query.ThenByDescending(x => x.Waktu_Server);
             }
         }
 
@@ -1659,30 +2108,74 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
-        // ANOMALY LOGS - GET
+        // ANOMALY LOGS - GET (Server-Side Pagination)
         // ============================================
-        [HttpGet("anomaly-logs/{deviceKey}")]
-        public async Task<IActionResult> GetAnomalyLogs(string deviceKey, int page = 1, int pageSize = 50)
+        [HttpGet("anomaly-logs/summary")]
+        public async Task<IActionResult> GetAnomalyLogsSummary()
         {
             try
             {
+                var query = _context.AnomalyLogs.AsQueryable();
+
+                var totalCount = await query.CountAsync();
+                var overloadCount = await query.CountAsync(x => x.AnomalyType == "OVERLOAD");
+                var dropCount = await query.CountAsync(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
+                var activeDeviceCount = await query.Select(x => x.DeviceKey).Distinct().CountAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    totalLogs = totalCount,
+                    totalOverload = overloadCount,
+                    totalDrop = dropCount,
+                    activeDevices = activeDeviceCount
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+            }
+        }
+
+        [HttpGet("anomaly-logs/{deviceKey}")]
+        public async Task<IActionResult> GetAnomalyLogs(
+            string deviceKey, 
+            int skip = 0, 
+            int take = 10,
+            string sort = null,
+            string filter = null)
+        {
+            try
+            {
+                if (skip < 0) skip = 0;
+                if (take < 1) take = 10;
+                if (take > 1000) take = 1000;
+
                 IQueryable<AnomalyLog> query;
 
                 if (deviceKey.ToUpper() == "ALL")
                 {
-                    query = _context.AnomalyLogs.OrderByDescending(x => x.DetectedTime);
+                    query = _context.AnomalyLogs.AsQueryable();
                 }
                 else
                 {
-                    query = _context.AnomalyLogs
-                        .Where(x => x.DeviceKey == deviceKey)
-                        .OrderByDescending(x => x.DetectedTime);
+                    query = _context.AnomalyLogs.Where(x => x.DeviceKey == deviceKey);
+                }
+
+                // Apply sorting
+                if (!string.IsNullOrEmpty(sort))
+                {
+                    query = ApplyAnomalySort(query, sort);
+                }
+                else
+                {
+                    query = query.OrderByDescending(x => x.DetectedTime);
                 }
 
                 var totalCount = await query.CountAsync();
                 var logs = await query
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
+                    .Skip(skip)
+                    .Take(take)
                     .Select(x => new
                     {
                         id = x.Id,
@@ -1704,16 +2197,15 @@ namespace KWHMonitoring.Controllers
                 return Ok(new
                 {
                     success = true,
+                    data = logs,
                     totalCount = totalCount,
-                    page = page,
-                    pageSize = pageSize,
-                    totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
-                    logs = logs
+                    skip = skip,
+                    take = take
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
             }
         }
 
@@ -1920,12 +2412,12 @@ namespace KWHMonitoring.Controllers
 
                 // ============================================
                 // DOWNTIME LOGIC:
-                // - Jika periode jam mati & anomali DROP → suppress (jangan log, jangan notifikasi)
+                // - Jika periode jam mati & anomali DROP ? suppress (jangan log, jangan notifikasi)
                 //   Karena listrik sengaja dimatikan, DROP adalah normal
-                // - Jika periode jam mati & anomali OVERLOAD → LOG dengan tipe khusus
+                // - Jika periode jam mati & anomali OVERLOAD ? LOG dengan tipe khusus
                 //   Trigger: Power > EMA (bukan Upper Line) - menandakan listrik masih menyala normal
                 //   Karena listrik seharusnya mati tapi masih menyala = anomali serius
-                // - Jika bukan periode jam mati → proses normal (trigger: Power > Upper Line)
+                // - Jika bukan periode jam mati ? proses normal (trigger: Power > Upper Line)
                 // ============================================
                 if (downtime.IsDowntime && data.AnomalyType == "DROP")
                 {
@@ -1953,7 +2445,7 @@ namespace KWHMonitoring.Controllers
                     Acknowledged = false
                 };
 
-                // Jika downtime & OVERLOAD → tandai sebagai anomali pada jam mati
+                // Jika downtime & OVERLOAD ? tandai sebagai anomali pada jam mati
                 if (downtime.IsDowntime && data.AnomalyType == "OVERLOAD")
                 {
                     log.Notes = string.Format("ALERT: Power detected during downtime period ({0}:00-{1}:00). Expected OFF but power is {2:N0}W",
@@ -2381,9 +2873,9 @@ namespace KWHMonitoring.Controllers
             {
                 // Seed default categories if none exist
                 var defaults = new[] {
-                    new AppSettingsRecord { SettingKey = "Category.Billboard", SettingValue = "{\"icon\":\"🔵\",\"color\":\"#2196f3\",\"description\":\"Perangkat kategori Billboard — Digunakan untuk panel iklan billboard.\"}", UpdatedAt = DateTime.Now },
-                    new AppSettingsRecord { SettingKey = "Category.Megatron", SettingValue = "{\"icon\":\"🟠\",\"color\":\"#ff9800\",\"description\":\"Perangkat kategori Megatron — Digunakan untuk panel megatron / LED display.\"}", UpdatedAt = DateTime.Now },
-                    new AppSettingsRecord { SettingKey = "Category.NeonBox", SettingValue = "{\"icon\":\"🟣\",\"color\":\"#9c27b0\",\"description\":\"Perangkat kategori Neon Box — Digunakan untuk box neon sign.\"}", UpdatedAt = DateTime.Now }
+                    new AppSettingsRecord { SettingKey = "Category.Billboard", SettingValue = "{\"icon\":\"??\",\"color\":\"#2196f3\",\"description\":\"Perangkat kategori Billboard � Digunakan untuk panel iklan billboard.\"}", UpdatedAt = DateTime.Now },
+                    new AppSettingsRecord { SettingKey = "Category.Megatron", SettingValue = "{\"icon\":\"??\",\"color\":\"#ff9800\",\"description\":\"Perangkat kategori Megatron � Digunakan untuk panel megatron / LED display.\"}", UpdatedAt = DateTime.Now },
+                    new AppSettingsRecord { SettingKey = "Category.NeonBox", SettingValue = "{\"icon\":\"??\",\"color\":\"#9c27b0\",\"description\":\"Perangkat kategori Neon Box � Digunakan untuk box neon sign.\"}", UpdatedAt = DateTime.Now }
                 };
                 _context.AppSettingsRecords.AddRange(defaults);
                 await _context.SaveChangesAsync();
@@ -2421,13 +2913,13 @@ namespace KWHMonitoring.Controllers
                 var result = catSettings.Select(x =>
                 {
                     var name = x.SettingKey.Replace("Category.", "");
-                    string icon = "⚪", color = "#607d8b", description = "";
+                    string icon = "?", color = "#607d8b", description = "";
                     try
                     {
                         if (!string.IsNullOrEmpty(x.SettingValue))
                         {
                             var parsed = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(x.SettingValue);
-                            icon = parsed.icon?.ToString() ?? "⚪";
+                            icon = parsed.icon?.ToString() ?? "?";
                             color = parsed.color?.ToString() ?? "#607d8b";
                             description = parsed.description?.ToString() ?? "";
                         }
@@ -2470,7 +2962,7 @@ namespace KWHMonitoring.Controllers
 
                 var meta = new
                 {
-                    icon = string.IsNullOrWhiteSpace(data.icon) ? "⚪" : data.icon,
+                    icon = string.IsNullOrWhiteSpace(data.icon) ? "?" : data.icon,
                     color = string.IsNullOrWhiteSpace(data.color) ? "#607d8b" : data.color,
                     description = data.description ?? ""
                 };
@@ -2508,7 +3000,7 @@ namespace KWHMonitoring.Controllers
 
                 var meta = new
                 {
-                    icon = string.IsNullOrWhiteSpace(data.icon) ? "⚪" : data.icon,
+                    icon = string.IsNullOrWhiteSpace(data.icon) ? "?" : data.icon,
                     color = string.IsNullOrWhiteSpace(data.color) ? "#607d8b" : data.color,
                     description = data.description ?? ""
                 };
@@ -3601,7 +4093,7 @@ namespace KWHMonitoring.Controllers
     public class DevExtremeDataGridRequest
     {
         public int Skip { get; set; } = 0;
-        public int Take { get; set; } = 50;
+        public int Take { get; set; } = 10;
         public string Sort { get; set; }
         public string Filter { get; set; }
         public string TotalSummary { get; set; }
@@ -3666,7 +4158,7 @@ namespace KWHMonitoring.Controllers
     public class CategoryData
     {
         public string name { get; set; } = string.Empty;
-        public string icon { get; set; } = "⚪";
+        public string icon { get; set; } = "?";
         public string color { get; set; } = "#607d8b";
         public string description { get; set; } = "";
     }
@@ -3676,3 +4168,6 @@ namespace KWHMonitoring.Controllers
         public string DeviceKey { get; set; } = string.Empty;
     }
 }
+
+
+

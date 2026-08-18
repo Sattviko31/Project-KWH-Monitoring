@@ -354,8 +354,8 @@
                         <div class="settings-field">
                             <label class="form-label">Warna</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="newCategoryColor" value="#607d8b" title="Pilih warna kategori">
-                                <input type="text" class="form-control" id="newCategoryColorHex" value="#607d8b" placeholder="#607d8b" maxlength="7">
+                                <input type="color" class="form-control form-control-color" id="newCategoryColor" value="#6c757d" title="Pilih warna kategori">
+                                <input type="text" class="form-control" id="newCategoryColorHex" value="#6c757d" placeholder="#6c757d" maxlength="7">
                             </div>
                             <small class="text-muted">Warna badge dan selector kategori</small>
                         </div>
@@ -814,8 +814,8 @@
                     <!-- Timeline Visual -->
                     <div class="settings-preview-box">
                         <div class="settings-preview-label"><i class="fas fa-clock"></i> Timeline</div>
-                        <div style="position: relative; height: 28px; background: #28a745; border-radius: 8px; overflow: hidden;">
-                            <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div>
+                        <div style="position: relative; height: 28px; background: #198754; border-radius: 8px; overflow: hidden;">
+                            <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #1a1d23; transition: all 0.3s;"></div>
                         </div>
                         <div class="d-flex justify-content-between mt-1" style="font-size: 0.7rem; color: #6c757d;">
                             <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
@@ -1393,7 +1393,7 @@
         $('#btnAddCategory').click(function() {
             var name = $('#newCategoryName').val().trim();
             var icon = $('#newCategoryIcon').val().trim() || '⚪';
-            var color = $('#newCategoryColorHex').val().trim() || '#607d8b';
+            var color = $('#newCategoryColorHex').val().trim() || '#6c757d';
             var description = $('#newCategoryDescription').val().trim();
 
             if (!name) {
@@ -1414,8 +1414,8 @@
                         showNotification('Kategori "' + name + '" berhasil ditambahkan!', 'success');
                         $('#newCategoryName').val('');
                         $('#newCategoryIcon').val('');
-                        $('#newCategoryColor').val('#607d8b');
-                        $('#newCategoryColorHex').val('#607d8b');
+                        $('#newCategoryColor').val('#6c757d');
+                        $('#newCategoryColorHex').val('#6c757d');
                         $('#newCategoryDescription').val('');
                         loadCategoriesList();
                     }
@@ -1497,7 +1497,7 @@
         $(document).on('click', '.btn-save-edit', function() {
             var name = $(this).data('name');
             var icon = $('#editCatIcon').val().trim() || '⚪';
-            var color = $('#editCatColor').val() || '#607d8b';
+            var color = $('#editCatColor').val() || '#6c757d';
             var desc = $('#editCatDesc').val().trim();
 
             $.ajax({
@@ -1985,14 +1985,14 @@
                     left: '0%',
                     width: '100%',
                     borderRadius: '8px',
-                    background: '#343a40'
+                    background: '#1a1d23'
                 });
             } else if (start < end) {
                 bar.css({
                     left: (start * pctPerHour) + '%',
                     width: ((end - start) * pctPerHour) + '%',
                     borderRadius: '0',
-                    background: '#343a40'
+                    background: '#1a1d23'
                 });
             } else {
                 var startPct = start * pctPerHour;
@@ -2001,7 +2001,7 @@
                     left: '0%',
                     width: '100%',
                     borderRadius: '0',
-                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
+                    background: 'linear-gradient(to right, #1a1d23 0%, #1a1d23 ' + endPct + '%, #198754 ' + endPct + '%, #198754 ' + startPct + '%, #1a1d23 ' + startPct + '%, #1a1d23 100%)'
                 });
                 return;
             }

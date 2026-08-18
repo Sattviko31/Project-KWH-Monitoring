@@ -356,7 +356,7 @@
                 var $icon = $(this);
                 var deviceKey = $icon.data('device-key');
                 var category = deviceCategoryMap[deviceKey] || 'Billboard';
-                var meta = categoryMetaMap[category] || { icon: '⚪', color: '#607d8b' };
+                var meta = categoryMetaMap[category] || { icon: '⚪', color: '#6c757d' };
                 $icon.text(meta.icon);
                 var classesToRemove = [];
                 $.each(this.classList, function(i, cls) {
@@ -389,7 +389,7 @@
         function updateCategoryIconUI(safeKey, category) {
             var $icon = $('#categoryIcon_' + safeKey);
             if ($icon.length === 0) return;
-            var meta = categoryMetaMap[category] || { icon: '⚪', color: '#607d8b' };
+            var meta = categoryMetaMap[category] || { icon: '⚪', color: '#6c757d' };
             $icon.text(meta.icon);
             // Remove all cat- classes and add the current one
             var classesToRemove = [];
@@ -811,9 +811,9 @@
                         const $phaseBadge = panelCard.find('[data-phase-type]');
                         if ($phaseBadge.length > 0) {
                             if (isThreePhase) {
-                                $phaseBadge.text('3\u03A6').css('background-color', '#6f42c1');
+                                $phaseBadge.text('3\u03A6').removeClass('bg-warning').addClass('bg-info').css('background-color', '').css('color', '');
                             } else {
-                                $phaseBadge.text('1\u03A6').css('background-color', '#fd7e14');
+                                $phaseBadge.text('1\u03A6').removeClass('bg-info').addClass('bg-warning').css('background-color', '').css('color', '#212529');
                             }
                         }
 

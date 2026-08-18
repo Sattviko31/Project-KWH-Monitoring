@@ -229,6 +229,7 @@
         var autoRefreshEnabled = true;
         var deleteLogId = null;
         var dataGrid = null;
+        var allData = [];
 
         $(document).ready(function() {
             console.log('Anomaly Logs page initialized');
@@ -237,11 +238,13 @@
             setInterval(updateLastUpdate, 60000);
 
             initDataGrid();
+            loadSummary();
             setupAutoRefresh();
 
             // Refresh button
             $('#btnRefresh').click(function() {
-                reloadGridData();
+                if (dataGrid) dataGrid.refresh();
+                loadSummary();
             });
 
             // Auto-refresh toggle
@@ -283,7 +286,8 @@
             stopAutoRefresh();
             if (autoRefreshEnabled) {
                 autoRefreshTimer = setInterval(function() {
-                    if (dataGrid) reloadGridData();
+                    if (dataGrid) dataGrid.refresh();
+                    loadSummary();
                 }, 30000);
             }
         }
@@ -329,6 +333,28 @@
         }
 
         // ============================================
+        // LOAD SUMMARY (total stats from server)
+        // ============================================
+        function loadSummary() {
+            $.ajax({
+                url: '/api/Api/anomaly-logs/summary',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        $('#totalOverload').text(response.totalOverload || 0);
+                        $('#totalDrop').text(response.totalDrop || 0);
+                        $('#totalLogs').text(response.totalLogs || 0);
+                        $('#activeDevices').text(response.activeDevices || 0);
+                    }
+                },
+                error: function() {
+                    // silently fail — summary cards are non-critical
+                }
+            });
+        }
+
+        // ============================================
         // INIT DATA GRID
         // ============================================
         function initDataGrid() {
@@ -336,15 +362,24 @@
                 dataSource: new DevExpress.data.DataSource({
                     store: new DevExpress.data.CustomStore({
                         key: 'id',
-                        load: function() {
+                        load: function(loadOptions) {
                             var d = $.Deferred();
+                            var params = {
+                                skip: loadOptions.skip || 0,
+                                take: loadOptions.take || 10
+                            };
+
+                            if (loadOptions.sort) {
+                                params.sort = JSON.stringify(loadOptions.sort);
+                            }
 
                             $.ajax({
-                                url: '/api/Api/anomaly-logs/ALL?page=1&pageSize=10000',
+                                url: '/api/Api/anomaly-logs/ALL',
                                 method: 'GET',
+                                data: params,
                                 dataType: 'json',
                                 success: function(response) {
-                                    var rawData = response.logs || [];
+                                    var rawData = response.data || [];
                                     var mapped = rawData.map(function(item) {
                                         return {
                                             id: item.id || item.Id || 0,
@@ -363,21 +398,9 @@
                                         };
                                     });
 
-                                    // Update summary cards
-                                    var overloadCount = 0;
-                                    var dropCount = 0;
-                                    var uniqueDevices = {};
-                                    for (var i = 0; i < mapped.length; i++) {
-                                        if (mapped[i].anomalyType === 'OVERLOAD') overloadCount++;
-                                        else if (mapped[i].anomalyType === 'DROP' || mapped[i].anomalyType === 'DEVICE_DROP') dropCount++;
-                                        uniqueDevices[mapped[i].deviceKey] = true;
-                                    }
-                                    $('#totalOverload').text(overloadCount);
-                                    $('#totalDrop').text(dropCount);
-                                    $('#totalLogs').text(response.totalCount || mapped.length);
-                                    $('#activeDevices').text(Object.keys(uniqueDevices).length);
+                                    allData = mapped;
 
-                                    d.resolve(mapped);
+                                    d.resolve(mapped, { totalCount: response.totalCount || 0 });
                                 },
                                 error: function(xhr, status, error) {
                                     console.error('Error loading anomaly logs:', error);
@@ -396,16 +419,24 @@
                             });
                             return d.promise();
                         }
-                    })
+                    }),
+                    reshapeOnPush: true
                 }),
 
+                remoteOperations: {
+                    sorting: true,
+                    paging: true,
+                    filtering: true
+                },
+
                 // Paging
-                paging: { pageSize: 50 },
+                paging: { pageSize: 10 },
                 pager: {
                     showPageSizeSelector: true,
-                    allowedPageSizes: [25, 50, 100, 200],
+                    allowedPageSizes: [10, 25, 50, 100],
                     showInfo: true,
-                    showNavigationButtons: true
+                    showNavigationButtons: true,
+                    visible: true
                 },
 
                 // Scrolling
@@ -486,7 +517,7 @@
                             hint: 'Clear all filters',
                             onClick: function() {
                                 dataGrid.clearFilter();
-                                reloadGridData();
+                                dataGrid.refresh();
                             }
                         }
                     });
@@ -498,7 +529,7 @@
                     if (e.column.dataField === 'powerValue' && e.value > 20000) {
                         e.cellElement.css('background-color', 'rgba(220,53,69,0.10)');
                     } else if (e.column.dataField === 'powerValue' && e.value > 10000) {
-                        e.cellElement.css('background-color', 'rgba(253,126,20,0.07)');
+                        e.cellElement.css('background-color', 'rgba(255,193,7,0.1)');
                     }
                 },
 
@@ -507,7 +538,7 @@
                     if (e.rowType !== 'data') return;
                     var t = e.data.anomalyType;
                     if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
-                    else if (t === 'DROP' || t === 'DEVICE_DROP' || t === 'DEVICE DROP') e.rowElement.css('border-left', '3px solid #fd7e14');
+                    else if (t === 'DROP' || t === 'DEVICE_DROP' || t === 'DEVICE DROP') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
 
@@ -683,53 +714,6 @@
             $('#deleteModal').modal('show');
         }
 
-        function reloadGridData() {
-            $.ajax({
-                url: '/api/Api/anomaly-logs/ALL?page=1&pageSize=10000',
-                method: 'GET',
-                dataType: 'json',
-                success: function(response) {
-                    var rawData = response.logs || [];
-                    var mapped = rawData.map(function(item) {
-                        return {
-                            id: item.id || item.Id || 0,
-                            deviceKey: item.deviceKey || item.DeviceKey || '',
-                            deviceId: item.deviceId || item.DeviceId || '',
-                            anomalyType: item.anomalyType || item.AnomalyType || '',
-                            powerValue: item.powerValue || item.PowerValue || 0,
-                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
-                            deviation: item.deviation || item.Deviation || 0,
-                            detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
-                            emaValue: item.emaValue || item.EMAValue,
-                            thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
-                            acknowledged: item.acknowledged || item.Acknowledged || false,
-                            acknowledgedTime: item.acknowledgedTime || item.AcknowledgedTime,
-                            notes: item.notes || item.Notes || ''
-                        };
-                    });
-
-                    // Update summary cards
-                    var overloadCount = 0;
-                    var dropCount = 0;
-                    var uniqueDevices = {};
-                    for (var i = 0; i < mapped.length; i++) {
-                        if (mapped[i].anomalyType === 'OVERLOAD') overloadCount++;
-                        else if (mapped[i].anomalyType === 'DROP' || mapped[i].anomalyType === 'DEVICE_DROP') dropCount++;
-                        uniqueDevices[mapped[i].deviceKey] = true;
-                    }
-                    $('#totalOverload').text(overloadCount);
-                    $('#totalDrop').text(dropCount);
-                    $('#totalLogs').text(response.totalCount || mapped.length);
-                    $('#activeDevices').text(Object.keys(uniqueDevices).length);
-
-                    dataGrid.option('dataSource', mapped);
-                },
-                error: function(xhr, status, error) {
-                    console.error('Error reloading data:', error);
-                }
-            });
-        }
-
         function deleteSingleLog(logId) {
             $('#btnConfirmDelete').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Deleting...');
 
@@ -740,7 +724,8 @@
                 success: function(response) {
                     $('#deleteModal').modal('hide');
                     $('#btnConfirmDelete').prop('disabled', false).html('<i class="fas fa-trash"></i> Delete');
-                    reloadGridData();
+                    dataGrid.refresh();
+                    loadSummary();
                     showNotification('Log deleted successfully', 'success');
                 },
                 error: function(xhr, status, error) {
@@ -764,7 +749,8 @@
                 success: function(response) {
                     $('#clearAllModal').modal('hide');
                     $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
-                    reloadGridData();
+                    dataGrid.refresh();
+                    loadSummary();
                     showNotification('Cleared ' + (response.message || 'all logs'), 'success');
                 },
                 error: function(xhr, status, error) {

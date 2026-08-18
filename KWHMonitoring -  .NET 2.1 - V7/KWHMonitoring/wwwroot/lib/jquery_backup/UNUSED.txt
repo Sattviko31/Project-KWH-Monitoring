@@ -1,2 +1,0 @@
-[UNUSED] Folder ini adalah backup library jQuery yang tidak direferensikan oleh project.
-Tidak ada file di sini yang digunakan. Bisa dihapus untuk menghemat ukuran project.

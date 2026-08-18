@@ -1,7 +1,14 @@
 ﻿@using KWHMonitoring.Models
+@using Microsoft.Extensions.Caching.Memory
+@inject IMemoryCache MemoryCache
 @inject ApplicationDbContext Db
 @{
-    var _footerSettings = Db.AppSettingsRecords.ToDictionary(x => x.SettingKey, x => x.SettingValue);
+    const string cacheKey = "Layout_FooterSettings";
+    if (!MemoryCache.TryGetValue(cacheKey, out Dictionary<string, string> _footerSettings))
+    {
+        _footerSettings = Db.AppSettingsRecords.ToDictionary(x => x.SettingKey, x => x.SettingValue);
+        MemoryCache.Set(cacheKey, _footerSettings, TimeSpan.FromMinutes(5));
+    }
     string _GetFooterSetting(string key, string defaultValue = "")
     {
         return _footerSettings.TryGetValue(key, out var value) ? value : defaultValue;
@@ -17,7 +24,7 @@
     <title>@ViewData["Title"] - KWH Monitoring</title>
     <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/bootstrap5-compat.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.common.css" />
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
@@ -162,12 +169,1372 @@
         </footer>
     </div>
 
+
+
+                        <!-- Tambahkan Library Marked.js untuk merender Markdown -->
+                        <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/lib/marked.umd.min.js" crossorigin="anonymous"></script>
+
+                        <!-- ========================================== -->
+                        <!-- HTML WIDGET QWEN (Professional Design)   -->
+                        <!-- ========================================== -->
+                        <div id="qwen-chat-widget">
+                            <!-- Toggle Button with Notification Badge -->
+                            <button id="qwen-toggle-btn" onclick="toggleQwenChat()" title="Tanya Voltra AI Assistant">
+                                <div class="qwen-btn-icon">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <span id="qwen-notification-badge" class="qwen-badge" style="display: none;">0</span>
+                            </button>
+
+                            <!-- Chat Box -->
+                            <div id="qwen-chat-box" class="qwen-hidden">
+                                <!-- Header -->
+                                <div id="qwen-chat-header">
+                                    <div class="qwen-header-left">
+                                        <div class="qwen-avatar">
+                                            <i class="fas fa-robot"></i>
+                                        </div>
+                                        <div class="qwen-header-info">
+                                            <div class="qwen-header-title">Voltra AI Assistant</div>
+                                            <div class="qwen-header-status">
+                                                <span class="qwen-status-dot"></span>
+                                                Online 💭 KWH Monitoring Support
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="qwen-header-actions">
+                                        <button id="qwen-minimize-btn" onclick="toggleQwenChat()" class="qwen-header-btn" title="Minimize">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <button id="qwen-clear-btn" onclick="clearChatHistory()" class="qwen-header-btn" title="Hapus Percakapan">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Actions -->
+                                <div id="qwen-quick-actions" class="qwen-quick-actions">
+                                    <button data-message="Mana panel paling boros?" class="qwen-quick-btn">
+                                        <i class="fas fa-fire"></i> Panel Boros
+                                    </button>
+                                    <button data-message="Berapa tagihan bulan ini?" class="qwen-quick-btn">
+                                        <i class="fas fa-file-invoice-dollar"></i> Tagihan
+                                    </button>
+                                    <button data-message="Berapa daya total sekarang?" class="qwen-quick-btn">
+                                        <i class="fas fa-bolt"></i> Daya Total
+                                    </button>
+                                    <button data-message="Ada anomali apa saja?" class="qwen-quick-btn">
+                                        <i class="fas fa-exclamation-triangle"></i> Anomali
+                                    </button>
+                                </div>
+
+                                <!-- Chat Body -->
+                                <div id="qwen-chat-body">
+                                    <div class="qwen-welcome-container">
+                                        <div class="qwen-welcome-icon">
+                                            <i class="fas fa-comments"></i>
+                                        </div>
+                                        <div class="qwen-welcome-title">Selamat Datang!</div>
+                                        <div class="qwen-welcome-text" id="qwen-welcome-message">
+                                            Saya <strong>Voltra</strong>, asisten AI khusus KWH Monitoring. 
+                                            Tanyakan apa saja seputar data listrik, panel, tagihan, atau anomali.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Typing Indicator -->
+                                <div id="qwen-typing-indicator" class="qwen-typing-indicator" style="display: none;">
+                                    <div class="qwen-typing-avatar">
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <div class="qwen-typing-dots">
+                                        <span></span><span></span><span></span>
+                                    </div>
+                                    <span class="qwen-typing-text">Voltra sedang mengetik...</span>
+                                </div>
+
+                                <!-- Footer / Input -->
+                                <div id="qwen-chat-footer">
+                                    <div class="qwen-input-wrapper">
+                                        <input type="text" id="qwen-chat-input" 
+                                               placeholder="Ketik pertanyaan Anda..." 
+                                               onkeypress="handleQwenEnter(event)" 
+                                               autocomplete="off" />
+                                        <button id="qwen-send-btn" onclick="sendQwenMessage()" title="Kirim Pesan">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                    <div class="qwen-footer-note">
+                                        <i class="fas fa-shield-alt"></i> Powered by Qwen AI
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ========================================== -->
+                        <!-- CSS PROFESSIONAL STYLING                   -->
+                        <!-- ========================================== -->
+                        <style>
+                            /* Main Widget Container */
+                            #qwen-chat-widget { 
+                                position: fixed; 
+                                bottom: 25px; 
+                                right: 25px; 
+                                z-index: 9999; 
+                                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                            }
+
+                            /* Toggle Button — Round floating button */
+                            #qwen-toggle-btn {
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                width: 60px;
+                                height: 60px;
+                                border-radius: 50%;
+                                cursor: pointer;
+                                box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                                position: relative;
+                                overflow: hidden;
+                                z-index: 9998;
+                            }
+
+                            #qwen-toggle-btn::before {
+                                content: '';
+                                position: absolute;
+                                top: -50%;
+                                left: -50%;
+                                width: 200%;
+                                height: 200%;
+                                background: conic-gradient(transparent, rgba(255,255,255,0.15), transparent 30%);
+                                animation: qwen-btn-spin 3s linear infinite;
+                            }
+
+                            @@keyframes qwen-btn-spin {
+                                from { transform: rotate(0deg); }
+                                to { transform: rotate(360deg); }
+                            }
+
+                            #qwen-toggle-btn:hover {
+                                transform: translateY(-3px) scale(1.08);
+                                box-shadow: 0 12px 35px rgba(102, 126, 234, 0.5);
+                            }
+
+                            #qwen-toggle-btn:active {
+                                transform: translateY(-1px) scale(0.96);
+                            }
+
+                            .qwen-btn-icon {
+                                width: 60px;
+                                height: 60px;
+                                background: transparent;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 24px;
+                                position: relative;
+                                z-index: 1;
+                            }
+
+                            .qwen-badge {
+                                position: absolute;
+                                top: -4px;
+                                right: -4px;
+                                background: #ff4757;
+                                color: white;
+                                border-radius: 50%;
+                                width: 24px;
+                                height: 24px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 11px;
+                                font-weight: 700;
+                                box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
+                                animation: qwen-pulse 2s infinite;
+                            }
+
+                            @@media (max-width: 768px) {
+                                #qwen-toggle-btn {
+                                    width: 54px;
+                                    height: 54px;
+                                }
+
+                                .qwen-btn-icon {
+                                    width: 54px;
+                                    height: 54px;
+                                    font-size: 22px;
+                                }
+                            }
+
+                            @@media (max-width: 480px) {
+                                #qwen-toggle-btn {
+                                    width: 52px;
+                                    height: 52px;
+                                }
+
+                                .qwen-btn-icon {
+                                    width: 52px;
+                                    height: 52px;
+                                    font-size: 20px;
+                                }
+                            }
+
+                            @@media (max-width: 360px) {
+                                #qwen-toggle-btn {
+                                    width: 48px;
+                                    height: 48px;
+                                }
+
+                                .qwen-btn-icon {
+                                    width: 48px;
+                                    height: 48px;
+                                    font-size: 14px;
+                                }
+                            }
+
+                            @@keyframes qwen-pulse {
+                                0%, 100% { transform: scale(1); }
+                                50% { transform: scale(1.1); }
+                            }
+
+                            /* Chat Box */
+                            #qwen-chat-box { 
+                                width: 420px; 
+                                height: 600px; 
+                                background: #ffffff; 
+                                border-radius: 20px; 
+                                box-shadow: 0 20px 60px rgba(0,0,0,0.15); 
+                                display: flex; 
+                                flex-direction: column; 
+                                overflow: hidden; 
+                                margin-bottom: 15px; 
+                                border: 1px solid #e8e8e8;
+                                animation: qwen-slide-up 0.3s ease-out;
+                            }
+
+                            @@keyframes qwen-slide-up {
+                                from {
+                                    opacity: 0;
+                                    transform: translateY(20px);
+                                }
+                                to {
+                                    opacity: 1;
+                                    transform: translateY(0);
+                                }
+                            }
+
+                            .qwen-hidden { 
+                                display: none !important; 
+                            }
+
+                            /* Header */
+                            #qwen-chat-header { 
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                color: white; 
+                                padding: 20px; 
+                                display: flex; 
+                                justify-content: space-between; 
+                                align-items: center;
+                                flex-shrink: 0;
+                            }
+
+                            .qwen-header-left {
+                                display: flex;
+                                align-items: center;
+                                gap: 12px;
+                            }
+
+                            .qwen-avatar {
+                                width: 45px;
+                                height: 45px;
+                                background: rgba(255,255,255,0.2);
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 22px;
+                                backdrop-filter: blur(10px);
+                                border: 2px solid rgba(255,255,255,0.3);
+                            }
+
+                            .qwen-header-info {
+                                flex: 1;
+                            }
+
+                            .qwen-header-title {
+                                font-weight: 700;
+                                font-size: 16px;
+                                margin-bottom: 2px;
+                            }
+
+                            .qwen-header-status {
+                                font-size: 12px;
+                                opacity: 0.9;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            }
+
+                            .qwen-status-dot {
+                                width: 8px;
+                                height: 8px;
+                                background: #4ade80;
+                                border-radius: 50%;
+                                display: inline-block;
+                                animation: qwen-status-pulse 2s infinite;
+                            }
+
+                            @@keyframes qwen-status-pulse {
+                                0%, 100% { opacity: 1; }
+                                50% { opacity: 0.5; }
+                            }
+
+                            .qwen-header-actions {
+                                display: flex;
+                                gap: 8px;
+                            }
+
+                            .qwen-header-btn { 
+                                background: rgba(255,255,255,0.15); 
+                                border: none; 
+                                color: white; 
+                                cursor: pointer; 
+                                border-radius: 50%; 
+                                width: 32px; 
+                                height: 32px; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                transition: all 0.2s;
+                                font-size: 14px;
+                            }
+
+                            .qwen-header-btn:hover { 
+                                background: rgba(255,255,255,0.25); 
+                                transform: scale(1.05);
+                            }
+
+                            /* Quick Actions */
+                            .qwen-quick-actions {
+                                padding: 15px 20px;
+                                background: #f8fafc;
+                                border-bottom: 1px solid #e8e8e8;
+                                display: flex;
+                                gap: 8px;
+                                flex-wrap: wrap;
+                                flex-shrink: 0;
+                            }
+
+                            .qwen-quick-btn {
+                                flex: 1;
+                                min-width: 90px;
+                                padding: 10px 12px;
+                                background: white;
+                                border: 1px solid #e2e8f0;
+                                border-radius: 12px;
+                                font-size: 12px;
+                                font-weight: 500;
+                                color: #475569;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 6px;
+                                touch-action: manipulation;
+                                -webkit-tap-highlight-color: transparent;
+                            }
+
+                            .qwen-quick-btn:hover {
+                                background: #667eea;
+                                color: white;
+                                border-color: #667eea;
+                                transform: translateY(-2px);
+                                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                            }
+
+                            .qwen-quick-btn:active {
+                                background: #5a6fd6;
+                                color: white;
+                                border-color: #5a6fd6;
+                                transform: scale(0.95);
+                            }
+
+                            .qwen-quick-btn i {
+                                font-size: 14px;
+                            }
+
+                            /* Chat Body */
+                            #qwen-chat-body { 
+                                flex: 1; 
+                                padding: 20px; 
+                                overflow-y: auto; 
+                                background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+                                display: flex; 
+                                flex-direction: column; 
+                                gap: 12px; 
+                            }
+
+                            #qwen-chat-body::-webkit-scrollbar { 
+                                width: 6px; 
+                            }
+
+                            #qwen-chat-body::-webkit-scrollbar-track {
+                                background: transparent;
+                            }
+
+                            #qwen-chat-body::-webkit-scrollbar-thumb { 
+                                background-color: #cbd5e1; 
+                                border-radius: 10px; 
+                            }
+
+                            /* Welcome Container */
+                            .qwen-welcome-container {
+                                text-align: center;
+                                padding: 30px 20px;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                gap: 12px;
+                            }
+
+                            .qwen-welcome-icon {
+                                width: 70px;
+                                height: 70px;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 32px;
+                                color: white;
+                                box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+                            }
+
+                            .qwen-welcome-title {
+                                font-size: 20px;
+                                font-weight: 700;
+                                color: #1e293b;
+                            }
+
+                            .qwen-welcome-text {
+                                font-size: 14px;
+                                color: #64748b;
+                                line-height: 1.6;
+                                max-width: 300px;
+                            }
+
+                            /* Messages */
+                            .qwen-message { 
+                                max-width: 85%; 
+                                padding: 14px 18px; 
+                                border-radius: 18px; 
+                                font-size: 14px; 
+                                line-height: 1.6; 
+                                word-wrap: break-word;
+                                animation: qwen-message-slide 0.3s ease-out;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                            }
+
+                            @@keyframes qwen-message-slide {
+                                from {
+                                    opacity: 0;
+                                    transform: translateY(10px);
+                                }
+                                to {
+                                    opacity: 1;
+                                    transform: translateY(0);
+                                }
+                            }
+
+                            .qwen-message p { 
+                                margin: 0 0 8px 0; 
+                            }
+
+                            .qwen-message p:last-child { 
+                                margin: 0; 
+                            }
+
+                            .qwen-message strong { 
+                                font-weight: 700; 
+                            }
+
+                            .qwen-message ul, .qwen-message ol { 
+                                margin: 8px 0; 
+                                padding-left: 20px; 
+                            }
+
+                            .qwen-bot { 
+                                background-color: #ffffff; 
+                                color: #334155; 
+                                align-self: flex-start; 
+                                border-bottom-left-radius: 6px;
+                                border: 1px solid #e2e8f0;
+                            }
+
+                            .qwen-user { 
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                color: white; 
+                                align-self: flex-end; 
+                                border-bottom-right-radius: 6px;
+                                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                            }
+
+                            /* Typing Indicator */
+                            .qwen-typing-indicator {
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                padding: 12px 18px;
+                                background: #f8fafc;
+                                border-radius: 18px;
+                                border: 1px solid #e2e8f0;
+                                margin-top: 8px;
+                            }
+
+                            .qwen-typing-avatar {
+                                width: 32px;
+                                height: 32px;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 14px;
+                            }
+
+                            .qwen-typing-dots {
+                                display: flex;
+                                gap: 3px;
+                                align-items: center;
+                            }
+
+                            .qwen-typing-dots span {
+                                width: 6px;
+                                height: 6px;
+                                background-color: #667eea;
+                                border-radius: 50%;
+                                animation: qwen-typing 1.4s infinite ease-in-out both;
+                                box-shadow: 0 0 6px rgba(102, 126, 234, 0.6);
+                            }
+
+                            .qwen-typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+                            .qwen-typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+                            @@keyframes qwen-typing {
+                                0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; box-shadow: 0 0 4px rgba(102, 126, 234, 0.3); }
+                                40% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 10px rgba(102, 126, 234, 0.8), 0 0 20px rgba(118, 75, 162, 0.4); }
+                            }
+
+                            .qwen-typing-text {
+                                font-size: 13px;
+                                color: #64748b;
+                                font-style: italic;
+                            }
+
+                            /* Electric Flow Loading Animation */
+                            .qwen-loading-dots {
+                                display: flex;
+                                align-items: center;
+                                gap: 2px;
+                                padding: 4px 0;
+                            }
+
+                            .qwen-loading-dots span {
+                                display: block;
+                                width: 4px;
+                                height: 16px;
+                                border-radius: 4px;
+                                background: linear-gradient(180deg, #667eea, #764ba2);
+                                animation: qwen-electric-flow 1.2s infinite ease-in-out;
+                                box-shadow: 0 0 8px rgba(102, 126, 234, 0.5);
+                            }
+
+                            .qwen-loading-dots span:nth-child(1) { animation-delay: 0s; }
+                            .qwen-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+                            .qwen-loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+                            .qwen-loading-dots span:nth-child(4) { animation-delay: 0.45s; }
+                            .qwen-loading-dots span:nth-child(5) { animation-delay: 0.6s; }
+
+                            @@keyframes qwen-electric-flow {
+                                0%, 100% {
+                                    transform: scaleY(0.3);
+                                    opacity: 0.3;
+                                    box-shadow: 0 0 2px rgba(102, 126, 234, 0.2);
+                                    background: #667eea;
+                                }
+                                50% {
+                                    transform: scaleY(1);
+                                    opacity: 1;
+                                    box-shadow: 0 0 12px rgba(102, 126, 234, 0.9), 0 0 24px rgba(118, 75, 162, 0.5);
+                                    background: linear-gradient(180deg, #a78bfa, #667eea);
+                                }
+                            }
+
+                            /* Bot message electric accent border when loading */
+                            .qwen-bot.qwen-electric-loading {
+                                border-color: #667eea;
+                                box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2), inset 0 0 8px rgba(102, 126, 234, 0.05);
+                                animation: qwen-electric-border 2s infinite;
+                            }
+
+                            @@keyframes qwen-electric-border {
+                                0%, 100% { border-color: #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+                                50% { border-color: #667eea; box-shadow: 0 0 12px rgba(102, 126, 234, 0.3), 0 2px 8px rgba(0,0,0,0.06); }
+                            }
+
+                            /* Footer / Input */
+                            #qwen-chat-footer { 
+                                padding: 16px 20px; 
+                                background: white; 
+                                border-top: 1px solid #e8e8e8;
+                                flex-shrink: 0;
+                            }
+
+                            .qwen-input-wrapper {
+                                display: flex;
+                                gap: 10px;
+                                margin-bottom: 8px;
+                            }
+
+                            #qwen-chat-input { 
+                                flex: 1; 
+                                padding: 14px 18px; 
+                                border: 2px solid #e2e8f0; 
+                                border-radius: 25px; 
+                                outline: none; 
+                                font-size: 14px; 
+                                background-color: #f8fafc; 
+                                transition: all 0.3s;
+                            }
+
+                            #qwen-chat-input:focus { 
+                                border-color: #667eea; 
+                                background-color: #ffffff;
+                                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+                            }
+
+                            #qwen-send-btn { 
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                color: white; 
+                                border: none; 
+                                width: 48px; 
+                                height: 48px; 
+                                border-radius: 50%; 
+                                cursor: pointer; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                transition: all 0.3s;
+                                font-size: 16px;
+                                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                            }
+
+                            #qwen-send-btn:hover { 
+                                transform: scale(1.05);
+                                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+                            }
+
+                            #qwen-send-btn:disabled { 
+                                background: #cbd5e1; 
+                                cursor: not-allowed;
+                                transform: none;
+                                box-shadow: none;
+                            }
+
+                            .qwen-footer-note {
+                                text-align: center;
+                                font-size: 11px;
+                                color: #94a3b8;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 4px;
+                            }
+
+                            /* Responsive */
+                            @@media (max-width: 480px) {
+                                #qwen-chat-box {
+                                    width: 100vw;
+                                    height: 100vh;
+                                    border-radius: 0;
+                                    position: fixed;
+                                    bottom: 0;
+                                    right: 0;
+                                }
+
+                                #qwen-chat-widget {
+                                    bottom: 0;
+                                    right: 0;
+                                }
+
+                                .qwen-quick-actions {
+                                    padding: 10px 15px;
+                                    gap: 5px;
+                                }
+
+                                .qwen-quick-btn {
+                                    min-width: 70px;
+                                    padding: 8px 10px;
+                                    font-size: 11px;
+                                    flex: 0 0 calc(50% - 4px);
+                                }
+                            }
+
+                            @@media (max-width: 768px) {
+                                #qwen-chat-box {
+                                    width: 90vw;
+                                    height: 80vh;
+                                    max-height: 600px;
+                                    border-radius: 16px;
+                                }
+                                
+                                #qwen-toggle-btn {
+                                    padding: 12px 22px;
+                                    font-size: 14px;
+                                }
+                                
+                                .qwen-btn-icon {
+                                    width: 32px;
+                                    height: 32px;
+                                    font-size: 16px;
+                                }
+                                
+                                #qwen-chat-header {
+                                    padding: 16px;
+                                }
+                                
+                                .qwen-avatar {
+                                    width: 40px;
+                                    height: 40px;
+                                    font-size: 18px;
+                                }
+                                
+                                .qwen-header-title {
+                                    font-size: 15px;
+                                }
+                                
+                                .qwen-quick-actions {
+                                    padding: 12px 16px;
+                                    gap: 6px;
+                                }
+                                
+                                .qwen-quick-btn {
+                                    min-width: 80px;
+                                    padding: 8px 10px;
+                                    font-size: 11px;
+                                }
+                                
+                                #qwen-chat-body {
+                                    padding: 16px;
+                                }
+                                
+                                .qwen-welcome-icon {
+                                    width: 60px;
+                                    height: 60px;
+                                    font-size: 24px;
+                                }
+                                
+                                .qwen-welcome-title {
+                                    font-size: 18px;
+                                }
+                                
+                                .qwen-welcome-text {
+                                    font-size: 13px;
+                                    max-width: 280px;
+                                }
+                                
+                                .qwen-message {
+                                    padding: 12px 16px;
+                                    font-size: 13px;
+                                    max-width: 90%;
+                                }
+                                
+                                #qwen-chat-footer {
+                                    padding: 12px 16px;
+                                }
+                                
+                                #qwen-chat-input {
+                                    padding: 12px 16px;
+                                    font-size: 13px;
+                                }
+                                
+                                #qwen-send-btn {
+                                    width: 42px;
+                                    height: 42px;
+                                    font-size: 14px;
+                                }
+                            }
+
+                            @@media (max-width: 360px) {
+                                #qwen-chat-box {
+                                    width: 100vw;
+                                    height: 100vh;
+                                }
+
+                                #qwen-toggle-btn {
+                                    padding: 12px 20px;
+                                    font-size: 13px;
+                                }
+
+                                .qwen-quick-btn {
+                                    min-width: 65px;
+                                    padding: 6px 7px;
+                                    font-size: 9px;
+                                    flex: 0 0 calc(50% - 3px);
+                                }
+
+                                .qwen-message {
+                                    padding: 9px 12px;
+                                    font-size: 11px;
+                                    max-width: 85%;
+                                }
+
+                                #qwen-chat-input {
+                                    padding: 10px 12px;
+                                    font-size: 11px;
+                                }
+
+                                #qwen-send-btn {
+                                    width: 38px;
+                                    height: 38px;
+                                }
+                            }
+                        </style>
+
+                        <!-- ========================================== -->
+                        <!-- JAVASCRIPT LOGIC WIDGET                    -->
+                        <!-- ========================================== -->
+                        <script>
+                            // Load chat history from localStorage on page load
+                            let chatHistory = [];
+                            try {
+                                const savedHistory = localStorage.getItem('qwen_chat_history');
+                                if (savedHistory) {
+                                    chatHistory = JSON.parse(savedHistory);
+                                    console.log('[QwenChat] ? History loaded from localStorage:', chatHistory.length, 'messages');
+                                }
+                            } catch (e) {
+                                console.warn('[QwenChat] ?? Failed to load history from localStorage:', e);
+                            }
+
+                            let cachedRealTimeData = null;
+                            let isFetchingData = false;
+                            let isSending = false;
+
+                            function toggleQwenChat() {
+                                const chatBox = document.getElementById('qwen-chat-box');
+                                const toggleBtn = document.getElementById('qwen-toggle-btn');
+                                if (chatBox.classList.contains('qwen-hidden')) {
+                                    chatBox.classList.remove('qwen-hidden');
+                                    toggleBtn.classList.add('qwen-hidden');
+                                    document.getElementById('qwen-chat-input').focus();
+
+                                    // Scroll to bottom to show latest messages
+                                    scrollToBottom();
+
+                                    // Fetch data realtime saat chat dibuka
+                                    refreshRealTimeData();
+                                } else {
+                                    chatBox.classList.add('qwen-hidden');
+                                    toggleBtn.classList.remove('qwen-hidden');
+                                }
+                            }
+
+                            // Save chat history to localStorage
+                            function saveChatHistory() {
+                                try {
+                                    localStorage.setItem('qwen_chat_history', JSON.stringify(chatHistory));
+                                    console.log('[QwenChat] ?? History saved to localStorage:', chatHistory.length, 'messages');
+                                } catch (e) {
+                                    console.warn('[QwenChat] ?? Failed to save history to localStorage:', e);
+                                }
+                            }
+
+                            // Clear chat history
+                            function clearChatHistory() {
+                                chatHistory = [];
+                                saveChatHistory();
+                                console.log('[QwenChat] Chat history cleared');
+                                // Clear chat body and restore default welcome container
+                                const chatBody = document.getElementById('qwen-chat-body');
+                                chatBody.innerHTML = '<div class="qwen-welcome-container">' +
+                                    '<div class="qwen-welcome-icon"><i class="fas fa-comments"></i></div>' +
+                                    '<div class="qwen-welcome-title">Selamat Datang!</div>' +
+                                    '<div class="qwen-welcome-text" id="qwen-welcome-message">Saya <strong>Voltra</strong>, asisten AI khusus KWH Monitoring. Tanyakan apa saja seputar data listrik, panel, tagihan, atau anomali.</div>' +
+                                    '</div>';
+                            }
+
+                            // Render chat history from localStorage on page load
+                            function renderChatHistory() {
+                                if (chatHistory.length === 0) {
+                                    console.log('[QwenChat] ?? No chat history to render');
+                                    return;
+                                }
+
+                                const chatBody = document.getElementById('qwen-chat-body');
+                                const welcomeMsg = document.getElementById('qwen-welcome-message');
+                                
+                                // Hide or remove welcome message
+                                if (welcomeMsg) {
+                                    welcomeMsg.style.display = 'none';
+                                }
+
+                                // Clear existing messages (except welcome)
+                                chatBody.innerHTML = '';
+
+                                // Render each message
+                                chatHistory.forEach(msg => {
+                                    const msgDiv = document.createElement('div');
+                                    msgDiv.className = 'qwen-message ' + (msg.Role === 'user' ? 'qwen-user' : 'qwen-bot');
+                                    
+                                    if (msg.Role === 'user') {
+                                        msgDiv.innerHTML = '<strong>Anda:</strong><br/>' + escapeHtml(msg.Content);
+                                    } else {
+                                        // Render bot message with markdown support if marked is available
+                                        if (typeof marked !== 'undefined') {
+                                            msgDiv.innerHTML = '<strong>Voltra:</strong><br/>' + marked.parse(msg.Content);
+                                        } else {
+                                            msgDiv.innerHTML = '<strong>Voltra:</strong><br/>' + escapeHtml(msg.Content).replace(/\n/g, '<br/>');
+                                        }
+                                    }
+                                    
+                                    chatBody.appendChild(msgDiv);
+                                });
+
+                                // Scroll to bottom
+                                scrollToBottom();
+                                console.log('[QwenChat] ? Rendered', chatHistory.length, 'messages from localStorage');
+                            }
+
+                            // Helper function to escape HTML
+                            function escapeHtml(text) {
+                                const div = document.createElement('div');
+                                div.textContent = text;
+                                return div.innerHTML;
+                            }
+
+                            function handleQwenEnter(event) {
+                                if (event.key === 'Enter') sendQwenMessage();
+                            }
+
+                            // Send quick message from quick action buttons
+                            function sendQuickMessage(message) {
+                                document.getElementById('qwen-chat-input').value = message;
+                                sendQwenMessage();
+                            }
+                            
+                            // Fetch data realtime dan cache
+                            async function refreshRealTimeData() {
+                                if (isFetchingData) return;
+                                isFetchingData = true;
+                                
+                                try {
+                                    console.log('[QwenChat] ?? Memuat data realtime...');
+                                    const data = await getRealTimeDashboardData();
+                                    if (data && !data.error) {
+                                        cachedRealTimeData = data;
+                                        console.log('[QwenChat] ? Data realtime tersimpan di cache:', {
+                                            panels: data.panels?.length || 0,
+                                            timestamp: data.timestamp
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.error('[QwenChat] ? Gagal memuat data realtime:', err);
+                                } finally {
+                                    isFetchingData = false;
+                                }
+                            }
+
+                            // LOGIKA PENGAMBILAN DATA REAL-TIME (OPTIMIZED)
+                            // Mengambil data langsung dari API internal � bukan scrape DOM
+                            // Agar chatbot mendapat data terstruktur, akurat, dan per-panel
+                            async function getRealTimeDashboardData() {
+                                try {
+                                    console.log('[QwenChat] ?? Fetch dari /api/qwenchat/current-dashboard-data...');
+                                    const apiResponse = await fetch('/api/qwenchat/current-dashboard-data', {
+                                        method: 'GET',
+                                        credentials: 'same-origin'
+                                    });
+
+                                    console.log('[QwenChat] ?? Response status:', apiResponse.status);
+                                    
+                                    if (apiResponse.ok) {
+                                        const jsonData = await apiResponse.json();
+                                        console.log('[QwenChat] ? JSON berhasil di-parse!');
+                                        console.log('[QwenChat] ?? Data detail:', {
+                                            panels: jsonData.panels?.length || 0,
+                                            hasUsageStats: !!jsonData.usageStatistics,
+                                            hasSystemStats: !!jsonData.systemStatistics,
+                                            hasAnomalies: !!jsonData.anomalies,
+                                            hasCharts: jsonData.chartHistory?.length || 0,
+                                            hasTariff: !!jsonData.tariff,
+                                            databaseTables: jsonData.databaseTables,
+                                            source: jsonData.source,
+                                            error: jsonData.error
+                                        });
+                                        
+                                        // Cek apakah data valid
+                                        if (jsonData.error) {
+                                            console.error('[QwenChat] ? API mengembalikan error:', jsonData.error);
+                                        }
+                                        
+                                        if (jsonData.panels?.length === 0) {
+                                            console.warn('[QwenChat] ?? PANELS KOSONG! Database mungkin belum ada data.');
+                                        }
+                                        
+                                        return jsonData; // Kirim sebagai objek JSON (bukan string)
+                                    } else {
+                                        console.warn('[QwenChat] API data realtime gagal (status:', apiResponse.status, ') � fallback ke scrape DOM');
+                                    }
+                                } catch (e) {
+                                    console.error('[QwenChat] ? EXCEPTION saat fetch:', e);
+                                    console.warn('[QwenChat] � fallback ke scrape DOM');
+                                }
+
+                                // FALLBACK: Scrape DOM (jika API tidak tersedia)
+                                console.log('[QwenChat] ?? FALLBACK ke scrape DOM...');
+                                return scrapeDashboardData();
+                            }
+
+                            // Fallback scraping DOM (tetap tersedia sebagai backup)
+                            function scrapeDashboardData() {
+                                let dashboardData = "";
+                                try {
+                                    let wattEl = document.getElementById('id-elemen-watt');
+                                    let pfEl = document.getElementById('id-elemen-pf');
+                                    let whEl = document.getElementById('id-elemen-wh');
+
+                                    let bodyText = document.body.innerText;
+
+                                    let wattVal = wattEl ? wattEl.innerText.trim() : (bodyText.includes("WATT") ? "Ada data WATT di layar" : "Tidak terbaca");
+                                    let pfVal = pfEl ? pfEl.innerText.trim() : (bodyText.includes("Power Factor") ? "Ada data PF di layar" : "Tidak terbaca");
+                                    let whVal = whEl ? whEl.innerText.trim() : (bodyText.includes("WH") ? "Ada data WH di layar" : "Tidak terbaca");
+
+                                    if (wattEl || pfEl || whEl) {
+                                        dashboardData = `- Daya Aktif (Power): ${wattVal} WATT\n` +
+                                                        `- Power Factor: ${pfVal}\n` +
+                                                        `- Konsumsi Energi (WH): ${whVal}`;
+                                    } else {
+                                        let rawText = document.body.innerText.replace(/\s+/g, ' ').substring(0, 500);
+                                        dashboardData = `(Elemen spesifik tidak ditemukan. Berikut ringkasan teks di layar user saat ini: ${rawText}...)`;
+                                    }
+                                } catch (e) {
+                                    console.error("Gagal membaca layar:", e);
+                                }
+                                return dashboardData;
+                            }
+
+                            async function sendQwenMessage() {
+                                if (isSending) return; // Prevent double-send (e.g. quick action while previous message still processing)
+
+                                const inputElement = document.getElementById('qwen-chat-input');
+                                const sendBtn = document.getElementById('qwen-send-btn');
+                                const messageText = inputElement.value.trim();
+
+                                if (!messageText) return;
+
+                                isSending = true;
+                                appendMessage(messageText, 'user', false);
+                                inputElement.value = '';
+                                inputElement.disabled = true;
+                                sendBtn.disabled = true;
+
+                                const loadingId = appendLoading();
+
+                                // Selalu ambil data realtime terbaru sebelum mengirim pesan
+                                console.log('[QwenChat] ?? Refresh data realtime sebelum kirim pesan...');
+                                await refreshRealTimeData();
+
+                                // Gunakan data dari cache
+                                let currentScreenData = cachedRealTimeData;
+
+                                // Jika cache masih kosong, coba ambil sekali lagi
+                                if (!currentScreenData) {
+                                    console.warn('[QwenChat] Cache kosong, mencoba ambil ulang...');
+                                    currentScreenData = await getRealTimeDashboardData();
+                                    cachedRealTimeData = currentScreenData;
+                                }
+
+                                // VALIDASI: Cek apakah data valid
+                                const isRealObject = typeof currentScreenData === 'object' && currentScreenData !== null && !Array.isArray(currentScreenData);
+
+                                console.log('[QwenChat] ?? Validasi Data:', {
+                                    type: isRealObject ? 'OBJECT (VALID)' : typeof currentScreenData,
+                                    panels: isRealObject ? (currentScreenData.panels?.length || 0) : 'NOT_FOUND',
+                                    usageStatistics: isRealObject ? (currentScreenData.usageStatistics ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
+                                    systemStatistics: isRealObject ? (currentScreenData.systemStatistics ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
+                                    anomalies: isRealObject ? (currentScreenData.anomalies ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
+                                    chartHistory: isRealObject ? (currentScreenData.chartHistory?.length || 0) : 'NOT_FOUND',
+                                    tariff: isRealObject ? (currentScreenData.tariff ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
+                                    source: isRealObject ? currentScreenData.source : 'NOT_FOUND'
+                                });
+
+                                if (!isRealObject) {
+                                    console.error('[QwenChat] ? ERROR: RealTimeData bukan object!');
+                                    removeElement(loadingId);
+                                    appendMessage("?? **ERROR**: Tidak dapat mengambil data realtime dari sistem. Silakan refresh halaman dan coba lagi.", 'bot', false);
+                                    inputElement.disabled = false;
+                                    sendBtn.disabled = false;
+                                    isSending = false;
+                                    return;
+                                }
+
+                                if (currentScreenData.panels?.length === 0) {
+                                    console.warn('[QwenChat] ?? WARNING: Tidak ada panel aktif di database!');
+                                    removeElement(loadingId);
+                                    appendMessage("?? **PERHATIAN**: Database menampilkan tidak ada panel aktif. Pastikan device sudah mengirim data.", 'bot', false);
+                                    inputElement.disabled = false;
+                                    sendBtn.disabled = false;
+                                    isSending = false;
+                                    return;
+                                }
+
+                                const payload = {
+                                    Message: messageText,
+                                    History: chatHistory,
+                                    RealTimeData: currentScreenData
+                                };
+
+                                try {
+                                    const response = await fetch('/api/qwenchat/send', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(payload)
+                                    });
+
+                                    const data = await response.json();
+                                    removeElement(loadingId);
+
+                                    if (data.success) {
+                                        appendMessage(data.reply, 'bot', true);
+                                        chatHistory.push({ Role: 'user', Content: messageText });
+                                        chatHistory.push({ Role: 'assistant', Content: data.reply });
+                                        saveChatHistory();
+                                    } else {
+                                        appendMessage("? Maaf, terjadi kesalahan: " + data.message, 'bot', false);
+                                    }
+                                } catch (error) {
+                                    removeElement(loadingId);
+                                    appendMessage("? Gagal menghubungi server. Periksa koneksi Anda.", 'bot', false);
+                                } finally {
+                                    inputElement.disabled = false;
+                                    sendBtn.disabled = false;
+                                    isSending = false;
+                                    inputElement.focus();
+                                }
+                            }
+
+                            function appendMessage(text, sender, parseMarkdown) {
+                                const chatBody = document.getElementById('qwen-chat-body');
+                                const welcomeMsg = document.getElementById('qwen-welcome-message');
+                                
+                                // Hide welcome message on first message
+                                if (welcomeMsg && chatBody.children.length === 1) {
+                                    welcomeMsg.style.display = 'none';
+                                }
+
+                                const msgDiv = document.createElement('div');
+                                msgDiv.className = 'qwen-message ' + (sender === 'user' ? 'qwen-user' : 'qwen-bot');
+
+                                if (parseMarkdown && typeof marked !== 'undefined') {
+                                    msgDiv.innerHTML = marked.parse(text);
+                                } else {
+                                    msgDiv.textContent = text;
+                                }
+
+                                chatBody.appendChild(msgDiv);
+                                scrollToBottom();
+                            }
+
+                            function appendLoading() {
+                                const chatBody = document.getElementById('qwen-chat-body');
+                                const msgDiv = document.createElement('div');
+                                const id = 'loading-' + Date.now();
+                                msgDiv.id = id;
+                                msgDiv.className = 'qwen-message qwen-bot qwen-electric-loading';
+                                msgDiv.innerHTML = '<div class="qwen-loading-dots"><span></span><span></span><span></span><span></span><span></span></div>';
+                                chatBody.appendChild(msgDiv);
+                                scrollToBottom();
+                                return id;
+                            }
+
+                            function removeElement(id) {
+                                const el = document.getElementById(id);
+                                if (el) el.remove();
+                            }
+
+                            function scrollToBottom() {
+                                const chatBody = document.getElementById('qwen-chat-body');
+                                // Use smooth scrolling for mobile devices
+                                chatBody.scrollTo({
+                                    top: chatBody.scrollHeight,
+                                    behavior: 'smooth'
+                                });
+                            }
+
+                            // Handle swipe gestures for mobile
+                            let touchStartY = 0;
+                            let touchEndY = 0;
+                            let startY = 0;
+                            let currentY = 0;
+                            let isDragging = false;
+
+                            function handleTouchStart(event) {
+                                touchStartY = event.touches[0].clientY;
+                                touchEndY = touchStartY; // Reset to avoid stale value causing false swipe-close on tap
+                                startY = parseInt(document.getElementById('qwen-chat-box').style.transform.replace('translateY(', '').replace('px)', ''), 10) || 0;
+                                isDragging = true;
+                            }
+
+                            function handleTouchMove(event) {
+                                if (!isDragging) return;
+
+                                touchEndY = event.touches[0].clientY;
+                                const diff = touchStartY - touchEndY;
+
+                                // Only start drag gesture after a clear vertical swipe (15px)
+                                // so small taps and normal scrolling inside chat body are not blocked
+                                if (Math.abs(diff) > 15) {
+                                    currentY = startY + diff;
+                                    // Apply resistance effect when pulling down
+                                    if (currentY > 0) {
+                                        currentY = currentY * 0.5; // Resistance when pulling down
+                                    }
+                                    document.getElementById('qwen-chat-box').style.transform = `translateY(${currentY}px)`;
+                                    event.preventDefault(); // Prevent scrolling only during intentional drag
+                                }
+                            }
+
+                            function handleTouchEnd() {
+                                if (!isDragging) return;
+                                
+                                const diff = touchStartY - touchEndY;
+                                const swipeThreshold = 80; // Increased threshold for intentional close
+                                
+                                if (Math.abs(diff) > swipeThreshold && diff > 0) {
+                                    // Swipe down - close/minimize
+                                    toggleQwenChat();
+                                } else {
+                                    // Reset position if not enough swipe
+                                    document.getElementById('qwen-chat-box').style.transition = 'transform 0.3s ease-out';
+                                    document.getElementById('qwen-chat-box').style.transform = 'translateY(0)';
+                                    
+                                    // Remove transition after animation completes
+                                    setTimeout(() => {
+                                        document.getElementById('qwen-chat-box').style.transition = '';
+                                    }, 300);
+                                }
+                                
+                                isDragging = false;
+                            }
+
+                            // Initialize touch events for mobile
+                            document.addEventListener('DOMContentLoaded', function() {
+                                // Initialize chat history when page loads
+                                renderChatHistory();
+                                
+                                // Initialize all event handlers after DOM is loaded
+                                initializeQwenChatEvents();
+                            });
+                            
+                            // Initialize all chatbot event handlers
+                            function initializeQwenChatEvents() {
+                                const toggleBtn = document.getElementById('qwen-toggle-btn');
+                                if (toggleBtn) {
+                                    toggleBtn.onclick = function() {
+                                        toggleQwenChat();
+                                    };
+                                }
+                                
+                                const minimizeBtn = document.getElementById('qwen-minimize-btn');
+                                if (minimizeBtn) {
+                                    minimizeBtn.onclick = function() {
+                                        toggleQwenChat();
+                                    };
+                                }
+                                
+                                const clearBtn = document.getElementById('qwen-clear-btn');
+                                if (clearBtn) {
+                                    clearBtn.onclick = function() {
+                                        clearChatHistory();
+                                    };
+                                }
+                                
+                                const sendBtn = document.getElementById('qwen-send-btn');
+                                if (sendBtn) {
+                                    sendBtn.onclick = function() {
+                                        sendQwenMessage();
+                                    };
+                                }
+                                
+                                const chatInput = document.getElementById('qwen-chat-input');
+                                if (chatInput) {
+                                    chatInput.onkeypress = function(event) {
+                                        handleQwenEnter(event);
+                                    };
+                                }
+                                
+                                // Initialize quick action buttons — use data-message attribute (more reliable than onclick parsing)
+                                const quickActionButtons = document.querySelectorAll('.qwen-quick-btn');
+                                quickActionButtons.forEach(function(btn) {
+                                    const message = btn.getAttribute('data-message');
+                                    if (message) {
+                                        btn.addEventListener('click', function(e) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            sendQuickMessage(message);
+                                        });
+                                    }
+                                });
+                                
+                                // Initialize touch events for mobile — swipe-to-close only on chat header,
+                                // NOT on the entire chat box (so tapping messages/input/quick-actions won't close the widget)
+                                const chatHeader = document.getElementById('qwen-chat-header');
+                                if (chatHeader) {
+                                    chatHeader.addEventListener('touchstart', handleTouchStart, false);
+                                    chatHeader.addEventListener('touchmove', handleTouchMove, false);
+                                    chatHeader.addEventListener('touchend', handleTouchEnd, false);
+                                }
+
+                                const chatBox = document.getElementById('qwen-chat-box');
+                                if (chatBox) {
+                                    // Reset any transform styles when showing/hiding
+                                    const observer = new MutationObserver(function(mutations) {
+                                        mutations.forEach(function(mutation) {
+                                            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                                                if (!chatBox.classList.contains('qwen-hidden')) {
+                                                    chatBox.style.transform = '';
+                                                    chatBox.style.transition = '';
+                                                }
+                                            }
+                                        });
+                                    });
+                                    
+                                    observer.observe(chatBox, {
+                                        attributes: true,
+                                        attributeFilter: ['class']
+                                    });
+                                }
+                            }
+
+                        </script>
+
+
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/devextreme/js/dx.all.js"></script>
     <script src="~/lib/bootstrap/js/bootstrap.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
-    <!-- Custom Tab Handler — completely replaces BS3's tab data-api -->
+    <!-- Custom Tab Handler � completely replaces BS3's tab data-api -->
     <script>
         $(function() {
             // 1. Remove BS3's native tab click handlers (they conflict with our CSS)
@@ -178,7 +1545,7 @@
                 $(this).find('.tab-pane.active').addClass('in');
             });
 
-            // 3. Our own tab click handler — fully controls tab switching
+            // 3. Our own tab click handler � fully controls tab switching
             $(document).on('click.customTab', '[data-toggle="tab"], [data-toggle="pill"]', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -192,7 +1559,7 @@
                 var $nav = $clickedTab.closest('.nav');
                 if (!$nav.length) $nav = $clickedTab.closest('ul');
 
-                // Find the tab-content — could be next sibling or in same parent
+                // Find the tab-content � could be next sibling or in same parent
                 var $tabContent = $nav.nextAll('.tab-content').first();
                 if (!$tabContent.length) {
                     $tabContent = $nav.parent().find('.tab-content').first();
@@ -297,3 +1664,4 @@
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
+

@@ -19,7 +19,10 @@ namespace KWHMonitoring.Services
         private readonly ApplicationDbContext _context;
         private readonly ILogger<NotificationService> _logger;
         private NotificationSettings _settings;
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
 
         public NotificationService(ApplicationDbContext context, ILogger<NotificationService> logger)
         {
@@ -49,28 +52,25 @@ namespace KWHMonitoring.Services
                 _settings = new NotificationSettings
                 {
                     SmtpServer = GetVal(settingsRecord, "Notification.SmtpServer", "smtp.gmail.com"),
-                    SmtpPort = int.Parse(GetVal(settingsRecord, "Notification.SmtpPort", "587")),
+                    SmtpPort = int.TryParse(GetVal(settingsRecord, "Notification.SmtpPort", "587"), out var port) ? port : 587,
                     SenderEmail = GetVal(settingsRecord, "Notification.SenderEmail", null),
                     SenderPassword = GetVal(settingsRecord, "Notification.SenderPassword", null),
                     RecipientEmail = GetVal(settingsRecord, "Notification.RecipientEmail", null),
-                    EnableEmailNotification = bool.Parse(GetVal(settingsRecord, "Notification.EnableEmail", "false")),
+                    EnableEmailNotification = bool.TryParse(GetVal(settingsRecord, "Notification.EnableEmail", "false"), out var emailOn) && emailOn,
 
                     WablasServerUrl = GetVal(settingsRecord, "Notification.WablasServerUrl", null),
                     WablasToken = GetVal(settingsRecord, "Notification.WablasToken", null),
                     WablasSecretKey = GetVal(settingsRecord, "Notification.WablasSecretKey", null),
                     WablasPhoneNumbers = phoneNumbers,
-                    EnableWhatsAppNotification = bool.Parse(GetVal(settingsRecord, "Notification.EnableWhatsApp", "false")),
+                    EnableWhatsAppNotification = bool.TryParse(GetVal(settingsRecord, "Notification.EnableWhatsApp", "false"), out var waOn) && waOn,
 
-                    WhatsAppApiKey = GetVal(settingsRecord, "Notification.WhatsAppApiKey", null),
-                    WhatsAppPhoneNumber = GetVal(settingsRecord, "Notification.WhatsAppPhoneNumber", null),
-
-                    SendInstantAlert = bool.Parse(GetVal(settingsRecord, "Notification.SendInstantAlert", "true")),
-                    SendHourlyReport = bool.Parse(GetVal(settingsRecord, "Notification.SendHourlyReport", "true")),
-                    SendDailyReport = bool.Parse(GetVal(settingsRecord, "Notification.SendDailyReport", "false")),
-                    SendMonthlyReport = bool.Parse(GetVal(settingsRecord, "Notification.SendMonthlyReport", "false")),
+                    SendInstantAlert = bool.TryParse(GetVal(settingsRecord, "Notification.SendInstantAlert", "true"), out var instantOn) ? instantOn : true,
+                    SendHourlyReport = bool.TryParse(GetVal(settingsRecord, "Notification.SendHourlyReport", "true"), out var hourlyOn) ? hourlyOn : true,
+                    SendDailyReport = bool.TryParse(GetVal(settingsRecord, "Notification.SendDailyReport", "false"), out var dailyOn) && dailyOn,
+                    SendMonthlyReport = bool.TryParse(GetVal(settingsRecord, "Notification.SendMonthlyReport", "false"), out var monthlyOn) && monthlyOn,
                     HourlyReportInterval = 0,
                     DailyReportTime = GetVal(settingsRecord, "Notification.DailyReportTime", "08:00"),
-                    MonthlyReportDay = int.Parse(GetVal(settingsRecord, "Notification.MonthlyReportDay", "1")),
+                    MonthlyReportDay = int.TryParse(GetVal(settingsRecord, "Notification.MonthlyReportDay", "1"), out var mday) ? mday : 1,
                     MonthlyReportTime = GetVal(settingsRecord, "Notification.MonthlyReportTime", "08:00")
                 };
             }
@@ -85,6 +85,32 @@ namespace KWHMonitoring.Services
         {
             string value;
             return dict.TryGetValue(key, out value) ? value : defaultValue;
+        }
+
+        private async Task<(int maxCapacity, int mediumThreshold, int normalThreshold)> LoadThresholdsAsync()
+        {
+            int maxCap = 30000, mediumThresh = 70, normalThresh = 30;
+
+            try
+            {
+                var keys = new[] { "Load.MaxCapacity", "Load.MediumThreshold", "Load.NormalThreshold" };
+                var records = await _context.AppSettingsRecords
+                    .Where(x => keys.Contains(x.SettingKey))
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                if (records.ContainsKey("Load.MaxCapacity") && int.TryParse(records["Load.MaxCapacity"], out var mc) && mc > 0)
+                    maxCap = mc;
+                if (records.ContainsKey("Load.MediumThreshold") && int.TryParse(records["Load.MediumThreshold"], out var mt))
+                    mediumThresh = mt;
+                if (records.ContainsKey("Load.NormalThreshold") && int.TryParse(records["Load.NormalThreshold"], out var nt))
+                    normalThresh = nt;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load thresholds from DB, using defaults");
+            }
+
+            return (maxCap, mediumThresh, normalThresh);
         }
 
         public void ReloadSettings()
@@ -168,7 +194,7 @@ namespace KWHMonitoring.Services
             var alertLabel = isOverload ? "OVERLOAD" : "DEVICE DROP";
             var severityPct = Math.Abs(deviation);
             var severityLevel = severityPct > 50 ? "CRITICAL" : severityPct > 20 ? "HIGH" : severityPct > 10 ? "MEDIUM" : "LOW";
-            var severityColor = severityPct > 50 ? "#dc3545" : severityPct > 20 ? "#fd7e14" : severityPct > 10 ? "#ffc107" : "#28a745";
+            var severityColor = severityPct > 50 ? "#dc3545" : severityPct > 20 ? "#fd7e14" : severityPct > 10 ? "#ffc107" : "#198754";
 
             // Panel info
             var groupName = panelData?.GroupName ?? deviceKey;
@@ -613,32 +639,15 @@ namespace KWHMonitoring.Services
 
             var estimatedCostToday = Math.Round(todayKWh * tariffPerKWh, 2);
 
+            // Load thresholds once (not per-panel)
+            var (maxCap, mediumThresh, normalThresh) = await LoadThresholdsAsync();
+
             // Build panel detail rows
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20)) // Max 20 panels
             {
-                // Gunakan kapasitas maksimum dari database jika tersedia, default ke 30000
-                var maxCap = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MaxCapacity")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (maxCap == 0) maxCap = 30000;
-
-                // Ambil threshold dari database, default ke nilai standar
-                var mediumThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MediumThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (mediumThresh == 0) mediumThresh = 70;
-
-                var normalThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.NormalThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (normalThresh == 0) normalThresh = 30;
-
                 var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
-                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#28a745";
+                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
@@ -934,32 +943,15 @@ namespace KWHMonitoring.Services
 
             var estimatedCostMonth = Math.Round(monthKWh * tariffPerKWh, 2);
 
+            // Load thresholds once (not per-panel)
+            var (maxCap, mediumThresh, normalThresh) = await LoadThresholdsAsync();
+
             // Build panel detail rows
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20)) // Max 20 panels
             {
-                // Gunakan kapasitas maksimum dari database jika tersedia, default ke 30000
-                var maxCap = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MaxCapacity")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (maxCap == 0) maxCap = 30000;
-
-                // Ambil threshold dari database, default ke nilai standar
-                var mediumThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MediumThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (mediumThresh == 0) mediumThresh = 70;
-
-                var normalThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.NormalThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (normalThresh == 0) normalThresh = 30;
-
                 var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
-                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#28a745";
+                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
@@ -1288,32 +1280,15 @@ namespace KWHMonitoring.Services
 
             var estimatedCostMonth = Math.Round(monthKWh * tariffPerKWh, 2);
 
+            // Load thresholds once (not per-panel)
+            var (maxCap, mediumThresh, normalThresh) = await LoadThresholdsAsync();
+
             // Build panel detail rows
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20))
             {
-                // Gunakan kapasitas maksimum dari database jika tersedia, default ke 30000
-                var maxCap = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MaxCapacity")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (maxCap == 0) maxCap = 30000;
-
-                // Ambil threshold dari database, default ke nilai standar
-                var mediumThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.MediumThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (mediumThresh == 0) mediumThresh = 70;
-
-                var normalThresh = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "Load.NormalThreshold")
-                    .Select(x => int.Parse(x.SettingValue))
-                    .FirstOrDefault();
-                if (normalThresh == 0) normalThresh = 30;
-
                 var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
-                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#28a745";
+                var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
@@ -1541,28 +1516,28 @@ namespace KWHMonitoring.Services
                     client.Credentials = new NetworkCredential(_settings.SenderEmail, _settings.SenderPassword);
                     client.EnableSsl = true;
 
-                    var mailMessage = new MailMessage
+                    using (var mailMessage = new MailMessage())
                     {
-                        From = new MailAddress(_settings.SenderEmail, "KWH Monitoring System"),
-                        Subject = subject,
-                        Body = body,
-                        IsBodyHtml = true
-                    };
+                        mailMessage.From = new MailAddress(_settings.SenderEmail, "KWH Monitoring System");
+                        mailMessage.Subject = subject;
+                        mailMessage.Body = body;
+                        mailMessage.IsBodyHtml = true;
 
-                    // Support multiple recipients (separated by comma or semicolon)
-                    var recipients = _settings.RecipientEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var recipient in recipients)
-                    {
-                        var trimmedEmail = recipient.Trim();
-                        if (!string.IsNullOrEmpty(trimmedEmail))
+                        // Support multiple recipients (separated by comma or semicolon)
+                        var recipients = _settings.RecipientEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var recipient in recipients)
                         {
-                            mailMessage.To.Add(trimmedEmail);
-                            _logger.LogInformation("Adding email recipient: {0}", trimmedEmail);
+                            var trimmedEmail = recipient.Trim();
+                            if (!string.IsNullOrEmpty(trimmedEmail))
+                            {
+                                mailMessage.To.Add(trimmedEmail);
+                                _logger.LogInformation("Adding email recipient: {0}", trimmedEmail);
+                            }
                         }
-                    }
 
-                    await client.SendMailAsync(mailMessage);
-                    _logger.LogInformation("Email sent successfully to {0} recipient(s)", recipients.Length);
+                        await client.SendMailAsync(mailMessage);
+                        _logger.LogInformation("Email sent successfully to {0} recipient(s)", recipients.Length);
+                    }
                 }
             }
             catch (Exception ex)

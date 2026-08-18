@@ -26,7 +26,7 @@ namespace KWHMonitoring.Models
         public bool IsThreePhase => Volt_S.HasValue && Volt_T.HasValue && Amp_S.HasValue && Amp_T.HasValue;
 
         public string PhaseTypeLabel => IsThreePhase ? "3 Phase" : "1 Phase";
-        public string PhaseTypeBadge => IsThreePhase ? "bg-purple" : "bg-orange";
+        public string PhaseTypeBadge => IsThreePhase ? "bg-info" : "bg-warning";
 
         public decimal AvgVoltage => IsThreePhase
             ? (Volt_R + Volt_S.Value + Volt_T.Value) / 3
@@ -47,10 +47,7 @@ namespace KWHMonitoring.Models
 
         private string GetStatus()
         {
-            // Gunakan LoadPercent agar sinkron dengan load bar
-            // LoadPercent = (Daya_Watt / 30000) * 100
-            // HIGH: >70%, MEDIUM: >30%, NORMAL: ≤30%
-            const decimal maxCapacity = 100000m; // Default value, should be loaded from database
+            const decimal maxCapacity = 30000m;
             var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
             if (loadPercent > 70) return "HIGH";
             if (loadPercent > 30) return "MEDIUM";
@@ -59,7 +56,7 @@ namespace KWHMonitoring.Models
 
         private string GetStatusColor()
         {
-            const decimal maxCapacity = 100000m; // Default value, should be loaded from database
+            const decimal maxCapacity = 30000m;
             var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
             if (loadPercent > 70) return "danger";
             if (loadPercent > 30) return "warning";
@@ -75,7 +72,7 @@ namespace KWHMonitoring.Models
 
         private string GetLoadColor()
         {
-            const decimal maxCapacity = 100000m; // Default value, should be loaded from database
+            const decimal maxCapacity = 30000m;
             var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
             if (loadPercent > 80) return "danger";
             if (loadPercent > 60) return "warning";

@@ -180,10 +180,8 @@ function improveTextContrast(elementId) {
     // Atur warna teks berdasarkan luminance background
     if (luminance > 0.5) {
         element.style.color = '#333'; // Gelap untuk background terang
-        element.style.textShadow = '0 1px 1px rgba(255, 255, 255, 0.5)';
     } else {
         element.style.color = '#fff'; // Putih untuk background gelap
-        element.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.5)';
     }
 }
 
@@ -212,24 +210,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 var card = entry.target;
                 var w = entry.contentRect.width;
                 var h = entry.contentRect.height;
-                // Reference: card 260px wide × 80px tall (content-driven)
-                var refW = 260, refH = 80;
+                // Reference: card 220px wide × 85px tall
+                var refW = 220, refH = 85;
                 // Width drives the scale (grid layout is width-based)
-                var scaleW = Math.max(w / refW, 0.45);
+                var scaleW = Math.max(w / refW, 0.5);
                 // Height acts as a safety cap so text doesn't overflow vertically
-                var scaleH = Math.max(h / refH, 0.45);
+                var scaleH = Math.max(h / refH, 0.5);
                 // Prefer width scale, but clamp if height is too small
                 var scale = scaleW;
                 if (scaleH < scaleW) {
-                    // Blend: mostly width, but pull toward height so it still fits
-                    scale = scaleW * 0.6 + scaleH * 0.4;
+                    scale = scaleW * 0.55 + scaleH * 0.45;
                 }
-                // Clamp between 0.55 and 1.5
-                scale = Math.max(0.55, Math.min(1.5, scale));
-                card.style.setProperty('--sc-label-size', (0.82 * scale).toFixed(3) + 'rem');
-                card.style.setProperty('--sc-value-size', (1.55 * scale).toFixed(3) + 'rem');
-                card.style.setProperty('--sc-small-size', (0.75 * scale).toFixed(3) + 'rem');
-                card.style.setProperty('--sc-icon-size', (1.8 * scale).toFixed(3) + 'rem');
+                // Clamp between 0.55 and 1.4
+                scale = Math.max(0.55, Math.min(1.4, scale));
+                card.style.setProperty('--sc-label-size', (0.75 * scale).toFixed(3) + 'rem');
+                card.style.setProperty('--sc-value-size', (1.4 * scale).toFixed(3) + 'rem');
+                card.style.setProperty('--sc-small-size', (0.7 * scale).toFixed(3) + 'rem');
+                card.style.setProperty('--sc-icon-size', (2 * scale).toFixed(3) + 'rem');
             });
         });
         document.querySelectorAll('.stats-row .stat-card').forEach(function(card) {

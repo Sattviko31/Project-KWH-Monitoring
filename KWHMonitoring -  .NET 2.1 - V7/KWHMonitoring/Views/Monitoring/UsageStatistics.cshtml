@@ -107,7 +107,7 @@
             <div class="stat-card bg-primary h-100">
                 <div class="stat-label">Hari Ini</div>
                 <div class="stat-value" id="usageToday">0 kWh</div>
-                <small style="opacity:0.75">Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
+                <small>Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
                 <i class="fas fa-calendar-day stat-icon"></i>
             </div>
         </div>
@@ -115,7 +115,7 @@
             <div class="stat-card bg-success h-100">
                 <div class="stat-label">Bulan Ini</div>
                 <div class="stat-value" id="usageMonth">0 kWh</div>
-                <small style="opacity:0.75">Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
+                <small>Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
                 <i class="fas fa-calendar-week stat-icon"></i>
             </div>
         </div>
@@ -123,7 +123,7 @@
             <div class="stat-card bg-info h-100">
                 <div class="stat-label">Tahun Ini</div>
                 <div class="stat-value" id="usageYear">0 kWh</div>
-                <small style="opacity:0.75">Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
+                <small>Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
                 <i class="fas fa-calendar stat-icon"></i>
             </div>
         </div>
@@ -131,7 +131,7 @@
             <div class="stat-card bg-warning h-100">
                 <div class="stat-label">Estimasi Biaya</div>
                 <div class="stat-value" id="usageCost">Rp 0</div>
-                <small style="opacity:0.75">Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
+                <small>Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
                 <i class="fas fa-money-bill-wave stat-icon"></i>
             </div>
         </div>
@@ -203,7 +203,7 @@
     </div>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" crossorigin="anonymous"></script>
     <script>
         let charts = {};
         let selectedDate = new Date();

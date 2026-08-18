@@ -44,9 +44,12 @@ namespace KWHMonitoring.Services
             _reportTimer = new Timer(DoWork, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
         }
 
-        // [BUG] async void - exception yang tidak tertangkap bisa crash proses.
-        // Sebaiknya ubah ke async Task dan handle dengan proper error handling.
         private async void DoWork(object state)
+        {
+            await DoWorkAsync();
+        }
+
+        private async Task DoWorkAsync()
         {
             // Prevent concurrent execution: if previous DoWork is still running, skip this tick
             if (!await _lock.WaitAsync(0))
@@ -235,6 +238,8 @@ namespace KWHMonitoring.Services
         {
             _logger.LogInformation("Anomaly Notification Background Service is stopping");
             _reportTimer?.Change(Timeout.Infinite, 0);
+            _reportTimer?.Dispose();
+            _reportTimer = null;
             return base.StopAsync(cancellationToken);
         }
     }

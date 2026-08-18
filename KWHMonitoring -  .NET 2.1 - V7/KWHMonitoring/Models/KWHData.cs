@@ -95,10 +95,7 @@ namespace KWHMonitoring.Models
 
         private string GetStatus()
         {
-            // Gunakan LoadPercent agar sinkron dengan load bar
-            // LoadPercent = (Daya_Watt / 30000) * 100
-            // HIGH: >70%, MEDIUM: >30%, NORMAL: ≤30%
-            const decimal maxCapacity = 100000m; // Default value, should be loaded from database
+            const decimal maxCapacity = 30000m;
             var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
             if (loadPercent > 70) return "HIGH";
             if (loadPercent > 30) return "MEDIUM";
@@ -107,7 +104,7 @@ namespace KWHMonitoring.Models
 
         private string GetStatusColor()
         {
-            const decimal maxCapacity = 100000m; // Default value, should be loaded from database
+            const decimal maxCapacity = 30000m;
             var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
             if (loadPercent > 70) return "danger";
             if (loadPercent > 30) return "warning";

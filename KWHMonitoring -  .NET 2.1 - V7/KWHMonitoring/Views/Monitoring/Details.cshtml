@@ -29,11 +29,11 @@
             <span class="ms-2">
                 @if (isThreePhase)
                 {
-                    <span class="badge" style="background-color: #6f42c1; font-size: 0.75rem;">3&#934; Three Phase</span>
+                    <span class="badge bg-info" style="font-size: 0.75rem;">3&#934; Three Phase</span>
                 }
                 else
                 {
-                    <span class="badge" style="background-color: #fd7e14; font-size: 0.75rem;">1&#934; Single Phase</span>
+                    <span class="badge bg-warning" style="font-size: 0.75rem; color: #212529;">1&#934; Single Phase</span>
                 }
             </span>
             <span class="ms-2" id="detailCategoryBadge" style="font-size: 1.1rem;">🔵</span>
@@ -118,11 +118,11 @@
                     <div class="d-flex align-items-center gap-2">
                         @if (isThreePhase)
                         {
-                            <span class="badge me-2" style="background-color: #6f42c1;" id="phaseTypeBadge">3&#934;</span>
+                            <span class="badge bg-info me-2" id="phaseTypeBadge">3&#934;</span>
                         }
                         else
                         {
-                            <span class="badge me-2" style="background-color: #fd7e14;" id="phaseTypeBadge">1&#934;</span>
+                            <span class="badge bg-warning me-2" style="color: #212529;" id="phaseTypeBadge">1&#934;</span>
                         }
                         <span class="badge bg-success me-2" id="panelStatus">NORMAL</span>
                         <span class="badge bg-secondary" id="panelAvgVoltage">@Model.AvgVoltage.ToString("N1")V</span>
@@ -515,7 +515,7 @@
 
         <!-- TAB 4: ANOMALY LOGS -->
         <div class="tab-pane fade" id="tabAnomalyLogs" role="tabpanel">
-            <div class="card shadow">
+            <div class="card shadow-sm">
                 <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2">
                     <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Anomaly Logs</h6>
                 </div>
@@ -756,7 +756,7 @@
 </style>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" crossorigin="anonymous"></script>
     <script>
 
         // ============================================
@@ -767,7 +767,7 @@
         var isThreePhaseDevice = @Model.IsThreePhase.ToString().ToLower();
         var charts = {};
         var currentAnomalyPage = 1;
-        var anomalyPageSize = 20;
+        var anomalyPageSize = 10;
         var refreshTimer = null;
         var anomalyTimer = null;
         var anomalyCooldown = {};
@@ -870,7 +870,7 @@
 
         function updateCategoryUI(category) {
             currentCategory = category;
-            var meta = categoryMeta[category] || { icon: '⚪', color: '#607d8b', desc: '' };
+            var meta = categoryMeta[category] || { icon: '⚪', color: '#6c757d', desc: '' };
 
             // Update icon in info bar
             $('#detailCategoryIcon').text(meta.icon);
@@ -966,7 +966,7 @@
             categories.forEach(function(cat, idx) {
                 var meta = categoryMeta[cat] || {};
                 var icon = meta.icon || '⚪';
-                var color = meta.color || '#607d8b';
+                var color = meta.color || '#6c757d';
                 var active = idx === 0;
 
                 // Tab nav
@@ -990,8 +990,8 @@
                     '<div class="mb-2"><label class="form-label ema-label">Deskripsi</label>' +
                     '<input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtime' + cat + 'Description" data-category="' + cat + '" placeholder="Contoh: ' + cat + ' mati malam hari"></div>' +
                     '<div class="mb-2"><label class="form-label ema-label"><i class="fas fa-clock"></i> Timeline</label>' +
-                    '<div class="position-relative" style="height: 24px; background: #28a745; border-radius: 4px; overflow: hidden;">' +
-                    '<div id="downtime' + cat + 'TimelineBar" style="position: absolute; top: 0; height: 100%; background: #343a40; transition: all 0.3s;"></div></div>' +
+                    '<div class="position-relative" style="height: 24px; background: #198754; border-radius: 4px; overflow: hidden;">' +
+                    '<div id="downtime' + cat + 'TimelineBar" style="position: absolute; top: 0; height: 100%; background: #1a1d23; transition: all 0.3s;"></div></div>' +
                     '<div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">' +
                     '<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div></div>' +
                     '<div class="card border" id="downtime' + cat + 'StatusCard"><div class="card-body text-center py-1">' +
@@ -1043,14 +1043,14 @@
             if (!bar.length) return;
             var pctPerHour = 100 / 24;
             if (start === end) {
-                bar.css({ left: '0%', width: '100%', borderRadius: '4px', background: '#343a40' });
+                bar.css({ left: '0%', width: '100%', borderRadius: '4px', background: '#1a1d23' });
             } else if (start < end) {
-                bar.css({ left: (start * pctPerHour) + '%', width: ((end - start) * pctPerHour) + '%', borderRadius: '0', background: '#343a40' });
+                bar.css({ left: (start * pctPerHour) + '%', width: ((end - start) * pctPerHour) + '%', borderRadius: '0', background: '#1a1d23' });
             } else {
                 var startPct = start * pctPerHour;
                 var endPct = end * pctPerHour;
                 bar.css({ left: '0%', width: '100%', borderRadius: '0',
-                    background: 'linear-gradient(to right, #343a40 0%, #343a40 ' + endPct + '%, #28a745 ' + endPct + '%, #28a745 ' + startPct + '%, #343a40 ' + startPct + '%, #343a40 100%)'
+                    background: 'linear-gradient(to right, #1a1d23 0%, #1a1d23 ' + endPct + '%, #198754 ' + endPct + '%, #198754 ' + startPct + '%, #1a1d23 ' + startPct + '%, #1a1d23 100%)'
                 });
             }
         }
@@ -1722,9 +1722,9 @@
                     // Phase type badge
                     var $phaseBadge = $('#phaseTypeBadge');
                     if (isThreePhase) {
-                        $phaseBadge.text('3\u03A6').css('background-color', '#6f42c1');
+                        $phaseBadge.text('3\u03A6').removeClass('bg-warning').addClass('bg-info').css('background-color', '').css('color', '');
                     } else {
-                        $phaseBadge.text('1\u03A6').css('background-color', '#fd7e14');
+                        $phaseBadge.text('1\u03A6').removeClass('bg-info').addClass('bg-warning').css('background-color', '').css('color', '#212529');
                     }
 
                     // Update category from API data
@@ -2070,14 +2070,24 @@
                 dataSource: new DevExpress.data.DataSource({
                     store: new DevExpress.data.CustomStore({
                         key: 'id',
-                        load: function() {
+                        load: function(loadOptions) {
                             var d = $.Deferred();
+                            var params = {
+                                skip: loadOptions.skip || 0,
+                                take: loadOptions.take || 10
+                            };
+
+                            if (loadOptions.sort) {
+                                params.sort = JSON.stringify(loadOptions.sort);
+                            }
+
                             $.ajax({
-                                url: '/api/Api/anomaly-logs/' + deviceKey + '?page=1&pageSize=10000',
+                                url: '/api/Api/anomaly-logs/' + deviceKey,
                                 method: 'GET',
+                                data: params,
                                 dataType: 'json',
                                 success: function(response) {
-                                    var rawData = response.logs || [];
+                                    var rawData = response.data || [];
                                     var mapped = rawData.map(function(item) {
                                         return {
                                             id: item.id || item.Id || 0,
@@ -2091,8 +2101,8 @@
                                             acknowledged: item.acknowledged || item.Acknowledged || false
                                         };
                                     });
-                                    $('#anomalyCount').text(response.totalCount || mapped.length);
-                                    d.resolve(mapped);
+                                    $('#anomalyCount').text(response.totalCount || 0);
+                                    d.resolve(mapped, { totalCount: response.totalCount || 0 });
                                 },
                                 error: function(xhr, status, error) {
                                     console.error('Error loading anomaly logs:', error);
@@ -2104,7 +2114,12 @@
                     })
                 }),
 
-                paging: { pageSize: 20 },
+                remoteOperations: {
+                    sorting: true,
+                    paging: true
+                },
+
+                paging: { pageSize: 10 },
                 pager: {
                     showPageSizeSelector: true,
                     allowedPageSizes: [10, 20, 50],
@@ -2135,7 +2150,7 @@
                     if (e.rowType !== 'data') return;
                     var t = e.data.anomalyType;
                     if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
-                    else if (t === 'DROP' || t === 'DEVICE_DROP') e.rowElement.css('border-left', '3px solid #fd7e14');
+                    else if (t === 'DROP' || t === 'DEVICE_DROP') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
 

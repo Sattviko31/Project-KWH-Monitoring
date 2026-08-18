@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -217,12 +218,6 @@ namespace KWHMonitoring.Controllers
             return View();
         }
 
-        // [UNUSED] NotificationSettings - hanya redirect ke Settings, tidak punya view sendiri
-        public IActionResult NotificationSettings()
-        {
-            return RedirectToAction(nameof(Settings));
-        }
-
         // ============================================
         // DETAILS
         // ============================================
@@ -292,7 +287,7 @@ namespace KWHMonitoring.Controllers
 
                 var totalCount = await query.CountAsync();
 
-                var pageSize = 100;
+                var pageSize = 10;
                 var data = await query
                     .OrderByDescending(x => x.Waktu_Server)
                     .Skip((page - 1) * pageSize)
@@ -322,8 +317,6 @@ namespace KWHMonitoring.Controllers
 
         // ============================================
         // EXPORT CSV
-        // [BUG] Tidak ada CSV escaping. Jika field mengandung koma atau quote,
-        // CSV akan rusak. Sebaiknya wrap setiap field dengan double-quotes.
         // ============================================
         public async Task<IActionResult> ExportCSV(string deviceKey)
         {
@@ -344,11 +337,12 @@ namespace KWHMonitoring.Controllers
 
                 foreach (var item in data)
                 {
-                    sb.AppendLine(string.Format("{0},{1},{2},{3}," +
-                        "{4:yyyy-MM-dd HH:mm:ss},{5:yyyy-MM-dd HH:mm:ss}," +
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                        "\"{0}\",\"{1}\",\"{2}\",\"{3}\"," +
+                        "\"{4:yyyy-MM-dd HH:mm:ss}\",\"{5:yyyy-MM-dd HH:mm:ss}\"," +
                         "{6},{7},{8},{9},{10},{11}," +
                         "{12},{13},{14},{15},{16},{17}",
-                        item.Id, item.DeviceKey, item.DeviceId, item.GroupName,
+                        item.Id, CsvEscape(item.DeviceKey), CsvEscape(item.DeviceId), CsvEscape(item.GroupName),
                         item.Waktu_Device, item.Waktu_Server,
                         item.Volt_R, item.Volt_S, item.Volt_T, item.Amp_R, item.Amp_S, item.Amp_T,
                         item.Cos_Phi, item.Daya_Watt, item.TotalW1M_Wh, item.Energi_Aktif_Wh, item.Total_Energy_Wh, item.Frekuensi_Hz));
@@ -368,14 +362,49 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // SETTINGS
         // ============================================
-        // [BUG] _appSettings adalah static in-memory, tidak sync dengan DB.
-        // MonitoringController.UsageStatistics() dan Settings() sudah baca dari DB,
-        // tapi UpdateSettings/GetSettings masih pakai static variable.
         [HttpPost]
-        public IActionResult UpdateSettings(AppSettings settings)
+        public async Task<IActionResult> UpdateSettings(AppSettings settings)
         {
             try
             {
+                var settingsDict = new Dictionary<string, string>
+                {
+                    { "emaPeriod", settings.EmaPeriod.ToString() },
+                    { "emaMode", settings.EmaMode },
+                    { "emaUpperThreshold", settings.EmaUpperThreshold.ToString() },
+                    { "emaLowerThreshold", settings.EmaLowerThreshold.ToString() },
+                    { "emaFibUpper", settings.EmaFibUpper.ToString() },
+                    { "emaFibLower", settings.EmaFibLower.ToString() },
+                    { "emaShowLine", settings.EmaShowLine.ToString() },
+                    { "emaShowThresholds", settings.EmaShowThresholds.ToString() },
+                    { "useInitial100ForEma", settings.useInitial100ForEma.ToString() },
+                    { "refreshInterval", settings.RefreshInterval.ToString() },
+                    { "chartDataPoints", settings.ChartDataPoints.ToString() },
+                    { "Tariff.PerKWh", settings.TariffPerKWh?.ToString() ?? "1500" }
+                };
+
+                foreach (var kvp in settingsDict)
+                {
+                    var existing = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == kvp.Key);
+
+                    if (existing != null)
+                    {
+                        existing.SettingValue = kvp.Value;
+                        existing.UpdatedAt = DateTime.Now;
+                    }
+                    else
+                    {
+                        _context.AppSettingsRecords.Add(new AppSettingsRecord
+                        {
+                            SettingKey = kvp.Key,
+                            SettingValue = kvp.Value,
+                            UpdatedAt = DateTime.Now
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
                 _appSettings = settings;
                 return Json(new { success = true, message = "Settings updated" });
             }
@@ -385,11 +414,39 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        // [UNUSED] GetSettings() mengembalikan static _appSettings yang tidak sync dengan DB.
-        // ApiController sudah punya get-system-settings yang baca dari DB.
-        public IActionResult GetSettings()
+        public async Task<IActionResult> GetSettings()
         {
-            return Json(_appSettings);
+            try
+            {
+                var settings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("ema") ||
+                               x.SettingKey.StartsWith("refresh") ||
+                               x.SettingKey.StartsWith("chart") ||
+                               x.SettingKey == "Tariff.PerKWh" ||
+                               x.SettingKey == "TariffPerKWh" ||
+                               x.SettingKey == "useInitial100ForEma")
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                return Json(new
+                {
+                    emaPeriod = GetIntSetting(settings, "emaPeriod", 20),
+                    emaMode = GetStrSetting(settings, "emaMode", "manual"),
+                    emaUpperThreshold = GetIntSetting(settings, "emaUpperThreshold", 30),
+                    emaLowerThreshold = GetIntSetting(settings, "emaLowerThreshold", 50),
+                    emaFibUpper = GetDblSetting(settings, "emaFibUpper", 1.618),
+                    emaFibLower = GetDblSetting(settings, "emaFibLower", 0.618),
+                    emaShowLine = GetBoolSetting(settings, "emaShowLine", true),
+                    emaShowThresholds = GetBoolSetting(settings, "emaShowThresholds", true),
+                    useInitial100ForEma = GetBoolSetting(settings, "useInitial100ForEma", false),
+                    refreshInterval = GetIntSetting(settings, "refreshInterval", 10),
+                    chartDataPoints = GetIntSetting(settings, "chartDataPoints", 20),
+                    TariffPerKWh = GetDecSetting(settings, "Tariff.PerKWh", 1500m)
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
 
         // ============================================
@@ -411,6 +468,37 @@ namespace KWHMonitoring.Controllers
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        private static string CsvEscape(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            return value.Replace("\"", "\"\"");
+        }
+
+        private static int GetIntSetting(Dictionary<string, string> dict, string key, int defaultValue)
+        {
+            return dict.TryGetValue(key, out var value) && int.TryParse(value, out var result) ? result : defaultValue;
+        }
+
+        private static double GetDblSetting(Dictionary<string, string> dict, string key, double defaultValue)
+        {
+            return dict.TryGetValue(key, out var value) && double.TryParse(value, out var result) ? result : defaultValue;
+        }
+
+        private static bool GetBoolSetting(Dictionary<string, string> dict, string key, bool defaultValue)
+        {
+            return dict.TryGetValue(key, out var value) && bool.TryParse(value, out var result) ? result : defaultValue;
+        }
+
+        private static string GetStrSetting(Dictionary<string, string> dict, string key, string defaultValue)
+        {
+            return dict.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        private static decimal GetDecSetting(Dictionary<string, string> dict, string key, decimal defaultValue)
+        {
+            return dict.TryGetValue(key, out var value) && decimal.TryParse(value, out var result) ? result : defaultValue;
         }
     }
 }

@@ -45,8 +45,6 @@ namespace KWHMonitoring.Models
         public DateTime? AcknowledgedTime { get; set; }
 
         [Column("Notes")]
-        // [BUG] Property ini tidak nullable (string) tapi tidak ada default value,
-        // akan bernilai null saat runtime. Sebaiknya ubah ke string? atau tambah default.
-        public string Notes { get; set; }
+        public string Notes { get; set; } = string.Empty;
     }
 }
