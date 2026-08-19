@@ -4,8 +4,8 @@
    ============================================ */
 
 :root {
-    --sidebar-width: 260px;
-    --sidebar-collapsed-width: 70px;
+    --sidebar-width: 0px;
+    --sidebar-collapsed-width: 0px;
     --topbar-height: 56px;
     --sidebar-bg: #1a1d23;
     --sidebar-bg-hover: #2a2d35;
@@ -329,6 +329,11 @@ h6 { font-size: 1rem; }
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+/* Mobile nav needs relative parent */
+.erp-main-wrapper > .erp-topbar {
+    position: relative;
+}
+
 .topbar-left {
     display: flex;
     align-items: center;
@@ -428,6 +433,99 @@ h6 { font-size: 1rem; }
     font-size: 0.65rem;
     color: #888;
     line-height: 1.2;
+}
+
+/* ============================================
+   TOPBAR HORIZONTAL NAV
+   ============================================ */
+.topbar-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 12px;
+    padding-left: 12px;
+    border-left: 1px solid var(--topbar-border);
+}
+
+.topbar-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #555;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.topbar-nav-link:hover {
+    color: var(--primary-color);
+    background-color: rgba(13, 110, 253, 0.06);
+}
+
+.topbar-nav-link.active {
+    color: var(--primary-color);
+    background-color: rgba(13, 110, 253, 0.1);
+    font-weight: 600;
+}
+
+.topbar-nav-link i {
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   MOBILE NAV DROPDOWN
+   ============================================ */
+.topbar-mobile-nav {
+    display: none;
+    position: absolute;
+    top: var(--topbar-height);
+    right: 0;
+    left: 0;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--topbar-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1030;
+    padding: 8px 12px;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.topbar-mobile-nav.show {
+    display: flex;
+}
+
+.topbar-mobile-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #555;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.topbar-mobile-link:hover {
+    color: var(--primary-color);
+    background-color: rgba(13, 110, 253, 0.06);
+}
+
+.topbar-mobile-link.active {
+    color: var(--primary-color);
+    background-color: rgba(13, 110, 253, 0.1);
+    font-weight: 600;
+}
+
+.topbar-mobile-link i {
+    font-size: 0.9rem;
+    width: 20px;
+    text-align: center;
 }
 
 /* ============================================
@@ -1705,18 +1803,6 @@ h6 { font-size: 1rem; }
    RESPONSIVE - TABLET (≤992px)
    ============================================ */
 @media (max-width: 992px) {
-    .erp-sidebar {
-        transform: translateX(-100%);
-    }
-
-    .erp-sidebar.show {
-        transform: translateX(0);
-    }
-
-    .erp-main-wrapper {
-        margin-left: 0 !important;
-    }
-
     .erp-content {
         padding: 16px;
     }
@@ -2894,18 +2980,13 @@ canvas {
 .settings-save-bar {
     position: fixed;
     bottom: 0;
-    left: var(--sidebar-width);
+    left: 0;
     right: 0;
     z-index: 1030;
     background: #fff;
     border-top: 1px solid #e5e7eb;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
     padding: 8px 20px;
-    transition: left 0.3s ease;
-}
-
-.erp-main-wrapper.sidebar-collapsed .settings-save-bar {
-    left: var(--sidebar-collapsed-width);
 }
 
 .settings-save-bar-inner {
@@ -3292,5 +3373,76 @@ canvas {
     .ema-preset-btn {
         font-size: 0.65rem;
         padding: 0.2rem 0.1rem !important;
+    }
+}
+
+/* ============================================
+   AI CHATBOT SETTINGS — Responsive
+   ============================================ */
+
+.chatbot-status-field {
+    display: flex;
+    align-items: center;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.4;
+    font-size: 0.82rem;
+}
+
+/* Tablet: 2-column status grid */
+@media (max-width: 991.98px) {
+    .chatbot-status-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Mobile: stack status grid, collapse button labels */
+@media (max-width: 575.98px) {
+    .chatbot-status-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chatbot-test-btn .chatbot-btn-label {
+        display: none;
+    }
+
+    .chatbot-test-btn {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .chatbot-status-field {
+        font-size: 0.78rem;
+        min-height: 36px;
+    }
+
+    #chatbotConnectionStatus {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        margin-left: 0 !important;
+        font-size: 0.78rem;
+    }
+
+    /* Info banner compact on mobile */
+    #chatbot .settings-info-banner {
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 14px;
+        font-size: 0.8rem;
+    }
+
+    #chatbot .settings-info-banner i {
+        align-self: flex-start;
+        margin-top: 2px;
+    }
+}
+
+/* Touch-friendly: larger tap targets for chatbot buttons */
+@media (hover: none) and (pointer: coarse) {
+    .chatbot-test-btn {
+        min-height: 38px;
+        min-width: 38px;
     }
 }

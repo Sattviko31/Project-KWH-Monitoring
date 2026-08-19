@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using KWHMonitoring.Models;
 using KWHMonitoring.Services;
 using Newtonsoft.Json;
@@ -28,13 +29,15 @@ namespace KWHMonitoring.Controllers
         private readonly IMemoryCache _cache;
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<ApiController> _logger;
+        private readonly AesEncryptionService _encryption;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption)
         {
             _context = context;
             _cache = cache;
             _serviceProvider = serviceProvider;
             _logger = logger;
+            _encryption = encryption;
         }
 
         // ============================================
@@ -72,11 +75,11 @@ namespace KWHMonitoring.Controllers
                 {
                     var st = status.Trim().ToUpper();
                     if (st == "HIGH")
-                        validData = validData.Where(x => x.Daya_Watt > 20000);
+                        validData = validData.Where(x => (x.Daya_Watt ?? 0m) > 20000);
                     else if (st == "MEDIUM")
-                        validData = validData.Where(x => x.Daya_Watt > 10000 && x.Daya_Watt <= 20000);
+                        validData = validData.Where(x => (x.Daya_Watt ?? 0m) > 10000 && (x.Daya_Watt ?? 0m) <= 20000);
                     else if (st == "NORMAL")
-                        validData = validData.Where(x => x.Daya_Watt <= 10000);
+                        validData = validData.Where(x => (x.Daya_Watt ?? 0m) <= 10000);
                 }
 
                 // Filter by phase type
@@ -97,18 +100,18 @@ namespace KWHMonitoring.Controllers
                         ? categorySettings["DeviceCategory." + data.DeviceKey]
                         : "Billboard",
                     isThreePhase = data.IsThreePhase,
-                    r = data.Volt_R,
-                    s = data.Volt_S,
-                    t = data.Volt_T,
-                    ampR = data.Amp_R,
-                    ampS = data.Amp_S,
-                    ampT = data.Amp_T,
-                    cosPhi = data.Cos_Phi,
-                    dayaWatt = data.Daya_Watt,
-                    totalW1M = data.TotalW1M_Wh,
-                    energiAktif = data.Energi_Aktif_Wh,
-                    totalEnergy = data.Total_Energy_Wh,
-                    frekuensi = data.Frekuensi_Hz,
+                    r = data.Volt_R ?? 0m,
+                    s = data.Volt_S ?? 0m,
+                    t = data.Volt_T ?? 0m,
+                    ampR = data.Amp_R ?? 0m,
+                    ampS = data.Amp_S ?? 0m,
+                    ampT = data.Amp_T ?? 0m,
+                    cosPhi = data.Cos_Phi ?? 0m,
+                    dayaWatt = data.Daya_Watt ?? 0m,
+                    totalW1M = data.TotalW1M_Wh ?? 0m,
+                    energiAktif = data.Energi_Aktif_Wh ?? 0m,
+                    totalEnergy = data.Total_Energy_Wh ?? 0m,
+                    frekuensi = data.Frekuensi_Hz ?? 0m,
                     avgVoltage = data.AvgVoltage,
                     avgAmpere = data.AvgAmpere,
                     // Gunakan Status dari model agar konsisten dengan load bar
@@ -139,13 +142,13 @@ namespace KWHMonitoring.Controllers
                     .ToListAsync();
 
                 var labels = data.Select(x => x.Waktu_Server.ToString("HH:mm:ss")).ToList();
-                var voltageR = data.Select(x => (double)x.Volt_R).ToList();
+                var voltageR = data.Select(x => (double)(x.Volt_R ?? 0m)).ToList();
                 var voltageS = data.Select(x => x.Volt_S.HasValue ? (double?)x.Volt_S.Value : null).ToList();
                 var voltageT = data.Select(x => x.Volt_T.HasValue ? (double?)x.Volt_T.Value : null).ToList();
-                var ampR = data.Select(x => (double)x.Amp_R).ToList();
+                var ampR = data.Select(x => (double)(x.Amp_R ?? 0m)).ToList();
                 var ampS = data.Select(x => x.Amp_S.HasValue ? (double?)x.Amp_S.Value : null).ToList();
                 var ampT = data.Select(x => x.Amp_T.HasValue ? (double?)x.Amp_T.Value : null).ToList();
-                var power = data.Select(x => (double)x.Daya_Watt).ToList();
+                var power = data.Select(x => (double)(x.Daya_Watt ?? 0m)).ToList();
 
                 var isThreePhase = data.Any(x => x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue);
 
@@ -182,12 +185,12 @@ namespace KWHMonitoring.Controllers
 
                 var stats = new
                 {
-                    totalDaya = validData.Sum(x => x.Daya_Watt),
-                    totalEnergy = validData.Sum(x => x.Total_Energy_Wh),
-                    totalW1M = validData.Sum(x => x.TotalW1M_Wh),
-                    totalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh),
+                    totalDaya = validData.Sum(x => x.Daya_Watt) ?? 0m,
+                    totalEnergy = validData.Sum(x => x.Total_Energy_Wh) ?? 0m,
+                    totalW1M = validData.Sum(x => x.TotalW1M_Wh) ?? 0m,
+                    totalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh) ?? 0m,
                     activePanels = validData.Count,
-                    avgPowerFactor = validData.Count > 0 ? validData.Average(x => x.Cos_Phi) : 0,
+                    avgPowerFactor = validData.Count > 0 ? validData.Average(x => x.Cos_Phi) ?? 0m : 0m,
                     timestamp = DateTime.Now.ToString("dd/MM/yyyy, HH:mm:ss")
                 };
 
@@ -309,7 +312,7 @@ namespace KWHMonitoring.Controllers
                             {
                                 var h = (decimal)(seq[i].Waktu_Server - seq[i - 1].Waktu_Server).TotalHours;
                                 if (h <= 0) continue;
-                                wh += (seq[i - 1].Daya_Watt + seq[i].Daya_Watt) / 2m * h;
+                                wh += ((seq[i - 1].Daya_Watt ?? 0m) + (seq[i].Daya_Watt ?? 0m)) / 2m * h;
                             }
                             realtimeKWh += wh / 1000m;
                         }
@@ -531,7 +534,7 @@ namespace KWHMonitoring.Controllers
                         {
                             var h = (decimal)(seq[i].Waktu_Server - seq[i - 1].Waktu_Server).TotalHours;
                             if (h <= 0) continue;
-                            realtimeKWh += (seq[i - 1].Daya_Watt + seq[i].Daya_Watt) / 2m * h / 1000m;
+                            realtimeKWh += ((seq[i - 1].Daya_Watt ?? 0m) + (seq[i].Daya_Watt ?? 0m)) / 2m * h / 1000m;
                         }
                     }
 
@@ -676,7 +679,7 @@ namespace KWHMonitoring.Controllers
                         var curr = sequence[i];
                         var hours = (decimal)(curr.Waktu_Server - prev.Waktu_Server).TotalHours;
                         if (hours <= 0) continue;
-                        var avgPower = (prev.Daya_Watt + curr.Daya_Watt) / 2m;
+                        var avgPower = ((prev.Daya_Watt ?? 0m) + (curr.Daya_Watt ?? 0m)) / 2m;
                         energyWh += avgPower * hours;
                     }
 
@@ -1079,20 +1082,20 @@ namespace KWHMonitoring.Controllers
                         deviceKey = item.DeviceKey,
                         deviceId = item.DeviceId,
                         groupName = item.GroupName,
-                        waktuDevice = item.Waktu_Device.ToString("dd/MM/yyyy HH:mm:ss"),
+                        waktuDevice = item.Waktu_Device?.ToString("dd/MM/yyyy HH:mm:ss") ?? "-",
                         waktuServer = item.Waktu_Server.ToString("dd/MM/yyyy HH:mm:ss"),
-                        voltR = item.Volt_R,
-                        voltS = item.Volt_S,
-                        voltT = item.Volt_T,
-                        ampR = item.Amp_R,
-                        ampS = item.Amp_S,
-                        ampT = item.Amp_T,
-                        cosPhi = item.Cos_Phi,
-                        dayaWatt = item.Daya_Watt,
-                        totalW1M = item.TotalW1M_Wh,
-                        energiAktif = item.Energi_Aktif_Wh,
-                        totalEnergy = item.Total_Energy_Wh,
-                        frekuensi = item.Frekuensi_Hz,
+                        voltR = item.Volt_R ?? 0m,
+                        voltS = item.Volt_S ?? 0m,
+                        voltT = item.Volt_T ?? 0m,
+                        ampR = item.Amp_R ?? 0m,
+                        ampS = item.Amp_S ?? 0m,
+                        ampT = item.Amp_T ?? 0m,
+                        cosPhi = item.Cos_Phi ?? 0m,
+                        dayaWatt = item.Daya_Watt ?? 0m,
+                        totalW1M = item.TotalW1M_Wh ?? 0m,
+                        energiAktif = item.Energi_Aktif_Wh ?? 0m,
+                        totalEnergy = item.Total_Energy_Wh ?? 0m,
+                        frekuensi = item.Frekuensi_Hz ?? 0m,
                         status = item.Status,
                         statusColor = item.StatusColor
                     }).ToList(),
@@ -1178,20 +1181,20 @@ namespace KWHMonitoring.Controllers
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.DeviceKey);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.DeviceId);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.GroupName);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.Waktu_Device);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.Waktu_Device ?? DateTime.MinValue);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.Waktu_Server);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_R);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_S ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_T ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_R);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_S ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_T ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Cos_Phi);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Daya_Watt);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW1M_Wh);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Energi_Aktif_Wh);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Total_Energy_Wh);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Frekuensi_Hz);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_R ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_S ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Volt_T ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_R ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_S ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Amp_T ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Cos_Phi ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Daya_Watt ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW1M_Wh ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Energi_Aktif_Wh ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Total_Energy_Wh ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.Frekuensi_Hz ?? 0m);
                         sb.AppendLine("</Row>");
                     }
 
@@ -1210,9 +1213,9 @@ namespace KWHMonitoring.Controllers
                     csv.AppendLine(string.Format(CultureInfo.InvariantCulture,
                         "{0},{1},{2},{3},{4:yyyy-MM-dd HH:mm:ss},{5:yyyy-MM-dd HH:mm:ss},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}",
                         item.Id, item.DeviceKey, item.DeviceId, item.GroupName,
-                        item.Waktu_Device, item.Waktu_Server,
-                        item.Volt_R, item.Volt_S, item.Volt_T, item.Amp_R, item.Amp_S, item.Amp_T,
-                        item.Cos_Phi, item.Daya_Watt, item.TotalW1M_Wh, item.Energi_Aktif_Wh, item.Total_Energy_Wh, item.Frekuensi_Hz));
+                        item.Waktu_Device ?? DateTime.MinValue, item.Waktu_Server,
+                        item.Volt_R ?? 0m, item.Volt_S ?? 0m, item.Volt_T ?? 0m, item.Amp_R ?? 0m, item.Amp_S ?? 0m, item.Amp_T ?? 0m,
+                        item.Cos_Phi ?? 0m, item.Daya_Watt ?? 0m, item.TotalW1M_Wh ?? 0m, item.Energi_Aktif_Wh ?? 0m, item.Total_Energy_Wh ?? 0m, item.Frekuensi_Hz ?? 0m));
                 }
 
                 var csvBytes = Encoding.UTF8.GetBytes(csv.ToString());
@@ -1291,18 +1294,18 @@ namespace KWHMonitoring.Controllers
                         groupName = item.GroupName,
                         terminalTime = item.TerminalTime,
                         receivedTime = item.ReceivedTime,
-                        phaseR = item.PhaseR,
-                        phaseS = item.PhaseS,
-                        phaseT = item.PhaseT,
-                        ampereR = item.AmpereR,
-                        ampereS = item.AmpereS,
-                        ampereT = item.AmpereT,
-                        w = item.W,
-                        cosPhi = item.CosPhi,
-                        f = item.F,
-                        aktifPower = item.AktifPower,
-                        totalW = item.TotalW,
-                        totalW1M = item.TotalW1M,
+                        phaseR = item.PhaseR ?? 0m,
+                        phaseS = item.PhaseS ?? 0m,
+                        phaseT = item.PhaseT ?? 0m,
+                        ampereR = item.AmpereR ?? 0m,
+                        ampereS = item.AmpereS ?? 0m,
+                        ampereT = item.AmpereT ?? 0m,
+                        w = item.W ?? 0m,
+                        cosPhi = item.CosPhi ?? 0m,
+                        f = item.F ?? 0m,
+                        aktifPower = item.AktifPower ?? 0m,
+                        totalW = item.TotalW ?? 0m,
+                        totalW1M = item.TotalW1M ?? 0m,
                         archivedAt = item.ArchivedAt
                     }).ToList(),
                     hasMore = data.Count >= take,
@@ -1476,18 +1479,18 @@ namespace KWHMonitoring.Controllers
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0}</Data></Cell>", item.GroupName);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.TerminalTime);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.ReceivedTime);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseR);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseS ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseT ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereR);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereS ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereT ?? 0);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.W);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.CosPhi);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.F);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AktifPower);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW);
-                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW1M);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseR ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseS ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.PhaseT ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereR ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereS ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AmpereT ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.W ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.CosPhi ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.F ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.AktifPower ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW ?? 0m);
+                        sb.AppendFormat("<Cell><Data ss:Type=\"Number\">{0}</Data></Cell>", item.TotalW1M ?? 0m);
                         sb.AppendFormat("<Cell><Data ss:Type=\"String\">{0:dd/MM/yyyy HH:mm:ss}</Data></Cell>", item.ArchivedAt);
                         sb.AppendLine("</Row>");
                     }
@@ -1508,9 +1511,9 @@ namespace KWHMonitoring.Controllers
                         "{0},{1},{2},{3},{4},{5:yyyy-MM-dd HH:mm:ss},{6:yyyy-MM-dd HH:mm:ss},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19}",
                         item.HistoryId, item.OriginalId, item.DeviceKey, item.DeviceId, item.GroupName,
                         item.TerminalTime, item.ReceivedTime,
-                        item.PhaseR, item.PhaseS, item.PhaseT,
-                        item.AmpereR, item.AmpereS, item.AmpereT,
-                        item.W, item.CosPhi, item.F, item.AktifPower, item.TotalW, item.TotalW1M, item.ArchivedAt));
+                        item.PhaseR ?? 0m, item.PhaseS ?? 0m, item.PhaseT ?? 0m,
+                        item.AmpereR ?? 0m, item.AmpereS ?? 0m, item.AmpereT ?? 0m,
+                        item.W ?? 0m, item.CosPhi ?? 0m, item.F ?? 0m, item.AktifPower ?? 0m, item.TotalW ?? 0m, item.TotalW1M ?? 0m, item.ArchivedAt));
                 }
 
                 var csvBytes = Encoding.UTF8.GetBytes(csv.ToString());
@@ -1893,28 +1896,28 @@ namespace KWHMonitoring.Controllers
                     }
                     else if (s.Type == "sum")
                     {
-                        if (s.Selector == "dayaWatt") value = await query.SumAsync(x => x.Daya_Watt);
-                        else if (s.Selector == "totalEnergy") value = await query.SumAsync(x => x.Total_Energy_Wh);
-                        else if (s.Selector == "energiAktif") value = await query.SumAsync(x => x.Energi_Aktif_Wh);
-                        else if (s.Selector == "totalW1M") value = await query.SumAsync(x => x.TotalW1M_Wh);
+                        if (s.Selector == "dayaWatt") value = await query.SumAsync(x => x.Daya_Watt) ?? 0m;
+                        else if (s.Selector == "totalEnergy") value = await query.SumAsync(x => x.Total_Energy_Wh) ?? 0m;
+                        else if (s.Selector == "energiAktif") value = await query.SumAsync(x => x.Energi_Aktif_Wh) ?? 0m;
+                        else if (s.Selector == "totalW1M") value = await query.SumAsync(x => x.TotalW1M_Wh) ?? 0m;
                     }
                     else if (s.Type == "avg")
                     {
-                        if (s.Selector == "voltR") value = Math.Round((double)(await query.AverageAsync(x => x.Volt_R)), 1);
-                        else if (s.Selector == "ampR") value = Math.Round((double)(await query.AverageAsync(x => x.Amp_R)), 3);
-                        else if (s.Selector == "cosPhi") value = Math.Round((double)(await query.AverageAsync(x => x.Cos_Phi)), 3);
-                        else if (s.Selector == "dayaWatt") value = Math.Round((double)(await query.AverageAsync(x => x.Daya_Watt)), 0);
-                        else if (s.Selector == "frekuensi") value = Math.Round((double)(await query.AverageAsync(x => x.Frekuensi_Hz)), 2);
+                        if (s.Selector == "voltR") value = Math.Round((double)(await query.AverageAsync(x => x.Volt_R) ?? 0m), 1);
+                        else if (s.Selector == "ampR") value = Math.Round((double)(await query.AverageAsync(x => x.Amp_R) ?? 0m), 3);
+                        else if (s.Selector == "cosPhi") value = Math.Round((double)(await query.AverageAsync(x => x.Cos_Phi) ?? 0m), 3);
+                        else if (s.Selector == "dayaWatt") value = Math.Round((double)(await query.AverageAsync(x => x.Daya_Watt) ?? 0m), 0);
+                        else if (s.Selector == "frekuensi") value = Math.Round((double)(await query.AverageAsync(x => x.Frekuensi_Hz) ?? 0m), 2);
                     }
                     else if (s.Type == "min")
                     {
-                        if (s.Selector == "voltR") value = await query.MinAsync(x => x.Volt_R);
-                        else if (s.Selector == "dayaWatt") value = await query.MinAsync(x => x.Daya_Watt);
+                        if (s.Selector == "voltR") value = await query.MinAsync(x => x.Volt_R) ?? 0m;
+                        else if (s.Selector == "dayaWatt") value = await query.MinAsync(x => x.Daya_Watt) ?? 0m;
                     }
                     else if (s.Type == "max")
                     {
-                        if (s.Selector == "voltR") value = await query.MaxAsync(x => x.Volt_R);
-                        else if (s.Selector == "dayaWatt") value = await query.MaxAsync(x => x.Daya_Watt);
+                        if (s.Selector == "voltR") value = await query.MaxAsync(x => x.Volt_R) ?? 0m;
+                        else if (s.Selector == "dayaWatt") value = await query.MaxAsync(x => x.Daya_Watt) ?? 0m;
                     }
 
                     result.Add(new DevExtremeSummaryItem
@@ -2188,7 +2191,7 @@ namespace KWHMonitoring.Controllers
                         detectedTime = x.DetectedTime,
                         emaValue = x.EMAValue,
                         thresholdMode = x.ThresholdMode,
-                        acknowledged = x.Acknowledged,
+                        acknowledged = x.Acknowledged ?? false,
                         acknowledgedTime = x.AcknowledgedTime,
                         notes = x.Notes
                     })
@@ -2248,7 +2251,7 @@ namespace KWHMonitoring.Controllers
 
                 // Hitung SMA (Simple Moving Average) dari 100 data pertama sebagai baseline
                 // Baseline = rata-rata sederhana, bukan EMA, agar EMA di chart mulai dari garis horizontal
-                double smaBaseline = first100Data.Average(x => (double)x.Daya_Watt);
+                double smaBaseline = first100Data.Average(x => (double)(x.Daya_Watt ?? 0m));
 
                 return Ok(new
                 {
@@ -3982,6 +3985,209 @@ namespace KWHMonitoring.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        // ============================================
+        // AI CHATBOT SETTINGS
+        // ============================================
+        [HttpGet("chatbot-settings")]
+        public async Task<IActionResult> GetChatbotSettings()
+        {
+            try
+            {
+                var settings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Chatbot."))
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                string apiKey = "";
+                if (settings.TryGetValue("Chatbot.ApiKey", out var encryptedKey) && !string.IsNullOrEmpty(encryptedKey))
+                {
+                    var decrypted = _encryption.Decrypt(encryptedKey);
+                    apiKey = decrypted ?? "";
+                }
+
+                string model = settings.TryGetValue("Chatbot.Model", out var m) ? m : "qwen-plus-2025-04-28";
+                string apiUrl = settings.TryGetValue("Chatbot.ApiUrl", out var u) ? u : "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+                bool isConfigured = settings.TryGetValue("Chatbot.ApiKey", out var ck) && !string.IsNullOrEmpty(ck);
+
+                return Ok(new
+                {
+                    apiKey = apiKey,
+                    model = model,
+                    apiUrl = apiUrl,
+                    isConfigured = isConfigured
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load chatbot settings");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("chatbot-settings")]
+        public async Task<IActionResult> SaveChatbotSettings([FromBody] ChatbotSettingsData data)
+        {
+            try
+            {
+                if (data == null)
+                    return BadRequest(new { error = "Invalid data" });
+
+                var settingsDict = new Dictionary<string, string>();
+
+                if (!string.IsNullOrWhiteSpace(data.ApiKey))
+                {
+                    settingsDict["Chatbot.ApiKey"] = _encryption.Encrypt(data.ApiKey.Trim());
+                }
+                if (!string.IsNullOrWhiteSpace(data.Model))
+                {
+                    settingsDict["Chatbot.Model"] = data.Model.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(data.ApiUrl))
+                {
+                    settingsDict["Chatbot.ApiUrl"] = data.ApiUrl.Trim();
+                }
+
+                foreach (var kvp in settingsDict)
+                {
+                    var existing = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == kvp.Key);
+
+                    if (existing != null)
+                    {
+                        existing.SettingValue = kvp.Value;
+                        existing.UpdatedAt = DateTime.Now;
+                    }
+                    else
+                    {
+                        _context.AppSettingsRecords.Add(new AppSettingsRecord
+                        {
+                            SettingKey = kvp.Key,
+                            SettingValue = kvp.Value,
+                            UpdatedAt = DateTime.Now
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Invalidate cache so chatbot picks up new settings immediately
+                _cache.Remove("ChatbotConfig_Cached");
+
+                _logger.LogInformation("Chatbot settings saved successfully. Key configured: {HasKey}", !string.IsNullOrWhiteSpace(data.ApiKey));
+                return Ok(new { success = true, message = "Chatbot settings saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save chatbot settings");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("test-chatbot-connection")]
+        public async Task<IActionResult> TestChatbotConnection([FromBody] ChatbotSettingsData data)
+        {
+            try
+            {
+                string apiKey = data?.ApiKey?.Trim() ?? "";
+                string model = data?.Model?.Trim() ?? "qwen-plus-2025-04-28";
+                string apiUrl = data?.ApiUrl?.Trim() ?? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+                // If no apiKey provided in test data, try loading from DB
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    var existingKey = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == "Chatbot.ApiKey");
+
+                    if (existingKey != null && !string.IsNullOrEmpty(existingKey.SettingValue))
+                    {
+                        var decrypted = _encryption.Decrypt(existingKey.SettingValue);
+                        if (!string.IsNullOrEmpty(decrypted))
+                            apiKey = decrypted;
+                    }
+
+                    if (string.IsNullOrEmpty(apiKey))
+                    {
+                        // Fallback to appsettings.json
+                        var config = _serviceProvider.GetRequiredService<IConfiguration>();
+                        apiKey = config["Qwen:ApiKey"] ?? "";
+                    }
+                }
+
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    return Ok(new { success = false, message = "API Key belum dikonfigurasi" });
+                }
+
+                // If no model provided, try loading from DB
+                if (string.IsNullOrEmpty(data?.Model))
+                {
+                    var existingModel = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == "Chatbot.Model");
+                    if (existingModel != null)
+                        model = existingModel.SettingValue;
+                }
+
+                // If no apiUrl provided, try loading from DB
+                if (string.IsNullOrEmpty(data?.ApiUrl))
+                {
+                    var existingUrl = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == "Chatbot.ApiUrl");
+                    if (existingUrl != null)
+                        apiUrl = existingUrl.SettingValue;
+                }
+
+                var httpClientFactory = _serviceProvider.GetRequiredService<IHttpClientFactory>();
+                var client = httpClientFactory.CreateClient("QwenClient");
+
+                var payload = new
+                {
+                    model = model,
+                    messages = new[]
+                    {
+                        new { role = "user", content = "Halo, ini tes koneksi. Jawab singkat: 'OK'." }
+                    }
+                };
+
+                string jsonString = JsonConvert.SerializeObject(payload);
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, apiUrl);
+                httpRequest.Content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+                httpRequest.Headers.Add("Authorization", "Bearer " + apiKey);
+
+                var response = await client.SendAsync(httpRequest);
+                var responseString = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = JObject.Parse(responseString);
+                    var choices = responseJson["choices"] as JArray;
+                    string replyText = "";
+                    if (choices != null && choices.Count > 0 && choices[0]["message"] != null)
+                    {
+                        replyText = choices[0]["message"]["content"]?.ToString() ?? "";
+                    }
+
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Berhasil terhubung ke AI Model: " + model,
+                        reply = replyText.Trim()
+                    });
+                }
+                else
+                {
+                    return Ok(new
+                    {
+                        success = false,
+                        message = "Gagal terhubung ke AI API (HTTP " + (int)response.StatusCode + ")",
+                        detail = responseString
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
     }
 
     // ============================================
@@ -4166,6 +4372,13 @@ namespace KWHMonitoring.Controllers
     public class ResetAnomalyAlertRequest
     {
         public string DeviceKey { get; set; } = string.Empty;
+    }
+
+    public class ChatbotSettingsData
+    {
+        public string ApiKey { get; set; }
+        public string Model { get; set; } = "qwen-plus-2025-04-28";
+        public string ApiUrl { get; set; } = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
     }
 }
 

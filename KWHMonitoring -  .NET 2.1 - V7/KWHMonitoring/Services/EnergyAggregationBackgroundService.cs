@@ -149,7 +149,7 @@ namespace KWHMonitoring.Services
                     var overlapHours = (decimal)(overlapEnd - overlapStart).TotalHours;
                     if (totalHours <= 0) continue;
 
-                    var avgPower = (prev.Daya_Watt + curr.Daya_Watt) / 2m;
+                    var avgPower = ((prev.Daya_Watt ?? 0m) + (curr.Daya_Watt ?? 0m)) / 2m;
                     totalEnergyWh += avgPower * overlapHours;
                 }
 

@@ -9,7 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using KWHMonitoring.Models;
+using KWHMonitoring.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -23,17 +25,79 @@ namespace KWHMonitoring.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<QwenChatController> _logger;
         private readonly ApplicationDbContext _context;
+        private readonly AesEncryptionService _encryption;
+        private readonly IMemoryCache _cache;
 
         public QwenChatController(
-            IConfiguration configuration, 
-            IHttpClientFactory httpClientFactory, 
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory,
             ILogger<QwenChatController> logger,
-            ApplicationDbContext context)
+            ApplicationDbContext context,
+            AesEncryptionService encryption,
+            IMemoryCache cache)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _context = context;
+            _encryption = encryption;
+            _cache = cache;
+        }
+
+        private class ChatbotConfig
+        {
+            public string ApiKey { get; set; }
+            public string Model { get; set; }
+            public string ApiUrl { get; set; }
+        }
+
+        private async Task<ChatbotConfig> GetChatbotConfigAsync()
+        {
+            const string cacheKey = "ChatbotConfig_Cached";
+
+            if (_cache.TryGetValue(cacheKey, out ChatbotConfig cached))
+                return cached;
+
+            string apiKey = "";
+            string modelName = "qwen-plus-2025-04-28";
+            string apiUrl = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+            try
+            {
+                var settings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Chatbot."))
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                if (settings.TryGetValue("Chatbot.ApiKey", out var encryptedKey) && !string.IsNullOrEmpty(encryptedKey))
+                {
+                    var decrypted = _encryption.Decrypt(encryptedKey);
+                    if (!string.IsNullOrEmpty(decrypted))
+                        apiKey = decrypted;
+                }
+
+                if (settings.TryGetValue("Chatbot.Model", out var model))
+                    modelName = model;
+
+                if (settings.TryGetValue("Chatbot.ApiUrl", out var url))
+                    apiUrl = url;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load chatbot config from DB, falling back to appsettings.json");
+            }
+
+            // Fallback to appsettings.json if DB has no config
+            if (string.IsNullOrEmpty(apiKey))
+                apiKey = _configuration["Qwen:ApiKey"] ?? "";
+
+            if (modelName == "qwen-plus-2025-04-28" && !string.IsNullOrEmpty(_configuration["Qwen:Model"]))
+                modelName = _configuration["Qwen:Model"];
+
+            var config = new ChatbotConfig { ApiKey = apiKey, Model = modelName, ApiUrl = apiUrl };
+
+            _cache.Set(cacheKey, config, TimeSpan.FromMinutes(5));
+
+            return config;
         }
 
         public class ChatMessageDto
@@ -158,18 +222,19 @@ namespace KWHMonitoring.Controllers
                 _logger.LogError("❌ ERROR: Tidak ada data realtime yang diterima dari frontend! RealTimeData = NULL");
             }
 
-            string apiKey = _configuration["Qwen:ApiKey"];
-            string modelName = _configuration["Qwen:Model"] ?? "qwen3-max-2025-10-30";
+            var chatbotConfig = await GetChatbotConfigAsync();
+            string apiKey = chatbotConfig.ApiKey;
+            string modelName = chatbotConfig.Model;
+            string url = chatbotConfig.ApiUrl;
 
             if (string.IsNullOrEmpty(apiKey))
             {
-                return StatusCode(500, new { success = false, message = "Qwen API Key belum dikonfigurasi di appsettings.json." });
+                return StatusCode(500, new { success = false, message = "AI Chatbot API Key belum dikonfigurasi. Atur di Settings > AI Chatbot." });
             }
 
             try
             {
                 var client = _httpClientFactory.CreateClient("QwenClient");
-                string url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
                 var messages = new List<object>();
 
                 // ==========================================
@@ -484,23 +549,23 @@ namespace KWHMonitoring.Controllers
                     deviceId = data.DeviceId ?? "",
                     groupName = data.GroupName ?? "",
                     isThreePhase = data.IsThreePhase,
-                    r = data.Volt_R,
-                    s = data.Volt_S,
-                    t = data.Volt_T,
-                    ampR = data.Amp_R,
-                    ampS = data.Amp_S,
-                    ampT = data.Amp_T,
-                    cosPhi = data.Cos_Phi,
-                    dayaWatt = data.Daya_Watt,
-                    totalW1M_Wh = data.TotalW1M_Wh,
-                    energiAktif_Wh = data.Energi_Aktif_Wh,
-                    totalEnergy_Wh = data.Total_Energy_Wh,
-                    frekuensi = data.Frekuensi_Hz,
+                    r = data.Volt_R ?? 0m,
+                    s = data.Volt_S ?? 0m,
+                    t = data.Volt_T ?? 0m,
+                    ampR = data.Amp_R ?? 0m,
+                    ampS = data.Amp_S ?? 0m,
+                    ampT = data.Amp_T ?? 0m,
+                    cosPhi = data.Cos_Phi ?? 0m,
+                    dayaWatt = data.Daya_Watt ?? 0m,
+                    totalW1M_Wh = data.TotalW1M_Wh ?? 0m,
+                    energiAktif_Wh = data.Energi_Aktif_Wh ?? 0m,
+                    totalEnergy_Wh = data.Total_Energy_Wh ?? 0m,
+                    frekuensi = data.Frekuensi_Hz ?? 0m,
                     avgVoltage = data.AvgVoltage,
                     avgAmpere = data.AvgAmpere,
                     status = data.Status ?? "",
                     lastUpdate = data.Waktu_Server,
-                    waktuDevice = data.Waktu_Device
+                    waktuDevice = data.Waktu_Device?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"
                 }).ToList();
 
                 // ==========================================
@@ -547,14 +612,14 @@ namespace KWHMonitoring.Controllers
                 
                 var systemStats = new
                 {
-                    totalDaya = validPanels.Sum(x => x.Daya_Watt),
-                    totalEnergy_Wh = validPanels.Sum(x => x.Total_Energy_Wh),
-                    totalW1M_Wh = validPanels.Sum(x => x.TotalW1M_Wh),
-                    totalEnergiAktif_Wh = validPanels.Sum(x => x.Energi_Aktif_Wh),
+                    totalDaya = validPanels.Sum(x => x.Daya_Watt) ?? 0m,
+                    totalEnergy_Wh = validPanels.Sum(x => x.Total_Energy_Wh) ?? 0m,
+                    totalW1M_Wh = validPanels.Sum(x => x.TotalW1M_Wh) ?? 0m,
+                    totalEnergiAktif_Wh = validPanels.Sum(x => x.Energi_Aktif_Wh) ?? 0m,
                     activePanels = validPanels.Count,
-                    avgPowerFactor = validPanels.Count > 0 ? validPanels.Average(x => x.Cos_Phi) : 0,
+                    avgPowerFactor = validPanels.Count > 0 ? validPanels.Average(x => x.Cos_Phi) ?? 0m : 0,
                     avgVoltage = validPanels.Count > 0 ? validPanels.Average(x => x.AvgVoltage) : 0,
-                    avgFrequency = validPanels.Count > 0 ? validPanels.Average(x => x.Frekuensi_Hz) : 0,
+                    avgFrequency = validPanels.Count > 0 ? validPanels.Average(x => x.Frekuensi_Hz) ?? 0m : 0,
                     timestamp = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")
                 };
                 _logger.LogInformation($"[3/7] System Statistics: Total Daya={systemStats.totalDaya:N0}W, Active Panels={systemStats.activePanels}");
@@ -672,7 +737,7 @@ namespace KWHMonitoring.Controllers
                             YearCost = Math.Round(yearKWh * tariffPerKWh, 2),
                             AllTimeKWh = Math.Round(allTimeKWh, 3),
                             AllTimeCost = Math.Round(allTimeKWh * tariffPerKWh, 2),
-                            CurrentPower = panel.Daya_Watt,  // decimal is non-nullable, no ?? needed
+                            CurrentPower = panel.Daya_Watt ?? 0m,
                             Status = string.IsNullOrEmpty(panel.Status) ? "UNKNOWN" : panel.Status
                         });
                     }
@@ -743,13 +808,13 @@ namespace KWHMonitoring.Controllers
                             powerValue = a.PowerValue,
                             deviation = a.Deviation,
                             detectedTime = a.DetectedTime,
-                            acknowledged = a.Acknowledged
+                            acknowledged = a.Acknowledged ?? false
                         })
                         .Cast<object>()
                         .ToList();
 
                     totalAnomalies = allAnomalyLogs.Count;
-                    unackAnomalies = allAnomalyLogs.Count(x => !x.Acknowledged);
+                    unackAnomalies = allAnomalyLogs.Count(x => x.Acknowledged != true);
                     last24hAnomalies = allAnomalyLogs.Count(x => x.DetectedTime >= DateTime.Now.AddDays(-1));
                     
                     _logger.LogInformation($"[5/7] AnomalyLogs: Total={totalAnomalies}, Unacknowledged={unackAnomalies}, Last24h={last24hAnomalies}");
@@ -791,11 +856,11 @@ namespace KWHMonitoring.Controllers
                                 deviceKey = panel.DeviceKey ?? "",
                                 groupName = panel.GroupName ?? "",
                                 labels = panelHistory.Select(x => x.Waktu_Server.ToString("HH:mm:ss")).ToList(),
-                                power = panelHistory.Select(x => Convert.ToDouble(x.Daya_Watt)).ToList(),
-                                voltageR = panelHistory.Select(x => Convert.ToDouble(x.Volt_R)).ToList(),
+                                power = panelHistory.Select(x => Convert.ToDouble(x.Daya_Watt ?? 0m)).ToList(),
+                                voltageR = panelHistory.Select(x => Convert.ToDouble(x.Volt_R ?? 0m)).ToList(),
                                 voltageS = panelHistory.Where(x => x.Volt_S.HasValue).Select(x => Convert.ToDouble(x.Volt_S.Value)).ToList(),
                                 voltageT = panelHistory.Where(x => x.Volt_T.HasValue).Select(x => Convert.ToDouble(x.Volt_T.Value)).ToList(),
-                                currentR = panelHistory.Select(x => Convert.ToDouble(x.Amp_R)).ToList(),
+                                currentR = panelHistory.Select(x => Convert.ToDouble(x.Amp_R ?? 0m)).ToList(),
                                 currentS = panelHistory.Where(x => x.Amp_S.HasValue).Select(x => Convert.ToDouble(x.Amp_S.Value)).ToList(),
                                 currentT = panelHistory.Where(x => x.Amp_T.HasValue).Select(x => Convert.ToDouble(x.Amp_T.Value)).ToList(),
                                 isThreePhase = panelHistory.Any(x => x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue),
@@ -897,18 +962,19 @@ namespace KWHMonitoring.Controllers
         [HttpGet("test")]
         public async Task<IActionResult> TestConnection()
         {
-            string apiKey = _configuration["Qwen:ApiKey"];
-            string modelName = _configuration["Qwen:Model"] ?? "qwen3.7-flash-2026-07-15";
+            var chatbotConfig = await GetChatbotConfigAsync();
+            string apiKey = chatbotConfig.ApiKey;
+            string modelName = chatbotConfig.Model;
+            string url = chatbotConfig.ApiUrl;
 
             if (string.IsNullOrEmpty(apiKey) || apiKey.StartsWith("YOUR_API_KEY") || apiKey == "CHANGE_ME")
             {
-                return BadRequest(new { status = "ERROR", message = "Qwen API Key belum diisi di appsettings.json!" });
+                return BadRequest(new { status = "ERROR", message = "AI Chatbot API Key belum dikonfigurasi. Atur di Settings > AI Chatbot." });
             }
 
             try
             {
                 var client = _httpClientFactory.CreateClient("QwenClient");
-                string url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
                 var payload = new
                 {

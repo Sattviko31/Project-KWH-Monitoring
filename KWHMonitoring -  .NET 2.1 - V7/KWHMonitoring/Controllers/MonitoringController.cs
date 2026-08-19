@@ -49,18 +49,18 @@ namespace KWHMonitoring.Controllers
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
                         Waktu_Server = data.Waktu_Server,
-                        Volt_R = data.Volt_R,
-                        Volt_S = data.Volt_S,
-                        Volt_T = data.Volt_T,
-                        Amp_R = data.Amp_R,
-                        Amp_S = data.Amp_S,
-                        Amp_T = data.Amp_T,
-                        Cos_Phi = data.Cos_Phi,
-                        Daya_Watt = data.Daya_Watt,
-                        TotalW1M_Wh = data.TotalW1M_Wh,
-                        Energi_Aktif_Wh = data.Energi_Aktif_Wh,
-                        Total_Energy_Wh = data.Total_Energy_Wh,
-                        Frekuensi_Hz = data.Frekuensi_Hz
+                        Volt_R = data.Volt_R ?? 0m,
+                        Volt_S = data.Volt_S ?? 0m,
+                        Volt_T = data.Volt_T ?? 0m,
+                        Amp_R = data.Amp_R ?? 0m,
+                        Amp_S = data.Amp_S ?? 0m,
+                        Amp_T = data.Amp_T ?? 0m,
+                        Cos_Phi = data.Cos_Phi ?? 0m,
+                        Daya_Watt = data.Daya_Watt ?? 0m,
+                        TotalW1M_Wh = data.TotalW1M_Wh ?? 0m,
+                        Energi_Aktif_Wh = data.Energi_Aktif_Wh ?? 0m,
+                        Total_Energy_Wh = data.Total_Energy_Wh ?? 0m,
+                        Frekuensi_Hz = data.Frekuensi_Hz ?? 0m
                     });
                 }
 
@@ -68,14 +68,14 @@ namespace KWHMonitoring.Controllers
                 {
                     viewModel.TotalStats = new TotalStatistics
                     {
-                        TotalDaya = validData.Sum(x => x.Daya_Watt),
-                        TotalEnergy = validData.Sum(x => x.Total_Energy_Wh),
-                        TotalW1M = validData.Sum(x => x.TotalW1M_Wh),
-                        TotalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh),
+                        TotalDaya = validData.Sum(x => x.Daya_Watt) ?? 0m,
+                        TotalEnergy = validData.Sum(x => x.Total_Energy_Wh) ?? 0m,
+                        TotalW1M = validData.Sum(x => x.TotalW1M_Wh) ?? 0m,
+                        TotalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh) ?? 0m,
                         ActivePanels = validData.Count,
-                        AvgPowerFactor = validData.Average(x => x.Cos_Phi),
+                        AvgPowerFactor = validData.Average(x => x.Cos_Phi) ?? 0m,
                         AvgVoltage = validData.Average(x => x.AvgVoltage),
-                        AvgFrequency = validData.Average(x => x.Frekuensi_Hz)
+                        AvgFrequency = validData.Average(x => x.Frekuensi_Hz) ?? 0m
                     };
                 }
 
@@ -120,18 +120,18 @@ namespace KWHMonitoring.Controllers
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
                         Waktu_Server = data.Waktu_Server,
-                        Volt_R = data.Volt_R,
-                        Volt_S = data.Volt_S,
-                        Volt_T = data.Volt_T,
-                        Amp_R = data.Amp_R,
-                        Amp_S = data.Amp_S,
-                        Amp_T = data.Amp_T,
-                        Cos_Phi = data.Cos_Phi,
-                        Daya_Watt = data.Daya_Watt,
-                        TotalW1M_Wh = data.TotalW1M_Wh,
-                        Energi_Aktif_Wh = data.Energi_Aktif_Wh,
-                        Total_Energy_Wh = data.Total_Energy_Wh,
-                        Frekuensi_Hz = data.Frekuensi_Hz
+                        Volt_R = data.Volt_R ?? 0m,
+                        Volt_S = data.Volt_S ?? 0m,
+                        Volt_T = data.Volt_T ?? 0m,
+                        Amp_R = data.Amp_R ?? 0m,
+                        Amp_S = data.Amp_S ?? 0m,
+                        Amp_T = data.Amp_T ?? 0m,
+                        Cos_Phi = data.Cos_Phi ?? 0m,
+                        Daya_Watt = data.Daya_Watt ?? 0m,
+                        TotalW1M_Wh = data.TotalW1M_Wh ?? 0m,
+                        Energi_Aktif_Wh = data.Energi_Aktif_Wh ?? 0m,
+                        Total_Energy_Wh = data.Total_Energy_Wh ?? 0m,
+                        Frekuensi_Hz = data.Frekuensi_Hz ?? 0m
                     });
                 }
 
@@ -170,18 +170,18 @@ namespace KWHMonitoring.Controllers
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
                         Waktu_Server = data.Waktu_Server,
-                        Volt_R = data.Volt_R,
-                        Volt_S = data.Volt_S,
-                        Volt_T = data.Volt_T,
-                        Amp_R = data.Amp_R,
-                        Amp_S = data.Amp_S,
-                        Amp_T = data.Amp_T,
-                        Cos_Phi = data.Cos_Phi,
-                        Daya_Watt = data.Daya_Watt,
-                        TotalW1M_Wh = data.TotalW1M_Wh,
-                        Energi_Aktif_Wh = data.Energi_Aktif_Wh,
-                        Total_Energy_Wh = data.Total_Energy_Wh,
-                        Frekuensi_Hz = data.Frekuensi_Hz
+                        Volt_R = data.Volt_R ?? 0m,
+                        Volt_S = data.Volt_S ?? 0m,
+                        Volt_T = data.Volt_T ?? 0m,
+                        Amp_R = data.Amp_R ?? 0m,
+                        Amp_S = data.Amp_S ?? 0m,
+                        Amp_T = data.Amp_T ?? 0m,
+                        Cos_Phi = data.Cos_Phi ?? 0m,
+                        Daya_Watt = data.Daya_Watt ?? 0m,
+                        TotalW1M_Wh = data.TotalW1M_Wh ?? 0m,
+                        Energi_Aktif_Wh = data.Energi_Aktif_Wh ?? 0m,
+                        Total_Energy_Wh = data.Total_Energy_Wh ?? 0m,
+                        Frekuensi_Hz = data.Frekuensi_Hz ?? 0m
                     });
                 }
 
@@ -242,18 +242,18 @@ namespace KWHMonitoring.Controllers
                     DeviceId = latestData.DeviceId,
                     GroupName = latestData.GroupName,
                     Waktu_Server = latestData.Waktu_Server,
-                    Volt_R = latestData.Volt_R,
-                    Volt_S = latestData.Volt_S,
-                    Volt_T = latestData.Volt_T,
-                    Amp_R = latestData.Amp_R,
-                    Amp_S = latestData.Amp_S,
-                    Amp_T = latestData.Amp_T,
-                    Cos_Phi = latestData.Cos_Phi,
-                    Daya_Watt = latestData.Daya_Watt,
-                    TotalW1M_Wh = latestData.TotalW1M_Wh,
-                    Energi_Aktif_Wh = latestData.Energi_Aktif_Wh,
-                    Total_Energy_Wh = latestData.Total_Energy_Wh,
-                    Frekuensi_Hz = latestData.Frekuensi_Hz
+                    Volt_R = latestData.Volt_R ?? 0m,
+                    Volt_S = latestData.Volt_S ?? 0m,
+                    Volt_T = latestData.Volt_T ?? 0m,
+                    Amp_R = latestData.Amp_R ?? 0m,
+                    Amp_S = latestData.Amp_S ?? 0m,
+                    Amp_T = latestData.Amp_T ?? 0m,
+                    Cos_Phi = latestData.Cos_Phi ?? 0m,
+                    Daya_Watt = latestData.Daya_Watt ?? 0m,
+                    TotalW1M_Wh = latestData.TotalW1M_Wh ?? 0m,
+                    Energi_Aktif_Wh = latestData.Energi_Aktif_Wh ?? 0m,
+                    Total_Energy_Wh = latestData.Total_Energy_Wh ?? 0m,
+                    Frekuensi_Hz = latestData.Frekuensi_Hz ?? 0m
                 };
 
                 ViewBag.DeviceKey = deviceKey;
@@ -343,9 +343,9 @@ namespace KWHMonitoring.Controllers
                         "{6},{7},{8},{9},{10},{11}," +
                         "{12},{13},{14},{15},{16},{17}",
                         item.Id, CsvEscape(item.DeviceKey), CsvEscape(item.DeviceId), CsvEscape(item.GroupName),
-                        item.Waktu_Device, item.Waktu_Server,
-                        item.Volt_R, item.Volt_S, item.Volt_T, item.Amp_R, item.Amp_S, item.Amp_T,
-                        item.Cos_Phi, item.Daya_Watt, item.TotalW1M_Wh, item.Energi_Aktif_Wh, item.Total_Energy_Wh, item.Frekuensi_Hz));
+                        item.Waktu_Device ?? DateTime.MinValue, item.Waktu_Server,
+                        item.Volt_R ?? 0m, item.Volt_S ?? 0m, item.Volt_T ?? 0m, item.Amp_R ?? 0m, item.Amp_S ?? 0m, item.Amp_T ?? 0m,
+                        item.Cos_Phi ?? 0m, item.Daya_Watt ?? 0m, item.TotalW1M_Wh ?? 0m, item.Energi_Aktif_Wh ?? 0m, item.Total_Energy_Wh ?? 0m, item.Frekuensi_Hz ?? 0m));
                 }
 
                 var bytes = Encoding.UTF8.GetBytes(sb.ToString());

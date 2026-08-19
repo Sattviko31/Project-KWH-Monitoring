@@ -50,6 +50,11 @@
             <i class="fas fa-bell"></i> <span>Notifications</span>
         </a>
     </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link erp-tab" id="chatbot-tab" data-toggle="tab" href="#chatbot" role="tab">
+            <i class="fas fa-robot"></i> <span>AI Chatbot</span>
+        </a>
+    </li>
 </ul>
 
 <div class="tab-content" id="settingsTabContent">
@@ -860,6 +865,139 @@
         </form>
     </div>
 
+    <!-- ==================== AI CHATBOT SETTINGS TAB ==================== -->
+    <div class="tab-pane fade" id="chatbot" role="tabpanel" aria-labelledby="chatbot-tab">
+        <form id="chatbotSettingsForm">
+        <div class="settings-section-list">
+
+            <!-- AI Provider Settings -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-robot text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>AI Chatbot Configuration</h5>
+                        <p>Konfigurasi provider, API key, dan model AI untuk asisten Voltra</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <button type="button" class="btn btn-outline-primary btn-sm chatbot-test-btn" id="btnTestChatbotConnection">
+                            <i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>
+                        </button>
+                        <span class="ms-2 d-inline-block" id="chatbotConnectionStatus"></span>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-info-banner settings-info-banner-info">
+                        <i class="fas fa-shield-alt"></i>
+                        <div>
+                            <strong>API Key terenkripsi</strong> — API key disimpan terenkripsi (AES-256) di database.
+                            Setelah disimpan, API key tidak dapat dilihat kembali dalam bentuk asli dari halaman ini.
+                            <br><strong>OpenAI-Compatible</strong> — Mendukung semua provider dengan format OpenAI API (<code>/chat/completions</code>).
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label class="form-label">AI Provider</label>
+                            <select class="form-select" id="chatbotProvider">
+                                <option value="qwen" selected>Qwen (Alibaba Cloud)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="claude">Anthropic Claude</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="zhipu">Zhipu AI (GLM)</option>
+                                <option value="groq">Groq (Fast Inference)</option>
+                                <option value="openrouter">OpenRouter (Multi-provider)</option>
+                                <option value="together">Together AI</option>
+                                <option value="siliconflow">SiliconFlow</option>
+                                <option value="mistral">Mistral AI</option>
+                                <option value="cohere">Cohere</option>
+                                <option value="custom">Custom Provider...</option>
+                            </select>
+                            <small class="text-muted">Pilih provider AI — URL & model otomatis menyesuaikan</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="chatbotApiKey"
+                                   placeholder="Masukkan API key baru untuk mengganti">
+                            <small class="text-muted">Kosongkan jika tidak ingin mengubah API key</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">AI Model</label>
+                            <select class="form-select" id="chatbotModel">
+                                <!-- Dynamically populated based on provider -->
+                            </select>
+                            <small class="text-muted">Model yang digunakan chatbot</small>
+                        </div>
+                        <div class="settings-field settings-field-full" id="customModelField" style="display: none;">
+                            <label class="form-label">Custom Model Name</label>
+                            <input type="text" class="form-control" id="chatbotCustomModel"
+                                   placeholder="Masukkan nama model custom">
+                            <small class="text-muted">Nama model sesuai dokumentasi provider</small>
+                        </div>
+                        <div class="settings-field settings-field-full" id="customProviderUrlField" style="display: none;">
+                            <label class="form-label">Custom API Endpoint URL</label>
+                            <input type="url" class="form-control" id="chatbotCustomApiUrl"
+                                   placeholder="https://api.your-provider.com/v1/chat/completions">
+                            <small class="text-muted">URL endpoint (harus OpenAI-compatible <code>/chat/completions</code>)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Status Info -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-info-soft">
+                        <i class="fas fa-info-circle text-info"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Status & Info</h5>
+                        <p>Informasi koneksi dan konfigurasi chatbot saat ini</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="settings-grid chatbot-status-grid">
+                        <div class="settings-field">
+                            <label class="form-label">Status Konfigurasi</label>
+                            <div class="form-control bg-light chatbot-status-field" id="chatbotConfigStatus" style="cursor: default; min-height: 38px;">
+                                <i class="fas fa-spinner fa-spin text-muted me-2"></i> Memuat...
+                            </div>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Provider & Model Aktif</label>
+                            <div class="form-control bg-light chatbot-status-field" id="chatbotActiveModel" style="cursor: default; min-height: 38px;">
+                                <i class="fas fa-spinner fa-spin text-muted me-2"></i> Memuat...
+                            </div>
+                        </div>
+                        <div class="settings-field settings-field-full">
+                            <label class="form-label">Endpoint URL Aktif</label>
+                            <div class="form-control bg-light chatbot-status-field" id="chatbotActiveUrl" style="cursor: default; min-height: 38px;">
+                                <i class="fas fa-spinner fa-spin text-muted me-2"></i> Memuat...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Sticky Save Bar -->
+        <div class="settings-save-bar">
+            <div class="settings-save-bar-inner">
+                <div class="settings-save-bar-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetChatbotSettings">
+                        <i class="fas fa-undo"></i> <span class="chatbot-btn-label">Reset Default</span>
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveChatbotSettings">
+                        <i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        </form>
+    </div>
+
 
 </div>
 
@@ -1370,6 +1508,476 @@
 
             $('body').append(notification);
             setTimeout(function() { notification.alert('close'); }, 3000);
+        }
+
+        // ============================================
+        // AI CHATBOT SETTINGS
+        // ============================================
+
+        // Provider presets: URL + models
+        var chatbotProviders = {
+            qwen: {
+                name: 'Qwen (Alibaba Cloud)',
+                url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+                models: [
+                    { value: 'qwen-plus-2025-04-28', label: 'qwen-plus-2025-04-28 ★ Recommended' },
+                    { value: 'qwen-plus', label: 'qwen-plus' },
+                    { value: 'qwen-turbo', label: 'qwen-turbo (Fast)' },
+                    { value: 'qwen-max', label: 'qwen-max (Powerful)' },
+                    { value: 'qwen-long', label: 'qwen-long (Long context)' },
+                    { value: 'qwq-32b', label: 'qwq-32b (Reasoning)' },
+                    { value: 'qwen2.5-72b-instruct', label: 'Qwen2.5 72B Instruct' },
+                    { value: 'qwen2.5-32b-instruct', label: 'Qwen2.5 32B Instruct' },
+                    { value: 'qwen2.5-14b-instruct', label: 'Qwen2.5 14B Instruct' },
+                    { value: 'qwen2.5-7b-instruct', label: 'Qwen2.5 7B Instruct' },
+                    { value: 'qwen2.5-3b-instruct', label: 'Qwen2.5 3B Instruct' },
+                    { value: 'qwen2.5-1.5b-instruct', label: 'Qwen2.5 1.5B Instruct' },
+                    { value: 'qwen2.5-0.5b-instruct', label: 'Qwen2.5 0.5B Instruct' },
+                    { value: 'qwen2-vl-72b-instruct', label: 'Qwen2-VL 72B (Vision)' },
+                    { value: 'qwen2-vl-7b-instruct', label: 'Qwen2-VL 7B (Vision)' }
+                ]
+            },
+            openai: {
+                name: 'OpenAI',
+                url: 'https://api.openai.com/v1/chat/completions',
+                models: [
+                    { value: 'gpt-4o', label: 'GPT-4o ★ Recommended' },
+                    { value: 'gpt-4o-mini', label: 'GPT-4o-mini (Fast & Cheap)' },
+                    { value: 'gpt-4.1', label: 'GPT-4.1' },
+                    { value: 'gpt-4.1-mini', label: 'GPT-4.1-mini' },
+                    { value: 'gpt-4.1-nano', label: 'GPT-4.1-nano' },
+                    { value: 'gpt-4-turbo', label: 'GPT-4-turbo' },
+                    { value: 'gpt-4', label: 'GPT-4' },
+                    { value: 'gpt-3.5-turbo', label: 'GPT-3.5-turbo (Legacy)' },
+                    { value: 'o3', label: 'o3 (Reasoning)' },
+                    { value: 'o3-mini', label: 'o3-mini (Reasoning)' },
+                    { value: 'o4-mini', label: 'o4-mini (Reasoning)' },
+                    { value: 'o1', label: 'o1 (Reasoning)' },
+                    { value: 'o1-preview', label: 'o1-preview' },
+                    { value: 'o1-mini', label: 'o1-mini' }
+                ]
+            },
+            gemini: {
+                name: 'Google Gemini',
+                url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+                models: [
+                    { value: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro ★ Recommended' },
+                    { value: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash (Fast)' },
+                    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+                    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
+                    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+                    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+                    { value: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B' },
+                    { value: 'gemma-3-27b-it', label: 'Gemma 3 27B IT' },
+                    { value: 'gemma-3-12b-it', label: 'Gemma 3 12B IT' },
+                    { value: 'gemma-3-4b-it', label: 'Gemma 3 4B IT' }
+                ]
+            },
+            claude: {
+                name: 'Anthropic Claude',
+                url: 'https://api.anthropic.com/v1/chat/completions',
+                models: [
+                    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 ★ Recommended' },
+                    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
+                    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+                    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (Fast)' },
+                    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus (Powerful)' },
+                    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (Fast & Cheap)' }
+                ]
+            },
+            deepseek: {
+                name: 'DeepSeek',
+                url: 'https://api.deepseek.com/v1/chat/completions',
+                models: [
+                    { value: 'deepseek-chat', label: 'DeepSeek-V3 ★ Recommended' },
+                    { value: 'deepseek-reasoner', label: 'DeepSeek-R1 (Reasoning)' },
+                    { value: 'deepseek-coder', label: 'DeepSeek-Coder V2' }
+                ]
+            },
+            zhipu: {
+                name: 'Zhipu AI (GLM)',
+                url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+                models: [
+                    { value: 'glm-4-plus', label: 'GLM-4-Plus ★ Recommended' },
+                    { value: 'glm-4-0520', label: 'GLM-4-0520' },
+                    { value: 'glm-4', label: 'GLM-4' },
+                    { value: 'glm-4-air', label: 'GLM-4-Air (Fast)' },
+                    { value: 'glm-4-airx', label: 'GLM-4-AirX (Fast)' },
+                    { value: 'glm-4-flash', label: 'GLM-4-Flash (Free tier)' },
+                    { value: 'glm-4-flashx', label: 'GLM-4-FlashX' },
+                    { value: 'glm-4-long', label: 'GLM-4-Long (128K context)' },
+                    { value: 'glm-4v', label: 'GLM-4V (Vision)' },
+                    { value: 'glm-4v-plus', label: 'GLM-4V-Plus (Vision)' },
+                    { value: 'glm-z1-air', label: 'GLM-Z1-Air (Reasoning)' },
+                    { value: 'glm-z1-airx', label: 'GLM-Z1-AirX (Reasoning)' },
+                    { value: 'glm-z1-flash', label: 'GLM-Z1-Flash (Reasoning)' },
+                    { value: 'chatglm-turbo', label: 'ChatGLM-Turbo (Legacy)' }
+                ]
+            },
+            groq: {
+                name: 'Groq (Fast Inference)',
+                url: 'https://api.groq.com/openai/v1/chat/completions',
+                models: [
+                    { value: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B ★ Recommended' },
+                    { value: 'llama-3.3-70b-specdec', label: 'Llama 3.3 70B SpecDec' },
+                    { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant' },
+                    { value: 'llama3-70b-8192', label: 'Llama 3 70B' },
+                    { value: 'llama3-8b-8192', label: 'Llama 3 8B' },
+                    { value: 'gemma2-9b-it', label: 'Gemma 2 9B IT' },
+                    { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B 32K' },
+                    { value: 'qwen-qwq-32b', label: 'Qwen QWQ 32B (Reasoning)' },
+                    { value: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 Distill 70B' },
+                    { value: 'deepseek-r1-distill-qwen-32b', label: 'DeepSeek R1 Distill Qwen 32B' }
+                ]
+            },
+            openrouter: {
+                name: 'OpenRouter (Multi-provider)',
+                url: 'https://openrouter.ai/api/v1/chat/completions',
+                models: [
+                    { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o ★' },
+                    { value: 'openai/gpt-4o-mini', label: 'OpenAI GPT-4o-mini' },
+                    { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+                    { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+                    { value: 'google/gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro' },
+                    { value: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+                    { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+                    { value: 'meta-llama/llama-3.1-8b-instruct', label: 'Llama 3.1 8B' },
+                    { value: 'deepseek/deepseek-chat', label: 'DeepSeek V3' },
+                    { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
+                    { value: 'qwen/qwen-2.5-72b-instruct', label: 'Qwen 2.5 72B' },
+                    { value: 'qwen/qwen-2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder 32B' },
+                    { value: 'mistralai/mistral-large', label: 'Mistral Large' },
+                    { value: 'mistralai/mixtral-8x7b-instruct', label: 'Mixtral 8x7B' },
+                    { value: 'microsoft/phi-4', label: 'Phi-4' }
+                ]
+            },
+            together: {
+                name: 'Together AI',
+                url: 'https://api.together.xyz/v1/chat/completions',
+                models: [
+                    { value: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', label: 'Llama 3.3 70B Turbo ★' },
+                    { value: 'meta-llama/Llama-3.1-8B-Instruct-Turbo', label: 'Llama 3.1 8B Turbo' },
+                    { value: 'meta-llama/Llama-3.1-405B-Instruct-Turbo', label: 'Llama 3.1 405B Turbo' },
+                    { value: 'Qwen/Qwen2.5-72B-Instruct-Turbo', label: 'Qwen 2.5 72B Turbo' },
+                    { value: 'Qwen/Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder 32B' },
+                    { value: 'Qwen/QwQ-32B', label: 'QwQ 32B (Reasoning)' },
+                    { value: 'google/gemma-2-27b-it', label: 'Gemma 2 27B' },
+                    { value: 'google/gemma-2-9b-it', label: 'Gemma 2 9B' },
+                    { value: 'mistralai/Mixtral-8x7B-Instruct-v0.1', label: 'Mixtral 8x7B' },
+                    { value: 'mistralai/Mistral-7B-Instruct-v0.3', label: 'Mistral 7B v0.3' },
+                    { value: 'deepseek-ai/DeepSeek-R1', label: 'DeepSeek R1' },
+                    { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek V3' },
+                    { value: 'databricks/dbrx-instruct', label: 'DBRX Instruct' }
+                ]
+            },
+            siliconflow: {
+                name: 'SiliconFlow',
+                url: 'https://api.siliconflow.cn/v1/chat/completions',
+                models: [
+                    { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen 2.5 72B ★ Recommended' },
+                    { value: 'Qwen/Qwen2.5-32B-Instruct', label: 'Qwen 2.5 32B' },
+                    { value: 'Qwen/Qwen2.5-14B-Instruct', label: 'Qwen 2.5 14B' },
+                    { value: 'Qwen/Qwen2.5-7B-Instruct', label: 'Qwen 2.5 7B' },
+                    { value: 'Qwen/Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder 32B' },
+                    { value: 'Qwen/QwQ-32B', label: 'QwQ 32B (Reasoning)' },
+                    { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek V3' },
+                    { value: 'deepseek-ai/DeepSeek-R1', label: 'DeepSeek R1' },
+                    { value: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B', label: 'DeepSeek R1 Distill 32B' },
+                    { value: 'meta-llama/Meta-Llama-3.1-405B-Instruct', label: 'Llama 3.1 405B' },
+                    { value: 'meta-llama/Meta-Llama-3.1-70B-Instruct', label: 'Llama 3.1 70B' },
+                    { value: 'meta-llama/Meta-Llama-3.1-8B-Instruct', label: 'Llama 3.1 8B' },
+                    { value: 'google/gemma-2-27b-it', label: 'Gemma 2 27B' },
+                    { value: 'google/gemma-2-9b-it', label: 'Gemma 2 9B' },
+                    { value: 'Pro/Qwen/Qwen2.5-VL-7B-Instruct', label: 'Qwen2.5-VL 7B (Vision)' }
+                ]
+            },
+            mistral: {
+                name: 'Mistral AI',
+                url: 'https://api.mistral.ai/v1/chat/completions',
+                models: [
+                    { value: 'mistral-large-latest', label: 'Mistral Large ★ Recommended' },
+                    { value: 'mistral-medium-latest', label: 'Mistral Medium' },
+                    { value: 'mistral-small-latest', label: 'Mistral Small (Fast)' },
+                    { value: 'mistral-tiny', label: 'Mistral Tiny' },
+                    { value: 'open-mistral-nemo', label: 'Mistral Nemo 12B (Open)' },
+                    { value: 'codestral-latest', label: 'Codestral (Code)' },
+                    { value: 'pixtral-large-latest', label: 'Pixtral Large (Vision)' },
+                    { value: 'open-mistral-7b', label: 'Mistral 7B (Open)' },
+                    { value: 'open-mixtral-8x7b', label: 'Mixtral 8x7B (Open)' },
+                    { value: 'open-mixtral-8x22b', label: 'Mixtral 8x22B (Open)' }
+                ]
+            },
+            cohere: {
+                name: 'Cohere',
+                url: 'https://api.cohere.com/v2/chat/completions',
+                models: [
+                    { value: 'command-r-plus', label: 'Command R+ ★ Recommended' },
+                    { value: 'command-r', label: 'Command R' },
+                    { value: 'command-r7b-12-2024', label: 'Command R7B (Fast)' },
+                    { value: 'command', label: 'Command' },
+                    { value: 'command-light', label: 'Command Light' },
+                    { value: 'c4ai-aya-expanse-32b', label: 'Aya Expanse 32B (Multilingual)' },
+                    { value: 'c4ai-aya-expanse-8b', label: 'Aya Expanse 8B (Multilingual)' }
+                ]
+            },
+            custom: {
+                name: 'Custom Provider',
+                url: '',
+                models: []
+            }
+        };
+
+        // Hidden field to store current resolved URL
+        var _currentChatbotApiUrl = chatbotProviders.qwen.url;
+
+        function populateChatbotModels(providerKey, selectedModel) {
+            var $select = $('#chatbotModel');
+            $select.empty();
+
+            var provider = chatbotProviders[providerKey];
+            if (!provider) provider = chatbotProviders.custom;
+
+            if (provider.models.length > 0) {
+                provider.models.forEach(function(m) {
+                    $select.append('<option value="' + m.value + '">' + m.label + '</option>');
+                });
+                $select.append('<option value="__custom__">Custom Model...</option>');
+
+                if (selectedModel) {
+                    var exists = provider.models.some(function(m) { return m.value === selectedModel; });
+                    if (exists) {
+                        $select.val(selectedModel);
+                        $('#customModelField').hide();
+                    } else {
+                        $select.val('__custom__');
+                        $('#chatbotCustomModel').val(selectedModel);
+                        $('#customModelField').show();
+                    }
+                } else {
+                    $('#customModelField').hide();
+                }
+            } else {
+                // Custom provider — only custom model option
+                $select.append('<option value="__custom__">Masukkan nama model</option>');
+                if (selectedModel) {
+                    $('#chatbotCustomModel').val(selectedModel);
+                }
+                $('#customModelField').show();
+            }
+        }
+
+        function detectProviderFromUrl(url) {
+            var suffixes = ['/chat/completions', '/v1/chat/completions', '/v2/chat/completions',
+                            '/v4/chat/completions', '/v1beta/openai/chat/completions',
+                            '/compatible-mode/v1/chat/completions'];
+            for (var key in chatbotProviders) {
+                if (key === 'custom') continue;
+                if (chatbotProviders[key].url) {
+                    var baseUrl = chatbotProviders[key].url;
+                    for (var i = 0; i < suffixes.length; i++) {
+                        baseUrl = baseUrl.replace(suffixes[i], '');
+                    }
+                    if (baseUrl && url.indexOf(baseUrl) !== -1) {
+                        return key;
+                    }
+                }
+            }
+            return 'custom';
+        }
+
+        function getChatbotApiUrl() {
+            var provider = $('#chatbotProvider').val();
+            if (provider === 'custom') {
+                return $('#chatbotCustomApiUrl').val().trim() || '';
+            }
+            return chatbotProviders[provider] ? chatbotProviders[provider].url : '';
+        }
+
+        function getChatbotModel() {
+            var modelVal = $('#chatbotModel').val();
+            if (modelVal === '__custom__') {
+                return $('#chatbotCustomModel').val().trim();
+            }
+            return modelVal;
+        }
+
+        loadChatbotSettings();
+
+        // Provider change — update URL & models
+        $('#chatbotProvider').change(function() {
+            var providerKey = $(this).val();
+            var provider = chatbotProviders[providerKey];
+
+            if (providerKey === 'custom') {
+                $('#customProviderUrlField').show();
+                $('#chatbotCustomApiUrl').focus();
+            } else {
+                $('#customProviderUrlField').hide();
+                _currentChatbotApiUrl = provider.url;
+            }
+
+            populateChatbotModels(providerKey);
+        });
+
+        // Model change — show/hide custom model field
+        $('#chatbotModel').change(function() {
+            if ($(this).val() === '__custom__') {
+                $('#customModelField').show();
+                $('#chatbotCustomModel').focus();
+            } else {
+                $('#customModelField').hide();
+            }
+        });
+
+        // Test chatbot connection
+        $('#btnTestChatbotConnection').click(function() {
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Testing...</span>');
+            $('#chatbotConnectionStatus').html('').removeClass('text-success text-danger');
+
+            var testData = {
+                apiKey: $('#chatbotApiKey').val().trim(),
+                model: getChatbotModel(),
+                apiUrl: getChatbotApiUrl()
+            };
+
+            $.ajax({
+                url: '/api/Api/test-chatbot-connection',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(testData),
+                success: function(response) {
+                    if (response.success) {
+                        $('#chatbotConnectionStatus').html('<i class="fas fa-check-circle text-success"></i> <span class="chatbot-btn-label">' + response.message + '</span>').addClass('text-success');
+                        showNotification('Chatbot connection successful! AI replied: ' + (response.reply || 'OK'), 'success');
+                    } else {
+                        $('#chatbotConnectionStatus').html('<i class="fas fa-times-circle text-danger"></i> <span class="chatbot-btn-label">' + response.message + '</span>').addClass('text-danger');
+                        showNotification('Chatbot connection failed: ' + response.message, 'danger');
+                    }
+                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>');
+                },
+                error: function(xhr) {
+                    var errorMsg = 'Connection failed';
+                    try { errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || errorMsg; } catch(e) {}
+                    $('#chatbotConnectionStatus').html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg).addClass('text-danger');
+                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>');
+                    showNotification('Chatbot connection error: ' + errorMsg, 'danger');
+                }
+            });
+        });
+
+        // Save chatbot settings
+        $('#btnSaveChatbotSettings').click(function() {
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Saving...</span>');
+
+            var settings = {
+                apiKey: $('#chatbotApiKey').val().trim(),
+                model: getChatbotModel(),
+                apiUrl: getChatbotApiUrl()
+            };
+
+            if (!settings.model) {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                showNotification('Model AI harus diisi', 'danger');
+                return;
+            }
+            if (!settings.apiUrl) {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                showNotification('API Endpoint URL harus diisi', 'danger');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/Api/chatbot-settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(settings),
+                success: function(response) {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                    if (response.success) {
+                        showNotification('AI Chatbot settings saved successfully!', 'success');
+                        $('#chatbotApiKey').val('');
+                        loadChatbotSettings();
+                    } else {
+                        showNotification('Error: ' + (response.error || 'Unknown error'), 'danger');
+                    }
+                },
+                error: function(xhr) {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                    showNotification('Error saving chatbot settings', 'danger');
+                }
+            });
+        });
+
+        // Reset chatbot settings
+        $('#btnResetChatbotSettings').click(function() {
+            if (confirm('Reset AI Chatbot settings ke default? API key akan dihapus dari database.')) {
+                $('#chatbotProvider').val('qwen');
+                $('#chatbotApiKey').val('');
+                $('#chatbotCustomModel').val('');
+                $('#customModelField').hide();
+                $('#customProviderUrlField').hide();
+                $('#chatbotCustomApiUrl').val('');
+                populateChatbotModels('qwen');
+                showNotification('AI Chatbot settings reset to default. Click Save to apply.', 'info');
+            }
+        });
+
+        // Load chatbot settings when tab is shown
+        $(document).on('shown.bs.tab', '#chatbot-tab', function() {
+            loadChatbotSettings();
+        });
+
+        function loadChatbotSettings() {
+            $.ajax({
+                url: '/api/Api/chatbot-settings',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    var model = data.model || 'qwen-plus-2025-04-28';
+                    var apiUrl = data.apiUrl || chatbotProviders.qwen.url;
+
+                    // Detect provider from URL
+                    var detectedProvider = detectProviderFromUrl(apiUrl);
+                    $('#chatbotProvider').val(detectedProvider);
+
+                    // Show/hide custom URL field
+                    if (detectedProvider === 'custom') {
+                        $('#customProviderUrlField').show();
+                        $('#chatbotCustomApiUrl').val(apiUrl);
+                    } else {
+                        $('#customProviderUrlField').hide();
+                    }
+
+                    _currentChatbotApiUrl = apiUrl;
+
+                    // Populate models for detected provider
+                    populateChatbotModels(detectedProvider, model);
+
+                    // Status display
+                    if (data.isConfigured) {
+                        var maskedKey = maskApiKey(data.apiKey);
+                        $('#chatbotConfigStatus').html('<i class="fas fa-check-circle text-success me-2"></i> <span class="text-success">Terkonfigurasi</span> — Key: ' + maskedKey);
+                    } else {
+                        $('#chatbotConfigStatus').html('<i class="fas fa-exclamation-triangle text-warning me-2"></i> <span class="text-warning">Belum dikonfigurasi</span> — Menggunakan appsettings.json');
+                    }
+
+                    var providerName = chatbotProviders[detectedProvider] ? chatbotProviders[detectedProvider].name : 'Custom';
+                    $('#chatbotActiveModel').html('<i class="fas fa-brain text-primary me-2"></i> ' + providerName + ' / ' + model);
+                    $('#chatbotActiveUrl').html('<i class="fas fa-link text-info me-2" style="font-size:0.7rem"></i> <span style="font-size:0.78rem;word-break:break-all;">' + apiUrl + '</span>');
+                },
+                error: function() {
+                    $('#chatbotConfigStatus').html('<i class="fas fa-question-circle text-muted me-2"></i> <span class="text-muted">Gagal memuat status</span>');
+                    $('#chatbotActiveModel').html('<i class="fas fa-question-circle text-muted me-2"></i> —');
+                    $('#chatbotActiveUrl').html('<i class="fas fa-question-circle text-muted me-2"></i> —');
+                }
+            });
+        }
+
+        function maskApiKey(key) {
+            if (!key || key.length < 8) return '••••••••';
+            return key.substring(0, 4) + '••••••••••••' + key.substring(key.length - 4);
         }
 
         // ============================================

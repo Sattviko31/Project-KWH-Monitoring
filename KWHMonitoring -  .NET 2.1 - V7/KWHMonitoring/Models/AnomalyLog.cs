@@ -11,40 +11,47 @@ namespace KWHMonitoring.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long Id { get; set; }
 
-        [Column("DeviceKey")]
+        [Required]
+        [Column("DeviceKey", TypeName = "nvarchar(50)")]
+        [MaxLength(50)]
         public string DeviceKey { get; set; } = string.Empty;
 
-        [Column("DeviceId")]
-        public string DeviceId { get; set; } = string.Empty;
+        [Column("DeviceId", TypeName = "nvarchar(50)")]
+        [MaxLength(50)]
+        public string DeviceId { get; set; }
 
-        [Column("AnomalyType")]
+        [Required]
+        [Column("AnomalyType", TypeName = "nvarchar(20)")]
+        [MaxLength(20)]
         public string AnomalyType { get; set; } = string.Empty;
 
-        [Column("PowerValue")]
+        [Column("PowerValue", TypeName = "decimal(18,2)")]
         public decimal PowerValue { get; set; }
 
-        [Column("ThresholdValue")]
+        [Column("ThresholdValue", TypeName = "decimal(18,2)")]
         public decimal ThresholdValue { get; set; }
 
-        [Column("Deviation")]
+        [Column("Deviation", TypeName = "decimal(5,2)")]
         public decimal Deviation { get; set; }
 
-        [Column("DetectedTime")]
-        public DateTime DetectedTime { get; set; } = DateTime.Now;
+        [Column("DetectedTime", TypeName = "datetime2")]
+        public DateTime DetectedTime { get; set; }
 
-        [Column("EMAValue")]
+        [Column("EMAValue", TypeName = "decimal(18,2)")]
         public decimal? EMAValue { get; set; }
 
-        [Column("ThresholdMode")]
+        [Column("ThresholdMode", TypeName = "nvarchar(20)")]
+        [MaxLength(20)]
         public string ThresholdMode { get; set; } = "manual";
 
         [Column("Acknowledged")]
-        public bool Acknowledged { get; set; } = false;
+        public bool? Acknowledged { get; set; } = false;
 
-        [Column("AcknowledgedTime")]
+        [Column("AcknowledgedTime", TypeName = "datetime2")]
         public DateTime? AcknowledgedTime { get; set; }
 
-        [Column("Notes")]
-        public string Notes { get; set; } = string.Empty;
+        [Column("Notes", TypeName = "nvarchar(500)")]
+        [MaxLength(500)]
+        public string Notes { get; set; }
     }
 }

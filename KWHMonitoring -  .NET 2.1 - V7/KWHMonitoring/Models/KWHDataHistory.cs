@@ -15,62 +15,62 @@ namespace KWHMonitoring.Models
         [Column("OriginalId")]
         public long OriginalId { get; set; }
 
-        [Column("DeviceKey")]
-        [MaxLength(100)]
         [Required]
+        [Column("DeviceKey", TypeName = "varchar(20)")]
+        [MaxLength(20)]
         public string DeviceKey { get; set; } = string.Empty;
 
         [Column("TerminalTime", TypeName = "datetime2")]
-        public DateTime TerminalTime { get; set; }
+        public DateTime? TerminalTime { get; set; }
 
         [Column("ReceivedTime", TypeName = "datetime2")]
         public DateTime ReceivedTime { get; set; }
 
-        [Column("GroupName")]
+        [Column("GroupName", TypeName = "nvarchar(100)")]
         [MaxLength(100)]
         public string GroupName { get; set; }
 
-        [Column("DeviceId")]
-        [MaxLength(100)]
+        [Column("DeviceId", TypeName = "nvarchar(50)")]
+        [MaxLength(50)]
         public string DeviceId { get; set; }
 
-        [Column("PHASE_R", TypeName = "decimal(18,4)")]
-        public decimal PhaseR { get; set; }
+        [Column("PHASE_R", TypeName = "decimal(18,2)")]
+        public decimal? PhaseR { get; set; }
 
-        [Column("PHASE_S", TypeName = "decimal(18,4)")]
+        [Column("PHASE_S", TypeName = "decimal(18,2)")]
         public decimal? PhaseS { get; set; }
 
-        [Column("PHASE_T", TypeName = "decimal(18,4)")]
+        [Column("PHASE_T", TypeName = "decimal(18,2)")]
         public decimal? PhaseT { get; set; }
 
-        [Column("AMPERE_R", TypeName = "decimal(18,4)")]
-        public decimal AmpereR { get; set; }
+        [Column("AMPERE_R", TypeName = "decimal(18,3)")]
+        public decimal? AmpereR { get; set; }
 
-        [Column("AMPERE_S", TypeName = "decimal(18,4)")]
+        [Column("AMPERE_S", TypeName = "decimal(18,3)")]
         public decimal? AmpereS { get; set; }
 
-        [Column("AMPERE_T", TypeName = "decimal(18,4)")]
+        [Column("AMPERE_T", TypeName = "decimal(18,3)")]
         public decimal? AmpereT { get; set; }
 
-        [Column("W", TypeName = "decimal(18,4)")]
-        public decimal W { get; set; }
+        [Column("W", TypeName = "decimal(18,1)")]
+        public decimal? W { get; set; }
 
-        [Column("CosPhi", TypeName = "decimal(18,4)")]
-        public decimal CosPhi { get; set; }
+        [Column("CosPhi", TypeName = "decimal(18,3)")]
+        public decimal? CosPhi { get; set; }
 
-        [Column("F", TypeName = "decimal(18,4)")]
-        public decimal F { get; set; }
+        [Column("F", TypeName = "decimal(18,2)")]
+        public decimal? F { get; set; }
 
-        [Column("Aktif_Power", TypeName = "decimal(18,4)")]
-        public decimal AktifPower { get; set; }
+        [Column("Aktif_Power", TypeName = "decimal(18,2)")]
+        public decimal? AktifPower { get; set; }
 
-        [Column("TotalW", TypeName = "decimal(18,4)")]
-        public decimal TotalW { get; set; }
+        [Column("TotalW", TypeName = "decimal(18,2)")]
+        public decimal? TotalW { get; set; }
 
-        [Column("TotalW1M", TypeName = "decimal(18,4)")]
-        public decimal TotalW1M { get; set; }
+        [Column("TotalW1M", TypeName = "decimal(18,2)")]
+        public decimal? TotalW1M { get; set; }
 
         [Column("ArchivedAt", TypeName = "datetime2")]
-        public DateTime? ArchivedAt { get; set; }
+        public DateTime ArchivedAt { get; set; }
     }
 }

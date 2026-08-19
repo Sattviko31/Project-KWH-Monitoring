@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -39,6 +40,7 @@ namespace KWHMonitoring
             });
 
             services.AddScoped<NotificationService>();
+            services.AddScoped<AesEncryptionService>();
 
             services.AddHostedService<EnergyAggregationBackgroundService>();
             services.AddHostedService<AnomalyNotificationBackgroundService>();
@@ -61,22 +63,29 @@ namespace KWHMonitoring
                 var logger = loggerFactory.CreateLogger("DatabaseMigration");
                 try
                 {
-                    logger.LogInformation("Checking database and applying migrations...");
-                    context.Database.Migrate();
-                    logger.LogInformation("Database migration completed successfully.");
+                    var pending = context.Database.GetPendingMigrations().ToList();
+                    if (pending.Count > 0)
+                    {
+                        logger.LogInformation("Applying {Count} pending migration(s)...", pending.Count);
+                        context.Database.Migrate();
+                        logger.LogInformation("Database migration completed successfully.");
+                    }
+                    else
+                    {
+                        logger.LogInformation("Database is up to date. No pending migrations.");
+                    }
                 }
                 catch (System.Exception ex)
                 {
-                    logger.LogError(ex, "Error during database migration.");
+                    logger.LogWarning(ex, "Migration failed. Attempting EnsureCreated as fallback...");
                     try
                     {
-                        logger.LogWarning("Attempting to create database with EnsureCreated...");
                         context.Database.EnsureCreated();
-                        logger.LogInformation("Database created with EnsureCreated (no migration history).");
+                        logger.LogInformation("Database ready via EnsureCreated.");
                     }
                     catch (System.Exception ex2)
                     {
-                        logger.LogCritical(ex2, "Failed to create database. Application cannot start.");
+                        logger.LogCritical(ex2, "Failed to initialize database. Application cannot start.");
                         throw;
                     }
                 }

@@ -615,13 +615,11 @@ namespace KWHMonitoring.Services
             var dropCount = anomalies.Count(x => x.AnomalyType == "DROP");
             var deviceCount = anomalies.Select(x => x.DeviceKey).Distinct().Count();
 
-            var totalDaya = validPanels.Sum(x => x.Daya_Watt);
-            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh);
-            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) : 0;
+            var totalDaya = validPanels.Sum(x => x.Daya_Watt) ?? 0m;
+            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh) ?? 0m;
+            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) ?? 0m : 0;
             var avgVoltage = validPanels.Any() ? validPanels.Average(x => x.AvgVoltage) : 0;
-            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) : 0;
-
-            // Calculate cost from aggregated energy data (same as Usage Statistics)
+            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) ?? 0m : 0;
             var tariffPerKWh = await GetTariffPerKWhAsync();
             var startOfToday = now.Date;
 
@@ -646,15 +644,15 @@ namespace KWHMonitoring.Services
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20)) // Max 20 panels
             {
-                var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
+                var loadPercent = Math.Min(((panel.Daya_Watt ?? 0m) / maxCap) * 100, 100);
                 var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt:N0} W</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R:N0} V</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R:N0} A</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi:N2}</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt ?? 0m:N0} W</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R ?? 0m:N0} V</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R ?? 0m:N0} A</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi ?? 0m:N2}</td>");
                 panelRows.Append($"<td style='padding: 8px; text-align: center;'><span style='background-color: {statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;'>{statusText}</span></td>");
                 panelRows.Append($"</tr>");
             }
@@ -918,13 +916,13 @@ namespace KWHMonitoring.Services
             var dropCount = anomalies.Count(x => x.AnomalyType == "DROP");
             var deviceCount = anomalies.Select(x => x.DeviceKey).Distinct().Count();
 
-            var totalDaya = validPanels.Sum(x => x.Daya_Watt);
-            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh);
-            var totalEnergiAktif = validPanels.Sum(x => x.Energi_Aktif_Wh);
-            var totalW1M = validPanels.Sum(x => x.TotalW1M_Wh);
-            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) : 0;
+            var totalDaya = validPanels.Sum(x => x.Daya_Watt) ?? 0m;
+            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh) ?? 0m;
+            var totalEnergiAktif = validPanels.Sum(x => x.Energi_Aktif_Wh) ?? 0m;
+            var totalW1M = validPanels.Sum(x => x.TotalW1M_Wh) ?? 0m;
+            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) ?? 0m : 0;
             var avgVoltage = validPanels.Any() ? validPanels.Average(x => x.AvgVoltage) : 0;
-            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) : 0;
+            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) ?? 0m : 0;
             var tariffPerKWh = await GetTariffPerKWhAsync();
 
             // Calculate cost from aggregated energy data (same as Usage Statistics)
@@ -950,16 +948,16 @@ namespace KWHMonitoring.Services
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20)) // Max 20 panels
             {
-                var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
+                var loadPercent = Math.Min(((panel.Daya_Watt ?? 0m) / maxCap) * 100, 100);
                 var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt:N0} W</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R:N0} V</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R:N0} A</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi:N2}</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{Math.Round(panel.Frekuensi_Hz)} Hz</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt ?? 0m:N0} W</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R ?? 0m:N0} V</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R ?? 0m:N0} A</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi ?? 0m:N2}</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{Math.Round(panel.Frekuensi_Hz ?? 0m)} Hz</td>");
                 panelRows.Append($"<td style='padding: 8px; text-align: center;'><span style='background-color: {statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;'>{statusText}</span></td>");
                 panelRows.Append($"</tr>");
             }
@@ -1257,13 +1255,13 @@ namespace KWHMonitoring.Services
             var dropCount = anomalies.Count(x => x.AnomalyType == "DROP");
             var deviceCount = anomalies.Select(x => x.DeviceKey).Distinct().Count();
 
-            var totalDaya = validPanels.Sum(x => x.Daya_Watt);
-            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh);
-            var totalEnergiAktif = validPanels.Sum(x => x.Energi_Aktif_Wh);
-            var totalW1M = validPanels.Sum(x => x.TotalW1M_Wh);
-            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) : 0;
+            var totalDaya = validPanels.Sum(x => x.Daya_Watt) ?? 0m;
+            var totalEnergy = validPanels.Sum(x => x.Total_Energy_Wh) ?? 0m;
+            var totalEnergiAktif = validPanels.Sum(x => x.Energi_Aktif_Wh) ?? 0m;
+            var totalW1M = validPanels.Sum(x => x.TotalW1M_Wh) ?? 0m;
+            var avgPowerFactor = validPanels.Any() ? validPanels.Average(x => x.Cos_Phi) ?? 0m : 0;
             var avgVoltage = validPanels.Any() ? validPanels.Average(x => x.AvgVoltage) : 0;
-            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) : 0;
+            var avgFrequency = validPanels.Any() ? validPanels.Average(x => x.Frekuensi_Hz) ?? 0m : 0;
             var tariffPerKWh = await GetTariffPerKWhAsync();
 
             // Calculate cost from aggregated energy data for the previous month
@@ -1287,16 +1285,16 @@ namespace KWHMonitoring.Services
             var panelRows = new StringBuilder();
             foreach (var panel in validPanels.Take(20))
             {
-                var loadPercent = Math.Min((panel.Daya_Watt / maxCap) * 100, 100);
+                var loadPercent = Math.Min(((panel.Daya_Watt ?? 0m) / maxCap) * 100, 100);
                 var statusColor = loadPercent > mediumThresh ? "#dc3545" : loadPercent > normalThresh ? "#ffc107" : "#198754";
                 var statusText = loadPercent > mediumThresh ? "HIGH" : loadPercent > normalThresh ? "MEDIUM" : "NORMAL";
                 panelRows.Append($"<tr style='border-bottom: 1px solid #eee;'>");
                 panelRows.Append($"<td style='padding: 8px; font-weight: bold;'>{panel.GroupName}</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt:N0} W</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R:N0} V</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R:N0} A</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi:N2}</td>");
-                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{Math.Round(panel.Frekuensi_Hz)} Hz</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Daya_Watt ?? 0m:N0} W</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Volt_R ?? 0m:N0} V</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Amp_R ?? 0m:N0} A</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{panel.Cos_Phi ?? 0m:N2}</td>");
+                panelRows.Append($"<td style='padding: 8px; text-align: center;'>{Math.Round(panel.Frekuensi_Hz ?? 0m)} Hz</td>");
                 panelRows.Append($"<td style='padding: 8px; text-align: center;'><span style='background-color: {statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;'>{statusText}</span></td>");
                 panelRows.Append($"</tr>");
             }
