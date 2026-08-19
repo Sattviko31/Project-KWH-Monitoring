@@ -891,9 +891,9 @@
                     <div class="settings-info-banner settings-info-banner-info">
                         <i class="fas fa-shield-alt"></i>
                         <div>
-                            <strong>API Key terenkripsi</strong> — API key disimpan terenkripsi (AES-256) di database.
-                            Setelah disimpan, API key tidak dapat dilihat kembali dalam bentuk asli dari halaman ini.
-                            <br><strong>OpenAI-Compatible</strong> — Mendukung semua provider dengan format OpenAI API (<code>/chat/completions</code>).
+                            @* <strong>API Key terenkripsi</strong> — API key disimpan terenkripsi (AES-256) di database.
+                            Setelah disimpan, API key tidak dapat dilihat kembali dalam bentuk asli dari halaman ini. *@
+                            @* <br><strong>OpenAI-Compatible</strong> — Mendukung semua provider dengan format OpenAI API (<code>/chat/completions</code>). *@
                         </div>
                     </div>
                     <div class="settings-grid">
@@ -927,13 +927,13 @@
                             <select class="form-select" id="chatbotModel">
                                 <!-- Dynamically populated based on provider -->
                             </select>
-                            <small class="text-muted">Model yang digunakan chatbot</small>
+                            <small class="text-muted">Model</small>
                         </div>
                         <div class="settings-field settings-field-full" id="customModelField" style="display: none;">
                             <label class="form-label">Custom Model Name</label>
                             <input type="text" class="form-control" id="chatbotCustomModel"
                                    placeholder="Masukkan nama model custom">
-                            <small class="text-muted">Nama model sesuai dokumentasi provider</small>
+                            <small class="text-muted">Nama model</small>
                         </div>
                         <div class="settings-field settings-field-full" id="customProviderUrlField" style="display: none;">
                             <label class="form-label">Custom API Endpoint URL</label>
