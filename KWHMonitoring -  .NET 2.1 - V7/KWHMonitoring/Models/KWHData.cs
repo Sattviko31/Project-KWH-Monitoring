@@ -71,7 +71,9 @@ namespace KWHMonitoring.Models
         public string DeviceCategory { get; set; } = "Billboard";
 
         [NotMapped]
-        public bool IsThreePhase => Volt_S.HasValue && Volt_T.HasValue && Amp_S.HasValue && Amp_T.HasValue;
+        // 1-phase devices report 0.0 (not null) for S/T, so require > 0
+        public bool IsThreePhase => Volt_S.HasValue && Volt_S.Value > 0
+                                    && Volt_T.HasValue && Volt_T.Value > 0;
 
         [NotMapped]
         public decimal AvgVoltage => IsThreePhase

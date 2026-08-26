@@ -23,7 +23,9 @@ namespace KWHMonitoring.Models
         public decimal Total_Energy_Wh { get; set; }
         public decimal Frekuensi_Hz { get; set; }
 
-        public bool IsThreePhase => Volt_S.HasValue && Volt_T.HasValue && Amp_S.HasValue && Amp_T.HasValue;
+        // 1-phase devices report 0.0 (not null) for S/T, so require > 0
+        public bool IsThreePhase => Volt_S.HasValue && Volt_S.Value > 0
+                                    && Volt_T.HasValue && Volt_T.Value > 0;
 
         public string PhaseTypeLabel => IsThreePhase ? "3 Phase" : "1 Phase";
         public string PhaseTypeBadge => IsThreePhase ? "bg-info" : "bg-warning";

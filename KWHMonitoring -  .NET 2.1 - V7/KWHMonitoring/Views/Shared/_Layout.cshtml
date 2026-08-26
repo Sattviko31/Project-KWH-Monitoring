@@ -45,10 +45,10 @@
                        asp-controller="Monitoring" asp-action="Index">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
-                    <a class="topbar-nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "History" ? "active" : "")"
+                    @* <a class="topbar-nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "History" ? "active" : "")"
                        asp-controller="Monitoring" asp-action="History">
                         <i class="fas fa-history"></i> History
-                    </a>
+                    </a> *@
                 </nav>
             </div>
             <div class="topbar-right">

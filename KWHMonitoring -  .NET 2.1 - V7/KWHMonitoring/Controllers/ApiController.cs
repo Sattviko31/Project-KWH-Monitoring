@@ -86,9 +86,9 @@ namespace KWHMonitoring.Controllers
                 if (!string.IsNullOrWhiteSpace(phase) && phase.ToLower() != "all")
                 {
                     if (phase.ToLower() == "3phase")
-                        validData = validData.Where(x => x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue);
+                        validData = validData.Where(x => x.IsThreePhase);
                     else if (phase.ToLower() == "1phase")
-                        validData = validData.Where(x => !(x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue));
+                        validData = validData.Where(x => !x.IsThreePhase);
                 }
 
                 var panels = validData.Select(data => new
@@ -114,6 +114,9 @@ namespace KWHMonitoring.Controllers
                     frekuensi = data.Frekuensi_Hz ?? 0m,
                     avgVoltage = data.AvgVoltage,
                     avgAmpere = data.AvgAmpere,
+                    phaseRColor = data.PhaseRColor,
+                    phaseSColor = data.PhaseSColor,
+                    phaseTColor = data.PhaseTColor,
                     // Gunakan Status dari model agar konsisten dengan load bar
                     status = data.Status
                 }).ToList();
@@ -150,7 +153,7 @@ namespace KWHMonitoring.Controllers
                 var ampT = data.Select(x => x.Amp_T.HasValue ? (double?)x.Amp_T.Value : null).ToList();
                 var power = data.Select(x => (double)(x.Daya_Watt ?? 0m)).ToList();
 
-                var isThreePhase = data.Any(x => x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue);
+                var isThreePhase = data.Any(x => x.IsThreePhase);
 
                 return Ok(new
                 {

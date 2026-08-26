@@ -793,7 +793,13 @@
 
                         // Update Header Badges
                         const headerBadges = panelCard.find('.card-header .badge');
-                        const statusBadge = headerBadges.first();
+                        const statusBadge = panelCard.find('#statusBadge_' + safeKey);
+
+                        // Update voltage header badge
+                        const $voltHeader = panelCard.find('[data-volt-header]');
+                        if ($voltHeader.length > 0) {
+                            $voltHeader.text(avgVoltage + 'V');
+                        }
 
                         // Update category selector from API data
                         if (panel.deviceCategory) {
@@ -817,16 +823,17 @@
                             }
                         }
 
-                        if (headerBadges.length > 1) headerBadges.eq(1).text(avgVoltage + 'V');
-
                         // Update Voltage Badges
                         const voltBadges = panelCard.find('[data-volt-badge]');
                         if (voltBadges.length >= 1) {
                             $(voltBadges[0]).find('.phase-val').text(panel.r.toFixed(1).replace('.', ','));
+                            $(voltBadges[0]).removeClass('bg-success bg-warning bg-danger bg-secondary').addClass('bg-' + (panel.phaseRColor || 'success'));
                         }
                         if (isThreePhase && voltBadges.length >= 3) {
                             $(voltBadges[1]).find('.phase-val').text(panel.s.toFixed(1).replace('.', ','));
+                            $(voltBadges[1]).removeClass('bg-success bg-warning bg-danger bg-secondary').addClass('bg-' + (panel.phaseSColor || 'secondary'));
                             $(voltBadges[2]).find('.phase-val').text(panel.t.toFixed(1).replace('.', ','));
+                            $(voltBadges[2]).removeClass('bg-success bg-warning bg-danger bg-secondary').addClass('bg-' + (panel.phaseTColor || 'secondary'));
                         }
 
                         // Update Amp Badges
@@ -837,6 +844,19 @@
                         if (isThreePhase && ampBadges.length >= 3) {
                             $(ampBadges[1]).find('.phase-val').text(panel.ampS.toFixed(2).replace('.', ','));
                             $(ampBadges[2]).find('.phase-val').text(panel.ampT.toFixed(2).replace('.', ','));
+                        }
+
+                        // Update panel-value for Voltage and Current labels (Avg line)
+                        const $voltLabel = panelCard.find('[data-label="voltage-avg"]');
+                        if ($voltLabel.length > 0) {
+                            $voltLabel.text('Avg ' + avgVoltage + ' V');
+                        }
+                        const avgAmpere = isThreePhase
+                            ? ((panel.ampR + panel.ampS + panel.ampT) / 3).toFixed(2)
+                            : panel.ampR.toFixed(2);
+                        const $ampLabel = panelCard.find('[data-label="current-avg"]');
+                        if ($ampLabel.length > 0) {
+                            $ampLabel.text('Avg ' + avgAmpere + ' A');
                         }
 
                         // Update Text Values

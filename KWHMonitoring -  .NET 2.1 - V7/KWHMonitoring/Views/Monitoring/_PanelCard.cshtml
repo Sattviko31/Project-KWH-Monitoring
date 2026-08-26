@@ -24,6 +24,7 @@
             {
                 <span class="badge bg-warning" style="font-size: 0.7rem; color: #212529;" data-phase-type="1-phase">1&#934;</span>
             }
+            <span class="badge bg-success" style="font-size: 0.7rem;" data-volt-header>@Model.Volt_R.ToString("N1")V</span>
             <span class="badge bg-success" style="font-size: 0.7rem;" id="statusBadge_@(Model.DeviceKey.Replace("-", "_"))">@Model.Status</span>
             <button type="button" class="panel-collapse-toggle"
                     data-toggle="collapse"
@@ -96,7 +97,7 @@
                 {
                     <div class="d-flex justify-content-between align-items-baseline mb-1">
                         <span class="panel-label"><i class="fas fa-bolt"></i> Voltage</span>
-                        <span class="panel-value">Avg @Model.AvgVoltage.ToString("N1") V</span>
+                        <span class="panel-value" data-label="voltage-avg">Avg @Model.AvgVoltage.ToString("N1") V</span>
                     </div>
                     <div class="d-flex gap-1">
                         <div class="phase-badge flex-fill text-center bg-@Model.PhaseRColor" data-volt-badge data-phase="R">
@@ -117,11 +118,13 @@
                 {
                     <div class="d-flex justify-content-between align-items-baseline mb-1">
                         <span class="panel-label"><i class="fas fa-bolt"></i> Voltage</span>
-                        <span class="panel-value">@Model.Volt_R.ToString("N1") V</span>
+                        <span class="panel-value" data-label="voltage-avg">Avg @Model.Volt_R.ToString("N1") V</span>
                     </div>
-                    <div class="phase-badge text-center bg-@Model.PhaseRColor" data-volt-badge data-phase="R">
-                        <span class="phase-letter">R</span>
-                        <span class="phase-val">@Model.Volt_R.ToString("N1")</span>
+                    <div class="d-flex gap-1">
+                        <div class="phase-badge flex-fill text-center bg-@Model.PhaseRColor" data-volt-badge data-phase="R">
+                            <span class="phase-letter">R</span>
+                            <span class="phase-val">@Model.Volt_R.ToString("N1")</span>
+                        </div>
                     </div>
                 }
             </div>
@@ -132,7 +135,7 @@
                 {
                     <div class="d-flex justify-content-between align-items-baseline mb-1">
                         <span class="panel-label"><i class="fas fa-wave-square"></i> Current</span>
-                        <span class="panel-value">Avg @Model.AvgAmpere.ToString("N2") A</span>
+                        <span class="panel-value" data-label="current-avg">Avg @Model.AvgAmpere.ToString("N2") A</span>
                     </div>
                     <div class="d-flex gap-1">
                         <div class="phase-badge flex-fill text-center bg-secondary" data-amp-badge data-phase="R">
@@ -153,11 +156,13 @@
                 {
                     <div class="d-flex justify-content-between align-items-baseline mb-1">
                         <span class="panel-label"><i class="fas fa-wave-square"></i> Current</span>
-                        <span class="panel-value">@Model.Amp_R.ToString("N2") A</span>
+                        <span class="panel-value" data-label="current-avg">Avg @Model.Amp_R.ToString("N2") A</span>
                     </div>
-                    <div class="phase-badge text-center bg-secondary" data-amp-badge data-phase="R">
-                        <span class="phase-letter">R</span>
-                        <span class="phase-val">@Model.Amp_R.ToString("N2")</span>
+                    <div class="d-flex gap-1">
+                        <div class="phase-badge flex-fill text-center bg-secondary" data-amp-badge data-phase="R">
+                            <span class="phase-letter">R</span>
+                            <span class="phase-val">@Model.Amp_R.ToString("N2")</span>
+                        </div>
                     </div>
                 }
             </div>

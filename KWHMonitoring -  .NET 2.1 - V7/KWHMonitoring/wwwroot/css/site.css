@@ -2402,6 +2402,11 @@ canvas {
     font-size: 0.75rem;
 }
 
+/* Single phase badge (1-phase panels) - slightly larger padding */
+.d-flex.gap-1 > .phase-badge:only-child {
+    padding: 6px 4px !important;
+}
+
 /* Panel progress - compact */
 .panel-progress {
     height: 14px;

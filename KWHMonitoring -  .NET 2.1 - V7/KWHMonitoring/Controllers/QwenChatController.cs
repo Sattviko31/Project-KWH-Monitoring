@@ -863,7 +863,7 @@ namespace KWHMonitoring.Controllers
                                 currentR = panelHistory.Select(x => Convert.ToDouble(x.Amp_R ?? 0m)).ToList(),
                                 currentS = panelHistory.Where(x => x.Amp_S.HasValue).Select(x => Convert.ToDouble(x.Amp_S.Value)).ToList(),
                                 currentT = panelHistory.Where(x => x.Amp_T.HasValue).Select(x => Convert.ToDouble(x.Amp_T.Value)).ToList(),
-                                isThreePhase = panelHistory.Any(x => x.Volt_S.HasValue && x.Volt_T.HasValue && x.Amp_S.HasValue && x.Amp_T.HasValue),
+                                isThreePhase = panelHistory.Any(x => x.IsThreePhase),
                                 pointCount = panelHistory.Count
                             };
                             chartData.Add(panelChart);
