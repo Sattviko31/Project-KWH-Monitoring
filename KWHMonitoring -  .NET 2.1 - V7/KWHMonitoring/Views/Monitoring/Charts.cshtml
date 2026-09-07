@@ -1020,6 +1020,9 @@
         // DATA LOADING WITH EMA + DOWNTIME
         // ============================================
         function loadChartData(deviceKey, safeKey) {
+            // Guard: skip if deviceKey is empty to prevent invalid API calls
+            if (!deviceKey || deviceKey.trim() === '') return;
+
             var points = systemSettings.chartDataPoints || 20;
             $.ajax({
                 url: '/api/Api/panels/' + deviceKey + '/chart?points=' + points,

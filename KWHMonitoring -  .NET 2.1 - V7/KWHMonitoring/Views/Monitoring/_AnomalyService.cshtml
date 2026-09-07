@@ -317,8 +317,7 @@
                         // Anomaly detection settings
                         if (data.anomalyCheckInterval) {
                             var newInterval = data.anomalyCheckInterval * 1000; // Convert ke ms
-                            anomalyServiceConfig.checkInterval = newInterval;
-                            anomalyConfirmation.maxConfirmations = data.anomalyMaxConfirmations || 3;
+                            anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
                             anomalyConfirmation.cooldownTime = (data.anomalyCooldownTime || 60) * 1000; // Convert ke ms
 
                             // Update timer jika interval berubah
@@ -464,6 +463,11 @@
         }
 
         function checkDeviceAnomaly(deviceKey) {
+            // Jumlah sampling 0 berarti deteksi anomali dimatikan
+            if (anomalyConfirmation.maxConfirmations <= 0) {
+                return;
+            }
+
             // Gunakan chartDataPoints yang sudah diload dari system settings
             const pointsToFetch = chartDataPoints || 20;
 

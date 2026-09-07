@@ -155,6 +155,26 @@
             });
         }
 
+        function loadAnomalyMaxConfirmations() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    url: '/api/Api/get-notification-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 5000,
+                    success: function(data) {
+                        anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
+                        console.log('Index anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations);
+                        resolve();
+                    },
+                    error: function() {
+                        console.log('Using default anomalyMaxConfirmations on Index:', anomalyConfirmation.maxConfirmations);
+                        resolve();
+                    }
+                });
+            });
+        }
+
 
         let refreshTimer = null;
         let panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new { deviceKey = p.DeviceKey, safeKey = p.DeviceKey.Replace("-", "_") }).ToList()));
@@ -454,6 +474,7 @@
         $(document).ready(function() {
             // Load settings dari database TERLEBIH DAHULU
             loadSystemSettings().then(function() {
+                loadAnomalyMaxConfirmations();
                 loadCategoriesMeta().then(function() {
                     loadDeviceCategories();
                 });
@@ -532,9 +553,18 @@
         // ANOMALY DETECTION & LOGGING
         // ============================================
         let anomalyCooldown = {}; // Mencegah spam log
+        let anomalyConfirmation = {
+            counts: {},
+            maxConfirmations: 3
+        };
 
         function detectAndLogAnomaly(deviceKey, powerData, ema, upperThreshold, lowerThreshold) {
             if (!emaSettings.enableAlerts) return;
+
+            if (anomalyConfirmation.maxConfirmations <= 0) {
+                console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')');
+                return;
+            }
 
             // Cek data point terakhir saja (real-time)
             const lastIndex = powerData.length - 1;
@@ -563,6 +593,18 @@
 
             if (!anomalyType) return;
 
+            const confirmationKey = `${deviceKey}_${anomalyType}`;
+            let confirmedCount = anomalyConfirmation.counts[confirmationKey] || 0;
+            confirmedCount++;
+            anomalyConfirmation.counts[confirmationKey] = confirmedCount;
+
+            console.log(`⚠️ ANOMALY CHECK: ${anomalyType} for ${deviceKey} - Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`);
+
+            if (confirmedCount < anomalyConfirmation.maxConfirmations) {
+                console.log(`⏳ Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`);
+                return;
+            }
+
             // Cooldown 60 detik per device per type
             const cooldownKey = `${deviceKey}_${anomalyType}`;
             const now = Date.now();
@@ -588,9 +630,11 @@
                 }),
                 success: function(response) {
                     console.log(`Anomaly logged: ${anomalyType} for ${deviceKey}`);
+                    anomalyConfirmation.counts[confirmationKey] = 0;
                 },
                 error: function(xhr, status, error) {
                     console.error('Error logging anomaly:', error);
+                    anomalyConfirmation.counts[confirmationKey] = 0;
                 }
             });
 

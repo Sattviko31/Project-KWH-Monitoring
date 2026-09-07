@@ -11,11 +11,11 @@
 
     <!-- Header -->
     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2" id="panelHeader_@(Model.DeviceKey.Replace("-", "_"))" style="overflow: hidden;">
-        <h6 class="mb-0 text-truncate" style="max-width: 45%; font-size: 0.9rem;">
+        <h6 class="mb-0 text-truncate" style="max-width: 100%; font-size: 0.9rem;">
             <i class="fas fa-plug"></i> @Model.GroupName
         </h6>
         <div class="d-flex gap-1 flex-shrink-0 align-items-center">
-            <span class="category-icon cat-Billboard" id="categoryIcon_@(Model.DeviceKey.Replace("-", "_"))" data-device-key="@Model.DeviceKey" style="font-size: 1rem; cursor: default;">🔵</span>
+            <span class="category-icon cat-Billboard" id="categoryIcon_@(Model.DeviceKey.Replace("-", "_"))" data-device-key="@Model.DeviceKey" style="font-size: 1rem; cursor: default;"></span>
             @if (Model.IsThreePhase)
             {
                 <span class="badge bg-info" style="font-size: 0.7rem;" data-phase-type="3-phase">3&#934;</span>
@@ -24,8 +24,8 @@
             {
                 <span class="badge bg-warning" style="font-size: 0.7rem; color: #212529;" data-phase-type="1-phase">1&#934;</span>
             }
-            <span class="badge bg-success" style="font-size: 0.7rem;" data-volt-header>@Model.Volt_R.ToString("N1")V</span>
-            <span class="badge bg-success" style="font-size: 0.7rem;" id="statusBadge_@(Model.DeviceKey.Replace("-", "_"))">@Model.Status</span>
+            @* <span class="badge bg-success" style="font-size: 0.7rem;" data-volt-header>@Model.Volt_R.ToString("N1")V</span> *@
+            @* <span class="badge bg-success" style="font-size: 0.7rem;" id="statusBadge_@(Model.DeviceKey.Replace("-", "_"))">@Model.Status</span> *@
             <button type="button" class="panel-collapse-toggle"
                     data-toggle="collapse"
                     data-target="#collapse_@(Model.DeviceKey.Replace("-", "_"))"

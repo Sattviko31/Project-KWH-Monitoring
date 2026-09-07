@@ -3102,7 +3102,7 @@ namespace KWHMonitoring.Controllers
             try
             {
                 var settings = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Notification"))
+                    .Where(x => x.SettingKey.StartsWith("Notification") || x.SettingKey.StartsWith("Anomaly."))
                     .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
                 return Ok(new

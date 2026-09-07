@@ -747,6 +747,11 @@
                             <input type="number" class="form-control" id="emaRefreshInterval" value="10" min="5" max="300">
                             <small class="text-muted">detik</small>
                         </div>
+                        <div class="settings-field">
+                            <label class="form-label">Jumlah Sampling Anomali</label>
+                            <input type="number" class="form-control" id="anomalyMaxConfirmations" value="3" min="0" max="10" step="1">
+                            <small class="text-muted">Data berturut-turut sebelum anomali terdeteksi (0-10, default: 3). 0 = tidak mendeteksi.</small>
+                        </div>
                     </div>
 
                     <hr class="settings-divider">
@@ -2188,36 +2193,59 @@
         });
 
         function loadEmaSettings() {
+            // Helper: apply EMA values to form
+            function applyEmaValues(data) {
+                $('#emaPeriod').val(data.emaPeriod || 20);
+                $('#emaUpperThreshold').val(data.emaUpperThreshold || 30);
+                $('#emaLowerThreshold').val(data.emaLowerThreshold || 50);
+                $('#emaFibUpper').val(data.emaFibUpper || 1.618);
+                $('#emaFibLower').val(data.emaFibLower || 0.618);
+                $('#emaRefreshInterval').val(data.refreshInterval || 10);
+                $('#emaShowLine').prop('checked', data.emaShowLine !== false);
+                $('#emaShowThresholds').prop('checked', data.emaShowThresholds !== false);
+                $('#useInitial100ForEma').prop('checked', data.useInitial100ForEma || false);
+
+                if (data.emaMode === 'fibonacci') {
+                    $('#emaModeFibonacci').prop('checked', true);
+                    $('#emaManualSettings').hide();
+                    $('#emaFibonacciSettings').show();
+                } else {
+                    $('#emaModeManual').prop('checked', true);
+                    $('#emaManualSettings').show();
+                    $('#emaFibonacciSettings').hide();
+                }
+            }
+
+            // Load EMA settings first
             $.ajax({
                 url: '/api/Api/get-ema-settings',
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    $('#emaPeriod').val(data.emaPeriod || 20);
-                    $('#emaUpperThreshold').val(data.emaUpperThreshold || 30);
-                    $('#emaLowerThreshold').val(data.emaLowerThreshold || 50);
-                    $('#emaFibUpper').val(data.emaFibUpper || 1.618);
-                    $('#emaFibLower').val(data.emaFibLower || 0.618);
-                    $('#emaRefreshInterval').val(data.refreshInterval || 10);
-                    $('#emaShowLine').prop('checked', data.emaShowLine !== false);
-                    $('#emaShowThresholds').prop('checked', data.emaShowThresholds !== false);
-                    $('#useInitial100ForEma').prop('checked', data.useInitial100ForEma || false);
-
-                    if (data.emaMode === 'fibonacci') {
-                        $('#emaModeFibonacci').prop('checked', true);
-                        $('#emaManualSettings').hide();
-                        $('#emaFibonacciSettings').show();
-                    } else {
-                        $('#emaModeManual').prop('checked', true);
-                        $('#emaManualSettings').show();
-                        $('#emaFibonacciSettings').hide();
-                    }
-
-                    loadAllCategoryDowntimeSettings();
+                    applyEmaValues(data);
+                    console.log('EMA settings loaded');
                 },
                 error: function() {
                     console.log('Using default EMA settings');
-                    loadAllCategoryDowntimeSettings();
+                },
+                complete: function() {
+                    // Load anomaly max confirmations independently
+                    $.ajax({
+                        url: '/api/Api/get-notification-settings',
+                        method: 'GET',
+                        dataType: 'json',
+                        success: function(notifSettings) {
+                            var loadedMax = (typeof notifSettings.anomalyMaxConfirmations === 'number') ? notifSettings.anomalyMaxConfirmations : 3;
+                            $('#anomalyMaxConfirmations').val(loadedMax);
+                            console.log('Anomaly maxConfirmations loaded:', loadedMax);
+                        },
+                        error: function() {
+                            console.log('Using default anomalyMaxConfirmations: 3');
+                        },
+                        complete: function() {
+                            loadAllCategoryDowntimeSettings();
+                        }
+                    });
                 }
             });
         }
@@ -2246,6 +2274,18 @@
                 data: JSON.stringify(emaSettingsData)
             });
 
+            // Save anomaly maxConfirmations without touching other anomaly settings
+            var rawMax = parseInt($('#anomalyMaxConfirmations').val());
+            var anomalyMaxConfirmationsValue = isNaN(rawMax) ? 3 : Math.max(0, Math.min(10, rawMax));
+            var anomalyMaxConfirmationsReq = $.ajax({
+                url: '/api/Api/save-system-settings',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    'Anomaly.MaxConfirmations': String(anomalyMaxConfirmationsValue)
+                })
+            });
+
             // Per-category downtime save
             var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
             var catDowntimeRequests = categories.map(function(cat) {
@@ -2264,7 +2304,7 @@
                 });
             });
 
-            var allRequests = [emaReq].concat(catDowntimeRequests);
+            var allRequests = [emaReq, anomalyMaxConfirmationsReq].concat(catDowntimeRequests);
 
             $.when.apply($, allRequests).done(function() {
                 btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
@@ -2283,6 +2323,7 @@
             $('#emaFibUpper').val(1.618);
             $('#emaFibLower').val(0.618);
             $('#emaRefreshInterval').val(10);
+            $('#anomalyMaxConfirmations').val(3);
             $('#emaShowLine').prop('checked', true);
             $('#emaShowThresholds').prop('checked', true);
             $('#useInitial100ForEma').prop('checked', false);

@@ -772,10 +772,10 @@
         var anomalyTimer = null;
         var anomalyCooldown = {};
         
-        // Konfirmasi anomali: butuh 5 data berturut-turut yang anomali
+        // Konfirmasi anomali: jumlah sampling bisa di-set melalui Settings
         var anomalyConfirmation = {
             counts: {}, // deviceKey_anomalyType -> count
-            maxConfirmations: 5,
+            maxConfirmations: 3, // Default, akan di-load dari DB
             cooldownTime: 60000
         };
         
@@ -1393,6 +1393,26 @@
             });
         }
 
+        function loadAnomalyMaxConfirmations() {
+            return new Promise(function(resolve) {
+                $.ajax({
+                    url: '/api/Api/get-notification-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    timeout: 10000,
+                    success: function(data) {
+                        anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
+                        console.log('Anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations);
+                        resolve();
+                    },
+                    error: function() {
+                        console.log('Using default anomalyMaxConfirmations:', anomalyConfirmation.maxConfirmations);
+                        resolve();
+                    }
+                });
+            });
+        }
+
         function checkDowntimeStatus() {
             return checkCategoryDowntime(currentCategory).then(function() {
                 isDowntimeNow = isDowntimeForDevice();
@@ -1536,6 +1556,11 @@
                 return;
             }
 
+            if (anomalyConfirmation.maxConfirmations <= 0) {
+                console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')');
+                return;
+            }
+
             // Cek data point terakhir (real-time)
             var lastIndex = powerData.length - 1;
             if (lastIndex < 0) {
@@ -1593,7 +1618,7 @@
                 return;
             }
 
-            // CONFIRMATION LOGIC: Need 5 consecutive data points to confirm anomaly
+            // CONFIRMATION LOGIC: Need N consecutive data points to confirm anomaly (N from Settings)
             var cooldownKey = deviceKey + '_' + anomalyType;
             var now = Date.now();
             
@@ -2420,7 +2445,7 @@
             // Load all settings in parallel, then init charts
             // NOTE: checkDowntimeStatus is NOT called here because currentCategory
             // is not yet known. It will be called after loadDeviceCategory() completes.
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadCategoryDowntimeSettings()]).then(function() {
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadAnomalyMaxConfirmations(), loadCategoryDowntimeSettings()]).then(function() {
                 console.log('All settings loaded, loading categories...');
 
                 // Load categories meta first, then device category, then downtime
@@ -2447,8 +2472,9 @@
                     initDetailAnomalyGrid();
                     startAutoRefresh();
 
-                    // Periodically re-check downtime status
+                    // Periodically re-check downtime status and anomaly maxConfirmations
                     setInterval(function() {
+                        loadAnomalyMaxConfirmations();
                         loadAllCategoryDowntime().then(function() {
                             updateCategoryDowntimeUI(currentCategory);
                             checkDowntimeStatus().then(function() {
@@ -2511,7 +2537,7 @@
 
             // Settings button — open modal
             $('#btnSettings').click(function() {
-                Promise.all([loadEmaSettings(), loadSystemSettings(), loadCategoryDowntimeSettings(), loadAllCategoryDowntime()]).then(function() {
+                Promise.all([loadEmaSettings(), loadSystemSettings(), loadAnomalyMaxConfirmations(), loadCategoryDowntimeSettings(), loadAllCategoryDowntime()]).then(function() {
                     updateSettingsModalUI();
                     $('#emaSettingsModal').modal('show');
                 });
