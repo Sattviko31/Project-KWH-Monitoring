@@ -119,6 +119,19 @@
             showLegend: false
         };
 
+        function showNotification(message, type) {
+            var alertClass = type === 'success' ? 'alert-success' : type === 'danger' ? 'alert-danger' : 'alert-info';
+            var icon = type === 'success' ? 'fa-check-circle' : type === 'danger' ? 'fa-exclamation-circle' : 'fa-info-circle';
+
+            var notification = $('<div class="alert ' + alertClass + ' alert-dismissible fade in position-fixed" style="top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">' +
+                '<i class="fas ' + icon + '"></i> ' + message +
+                '<button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>' +
+                '</div>');
+
+            $('body').append(notification);
+            setTimeout(function() { notification.alert('close'); }, 3000);
+        }
+
             function loadSystemSettings() {
             return new Promise((resolve) => {
                 $.ajax({
@@ -492,8 +505,9 @@
             $(document).on('click', '.panel-card-clickable', function(e) {
                 var $target = $(e.target);
                 if ($target.closest('.panel-collapse-toggle').length > 0 ||
-                    $target.closest('[data-toggle="collapse"]').length > 0) {
-                    return; // Let Bootstrap handle collapse, don't navigate
+                    $target.closest('[data-toggle="collapse"]').length > 0 ||
+                    $target.closest('.btn-device-on, .btn-device-off').length > 0) {
+                    return; // Let Bootstrap handle collapse / device control, don't navigate
                 }
                 var url = $(this).data('details-url');
                 if (url) {
@@ -525,6 +539,7 @@
             setTimeout(function() {
                 updatePanelCards();
                 updateStatistics();
+                updateRelayStates();
             }, 500);
 
             $('#btnRefresh').click(function() {
@@ -781,6 +796,72 @@
             return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
 
+        // ============================================
+        // RELAY STATE INDICATOR (RCI)
+        // ============================================
+        function updateRelayIndicator($wrapper, state) {
+            if (!$wrapper || $wrapper.length === 0) return;
+            $wrapper.removeClass('on off unknown').addClass(state || 'unknown');
+            $wrapper.attr('data-relay-state', state || 'unknown');
+        }
+
+        function getRelayStateFromRci(mode, relay, rci) {
+            if (rci === null || rci === undefined || rci === '') return 'unknown';
+            var s = String(rci).trim();
+            var n = parseInt(s, 10);
+
+            if (isNaN(n)) {
+                s = s.toLowerCase();
+                if (s === 'true' || s === 'on' || s === 'high') return 'on';
+                if (s === 'false' || s === 'off' || s === 'low') return 'off';
+                return 'unknown';
+            }
+
+            if (mode === 'Toggle2Relay') {
+                // bit 0 = relay 1, bit 1 = relay 2
+                if (relay === 1 || relay === '1') return (n & 1) === 1 ? 'on' : 'off';
+                if (relay === 2 || relay === '2') return (n & 2) === 2 ? 'on' : 'off';
+                return 'unknown';
+            }
+
+            if (mode === 'ToggleAll') {
+                return n === 3 ? 'on' : 'off';
+            }
+
+            if (mode === 'Pulse') {
+                return n === 1 ? 'on' : 'off';
+            }
+
+            // OnOff, Toggle: 1 = on, 0 = off
+            return n === 0 ? 'off' : 'on';
+        }
+
+        function updateRelayStates() {
+            $.ajax({
+                url: '/api/Api/relay-states',
+                method: 'GET',
+                dataType: 'json',
+                cache: false,
+                success: function(response) {
+                    if (!response.success || !response.states) return;
+                    var states = response.states;
+                    $('.device-control-wrapper').each(function() {
+                        var $wrapper = $(this);
+                        var deviceKey = $wrapper.data('device-key');
+                        var mode = $wrapper.data('control-mode') || 'OnOff';
+                        var relay = $wrapper.data('relay');
+                        var info = states[deviceKey];
+                        var rci = info && info.rci !== undefined && info.rci !== null ? info.rci : '';
+                        var state = getRelayStateFromRci(mode, relay, rci);
+                        updateRelayIndicator($wrapper, state);
+                    });
+                },
+                error: function() {
+                    console.error('Failed to update relay states');
+                }
+            });
+        }
+
         function startAutoRefresh() {
             if (refreshTimer) clearInterval(refreshTimer);
             refreshTimer = setInterval(function() {
@@ -950,6 +1031,9 @@
 
                     // Re-apply active filter after data refresh
                     applyPanelFilter();
+
+                    // Update relay state indicator behind On/Off buttons
+                    updateRelayStates();
                 },
                 error: function() {
                     console.error('Error updating panel cards');
@@ -960,5 +1044,113 @@
         function updateLastUpdate() {
             $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
         }
+
+        // ============================================
+        // DEVICE CONTROL (MQTT PUBLISH)
+        // ============================================
+        function publishRelayCommand(deviceId, rcValue, $btn, pulse) {
+            if (!deviceId) {
+                showNotification('Device ID tidak ditemukan', 'danger');
+                return;
+            }
+
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+            $.ajax({
+                url: '/api/Api/publish-relay',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ DeviceId: deviceId, RCValue: rcValue, Pulse: pulse || false }),
+                success: function(response) {
+                    $btn.prop('disabled', false).html(originalHtml);
+                    if (response.success) {
+                        showNotification(response.message || 'Perintah terkirim', 'success');
+                    } else {
+                        showNotification(response.error || 'Gagal mengirim perintah', 'danger');
+                    }
+                },
+                error: function(xhr) {
+                    $btn.prop('disabled', false).html(originalHtml);
+                    var errorMsg = 'Gagal mengirim perintah';
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        errorMsg = response.error || errorMsg;
+                    } catch(e) {}
+                    showNotification(errorMsg, 'danger');
+                }
+            });
+        }
+
+        // ON/OFF mode: ON -> RC=1, OFF -> RC=0
+        $(document).on('click', '.btn-device-on, .btn-device-off', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var $btn = $(this);
+            var deviceId = $btn.data('device-id');
+            var isOn = $btn.hasClass('btn-device-on');
+            var rcValue = isOn ? '1' : '0';
+
+            // Update indicator immediately for responsive feedback
+            var $wrapper = $btn.closest('.device-control-wrapper');
+            updateRelayIndicator($wrapper, isOn ? 'on' : 'off');
+
+            publishRelayCommand(deviceId, rcValue, $btn, false);
+        });
+
+        // Pulse mode
+        $(document).on('click', '.btn-device-pulse', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var $btn = $(this);
+            var deviceId = $btn.data('device-id');
+            var rcValue = String($btn.data('rc'));
+            var isOn = rcValue === '1';
+
+            // Update indicator immediately for responsive feedback
+            var $wrapper = $btn.closest('.device-control-wrapper');
+            updateRelayIndicator($wrapper, isOn ? 'on' : 'off');
+
+            publishRelayCommand(deviceId, rcValue, $btn, true);
+        });
+
+        // Toggle mode
+        $(document).on('click', '.btn-device-toggle', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var $btn = $(this);
+            var deviceId = $btn.data('device-id');
+            var relay = String($btn.data('relay'));
+            var currentState = $btn.data('state') || 'off';
+            var isOff = currentState === 'off';
+
+            var rcValue;
+            if (relay === 'all') {
+                rcValue = isOff ? '3' : '0';
+            } else {
+                rcValue = isOff ? relay : '0';
+            }
+
+            publishRelayCommand(deviceId, rcValue, $btn, false);
+
+            // Update UI state
+            var newState = isOff ? 'on' : 'off';
+            $btn.data('state', newState);
+
+            // Update indicator immediately for responsive feedback
+            var $wrapper = $btn.closest('.device-control-wrapper');
+            updateRelayIndicator($wrapper, newState);
+
+            if (relay === 'all') {
+                $btn.find('span').text(newState === 'on' ? 'OFF ALL' : 'ON ALL');
+                $btn.toggleClass('btn-success btn-danger');
+            } else {
+                $btn.find('span').text(newState === 'on' ? 'OFF' : 'ON');
+                $btn.toggleClass('btn-success btn-danger');
+            }
+        });
     </script>
 }

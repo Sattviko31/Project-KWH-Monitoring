@@ -41,6 +41,7 @@ namespace KWHMonitoring
 
             services.AddScoped<NotificationService>();
             services.AddScoped<AesEncryptionService>();
+            services.AddSingleton<MqttService>();
 
             services.AddHostedService<EnergyAggregationBackgroundService>();
             services.AddHostedService<AnomalyNotificationBackgroundService>();

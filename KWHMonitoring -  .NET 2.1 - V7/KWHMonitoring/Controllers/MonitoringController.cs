@@ -39,6 +39,11 @@ namespace KWHMonitoring.Controllers
 
                 var validData = latestData.Where(x => x != null).ToList();
 
+                var globalControlMode = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey == "DeviceControlMode")
+                    .Select(x => x.SettingValue)
+                    .FirstOrDefaultAsync() ?? "OnOff";
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
@@ -48,6 +53,7 @@ namespace KWHMonitoring.Controllers
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
+                        ControlMode = globalControlMode,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,
@@ -110,6 +116,11 @@ namespace KWHMonitoring.Controllers
 
                 var validData = latestData.Where(x => x != null).ToList();
 
+                var globalControlMode = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey == "DeviceControlMode")
+                    .Select(x => x.SettingValue)
+                    .FirstOrDefaultAsync() ?? "OnOff";
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
@@ -119,6 +130,7 @@ namespace KWHMonitoring.Controllers
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
+                        ControlMode = globalControlMode,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,
@@ -160,6 +172,11 @@ namespace KWHMonitoring.Controllers
 
                 var validData = latestData.Where(x => x != null).ToList();
 
+                var globalControlMode = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey == "DeviceControlMode")
+                    .Select(x => x.SettingValue)
+                    .FirstOrDefaultAsync() ?? "OnOff";
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
@@ -169,6 +186,7 @@ namespace KWHMonitoring.Controllers
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
+                        ControlMode = globalControlMode,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,

@@ -64,15 +64,15 @@
         <form id="systemSettingsForm">
         <div class="settings-section-list">
 
-            <!-- 1. DATABASE CONNECTION -->
+            <!-- 1. MQTT CONNECTION -->
             <div class="settings-section">
                 <div class="settings-section-header">
                     <div class="settings-section-icon bg-primary-soft">
-                        <i class="fas fa-database text-primary"></i>
+                        <i class="fas fa-network-wired text-primary"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>Database Connection</h5>
-                        <p>Konfigurasi koneksi ke SQL Server database</p>
+                        <h5>MQTT Connection</h5>
+                        <p>Konfigurasi koneksi ke broker MQTT (Mosquitto)</p>
                     </div>
                     <div class="settings-section-action">
                         <button type="button" class="btn btn-outline-primary btn-sm" id="btnTestConnection">
@@ -84,36 +84,96 @@
                 <div class="settings-section-body">
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">Server IP / Host</label>
-                            <input type="text" class="form-control" id="dbServer"
-                                   value="@GetSetting("Database.Server", "192.168.6.15")"
-                                   placeholder="192.168.6.15">
-                            <small class="text-muted">IP address atau hostname database server</small>
+                            <label class="form-label">Broker Host / IP</label>
+                            <input type="text" class="form-control" id="mqttBroker"
+                                   value="@GetSetting("MQTT.Broker", "localhost")"
+                                   placeholder="localhost">
+                            <small class="text-muted">IP address atau hostname broker MQTT</small>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Port</label>
-                            <input type="number" class="form-control" id="dbPort"
-                                   value="@GetSetting("Database.Port", "1433")"
-                                   placeholder="1433">
-                            <small class="text-muted">Default SQL Server: 1433</small>
+                            <input type="number" class="form-control" id="mqttPort"
+                                   value="@GetSetting("MQTT.Port", "1883")"
+                                   placeholder="1883">
+                            <small class="text-muted">Default Mosquitto: 1883</small>
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Client ID</label>
+                            <input type="text" class="form-control" id="mqttClientId"
+                                   value="@GetSetting("MQTT.ClientId", "KWHMonitoringWeb")"
+                                   placeholder="KWHMonitoringWeb">
+                        </div>
+                        <div class="settings-field">
+                            <label class="form-label">Use TLS</label>
+                            <select class="form-select" id="mqttUseTls">
+                                <option value="false">No</option>
+                                <option value="true">Yes</option>
+                            </select>
+                            <script>
+                                (function() {
+                                    var useTls = '@GetSetting("MQTT.UseTls", "false")' === 'true';
+                                    document.getElementById('mqttUseTls').value = useTls ? 'true' : 'false';
+                                })();
+                            </script>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Username</label>
-                            <input type="text" class="form-control" id="dbUser"
-                                   value="@GetSetting("Database.User", "sa")"
-                                   placeholder="sa">
+                            <input type="text" class="form-control" id="mqttUsername"
+                                   value="@GetSetting("MQTT.Username", "")"
+                                   placeholder="(optional)">
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Password</label>
-                            <input type="password" class="form-control" id="dbPassword"
-                                   value="@GetSetting("Database.Password", "")"
-                                   placeholder="••••••••">
+                            <input type="password" class="form-control" id="mqttPassword"
+                                   value="@GetSetting("MQTT.Password", "")"
+                                   placeholder="(optional)">
                         </div>
-                        <div class="settings-field settings-field-full">
-                            <label class="form-label">Database Name</label>
-                            <input type="text" class="form-control" id="dbName"
-                                   value="@GetSetting("Database.Name", "HaiwellElectrical")"
-                                   placeholder="HaiwellElectrical">
+                    </div>
+
+                    <!-- TLS / SSL Options (muncul saat Use TLS = Yes) -->
+                    <div id="tlsOptionsPanel" style="display:none; margin-top:14px; padding-top:14px; border-top:1px dashed #dde3ea;">
+                        <div style="margin-bottom:10px;">
+                            <h6 style="margin:0 0 2px 0; font-size:0.9rem; font-weight:700;">
+                                <i class="fas fa-shield-alt text-primary"></i> TLS / SSL Certificate Options
+                            </h6>
+                            <small class="text-muted" style="font-size:0.74rem;">
+                                Port standar MQTT over TLS: <b>8883</b>. Sertifikat di-upload dan disimpan di server, lalu langsung dipakai untuk Test Connection &amp; koneksi produksi.
+                            </small>
+                        </div>
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label class="form-label">CA Certificate <span class="text-muted">(opsional)</span></label>
+                                <input type="file" class="form-control" id="mqttCaCertFile" accept=".pem,.crt,.cer,.der">
+                                <small class="text-muted" id="mqttCaCertStatus" data-stored="@GetSetting("MQTT.TlsCaCertFile", "")"></small>
+                                <small class="text-muted">Validasi identitas broker (.pem / .crt / .cer / .der)</small>
+                            </div>
+                            <div class="settings-field">
+                                <label class="form-label">Client Certificate <span class="text-muted">(opsional)</span></label>
+                                <input type="file" class="form-control" id="mqttClientCertFile" accept=".pfx,.p12">
+                                <small class="text-muted" id="mqttClientCertStatus" data-stored="@GetSetting("MQTT.TlsClientCertFile", "")"></small>
+                                <small class="text-muted">Autentikasi client ke broker — mutual TLS (.pfx / .p12)</small>
+                            </div>
+                            <div class="settings-field">
+                                <label class="form-label">Client Certificate Password</label>
+                                <input type="password" class="form-control" id="mqttClientCertPassword"
+                                       value="@GetSetting("MQTT.TlsClientCertPassword", "")"
+                                       placeholder="(optional)">
+                                <small class="text-muted">Password file .pfx — isi sebelum upload bila diperlukan</small>
+                            </div>
+                            <div class="settings-field">
+                                <label class="form-label">Skip Certificate Validation</label>
+                                <select class="form-select" id="mqttSkipCertValidation">
+                                    <option value="false">No</option>
+                                    <option value="true">Yes</option>
+                                </select>
+                                <small class="text-muted">Abaikan validasi sertifikat broker (self-signed tanpa CA)</small>
+                                <script>
+                                    (function() {
+                                        var skipValidation = '@GetSetting("MQTT.TlsSkipCertValidation", "false")' === 'true';
+                                        document.getElementById('mqttSkipCertValidation').value = skipValidation ? 'true' : 'false';
+                                    })();
+                                </script>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -332,6 +392,39 @@
     <!-- ==================== CATEGORIES SETTINGS TAB ==================== -->
     <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
         <div class="settings-section-list">
+
+            <!-- Device Control Mode -->
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <div class="settings-section-icon bg-primary-soft">
+                        <i class="fas fa-toggle-on text-primary"></i>
+                    </div>
+                    <div class="settings-section-title">
+                        <h5>Device Control Mode</h5>
+                        <p>Atur preset mode kontrol relay untuk semua device</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <div class="row align-items-end g-3">
+                        <div class="col-md-6 col-lg-5 col-xl-4">
+                            <label class="form-label">Global Control Mode</label>
+                            <select class="form-select" id="globalControlMode">
+                                <option value="OnOff">ON/OFF (1 relay)</option>
+                                <option value="Toggle">Toggle (1 relay)</option>
+                                <option value="Pulse">Pulse (2 relay)</option>
+                                <option value="Toggle2Relay">Toggle 2 Relay</option>
+                                <option value="ToggleAll">Toggle All</option>
+                            </select>
+                            <small class="text-muted d-block mt-1">Preset ini diterapkan ke semua device</small>
+                        </div>
+                        <div class="col-md-6 col-lg-4">
+                            <button type="button" class="btn btn-primary btn-sm" id="btnSaveControlMode">
+                                <i class="fas fa-save"></i> Simpan Preset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Add New Category -->
             <div class="settings-section">
@@ -1032,29 +1125,32 @@
                 showNotification('All intervals synced to ' + dashboardValue + ' seconds', 'success');
             });
 
-            // Test database connection
+            // Test MQTT connection
             $('#btnTestConnection').click(function() {
                 var btn = $(this);
                 btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
                 $('#connectionStatus').html('').removeClass('text-success text-danger');
 
                 var connectionData = {
-                    server: $('#dbServer').val(),
-                    port: $('#dbPort').val(),
-                    user: $('#dbUser').val(),
-                    password: $('#dbPassword').val(),
-                    database: $('#dbName').val()
+                    broker: $('#mqttBroker').val(),
+                    port: parseInt($('#mqttPort').val()) || 1883,
+                    username: $('#mqttUsername').val(),
+                    password: $('#mqttPassword').val(),
+                    useTls: $('#mqttUseTls').val() === 'true',
+                    clientId: $('#mqttClientId').val(),
+                    clientCertPassword: $('#mqttClientCertPassword').val(),
+                    skipCertValidation: $('#mqttSkipCertValidation').val() === 'true'
                 };
 
                 $.ajax({
-                    url: '/api/Api/test-database-connection',
+                    url: '/api/Api/test-mqtt-connection',
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify(connectionData),
                     success: function(response) {
                         $('#connectionStatus').html('<i class="fas fa-check-circle text-success"></i> Connection successful!').addClass('text-success');
                         btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
-                        showNotification('Database connection successful!', 'success');
+                        showNotification('MQTT connection successful!', 'success');
                     },
                     error: function(xhr) {
                         var errorMsg = 'Connection failed';
@@ -1064,7 +1160,7 @@
                         } catch(e) {}
                         $('#connectionStatus').html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg).addClass('text-danger');
                         btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
-                        showNotification('Database connection failed: ' + errorMsg, 'danger');
+                        showNotification('MQTT connection failed: ' + errorMsg, 'danger');
                     }
                 });
             });
@@ -1075,11 +1171,14 @@
                 btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
 
                 var settings = {
-                    'Database.Server': $('#dbServer').val(),
-                    'Database.Port': $('#dbPort').val(),
-                    'Database.User': $('#dbUser').val(),
-                    'Database.Password': $('#dbPassword').val(),
-                    'Database.Name': $('#dbName').val(),
+                    'MQTT.Broker': $('#mqttBroker').val(),
+                    'MQTT.Port': $('#mqttPort').val(),
+                    'MQTT.ClientId': $('#mqttClientId').val(),
+                    'MQTT.UseTls': $('#mqttUseTls').val(),
+                    'MQTT.Username': $('#mqttUsername').val(),
+                    'MQTT.Password': $('#mqttPassword').val(),
+                    'MQTT.TlsSkipCertValidation': $('#mqttSkipCertValidation').val(),
+                    'MQTT.TlsClientCertPassword': $('#mqttClientCertPassword').val(),
                     'Interval.Dashboard': $('#dashboardInterval').val(),
                     'Interval.Charts': $('#chartsInterval').val(),
                     'Interval.Details': $('#detailsInterval').val(),
@@ -1112,11 +1211,17 @@
             // Reset System Settings
             $('#btnResetSystemSettings').click(function() {
                 if (confirm('Reset semua settings ke default?')) {
-                    $('#dbServer').val('192.168.6.15');
-                    $('#dbPort').val('1433');
-                    $('#dbUser').val('kwhapp');
-                    $('#dbPassword').val('kwhapp1234');
-                    $('#dbName').val('HaiwellElectrical');
+                    $('#mqttBroker').val('localhost');
+                    $('#mqttPort').val('1883');
+                    $('#mqttClientId').val('KWHMonitoringWeb');
+                    $('#mqttUseTls').val('false');
+                    $('#mqttUsername').val('');
+                    $('#mqttPassword').val('');
+                    $('#mqttClientCertPassword').val('');
+                    $('#mqttSkipCertValidation').val('false');
+                    $('#mqttCaCertFile').val('');
+                    $('#mqttClientCertFile').val('');
+                    toggleTlsPanel();
                     $('#dashboardInterval').val('10');
                     $('#chartsInterval').val('10');
                     $('#detailsInterval').val('10');
@@ -1132,14 +1237,112 @@
                 }
             });
 
+            // ============================================
+            // MQTT TLS / SSL CERTIFICATES
+            // ============================================
+            function toggleTlsPanel() {
+                if ($('#mqttUseTls').val() === 'true') {
+                    $('#tlsOptionsPanel').show();
+                } else {
+                    $('#tlsOptionsPanel').hide();
+                }
+            }
+            $('#mqttUseTls').on('change', toggleTlsPanel);
+            toggleTlsPanel();
+
+            function renderCertStatus($statusEl, fileName, type) {
+                if (fileName && fileName.length > 0) {
+                    $statusEl.html('<i class="fas fa-certificate text-success"></i> Tersimpan: <b>' + fileName + '</b> ' +
+                        '<a href="javascript:void(0)" class="remove-mqtt-cert text-danger" data-type="' + type + '" style="margin-left:6px;">' +
+                        '<i class="fas fa-trash-alt"></i> Hapus</a>');
+                } else {
+                    $statusEl.html('<i class="far fa-file text-muted"></i> Belum ada sertifikat');
+                }
+            }
+
+            var caCertStatus = $('#mqttCaCertStatus');
+            var clientCertStatus = $('#mqttClientCertStatus');
+            renderCertStatus(caCertStatus, caCertStatus.data('stored') || '', 'ca');
+            renderCertStatus(clientCertStatus, clientCertStatus.data('stored') || '', 'client');
+
+            function uploadMqttCertificate($input, $statusEl, type) {
+                if (!$input[0].files || $input[0].files.length === 0) {
+                    return;
+                }
+                var fd = new FormData();
+                fd.append('file', $input[0].files[0]);
+                fd.append('certificateType', type);
+                fd.append('certificatePassword', $('#mqttClientCertPassword').val() || '');
+
+                $statusEl.html('<i class="fas fa-spinner fa-spin text-muted"></i> Mengunggah...');
+
+                $.ajax({
+                    url: '/api/Api/upload-mqtt-certificate?certificateType=' + encodeURIComponent(type),
+                    method: 'POST',
+                    data: fd,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        $statusEl.data('stored', response.fileName);
+                        renderCertStatus($statusEl, response.fileName, type);
+                        showNotification('Sertifikat ' + type.toUpperCase() + ' berhasil di-upload', 'success');
+                    },
+                    error: function(xhr) {
+                        var errorMsg = 'Upload sertifikat gagal';
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            errorMsg = response.error || errorMsg;
+                        } catch(e) {}
+                        $statusEl.html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg);
+                        showNotification('Upload sertifikat gagal: ' + errorMsg, 'danger');
+                    },
+                    complete: function() {
+                        $input.val('');
+                    }
+                });
+            }
+
+            $('#mqttCaCertFile').on('change', function() {
+                uploadMqttCertificate($(this), caCertStatus, 'ca');
+            });
+
+            $('#mqttClientCertFile').on('change', function() {
+                uploadMqttCertificate($(this), clientCertStatus, 'client');
+            });
+
+            $(document).on('click', '.remove-mqtt-cert', function() {
+                var type = $(this).data('type');
+                var $statusEl = type === 'ca' ? caCertStatus : clientCertStatus;
+                if (!confirm('Hapus sertifikat ini dari server?')) {
+                    return;
+                }
+                $statusEl.html('<i class="fas fa-spinner fa-spin text-muted"></i> Menghapus...');
+                $.ajax({
+                    url: '/api/Api/remove-mqtt-certificate',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ certificateType: type }),
+                    success: function() {
+                        $statusEl.data('stored', '');
+                        renderCertStatus($statusEl, '', type);
+                        showNotification('Sertifikat berhasil dihapus', 'success');
+                    },
+                    error: function() {
+                        renderCertStatus($statusEl, $statusEl.data('stored') || '', type);
+                        showNotification('Gagal menghapus sertifikat', 'danger');
+                    }
+                });
+            });
+
             // Export settings
             $('#btnExportSettings').click(function() {
                 var settings = {
-                    Database: {
-                        Server: $('#dbServer').val(),
-                        Port: $('#dbPort').val(),
-                        User: $('#dbUser').val(),
-                        Name: $('#dbName').val()
+                    MQTT: {
+                        Broker: $('#mqttBroker').val(),
+                        Port: $('#mqttPort').val(),
+                        ClientId: $('#mqttClientId').val(),
+                        UseTls: $('#mqttUseTls').val(),
+                        Username: $('#mqttUsername').val()
                     },
                     Intervals: {
                         Dashboard: $('#dashboardInterval').val(),
@@ -1174,6 +1377,7 @@
             // ============================================
 
             loadNotificationSettings();
+            loadControlMode();
 
             $('#btnSaveNotificationSettings').click(function() {
                 saveNotificationSettings();
@@ -1514,6 +1718,50 @@
             $('body').append(notification);
             setTimeout(function() { notification.alert('close'); }, 3000);
         }
+
+        // ============================================
+        // DEVICE CONTROL MODE (GLOBAL PRESET)
+        // ============================================
+        function loadControlMode() {
+            $.ajax({
+                url: '/api/Api/device-control-mode',
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    if (data.success) {
+                        $('#globalControlMode').val(data.mode || 'OnOff');
+                    }
+                },
+                error: function() {
+                    showNotification('Gagal memuat mode kontrol', 'danger');
+                }
+            });
+        }
+
+        $('#btnSaveControlMode').click(function() {
+            var btn = $(this);
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+
+            var mode = $('#globalControlMode').val();
+            $.ajax({
+                url: '/api/Api/device-control-mode',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ deviceKey: '_global', mode: mode }),
+                success: function(data) {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
+                    if (data.success) {
+                        showNotification('Control mode saved successfully', 'success');
+                    } else {
+                        showNotification(data.error || 'Gagal menyimpan mode', 'danger');
+                    }
+                },
+                error: function() {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
+                    showNotification('Error saving control mode', 'danger');
+                }
+            });
+        });
 
         // ============================================
         // AI CHATBOT SETTINGS

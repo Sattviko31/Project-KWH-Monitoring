@@ -9,6 +9,7 @@ namespace KWHMonitoring.Models
         public string DeviceId { get; set; } = string.Empty;
         public string GroupName { get; set; } = string.Empty;
         public string DeviceCategory { get; set; } = "Billboard";
+        public string ControlMode { get; set; } = "OnOff";
         public DateTime Waktu_Server { get; set; }
         public decimal Volt_R { get; set; }
         public decimal? Volt_S { get; set; }

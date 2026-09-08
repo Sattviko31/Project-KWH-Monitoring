@@ -1,0 +1,31 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Launch KWHMonitoring (Web)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build KWHMonitoring",
+            "program": "${workspaceFolder}/KWHMonitoring -  .NET 2.1 - V7/KWHMonitoring/bin/Debug/netcoreapp2.1/KWHMonitoring.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/KWHMonitoring -  .NET 2.1 - V7/KWHMonitoring",
+            "stopAtEntry": false,
+            "internalConsoleOptions": "openOnSessionStart",
+            "launchBrowser": {
+                "enabled": true,
+                "args": "http://localhost:7263",
+                "windows": {
+                    "command": "cmd.exe",
+                    "args": "/C start http://localhost:7263"
+                }
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        }
+    ]
+}

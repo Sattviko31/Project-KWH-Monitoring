@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build KWHMonitoring",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/KWHMonitoring -  .NET 2.1 - V7/KWHMonitoring/KWHMonitoring.csproj"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/KWHMonitoring -  .NET 2.1 - V7/KWHMonitoring"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$mscompile"
+        }
+    ]
+}

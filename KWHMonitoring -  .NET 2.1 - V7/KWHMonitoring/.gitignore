@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+## MQTT TLS certificates uploaded at runtime — never commit
+AppData/MqttCerts/

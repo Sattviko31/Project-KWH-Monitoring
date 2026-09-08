@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Mail;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -30,14 +33,25 @@ namespace KWHMonitoring.Controllers
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<ApiController> _logger;
         private readonly AesEncryptionService _encryption;
+        private readonly MqttService _mqttService;
+        private readonly IHostingEnvironment _environment;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment)
         {
             _context = context;
             _cache = cache;
             _serviceProvider = serviceProvider;
             _logger = logger;
             _encryption = encryption;
+            _mqttService = mqttService;
+            _environment = environment;
+        }
+
+        private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
+        {
+            var record = await _context.AppSettingsRecords
+                .FirstOrDefaultAsync(x => x.SettingKey == key);
+            return record != null ? record.SettingValue : defaultValue;
         }
 
         // ============================================
@@ -1998,6 +2012,399 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // MQTT CONNECTION TEST
+        // ============================================
+        [HttpPost("test-mqtt-connection")]
+        public async Task<IActionResult> TestMqttConnection([FromBody] MqttConnectionData data)
+        {
+            try
+            {
+                // Sertifikat yang dipakai adalah file yang sudah ter-upload (tersimpan di DB)
+                var settings = new MqttSettings
+                {
+                    Broker = data.broker,
+                    Port = data.port,
+                    Username = data.username ?? string.Empty,
+                    Password = data.password ?? string.Empty,
+                    UseTls = data.useTls,
+                    ClientId = string.IsNullOrWhiteSpace(data.clientId) ? "KWHMonitoringWeb" : data.clientId,
+                    CaCertificateFile = await GetSettingValueAsync("MQTT.TlsCaCertFile"),
+                    ClientCertificateFile = await GetSettingValueAsync("MQTT.TlsClientCertFile"),
+                    ClientCertificatePassword = data.clientCertPassword ?? string.Empty,
+                    SkipCertificateValidation = data.skipCertValidation
+                };
+
+                var result = await _mqttService.TestConnectionAsync(settings);
+
+                if (result.Connected)
+                {
+                    return Ok(new { success = true, message = "MQTT connection successful" });
+                }
+
+                var error = string.IsNullOrWhiteSpace(result.Error) ? "Failed to connect to MQTT broker" : result.Error;
+                return BadRequest(new { success = false, error = error });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // MQTT CERTIFICATE UPLOAD
+        // ============================================
+        [HttpPost("upload-mqtt-certificate")]
+        public async Task<IActionResult> UploadMqttCertificate(IFormFile file, [FromForm] string certificateType, [FromForm] string certificatePassword)
+        {
+            try
+            {
+                // Safety: beberapa request/versi ASP.NET Core tidak mengikat form field ke parameter string saat ada IFormFile
+                if (string.IsNullOrEmpty(certificateType) && Request.HasFormContentType)
+                {
+                    certificateType = Request.Form["certificateType"].FirstOrDefault();
+                }
+
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { success = false, error = "Certificate file is required" });
+                }
+
+                var isCa = string.Equals(certificateType, "ca", StringComparison.OrdinalIgnoreCase);
+                if (!isCa && !string.Equals(certificateType, "client", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { success = false, error = "Invalid certificate type" });
+                }
+
+                var allowedExtensions = isCa
+                    ? new[] { ".pem", ".crt", ".cer", ".der", "" }
+                    : new[] { ".pfx", ".p12", "" };
+
+                var extension = (Path.GetExtension(file.FileName) ?? string.Empty).ToLower();
+                if (!allowedExtensions.Contains(extension))
+                {
+                    return BadRequest(new { success = false, error = isCa
+                        ? "CA certificate harus .pem / .crt / .cer / .der"
+                        : "Client certificate harus .pfx / .p12" });
+                }
+
+                if (file.Length > 1024 * 1024)
+                {
+                    return BadRequest(new { success = false, error = "Certificate file must be under 1 MB" });
+                }
+
+                // Validasi isi sertifikat sebelum disimpan
+                var tempPath = Path.GetTempFileName();
+                using (var stream = new FileStream(tempPath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                if (isCa)
+                {
+                    // CA certificate: validasi isi (PEM atau DER)
+                    var raw = System.IO.File.ReadAllBytes(tempPath);
+                    var text = System.Text.Encoding.ASCII.GetString(raw);
+                    try
+                    {
+                        if (text.Contains("-----BEGIN CERTIFICATE-----"))
+                        {
+                            var pem = text.Replace("-----BEGIN CERTIFICATE-----", string.Empty)
+                                          .Replace("-----END CERTIFICATE-----", string.Empty)
+                                          .Trim();
+                            new System.Security.Cryptography.X509Certificates.X509Certificate2(Convert.FromBase64String(pem));
+                        }
+                        else
+                        {
+                            new System.Security.Cryptography.X509Certificates.X509Certificate2(raw);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        System.IO.File.Delete(tempPath);
+                        return BadRequest(new { success = false, error = "File is not a valid certificate" });
+                    }
+                }
+                else
+                {
+                    // Client PFX: jika password diberikan, validasi langsung.
+                    // Tanpa password, cek header ASN.1 SEQUENCE (byte 0x30) milik file PFX
+                    // karena PFX ber-password tidak bisa di-load tanpa password-nya.
+                    var raw = System.IO.File.ReadAllBytes(tempPath);
+                    var password = certificatePassword ?? string.Empty;
+                    var isValid = false;
+                    if (password.Length > 0)
+                    {
+                        try
+                        {
+                            new System.Security.Cryptography.X509Certificates.X509Certificate2(tempPath, password);
+                            isValid = true;
+                        }
+                        catch (Exception)
+                        {
+                            // password salah — kembalikan pesan yang jelas
+                        }
+                    }
+                    else
+                    {
+                        isValid = raw.Length > 0 && raw[0] == 0x30;
+                    }
+
+                    if (!isValid)
+                    {
+                        System.IO.File.Delete(tempPath);
+                        return BadRequest(new { success = false, error = password.Length > 0
+                            ? "Client certificate is invalid or the password is wrong"
+                            : "File is not a valid .pfx or .p12 certificate" });
+                    }
+                }
+
+                var directory = Path.Combine(_environment.ContentRootPath, "AppData", "MqttCerts");
+                Directory.CreateDirectory(directory);
+
+                var fileName = (isCa ? "ca_certificate" : "client_certificate") + extension.ToLower();
+                var fullPath = Path.Combine(directory, fileName);
+
+                System.IO.File.Copy(tempPath, fullPath, true);
+                System.IO.File.Delete(tempPath);
+
+                // Bersihkan file lama dengan ekstensi berbeda maupun file tanpa ekstensi sebelumnya
+                var baseName = (isCa ? "ca_certificate" : "client_certificate");
+                foreach (var existingFile in Directory.GetFiles(directory, baseName + "*"))
+                {
+                    if (!string.Equals(existingFile, fullPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { System.IO.File.Delete(existingFile); } catch { /* ignore */ }
+                    }
+                }
+
+                var settingKey = isCa ? "MQTT.TlsCaCertFile" : "MQTT.TlsClientCertFile";
+                var existing = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == settingKey);
+
+                if (existing != null)
+                {
+                    existing.SettingValue = fileName;
+                    existing.UpdatedAt = DateTime.Now;
+                }
+                else
+                {
+                    _context.AppSettingsRecords.Add(new AppSettingsRecord
+                    {
+                        SettingKey = settingKey,
+                        SettingValue = fileName,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("MQTT certificate uploaded: {Type} {FileName}", certificateType, fileName);
+                return Ok(new { success = true, fileName = fileName, message = "Certificate uploaded successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload MQTT certificate");
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // MQTT CERTIFICATE REMOVE
+        // ============================================
+        [HttpPost("remove-mqtt-certificate")]
+        public async Task<IActionResult> RemoveMqttCertificate([FromBody] MqttCertificateRequest request)
+        {
+            try
+            {
+                var isCa = string.Equals(request?.certificateType, "ca", StringComparison.OrdinalIgnoreCase);
+                if (!isCa && !string.Equals(request?.certificateType, "client", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { success = false, error = "Invalid certificate type" });
+                }
+
+                var settingKey = isCa ? "MQTT.TlsCaCertFile" : "MQTT.TlsClientCertFile";
+                var record = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == settingKey);
+
+                if (record != null)
+                {
+                    var directory = Path.Combine(_environment.ContentRootPath, "AppData", "MqttCerts");
+                    if (!string.IsNullOrWhiteSpace(record.SettingValue))
+                    {
+                        var path = Path.Combine(directory, record.SettingValue);
+                        if (System.IO.File.Exists(path))
+                        {
+                            System.IO.File.Delete(path);
+                        }
+                    }
+
+                    _context.AppSettingsRecords.Remove(record);
+                    await _context.SaveChangesAsync();
+                }
+
+                _logger.LogInformation("MQTT certificate removed: {Type}", request?.certificateType);
+                return Ok(new { success = true, message = "Certificate removed" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to remove MQTT certificate");
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // PUBLISH RELAY CONTROL COMMAND
+        // ============================================
+        [HttpPost("publish-relay")]
+        public async Task<IActionResult> PublishRelayControl([FromBody] RelayControlRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.DeviceId))
+                {
+                    return BadRequest(new { success = false, error = "DeviceId is required" });
+                }
+
+                if (request.RCValue != "0" && request.RCValue != "1" && request.RCValue != "2" && request.RCValue != "3")
+                {
+                    return BadRequest(new { success = false, error = "RC value must be 0, 1, 2, or 3" });
+                }
+
+                bool result;
+                if (request.Pulse)
+                {
+                    result = await _mqttService.PublishRelayPulseAsync(request.DeviceId, request.RCValue);
+                }
+                else
+                {
+                    result = await _mqttService.PublishRelayControlAsync(request.DeviceId, request.RCValue);
+                }
+
+                if (result)
+                {
+                    return Ok(new { success = true, message = $"Command RC={request.RCValue} published to {request.DeviceId}" });
+                }
+
+                return BadRequest(new { success = false, error = "Failed to publish MQTT command" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to publish relay control command");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // GET RELAY STATES (RCI) FROM DEVICE
+        // ============================================
+        [HttpGet("relay-states")]
+        public async Task<IActionResult> GetRelayStates()
+        {
+            try
+            {
+                var states = new Dictionary<string, object>();
+                var connectionString = _context.Database.GetDbConnection().ConnectionString;
+
+                using (var connection = new SqlConnection(connectionString))
+                using (var command = new SqlCommand(@"
+                    SELECT DeviceKey, RCI, ReceivedTime
+                    FROM (
+                        SELECT DeviceKey, RCI, ReceivedTime,
+                            ROW_NUMBER() OVER (PARTITION BY DeviceKey ORDER BY ReceivedTime DESC) AS rn
+                        FROM RelayControl
+                    ) t
+                    WHERE t.rn = 1", connection))
+                {
+                    await connection.OpenAsync();
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var deviceKey = reader["DeviceKey"]?.ToString();
+                            var rci = reader["RCI"]?.ToString();
+                            var receivedTime = reader["ReceivedTime"] as DateTime?;
+
+                            if (!string.IsNullOrWhiteSpace(deviceKey))
+                            {
+                                states[deviceKey] = new
+                                {
+                                    rci = rci,
+                                    receivedTime = receivedTime
+                                };
+                            }
+                        }
+                    }
+                }
+
+                return Ok(new { success = true, states = states });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get relay states");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // DEVICE CONTROL MODE (GLOBAL PRESET)
+        // ============================================
+        [HttpGet("device-control-mode")]
+        public async Task<IActionResult> GetDeviceControlMode()
+        {
+            try
+            {
+                var mode = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey == "DeviceControlMode")
+                    .Select(x => x.SettingValue)
+                    .FirstOrDefaultAsync() ?? "OnOff";
+
+                return Ok(new { success = true, mode = mode });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("device-control-mode")]
+        public async Task<IActionResult> SaveDeviceControlMode([FromBody] DeviceControlModeRequest request)
+        {
+            try
+            {
+                var validModes = new[] { "Toggle", "Pulse", "OnOff", "Toggle2Relay", "ToggleAll" };
+                if (!validModes.Contains(request.Mode))
+                {
+                    return BadRequest(new { success = false, error = "Invalid control mode" });
+                }
+
+                var existing = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == "DeviceControlMode");
+
+                if (existing != null)
+                {
+                    existing.SettingValue = request.Mode;
+                    existing.UpdatedAt = DateTime.Now;
+                }
+                else
+                {
+                    _context.AppSettingsRecords.Add(new AppSettingsRecord
+                    {
+                        SettingKey = "DeviceControlMode",
+                        SettingValue = request.Mode,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Control mode saved" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
             }
         }
 
@@ -4203,6 +4610,36 @@ namespace KWHMonitoring.Controllers
         public string user { get; set; } = string.Empty;
         public string password { get; set; } = string.Empty;
         public string database { get; set; } = string.Empty;
+    }
+
+    public class MqttConnectionData
+    {
+        public string broker { get; set; } = string.Empty;
+        public int port { get; set; } = 1883;
+        public string username { get; set; } = string.Empty;
+        public string password { get; set; } = string.Empty;
+        public bool useTls { get; set; } = false;
+        public string clientId { get; set; } = string.Empty;
+        public string clientCertPassword { get; set; } = string.Empty;
+        public bool skipCertValidation { get; set; } = false;
+    }
+
+    public class MqttCertificateRequest
+    {
+        public string certificateType { get; set; } = string.Empty;
+    }
+
+    public class RelayControlRequest
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string RCValue { get; set; } = string.Empty;
+        public bool Pulse { get; set; } = false;
+    }
+
+    public class DeviceControlModeRequest
+    {
+        public string DeviceKey { get; set; } = string.Empty;
+        public string Mode { get; set; } = "OnOff";
     }
 
     public class EmaSettingsData
