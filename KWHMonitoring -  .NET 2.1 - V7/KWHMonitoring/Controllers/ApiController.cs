@@ -847,63 +847,6 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        // ============================================
-        // TRIGGER ENERGY AGGREGATION (Manual)
-        // ============================================
-        [HttpPost("trigger-aggregation")]
-        public async Task<IActionResult> TriggerAggregation([FromBody] AggregationRequest request)
-        {
-            try
-            {
-                var context = HttpContext.RequestServices.GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
-
-                if (request != null && request.BackfillAll)
-                {
-                    var result = await EnergyAggregationBackgroundService.BackfillAllAsync(context);
-                    return Ok(new { success = true, message = result });
-                }
-
-                var messages = new List<string>();
-                var now = DateTime.Now;
-
-                if (request?.Hour != null)
-                {
-                    await EnergyAggregationBackgroundService.AggregateHourlyAsync(context, request.Hour.Value);
-                    messages.Add(string.Format("Hourly aggregated for {0:yyyy-MM-dd HH:00}", request.Hour.Value));
-                }
-                else
-                {
-                    var prevHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0).AddHours(-1);
-                    await EnergyAggregationBackgroundService.AggregateHourlyAsync(context, prevHour);
-                    messages.Add(string.Format("Hourly aggregated for {0:yyyy-MM-dd HH:00}", prevHour));
-                }
-
-                if (request?.Date != null)
-                {
-                    await EnergyAggregationBackgroundService.AggregateDailyAsync(context, request.Date.Value.Date);
-                    messages.Add(string.Format("Daily aggregated for {0:yyyy-MM-dd}", request.Date.Value.Date));
-                }
-
-                if (request?.Year != null && request?.Month != null)
-                {
-                    await EnergyAggregationBackgroundService.AggregateMonthlyAsync(context, request.Year.Value, request.Month.Value);
-                    messages.Add(string.Format("Monthly aggregated for {0}-{1:D2}", request.Year.Value, request.Month.Value));
-                }
-
-                else if (request?.Year != null)
-                {
-                    await EnergyAggregationBackgroundService.AggregateYearlyAsync(context, request.Year.Value);
-                    messages.Add(string.Format("Yearly aggregated for {0}", request.Year.Value));
-                }
-
-                return Ok(new { success = true, messages = messages });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message });
-            }
-        }
-
         private string GetMonthName(int month)
         {
             if (month < 1 || month > 12) return "";
@@ -4848,15 +4791,6 @@ namespace KWHMonitoring.Controllers
     {
         public string StartDate { get; set; }
         public string EndDate { get; set; }
-    }
-
-    public class AggregationRequest
-    {
-        public bool BackfillAll { get; set; }
-        public DateTime? Hour { get; set; }
-        public DateTime? Date { get; set; }
-        public int? Year { get; set; }
-        public int? Month { get; set; }
     }
 
     public class DowntimeCheckResult

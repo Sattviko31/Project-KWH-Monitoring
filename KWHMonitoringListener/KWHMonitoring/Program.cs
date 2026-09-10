@@ -113,7 +113,12 @@ public class Program
             .ConfigureServices((hostContext, services) =>
             {
                 services.Configure<AppConfig>(hostContext.Configuration);
+
+                // Singleton tracker untuk agregasi energi real-time (shared antara MQTT dan background service)
+                services.AddSingleton<IEnergyAggregationTracker, EnergyAggregationTracker>();
+
                 services.AddHostedService<KwhMonitoringService>();
+                services.AddHostedService<EnergyAggregationService>();
             });
 
     private static string? LoadUserConfigJson()

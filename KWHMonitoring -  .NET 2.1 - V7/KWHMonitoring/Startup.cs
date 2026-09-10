@@ -65,7 +65,6 @@ namespace KWHMonitoring
                 options.AddPolicy("RequireViewer", policy => policy.RequireRole("Viewer", "Operator", "Admin"));
             });
 
-            services.AddHostedService<EnergyAggregationBackgroundService>();
             services.AddHostedService<AnomalyNotificationBackgroundService>();
 
             // =========================================================

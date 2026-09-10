@@ -19,6 +19,7 @@ public class KwhMonitoringService : BackgroundService
     private readonly ILogger<KwhMonitoringService> _logger;
     private readonly AppConfig _config;
     private readonly string _connectionString;
+    private readonly IEnergyAggregationTracker _energyTracker;
 
     private IMqttClient? _mqttClient;
     private long _messageCount, _errorCount, _successCount;
@@ -54,11 +55,12 @@ public class KwhMonitoringService : BackgroundService
         "_terminalTime", "_groupName"
     };
 
-    public KwhMonitoringService(ILogger<KwhMonitoringService> logger, IOptions<AppConfig> config)
+    public KwhMonitoringService(ILogger<KwhMonitoringService> logger, IOptions<AppConfig> config, IEnergyAggregationTracker energyTracker)
     {
         _logger = logger;
         _config = config.Value;
         _connectionString = _config.Database.GetConnectionString();
+        _energyTracker = energyTracker;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -724,6 +726,9 @@ public class KwhMonitoringService : BackgroundService
                 cmd.CommandText = $"INSERT INTO KWHData ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)})";
                 await cmd.ExecuteNonQueryAsync(ct);
 
+                // Update real-time energy aggregation tracker
+                TrackEnergyReading(deviceKey, data);
+
                 using var upd = new SqlCommand("UPDATE DeviceRegistry SET MessageCount = MessageCount + 1, LastSeen = GETDATE(), UpdatedAt = GETDATE() WHERE DeviceKey = @DeviceKey", conn);
                 upd.Parameters.AddWithValue("@DeviceKey", deviceKey);
                 await upd.ExecuteNonQueryAsync(ct);
@@ -735,6 +740,28 @@ public class KwhMonitoringService : BackgroundService
         }
         _sqlHealthy = false;
         return false;
+    }
+
+    /// <summary>
+    /// Meneruskan pembacaan daya (Watt) ke energy aggregation tracker.
+    /// Data diflush ke HourlyEnergy setiap 30 detik.
+    /// </summary>
+    private void TrackEnergyReading(string deviceKey, Dictionary<string, string?> data)
+    {
+        try
+        {
+            if (!data.TryGetValue("W", out var wValue) || string.IsNullOrEmpty(wValue))
+                return;
+
+            if (!decimal.TryParse(wValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var watt))
+                return;
+
+            _energyTracker.TrackReading(deviceKey, DateTime.Now, watt);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gagal track energy reading untuk {DeviceKey}", deviceKey);
+        }
     }
 
     private async Task<bool> SaveRelayControlAsync(Dictionary<string, string?> data, string? terminalTime,
@@ -1297,6 +1324,22 @@ CREATE TABLE [dbo].[YearlyEnergy](
 [CalculatedAt] [datetime2](7) NOT NULL,
 PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_HourlyEnergy_DeviceKey_Hour] ON [dbo].[HourlyEnergy]([DeviceKey] ASC, [Hour] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_DailyEnergy_DeviceKey_Date] ON [dbo].[DailyEnergy]([DeviceKey] ASC, [Date] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_MonthlyEnergy_DeviceKey_Year_Month] ON [dbo].[MonthlyEnergy]([DeviceKey] ASC, [Year] ASC, [Month] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+CREATE UNIQUE NONCLUSTERED INDEX [IX_YearlyEnergy_DeviceKey_Year] ON [dbo].[YearlyEnergy]([DeviceKey] ASC, [Year] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
 GO
 CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DetectedTime] ON [dbo].[AnomalyLogs]([DetectedTime] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
