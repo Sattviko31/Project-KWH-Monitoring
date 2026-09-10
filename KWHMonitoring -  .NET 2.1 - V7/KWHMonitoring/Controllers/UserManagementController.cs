@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using KWHMonitoring.Models;
+using KWHMonitoring.Services;
 
 namespace KWHMonitoring.Controllers
 {
@@ -12,10 +14,12 @@ namespace KWHMonitoring.Controllers
     public class UserManagementController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IEmailService _emailService;
 
-        public UserManagementController(ApplicationDbContext context)
+        public UserManagementController(ApplicationDbContext context, IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         private async Task<string> GetMasterAdminEmailAsync()
@@ -75,8 +79,17 @@ namespace KWHMonitoring.Controllers
                 return Json(new { success = false, message = "Tidak dapat mengubah master admin." });
             }
 
+            var previousRole = user.Role;
             user.Role = role;
             await _context.SaveChangesAsync();
+
+            await LogSecurityActionAsync(SecurityAction.RoleChanged,
+                $"Role user {user.Email} diubah dari {previousRole} menjadi {role}", true);
+
+            await _emailService.SendCriticalActionNotificationAsync(
+                User.Identity.Name,
+                "Role Changed",
+                $"User {user.Email} role changed from {previousRole} to {role}.");
 
             return Json(new { success = true, message = "Role berhasil diperbarui." });
         }
@@ -143,6 +156,36 @@ namespace KWHMonitoring.Controllers
             await _context.SaveChangesAsync();
 
             return Json(new { success = true, message = "User berhasil dihapus." });
+        }
+
+        private async Task LogSecurityActionAsync(SecurityAction action, string details, bool success)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                int? userId = int.TryParse(userIdClaim, out var parsedId) ? (int?)parsedId : null;
+                var email = User.Identity.Name ?? "unknown";
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                _context.SecurityAuditLogs.Add(new SecurityAuditLog
+                {
+                    UserId = userId,
+                    Email = email,
+                    Action = action,
+                    Success = success,
+                    Details = details,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                // Audit log failure should not break the main flow
+            }
         }
     }
 }

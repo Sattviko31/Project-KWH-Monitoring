@@ -10,5 +10,6 @@ namespace KWHMonitoring.Services
         Task<bool> SendApprovalConfirmationAsync(string email, string role);
         Task<bool> SendAccessRejectedNoticeAsync(string email);
         Task<bool> SendPasswordResetEmailAsync(string email, string resetLink);
+        Task<bool> SendCriticalActionNotificationAsync(string actorEmail, string action, string details);
     }
 }

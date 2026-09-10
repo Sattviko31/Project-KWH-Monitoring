@@ -119,7 +119,8 @@ namespace KWHMonitoring
                 try
                 {
                     var seedContext = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    DbInitializer.SeedAdminUser(seedContext);
+                    var seedConfig = seedScope.ServiceProvider.GetRequiredService<IConfiguration>();
+                    DbInitializer.SeedAdminUser(seedContext, seedConfig);
                 }
                 catch (System.Exception ex)
                 {
@@ -143,6 +144,18 @@ namespace KWHMonitoring
             app.UseCookiePolicy();
             app.UseResponseCompression();
             app.UseAuthentication();
+
+            // Security headers middleware
+            app.Use(async (context, next) =>
+            {
+                context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+                context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+                context.Response.Headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+                context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';";
+                await next();
+            });
 
             app.UseMvc(routes =>
             {

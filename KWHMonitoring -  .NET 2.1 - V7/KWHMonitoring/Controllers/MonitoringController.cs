@@ -2,23 +2,27 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using KWHMonitoring.Models;
+using KWHMonitoring.Services;
 
 namespace KWHMonitoring.Controllers
 {
     public class MonitoringController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IEmailService _emailService;
         private static AppSettings _appSettings = new AppSettings();
 
-        public MonitoringController(ApplicationDbContext context)
+        public MonitoringController(ApplicationDbContext context, IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         // ============================================
@@ -238,6 +242,9 @@ namespace KWHMonitoring.Controllers
             var isMasterAdmin = !string.IsNullOrEmpty(masterAdminEmail) &&
                 string.Equals(User.Identity.Name, masterAdminEmail, StringComparison.OrdinalIgnoreCase);
 
+            await LogSecurityActionAsync(SecurityAction.SettingsViewed,
+                "Halaman Settings diakses", true);
+
             ViewBag.CurrentSettings = settings;
             ViewBag.IsMasterAdmin = isMasterAdmin;
             return View();
@@ -432,10 +439,21 @@ namespace KWHMonitoring.Controllers
 
                 await _context.SaveChangesAsync();
                 _appSettings = settings;
+
+                await LogSecurityActionAsync(SecurityAction.SettingsUpdated,
+                    "System settings diperbarui", true);
+
+                await _emailService.SendCriticalActionNotificationAsync(
+                    User.Identity.Name,
+                    "Settings Updated",
+                    "System settings telah diperbarui.");
+
                 return Json(new { success = true, message = "Settings updated" });
             }
             catch (Exception ex)
             {
+                await LogSecurityActionAsync(SecurityAction.SettingsUpdated,
+                    "Gagal memperbarui system settings: " + ex.Message, false);
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -494,6 +512,36 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        private async Task LogSecurityActionAsync(SecurityAction action, string details, bool success)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                int? userId = int.TryParse(userIdClaim, out var parsedId) ? (int?)parsedId : null;
+                var email = User.Identity.Name ?? "unknown";
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                _context.SecurityAuditLogs.Add(new SecurityAuditLog
+                {
+                    UserId = userId,
+                    Email = email,
+                    Action = action,
+                    Success = success,
+                    Details = details,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                // Audit log failure should not break the main flow
             }
         }
 

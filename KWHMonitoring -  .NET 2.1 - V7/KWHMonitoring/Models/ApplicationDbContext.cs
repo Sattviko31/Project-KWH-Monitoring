@@ -25,6 +25,7 @@ namespace KWHMonitoring.Models
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }
         public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
         public DbSet<SecurityAuditLog> SecurityAuditLogs { get; set; }
+        public DbSet<RelayControl> RelayControls { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

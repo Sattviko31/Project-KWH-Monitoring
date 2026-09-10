@@ -1125,8 +1125,47 @@
 
 </div>
 
+<!-- Settings Save Confirmation Modal -->
+<div class="modal fade" id="settingsConfirmModal" tabindex="-1" role="dialog" aria-labelledby="settingsConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="settingsConfirmModalLabel"><i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Perubahan</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="settingsConfirmMessage">Apakah Anda yakin ingin menyimpan perubahan ini?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary" id="settingsConfirmOk">Ya, Simpan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        // Global settings confirmation modal helper
+        var pendingSettingsAction = null;
+        function showSettingsConfirm(title, message, callback) {
+            var $modal = $('#settingsConfirmModal');
+            $modal.find('.modal-title').html(title);
+            $modal.find('#settingsConfirmMessage').text(message);
+            pendingSettingsAction = callback;
+            $modal.modal('show');
+        }
+
+        $(document).on('click', '#settingsConfirmOk', function() {
+            if (typeof pendingSettingsAction === 'function') {
+                pendingSettingsAction();
+                pendingSettingsAction = null;
+            }
+            $('#settingsConfirmModal').modal('hide');
+        });
+
         $(document).ready(function() {
             // Check if we should open a specific tab
             const urlParams = new URLSearchParams(window.location.search);
@@ -1217,44 +1256,51 @@
             // Save System Settings
             $('#btnSaveSystemSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
 
-                var settings = {
-                    'MQTT.Broker': $('#mqttBroker').val(),
-                    'MQTT.Port': $('#mqttPort').val(),
-                    'MQTT.ClientId': $('#mqttClientId').val(),
-                    'MQTT.UseTls': $('#mqttUseTls').val(),
-                    'MQTT.Username': $('#mqttUsername').val(),
-                    'MQTT.Password': $('#mqttPassword').val(),
-                    'MQTT.TlsSkipCertValidation': $('#mqttSkipCertValidation').val(),
-                    'MQTT.TlsClientCertPassword': $('#mqttClientCertPassword').val(),
-                    'Interval.Dashboard': $('#dashboardInterval').val(),
-                    'Interval.Charts': $('#chartsInterval').val(),
-                    'Interval.Details': $('#detailsInterval').val(),
-                    'Interval.Anomaly': $('#anomalyInterval').val(),
-                    'Chart.DataPoints': $('#chartDataPoints').val(),
-                    'Interval.AutoScan': $('#autoScanInterval').val(),
-                    'Load.MaxCapacity': $('#maxCapacity').val(),
-                    'Load.NormalThreshold': $('#normalThreshold').val(),
-                    'Load.MediumThreshold': $('#mediumThreshold').val(),
-                    'Tariff.PerKWh': $('#tariffPerKWh').val()
-                };
+                showSettingsConfirm(
+                    'Simpan System Settings',
+                    'Apakah Anda yakin ingin menyimpan perubahan System Settings?',
+                    function() {
+                        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
 
-                $.ajax({
-                    url: '/api/Api/save-system-settings',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(settings),
-                    success: function(response) {
-                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                        showNotification('All settings saved successfully!', 'success');
-                        setTimeout(function() { location.reload(); }, 1000);
-                    },
-                    error: function(xhr) {
-                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                        showNotification('Error saving settings', 'danger');
+                        var settings = {
+                            'MQTT.Broker': $('#mqttBroker').val(),
+                            'MQTT.Port': $('#mqttPort').val(),
+                            'MQTT.ClientId': $('#mqttClientId').val(),
+                            'MQTT.UseTls': $('#mqttUseTls').val(),
+                            'MQTT.Username': $('#mqttUsername').val(),
+                            'MQTT.Password': $('#mqttPassword').val(),
+                            'MQTT.TlsSkipCertValidation': $('#mqttSkipCertValidation').val(),
+                            'MQTT.TlsClientCertPassword': $('#mqttClientCertPassword').val(),
+                            'Interval.Dashboard': $('#dashboardInterval').val(),
+                            'Interval.Charts': $('#chartsInterval').val(),
+                            'Interval.Details': $('#detailsInterval').val(),
+                            'Interval.Anomaly': $('#anomalyInterval').val(),
+                            'Chart.DataPoints': $('#chartDataPoints').val(),
+                            'Interval.AutoScan': $('#autoScanInterval').val(),
+                            'Load.MaxCapacity': $('#maxCapacity').val(),
+                            'Load.NormalThreshold': $('#normalThreshold').val(),
+                            'Load.MediumThreshold': $('#mediumThreshold').val(),
+                            'Tariff.PerKWh': $('#tariffPerKWh').val()
+                        };
+
+                        $.ajax({
+                            url: '/api/Api/save-system-settings',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify(settings),
+                            success: function(response) {
+                                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                                showNotification('All settings saved successfully!', 'success');
+                                setTimeout(function() { location.reload(); }, 1000);
+                            },
+                            error: function(xhr) {
+                                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                                showNotification('Error saving settings', 'danger');
+                            }
+                        });
                     }
-                });
+                );
             });
 
             // Reset System Settings
@@ -1792,27 +1838,33 @@
 
         $('#btnSaveControlMode').click(function() {
             var btn = $(this);
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
-
             var mode = $('#globalControlMode').val();
-            $.ajax({
-                url: '/api/Api/device-control-mode',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ deviceKey: '_global', mode: mode }),
-                success: function(data) {
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
-                    if (data.success) {
-                        showNotification('Control mode saved successfully', 'success');
-                    } else {
-                        showNotification(data.error || 'Gagal menyimpan mode', 'danger');
-                    }
-                },
-                error: function() {
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
-                    showNotification('Error saving control mode', 'danger');
+
+            showSettingsConfirm(
+                'Simpan Control Mode',
+                'Apakah Anda yakin ingin mengubah Global Control Mode menjadi ' + mode + '?',
+                function() {
+                    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                    $.ajax({
+                        url: '/api/Api/device-control-mode',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ deviceKey: '_global', mode: mode }),
+                        success: function(data) {
+                            btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
+                            if (data.success) {
+                                showNotification('Control mode saved successfully', 'success');
+                            } else {
+                                showNotification(data.error || 'Gagal menyimpan mode', 'danger');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
+                            showNotification('Error saving control mode', 'danger');
+                        }
+                    });
                 }
-            });
+            );
         });
 
         // ============================================

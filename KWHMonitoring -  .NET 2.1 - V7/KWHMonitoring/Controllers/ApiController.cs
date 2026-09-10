@@ -6,8 +6,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Mail;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -35,8 +37,9 @@ namespace KWHMonitoring.Controllers
         private readonly AesEncryptionService _encryption;
         private readonly MqttService _mqttService;
         private readonly IHostingEnvironment _environment;
+        private readonly IEmailService _emailService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService)
         {
             _context = context;
             _cache = cache;
@@ -45,6 +48,7 @@ namespace KWHMonitoring.Controllers
             _encryption = encryption;
             _mqttService = mqttService;
             _environment = environment;
+            _emailService = emailService;
         }
 
         private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
@@ -52,6 +56,61 @@ namespace KWHMonitoring.Controllers
             var record = await _context.AppSettingsRecords
                 .FirstOrDefaultAsync(x => x.SettingKey == key);
             return record != null ? record.SettingValue : defaultValue;
+        }
+
+        private async Task LogSecurityActionAsync(SecurityAction action, string targetDevice, string details, bool success)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                int? userId = int.TryParse(userIdClaim, out var parsedId) ? (int?)parsedId : null;
+                var email = User.Identity.Name ?? "unknown";
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                _context.SecurityAuditLogs.Add(new SecurityAuditLog
+                {
+                    UserId = userId,
+                    Email = email,
+                    Action = action,
+                    TargetDevice = targetDevice ?? string.Empty,
+                    Details = details,
+                    Success = success,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                // Audit log failure should not break the main flow
+            }
+        }
+
+        // Rate limiting: max 10 requests per 60 seconds per user for relay control
+        private bool IsRelayControlRateLimited(string userIdentifier)
+        {
+            var key = "RelayRateLimit_" + userIdentifier;
+            var now = DateTime.UtcNow;
+            var windowStart = now.AddSeconds(-60);
+
+            if (!_cache.TryGetValue(key, out List<DateTime> timestamps))
+            {
+                timestamps = new List<DateTime>();
+            }
+
+            timestamps = timestamps.Where(t => t > windowStart).ToList();
+
+            if (timestamps.Count >= 10)
+            {
+                return true;
+            }
+
+            timestamps.Add(now);
+            _cache.Set(key, timestamps, TimeSpan.FromMinutes(1));
+            return false;
         }
 
         // ============================================
@@ -1957,6 +2016,7 @@ namespace KWHMonitoring.Controllers
         // SAVE SYSTEM SETTINGS
         // ============================================
         [HttpPost("save-system-settings")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SaveSystemSettings([FromBody] Dictionary<string, string> settings)
         {
             try
@@ -2260,8 +2320,12 @@ namespace KWHMonitoring.Controllers
         // PUBLISH RELAY CONTROL COMMAND
         // ============================================
         [HttpPost("publish-relay")]
+        [Authorize(Roles = "Operator,Admin")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> PublishRelayControl([FromBody] RelayControlRequest request)
         {
+            var userIdentifier = User.Identity.Name ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+
             try
             {
                 if (string.IsNullOrWhiteSpace(request.DeviceId))
@@ -2273,6 +2337,20 @@ namespace KWHMonitoring.Controllers
                 {
                     return BadRequest(new { success = false, error = "RC value must be 0, 1, 2, or 3" });
                 }
+
+                // Rate limiting: max 10 relay commands per 60 seconds per user
+                if (IsRelayControlRateLimited(userIdentifier))
+                {
+                    await LogSecurityActionAsync(SecurityAction.UnauthorizedAttempt, request.DeviceId,
+                        "Relay control rate limit exceeded", false);
+                    return StatusCode(429, new { success = false, error = "Terlalu banyak perintah relay. Silakan tunggu 60 detik." });
+                }
+
+                var action = request.Pulse
+                    ? SecurityAction.RelayPulse
+                    : request.RCValue == "0"
+                        ? SecurityAction.RelayOff
+                        : SecurityAction.RelayOn;
 
                 bool result;
                 if (request.Pulse)
@@ -2286,14 +2364,23 @@ namespace KWHMonitoring.Controllers
 
                 if (result)
                 {
+                    var details = $"Device {request.DeviceId}, RC={request.RCValue}, Pulse={request.Pulse}";
+                    await LogSecurityActionAsync(action, request.DeviceId, details, true);
+                    await _emailService.SendCriticalActionNotificationAsync(
+                        User.Identity.Name,
+                        request.Pulse ? "Relay Pulse" : (request.RCValue == "0" ? "Relay OFF" : "Relay ON"),
+                        details);
+
                     return Ok(new { success = true, message = $"Command RC={request.RCValue} published to {request.DeviceId}" });
                 }
 
+                await LogSecurityActionAsync(action, request.DeviceId, "Failed to publish MQTT command", false);
                 return BadRequest(new { success = false, error = "Failed to publish MQTT command" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to publish relay control command");
+                await LogSecurityActionAsync(SecurityAction.RelayOn, request.DeviceId, "Exception: " + ex.Message, false);
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -2306,35 +2393,80 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var states = new Dictionary<string, object>();
-                var connectionString = _context.Database.GetDbConnection().ConnectionString;
+                var states = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
-                using (var connection = new SqlConnection(connectionString))
-                using (var command = new SqlCommand(@"
-                    SELECT DeviceKey, RCI, ReceivedTime
-                    FROM (
-                        SELECT DeviceKey, RCI, ReceivedTime,
-                            ROW_NUMBER() OVER (PARTITION BY DeviceKey ORDER BY ReceivedTime DESC) AS rn
-                        FROM RelayControl
-                    ) t
-                    WHERE t.rn = 1", connection))
+                using (var connection = _context.Database.GetDbConnection())
                 {
                     await connection.OpenAsync();
-                    using (var reader = await command.ExecuteReaderAsync())
+                    using (var command = connection.CreateCommand())
                     {
-                        while (await reader.ReadAsync())
-                        {
-                            var deviceKey = reader["DeviceKey"]?.ToString();
-                            var rci = reader["RCI"]?.ToString();
-                            var receivedTime = reader["ReceivedTime"] as DateTime?;
+                        // Deteksi apakah kolom RC ada di tabel (untuk backward compatibility).
+                        command.CommandText = @"SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RelayControl' AND COLUMN_NAME = 'RC'";
+                        var rcColumnExists = await command.ExecuteScalarAsync() != null;
 
-                            if (!string.IsNullOrWhiteSpace(deviceKey))
+                        // Ambil record terbaru per DeviceKey. Prioritaskan RCI; jika RCI kosong/null, fallback ke RC.
+                        command.CommandText = rcColumnExists
+                            ? @"
+                                SELECT DeviceKey, DeviceId, GroupName, RCI, RC, ReceivedTime
+                                FROM (
+                                    SELECT *,
+                                        ROW_NUMBER() OVER (PARTITION BY DeviceKey ORDER BY ReceivedTime DESC) AS rn
+                                    FROM RelayControl
+                                ) t
+                                WHERE rn = 1"
+                            : @"
+                                SELECT DeviceKey, DeviceId, GroupName, RCI, NULL AS RC, ReceivedTime
+                                FROM (
+                                    SELECT *,
+                                        ROW_NUMBER() OVER (PARTITION BY DeviceKey ORDER BY ReceivedTime DESC) AS rn
+                                    FROM RelayControl
+                                ) t
+                                WHERE rn = 1";
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
                             {
-                                states[deviceKey] = new
+                                var deviceKey = (reader["DeviceKey"] as string)?.Trim();
+                                var deviceId = (reader["DeviceId"] as string)?.Trim();
+                                var groupName = (reader["GroupName"] as string)?.Trim();
+                                var rciRaw = reader["RCI"] as string;
+                                var rcRaw = reader["RC"];
+                                var receivedTime = reader.GetDateTime(reader.GetOrdinal("ReceivedTime"));
+
+                                // Prefer RCI, fallback ke RC
+                                string effectiveValue = null;
+                                if (!string.IsNullOrWhiteSpace(rciRaw))
                                 {
-                                    rci = rci,
+                                    effectiveValue = rciRaw.Trim();
+                                }
+                                else if (rcRaw != null && rcRaw != DBNull.Value)
+                                {
+                                    effectiveValue = rcRaw.ToString().Trim();
+                                }
+
+                                // Lewati device yang tidak punya nilai RCI/RC sama sekali
+                                if (string.IsNullOrWhiteSpace(effectiveValue))
+                                    continue;
+
+                                var stateObj = new
+                                {
+                                    rci = effectiveValue,
+                                    rciRaw = rciRaw,
+                                    rcRaw = rcRaw?.ToString(),
                                     receivedTime = receivedTime
                                 };
+
+                                // Expose state under every possible identifier so the UI can find it
+                                // regardless of whether the external process writes DeviceKey, DeviceId, or GroupName.
+                                var keys = new[] { deviceKey, deviceId, groupName };
+                                foreach (var key in keys)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(key))
+                                    {
+                                        states[key] = stateObj;
+                                    }
+                                }
                             }
                         }
                     }
@@ -2345,7 +2477,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get relay states");
-                return StatusCode(500, new { error = ex.Message });
+                return Ok(new { success = true, error = ex.Message, states = new Dictionary<string, object>() });
             }
         }
 
@@ -2371,6 +2503,8 @@ namespace KWHMonitoring.Controllers
         }
 
         [HttpPost("device-control-mode")]
+        [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveDeviceControlMode([FromBody] DeviceControlModeRequest request)
         {
             try
@@ -3769,6 +3903,7 @@ namespace KWHMonitoring.Controllers
         // NOTIFICATION SETTINGS - SAVE
         // ============================================
         [HttpPost("save-notification-settings")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SaveNotificationSettings([FromBody] NotificationSettingsData data)
         {
             try

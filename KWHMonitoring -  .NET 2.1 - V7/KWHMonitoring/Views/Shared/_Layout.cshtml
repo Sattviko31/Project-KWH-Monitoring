@@ -2,6 +2,7 @@
 @using Microsoft.Extensions.Caching.Memory
 @inject IMemoryCache MemoryCache
 @inject ApplicationDbContext Db
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @{
     const string cacheKey = "Layout_FooterSettings";
     if (!MemoryCache.TryGetValue(cacheKey, out Dictionary<string, string> _footerSettings))
@@ -15,12 +16,14 @@
     }
     var _dbServer = _GetFooterSetting("Database.Server", "192.168.6.15");
     var _dbName = _GetFooterSetting("Database.Name", "HaiwellElectrical");
+    var _antiforgeryTokens = Antiforgery.GetAndStoreTokens(Context);
 }
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="@_antiforgeryTokens.RequestToken" />
     <title>@ViewData["Title"] - KWH Monitoring</title>
     <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/bootstrap5-compat.css" />
@@ -134,7 +137,7 @@
 
 
                         <!-- Tambahkan Library Marked.js untuk merender Markdown -->
-                        <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/lib/marked.umd.min.js" crossorigin="anonymous"></script>
+                        <script src="~/js/marked.umd.min.js"></script>
 
                         <!-- ========================================== -->
                         <!-- HTML WIDGET QWEN (Professional Design)   -->
@@ -1492,6 +1495,21 @@
 
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script>
+        // CSRF token helper: attach anti-forgery token to all mutating AJAX requests
+        (function() {
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            if (typeof jQuery !== 'undefined') {
+                $(document).ajaxSend(function(e, xhr, options) {
+                    var method = (options.type || 'GET').toUpperCase();
+                    if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+                        xhr.setRequestHeader('RequestVerificationToken', csrfToken);
+                    }
+                });
+            }
+            window.getCsrfToken = function() { return csrfToken; };
+        })();
+    </script>
     <script src="~/lib/devextreme/js/dx.all.js"></script>
     <script src="~/lib/bootstrap/js/bootstrap.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

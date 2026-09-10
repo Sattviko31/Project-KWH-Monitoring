@@ -13,7 +13,13 @@ namespace KWHMonitoring.Services
 
         public AesEncryptionService(IConfiguration configuration)
         {
-            var encryptionKey = configuration["Encryption:Key"] ?? "KWH-Monitoring-2024-AES256-SecureKey!";
+            var encryptionKey = configuration["Encryption:Key"]?.Trim();
+            if (string.IsNullOrWhiteSpace(encryptionKey) ||
+                encryptionKey == "YOUR_ENCRYPTION_KEY")
+            {
+                throw new InvalidOperationException("Encryption key is not configured. Set the environment variable 'Encryption__Key' or the configuration key 'Encryption:Key' to a strong secret value.");
+            }
+
             using (var sha256 = SHA256.Create())
             {
                 _key = sha256.ComputeHash(Encoding.UTF8.GetBytes(encryptionKey));

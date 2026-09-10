@@ -1630,6 +1630,24 @@ namespace KWHMonitoring.Services
         }
 
         // ============================================
+        // MASTER ADMIN EMAIL HELPER
+        // ============================================
+        public async Task<string> GetMasterAdminEmailAsync()
+        {
+            try
+            {
+                var record = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == "Notification.MasterAdminEmail");
+                return record?.SettingValue ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to retrieve master admin email");
+                return string.Empty;
+            }
+        }
+
+        // ============================================
         // WABLAS WHATSAPP - SEND TEXT MESSAGE
         // ============================================
         public async Task<WablasResponse> SendWablasAsync(string message, string phone = null)

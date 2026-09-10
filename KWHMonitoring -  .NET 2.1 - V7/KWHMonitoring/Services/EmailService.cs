@@ -102,5 +102,44 @@ namespace KWHMonitoring.Services
 
             return await _notificationService.SendEmailAsync(email, subject, body);
         }
+
+        public async Task<bool> SendCriticalActionNotificationAsync(string actorEmail, string action, string details)
+        {
+            var masterAdminEmail = await _notificationService.GetMasterAdminEmailAsync();
+            if (string.IsNullOrWhiteSpace(masterAdminEmail))
+            {
+                _logger.LogWarning("Master admin email not configured; skipping critical action notification.");
+                return false;
+            }
+
+            var now = DateTime.UtcNow;
+            var subject = "[KWH Monitoring] Aksi Kritis Terdeteksi";
+            var body = $@"<html><body style='font-family:Arial,sans-serif'>
+                <h2 style='color:#dc3545'>Aksi Kritis pada KWH Monitoring</h2>
+                <p>Aksi berikut dilakukan oleh pengguna yang memerlukan perhatian:</p>
+                <table style='border-collapse:collapse;width:100%;max-width:600px'>
+                    <tr style='border-bottom:1px solid #dee2e6'>
+                        <td style='padding:8px;font-weight:bold'>Waktu</td>
+                        <td style='padding:8px'>{now:yyyy-MM-dd HH:mm:ss} UTC</td>
+                    </tr>
+                    <tr style='border-bottom:1px solid #dee2e6'>
+                        <td style='padding:8px;font-weight:bold'>Actor</td>
+                        <td style='padding:8px'>{WebUtility.HtmlEncode(actorEmail ?? "unknown")}</td>
+                    </tr>
+                    <tr style='border-bottom:1px solid #dee2e6'>
+                        <td style='padding:8px;font-weight:bold'>Aksi</td>
+                        <td style='padding:8px'>{WebUtility.HtmlEncode(action)}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding:8px;font-weight:bold'>Detail</td>
+                        <td style='padding:8px'>{WebUtility.HtmlEncode(details)}</td>
+                    </tr>
+                </table>
+                <hr>
+                <p style='font-size:12px;color:#666'>Email ini dikirim secara otomatis oleh sistem KWH Monitoring.</p>
+            </body></html>";
+
+            return await _notificationService.SendEmailAsync(masterAdminEmail, subject, body);
+        }
     }
 }

@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 ## MQTT TLS certificates uploaded at runtime — never commit
 AppData/MqttCerts/
+
+## Captured anti-forgery / request tokens — never commit
+token.txt
