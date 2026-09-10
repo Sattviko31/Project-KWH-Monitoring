@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using KWHMonitoring.Models;
@@ -227,12 +228,18 @@ namespace KWHMonitoring.Controllers
         }
 
         // SETTINGS PAGE
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Settings()
         {
             var settings = await _context.AppSettingsRecords
                 .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
+            var masterAdminEmail = settings.TryGetValue("Notification.MasterAdminEmail", out var mae) ? mae : string.Empty;
+            var isMasterAdmin = !string.IsNullOrEmpty(masterAdminEmail) &&
+                string.Equals(User.Identity.Name, masterAdminEmail, StringComparison.OrdinalIgnoreCase);
+
             ViewBag.CurrentSettings = settings;
+            ViewBag.IsMasterAdmin = isMasterAdmin;
             return View();
         }
 
@@ -381,6 +388,7 @@ namespace KWHMonitoring.Controllers
         // SETTINGS
         // ============================================
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateSettings(AppSettings settings)
         {
             try
@@ -432,6 +440,7 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetSettings()
         {
             try

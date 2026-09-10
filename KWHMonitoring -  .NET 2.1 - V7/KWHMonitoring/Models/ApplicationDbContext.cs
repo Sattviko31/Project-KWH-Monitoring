@@ -22,6 +22,9 @@ namespace KWHMonitoring.Models
         public DbSet<HourlyEnergy> HourlyEnergy { get; set; }
         public DbSet<MonthlyEnergy> MonthlyEnergy { get; set; }
         public DbSet<YearlyEnergy> YearlyEnergy { get; set; }
+        public DbSet<ApplicationUser> ApplicationUsers { get; set; }
+        public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
+        public DbSet<SecurityAuditLog> SecurityAuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -261,6 +264,61 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Year);
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+            });
+
+            modelBuilder.Entity<ApplicationUser>(entity =>
+            {
+                entity.ToTable("ApplicationUsers");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.Email).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.NormalizedEmail).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.DisplayName).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.PasswordHash).HasColumnType("nvarchar(500)").IsRequired();
+                entity.Property(x => x.Role).HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2").IsRequired();
+                entity.Property(x => x.LastLoginAt).HasColumnType("datetime2");
+                entity.Property(x => x.LockoutEnd).HasColumnType("datetime2");
+
+                entity.HasIndex(x => x.NormalizedEmail).IsUnique().HasName("IX_ApplicationUsers_NormalizedEmail");
+            });
+
+            modelBuilder.Entity<EmailVerificationToken>(entity =>
+            {
+                entity.ToTable("EmailVerificationTokens");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.Email).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.TokenHash).HasColumnType("nvarchar(128)").HasMaxLength(128).IsRequired();
+                entity.Property(x => x.Purpose).IsRequired();
+                entity.Property(x => x.ExpiresAt).HasColumnType("datetime2").IsRequired();
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2").IsRequired();
+                entity.Property(x => x.UsedAt).HasColumnType("datetime2");
+                entity.Property(x => x.RequestedRole).HasColumnType("nvarchar(50)").HasMaxLength(50);
+
+                entity.HasIndex(x => new { x.TokenHash, x.Purpose }).HasName("IX_EmailVerificationTokens_Token_Purpose");
+                entity.HasIndex(x => x.ExpiresAt).HasName("IX_EmailVerificationTokens_ExpiresAt");
+            });
+
+            modelBuilder.Entity<SecurityAuditLog>(entity =>
+            {
+                entity.ToTable("SecurityAuditLogs");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.Email).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.Action).IsRequired();
+                entity.Property(x => x.TargetDevice).HasColumnType("nvarchar(100)").HasMaxLength(100);
+                entity.Property(x => x.IpAddress).HasColumnType("nvarchar(50)").HasMaxLength(50);
+                entity.Property(x => x.UserAgent).HasColumnType("nvarchar(500)");
+                entity.Property(x => x.Details).HasColumnType("nvarchar(500)");
+                entity.Property(x => x.Timestamp).HasColumnType("datetime2").IsRequired();
+
+                entity.HasIndex(x => x.Timestamp).HasName("IX_SecurityAuditLogs_Timestamp");
+                entity.HasIndex(x => x.UserId).HasName("IX_SecurityAuditLogs_UserId");
+                entity.HasIndex(x => x.Action).HasName("IX_SecurityAuditLogs_Action");
             });
         }
     }

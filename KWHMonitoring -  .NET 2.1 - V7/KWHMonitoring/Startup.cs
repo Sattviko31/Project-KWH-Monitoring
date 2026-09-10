@@ -43,6 +43,28 @@ namespace KWHMonitoring
             services.AddScoped<AesEncryptionService>();
             services.AddSingleton<MqttService>();
 
+            services.AddScoped<IEmailService, EmailService>();
+
+            services.AddAuthentication("Cookies")
+                .AddCookie("Cookies", options =>
+                {
+                    options.LoginPath = "/Account/Login";
+                    options.AccessDeniedPath = "/Account/AccessDenied";
+                    options.LogoutPath = "/Account/Logout";
+                    options.ExpireTimeSpan = System.TimeSpan.FromMinutes(30);
+                    options.SlidingExpiration = true;
+                    options.Cookie.HttpOnly = true;
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                    options.Cookie.SameSite = SameSiteMode.Lax;
+                });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Admin"));
+                options.AddPolicy("RequireOperator", policy => policy.RequireRole("Operator", "Admin"));
+                options.AddPolicy("RequireViewer", policy => policy.RequireRole("Viewer", "Operator", "Admin"));
+            });
+
             services.AddHostedService<EnergyAggregationBackgroundService>();
             services.AddHostedService<AnomalyNotificationBackgroundService>();
 
@@ -92,6 +114,20 @@ namespace KWHMonitoring
                 }
             }
 
+            using (var seedScope = app.ApplicationServices.CreateScope())
+            {
+                try
+                {
+                    var seedContext = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    DbInitializer.SeedAdminUser(seedContext);
+                }
+                catch (System.Exception ex)
+                {
+                    var seedLogger = loggerFactory.CreateLogger("DbInitializer");
+                    seedLogger.LogWarning(ex, "Failed to seed admin user.");
+                }
+            }
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -106,6 +142,7 @@ namespace KWHMonitoring
             app.UseStaticFiles();
             app.UseCookiePolicy();
             app.UseResponseCompression();
+            app.UseAuthentication();
 
             app.UseMvc(routes =>
             {

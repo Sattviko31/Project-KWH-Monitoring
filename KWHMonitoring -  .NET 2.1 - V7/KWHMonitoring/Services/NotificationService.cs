@@ -1545,6 +1545,91 @@ namespace KWHMonitoring.Services
         }
 
         // ============================================
+        // GENERIC EMAIL SENDER (used by auth, anomaly, etc.)
+        // Returns true when the message is accepted by the SMTP server.
+        // ============================================
+        public async Task<bool> SendEmailAsync(string to, string subject, string body)
+        {
+            if (string.IsNullOrEmpty(_settings.SmtpServer) ||
+                string.IsNullOrEmpty(_settings.SenderEmail) ||
+                string.IsNullOrEmpty(_settings.SenderPassword) ||
+                string.IsNullOrEmpty(to))
+            {
+                _logger.LogWarning("Email settings not configured or recipient is empty");
+                return false;
+            }
+
+            try
+            {
+                using (var client = new SmtpClient(_settings.SmtpServer, _settings.SmtpPort))
+                {
+                    client.Credentials = new NetworkCredential(_settings.SenderEmail, _settings.SenderPassword);
+                    client.EnableSsl = true;
+
+                    using (var mailMessage = new MailMessage())
+                    {
+                        mailMessage.From = new MailAddress(_settings.SenderEmail, "KWH Monitoring System");
+                        mailMessage.ReplyToList.Add(_settings.SenderEmail);
+                        mailMessage.Subject = subject;
+                        mailMessage.Body = body;
+                        mailMessage.IsBodyHtml = true;
+
+                        // Plain-text alternative improves deliverability (reduces spam score).
+                        var plainText = HtmlToPlainText(body);
+                        if (!string.IsNullOrWhiteSpace(plainText))
+                        {
+                            mailMessage.AlternateViews.Add(
+                                AlternateView.CreateAlternateViewFromString(plainText, Encoding.UTF8, "text/plain"));
+                        }
+
+                        var recipients = to.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var recipient in recipients)
+                        {
+                            var trimmedEmail = recipient.Trim();
+                            if (!string.IsNullOrEmpty(trimmedEmail))
+                            {
+                                mailMessage.To.Add(trimmedEmail);
+                            }
+                        }
+
+                        if (mailMessage.To.Count == 0)
+                        {
+                            _logger.LogWarning("No valid recipients found for email");
+                            return false;
+                        }
+
+                        await client.SendMailAsync(mailMessage);
+                        _logger.LogInformation("Email sent successfully to {0}", to);
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending email to {0}: {1}", to, ex.Message);
+                return false;
+            }
+        }
+
+        private static string HtmlToPlainText(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            var text = html;
+            text = System.Text.RegularExpressions.Regex.Replace(text, "(?i)<br\\s*/?>", "\n");
+            text = System.Text.RegularExpressions.Regex.Replace(text, "(?i)</(p|div|h\\d|li|ul|tr)>", "\n");
+            text = System.Text.RegularExpressions.Regex.Replace(text, "(?is)<style.*?</style>", string.Empty);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "(?is)<script.*?</script>", string.Empty);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", string.Empty);
+            text = System.Net.WebUtility.HtmlDecode(text);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "\n{3,}", "\n\n");
+            return text.Trim();
+        }
+
+        // ============================================
         // WABLAS WHATSAPP - SEND TEXT MESSAGE
         // ============================================
         public async Task<WablasResponse> SendWablasAsync(string message, string phone = null)

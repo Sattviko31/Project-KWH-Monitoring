@@ -3519,6 +3519,7 @@ namespace KWHMonitoring.Controllers
                     senderEmail = GetString(settings, "Notification.SenderEmail", ""),
                     senderPassword = GetString(settings, "Notification.SenderPassword", ""),
                     recipientEmail = GetString(settings, "Notification.RecipientEmail", ""),
+                    masterAdminEmail = GetString(settings, "Notification.MasterAdminEmail", ""),
                     whatsappGatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "https://api.fonnte.com/send"),
                     whatsappToken = GetString(settings, "Notification.WhatsAppToken", ""),
                     whatsappPhone = GetString(settings, "Notification.WhatsAppPhone", ""),
@@ -3783,6 +3784,7 @@ namespace KWHMonitoring.Controllers
                     { "Notification.SenderEmail", data.senderEmail ?? "" },
                     { "Notification.SenderPassword", data.senderPassword ?? "" },
                     { "Notification.RecipientEmail", data.recipientEmail ?? "" },
+                    { "Notification.MasterAdminEmail", data.masterAdminEmail ?? "" },
                     { "Notification.WhatsAppGatewayUrl", data.whatsappGatewayUrl ?? "" },
                     { "Notification.WhatsAppToken", data.whatsappToken ?? "" },
                     { "Notification.WhatsAppPhone", data.whatsappPhone ?? "" },
@@ -4664,6 +4666,7 @@ namespace KWHMonitoring.Controllers
         public string senderEmail { get; set; }
         public string senderPassword { get; set; }
         public string recipientEmail { get; set; }
+        public string masterAdminEmail { get; set; }
         public string whatsappGatewayUrl { get; set; }
         public string whatsappToken { get; set; }
         public string whatsappPhone { get; set; }
