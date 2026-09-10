@@ -148,7 +148,9 @@ public class EnergyAggregationService : BackgroundService
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
             {
-                dataPoints.Add((reader.GetDateTime(0), reader.GetDecimal(1)));
+                var receivedTime = reader.GetDateTime(0);
+                var watt = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                dataPoints.Add((receivedTime, watt));
             }
         }
 
@@ -169,7 +171,9 @@ public class EnergyAggregationService : BackgroundService
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                dataPoints.Add((reader.GetDateTime(0), reader.GetDecimal(1)));
+                var receivedTime = reader.GetDateTime(0);
+                var watt = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                dataPoints.Add((receivedTime, watt));
             }
         }
 
@@ -187,7 +191,9 @@ public class EnergyAggregationService : BackgroundService
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
             if (await reader.ReadAsync(cancellationToken))
             {
-                dataPoints.Add((reader.GetDateTime(0), reader.GetDecimal(1)));
+                var receivedTime = reader.GetDateTime(0);
+                var watt = reader.IsDBNull(1) ? 0m : reader.GetDecimal(1);
+                dataPoints.Add((receivedTime, watt));
             }
         }
 
