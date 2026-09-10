@@ -286,10 +286,9 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var utcNow = DateTime.UtcNow;
-                var jakartaOffset = TimeSpan.FromHours(7);
-                var serverNow = new DateTimeOffset(utcNow, TimeSpan.Zero).ToOffset(jakartaOffset).DateTime;
-                var serverToday = serverNow.Date;
+                // Gunakan local server time agar konsisten dengan listener (DateTime.Now)
+                var serverNow = DateTime.Now;
+                var serverToday = DateTime.Today;
 
                 DateTime startDate;
                 if (!string.IsNullOrWhiteSpace(filter?.StartDate) &&
@@ -361,58 +360,35 @@ namespace KWHMonitoring.Controllers
 
                 if (isToday)
                 {
-                    var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
-                    var currentHourReadings = await _context.KWH_Monitoring
-                        .Where(x => x.Waktu_Server >= currentHourStart)
-                        .OrderBy(x => x.DeviceKey)
-                        .ThenBy(x => x.Waktu_Server)
-                        .ToListAsync();
-
-                    if (currentHourReadings.Any())
-                    {
-                        var rtDeviceKeys = currentHourReadings.Select(x => x.DeviceKey).Distinct().ToList();
-                        foreach (var dk in rtDeviceKeys)
-                        {
-                            var baseline = await _context.KWH_Monitoring
-                                .Where(x => x.DeviceKey == dk && x.Waktu_Server < currentHourStart)
-                                .OrderByDescending(x => x.Waktu_Server)
-                                .FirstOrDefaultAsync();
-
-                            var seq = new List<KWHData>();
-                            if (baseline != null) seq.Add(baseline);
-                            seq.AddRange(currentHourReadings.Where(x => x.DeviceKey == dk));
-
-                            if (seq.Count < 2) continue;
-                            decimal wh = 0;
-                            for (int i = 1; i < seq.Count; i++)
-                            {
-                                var h = (decimal)(seq[i].Waktu_Server - seq[i - 1].Waktu_Server).TotalHours;
-                                if (h <= 0) continue;
-                                wh += ((seq[i - 1].Daya_Watt ?? 0m) + (seq[i].Daya_Watt ?? 0m)) / 2m * h;
-                            }
-                            realtimeKWh += wh / 1000m;
-                        }
-                    }
-
+                    // Data jam berjalan sudah ada di HourlyEnergy karena listener flush tiap 30 detik
                     var currentHourIndex = serverNow.Hour;
                     currentHourLabel = string.Format("{0:D2}:00", currentHourIndex);
+                    var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
                     secondsToNextHour = (int)(currentHourStart.AddHours(1) - serverNow).TotalSeconds;
 
+                    // Ambil nilai current hour dari HourlyEnergy untuk realtimeKWh
                     if (currentHourIndex >= 0 && currentHourIndex < hourlyData.Count)
                     {
-                        hourlyData[currentHourIndex] = new
-                        {
-                            timeLabel = currentHourLabel,
-                            energy = Math.Round(realtimeKWh, 2),
-                            sortKey = currentHourIndex
-                        };
+                        realtimeKWh = hourlyData[currentHourIndex].energy;
                     }
 
+                    // Total hari ini dari HourlyEnergy
                     todayKWh = Math.Round(hourlyData.Sum(x => x.energy), 2);
-                    var todayOldInDaily = dailyData.FirstOrDefault(x => x.sortKey == serverNow.Day)?.energy ?? 0;
-                    monthKWh = Math.Round(dailyData.Sum(x => x.energy) - todayOldInDaily + todayKWh, 2);
-                    var monthOldInMonthly = monthlyData.FirstOrDefault(x => x.sortKey == serverNow.Month)?.energy ?? 0;
-                    yearKWh = Math.Round(monthlyData.Sum(x => x.energy) - monthOldInMonthly + monthKWh, 2);
+
+                    // Total bulan ini = HourlyEnergy hari ini + DailyEnergy hari-hari sebelumnya di bulan ini
+                    var previousDaysTotal = await _context.DailyEnergy
+                        .Where(x => x.Date >= monthStart && x.Date < serverToday)
+                        .SumAsync(x => x.EnergyKWh);
+                    monthKWh = Math.Round(todayKWh + previousDaysTotal, 2);
+
+                    // Total tahun ini = HourlyEnergy hari ini + DailyEnergy bulan ini sebelum hari ini + MonthlyEnergy bulan-bulan sebelumnya
+                    var currentMonthUpToYesterday = await _context.DailyEnergy
+                        .Where(x => x.Date >= monthStart && x.Date < serverToday)
+                        .SumAsync(x => x.EnergyKWh);
+                    var previousMonthsTotal = await _context.MonthlyEnergy
+                        .Where(x => x.Year == startDate.Year && x.Month < startDate.Month)
+                        .SumAsync(x => x.EnergyKWh);
+                    yearKWh = Math.Round(todayKWh + currentMonthUpToYesterday + previousMonthsTotal, 2);
 
                     // Update daily chart for today
                     var todayDay = serverNow.Day;
@@ -498,10 +474,8 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var utcNow = DateTime.UtcNow;
-                var jakartaOffset = TimeSpan.FromHours(7);
-                var serverNow = new DateTimeOffset(utcNow, TimeSpan.Zero).ToOffset(jakartaOffset).DateTime;
-                var serverToday = serverNow.Date;
+                var serverNow = DateTime.Now;
+                var serverToday = DateTime.Today;
 
                 DateTime startDate;
                 if (!string.IsNullOrWhiteSpace(filter?.StartDate) &&
@@ -589,50 +563,33 @@ namespace KWHMonitoring.Controllers
 
                 if (isTodayDevice)
                 {
-                    var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
-                    var baseline = await _context.KWH_Monitoring
-                        .Where(x => x.DeviceKey == deviceKey && x.Waktu_Server < currentHourStart)
-                        .OrderByDescending(x => x.Waktu_Server)
-                        .FirstOrDefaultAsync();
-
-                    var hourReadings = await _context.KWH_Monitoring
-                        .Where(x => x.DeviceKey == deviceKey && x.Waktu_Server >= currentHourStart)
-                        .OrderBy(x => x.Waktu_Server)
-                        .ToListAsync();
-
-                    var seq = new List<KWHData>();
-                    if (baseline != null) seq.Add(baseline);
-                    seq.AddRange(hourReadings);
-
-                    if (seq.Count >= 2)
-                    {
-                        for (int i = 1; i < seq.Count; i++)
-                        {
-                            var h = (decimal)(seq[i].Waktu_Server - seq[i - 1].Waktu_Server).TotalHours;
-                            if (h <= 0) continue;
-                            realtimeKWh += ((seq[i - 1].Daya_Watt ?? 0m) + (seq[i].Daya_Watt ?? 0m)) / 2m * h / 1000m;
-                        }
-                    }
-
                     var currentHourIndex = serverNow.Hour;
                     currentHourLabel = string.Format("{0:D2}:00", currentHourIndex);
+                    var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
                     secondsToNextHour = (int)(currentHourStart.AddHours(1) - serverNow).TotalSeconds;
 
+                    // Gunakan HourlyEnergy untuk jam berjalan (listener flush tiap 30 detik)
                     if (currentHourIndex >= 0 && currentHourIndex < hourlyData.Count)
                     {
-                        hourlyData[currentHourIndex] = new
-                        {
-                            timeLabel = currentHourLabel,
-                            energy = Math.Round(realtimeKWh, 2),
-                            sortKey = currentHourIndex
-                        };
+                        realtimeKWh = hourlyData[currentHourIndex].energy;
                     }
 
                     todayKWh = Math.Round(hourlyData.Sum(x => x.energy), 2);
-                    var todayOldInDaily = dailyData.FirstOrDefault(x => x.sortKey == serverNow.Day)?.energy ?? 0;
-                    monthKWh = Math.Round(dailyData.Sum(x => x.energy) - todayOldInDaily + todayKWh, 2);
-                    var monthOldInMonthly = monthlyData.FirstOrDefault(x => x.sortKey == serverNow.Month)?.energy ?? 0;
-                    yearKWh = Math.Round(monthlyData.Sum(x => x.energy) - monthOldInMonthly + monthKWh, 2);
+
+                    // Bulan ini = hari ini dari HourlyEnergy + hari sebelumnya dari DailyEnergy
+                    var previousDaysTotal = await _context.DailyEnergy
+                        .Where(x => x.DeviceKey == deviceKey && x.Date >= monthStart && x.Date < serverToday)
+                        .SumAsync(x => x.EnergyKWh);
+                    monthKWh = Math.Round(todayKWh + previousDaysTotal, 2);
+
+                    // Tahun ini = hari ini + hari sebelumnya di bulan ini + bulan-bulan sebelumnya dari MonthlyEnergy
+                    var currentMonthUpToYesterday = await _context.DailyEnergy
+                        .Where(x => x.DeviceKey == deviceKey && x.Date >= monthStart && x.Date < serverToday)
+                        .SumAsync(x => x.EnergyKWh);
+                    var previousMonthsTotal = await _context.MonthlyEnergy
+                        .Where(x => x.DeviceKey == deviceKey && x.Year == startDate.Year && x.Month < startDate.Month)
+                        .SumAsync(x => x.EnergyKWh);
+                    yearKWh = Math.Round(todayKWh + currentMonthUpToYesterday + previousMonthsTotal, 2);
 
                     avgPerHour = Math.Round(hourlyData.Average(x => x.energy), 2);
                     peakHour = Math.Round(hourlyData.Max(x => x.energy), 2);
