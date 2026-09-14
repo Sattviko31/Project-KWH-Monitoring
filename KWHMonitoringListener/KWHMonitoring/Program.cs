@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Runtime.Versioning;
 using System.Reflection;
@@ -204,6 +205,40 @@ public class Program
             $"Interval sampling (detik) [0 = tanpa sampling, default: {config.Sampling.IntervalSeconds}]: ",
             config.Sampling.IntervalSeconds);
 
+        Console.WriteLine("\n=== Konfigurasi Scaling Sensor ===");
+        config.Scaling.W = ReadValidatedPositiveDecimal(
+            $"Scaling faktor daya W (raw / faktor = Watt) [default: {config.Scaling.W}]: ",
+            config.Scaling.W);
+        config.Scaling.Ampere = ReadValidatedPositiveDecimal(
+            $"Scaling faktor arus Ampere (raw / faktor = A) [default: {config.Scaling.Ampere}]: ",
+            config.Scaling.Ampere);
+        config.Scaling.CosPhi = ReadValidatedPositiveDecimal(
+            $"Scaling faktor CosPhi (raw / faktor = CosPhi) [default: {config.Scaling.CosPhi}]: ",
+            config.Scaling.CosPhi);
+        config.Scaling.AktifPower = ReadValidatedPositiveDecimal(
+            $"Scaling faktor Aktif Power (raw / faktor = Wh) [default: {config.Scaling.AktifPower}]: ",
+            config.Scaling.AktifPower);
+        config.Scaling.TotalW = ReadValidatedPositiveDecimal(
+            $"Scaling faktor TotalW (raw / faktor = Wh) [default: {config.Scaling.TotalW}]: ",
+            config.Scaling.TotalW);
+        config.Scaling.Frequency = ReadValidatedPositiveDecimal(
+            $"Scaling faktor frekuensi F (raw / faktor = Hz) [default: {config.Scaling.Frequency}]: ",
+            config.Scaling.Frequency);
+
+        Console.WriteLine("\n--- Konfigurasi Scaling Tegangan (PHASE_R/S/T) ---");
+        config.Scaling.Voltage.ThresholdVeryHigh = ReadValidatedPositiveDecimal(
+            $"Threshold tegangan sangat tinggi (raw >= threshold / ScaleVeryHigh) [default: {config.Scaling.Voltage.ThresholdVeryHigh}]: ",
+            config.Scaling.Voltage.ThresholdVeryHigh);
+        config.Scaling.Voltage.ScaleVeryHigh = ReadValidatedPositiveDecimal(
+            $"ScaleVeryHigh [default: {config.Scaling.Voltage.ScaleVeryHigh}]: ",
+            config.Scaling.Voltage.ScaleVeryHigh);
+        config.Scaling.Voltage.ThresholdHigh = ReadValidatedPositiveDecimal(
+            $"Threshold tegangan tinggi (raw >= threshold / ScaleHigh) [default: {config.Scaling.Voltage.ThresholdHigh}]: ",
+            config.Scaling.Voltage.ThresholdHigh);
+        config.Scaling.Voltage.ScaleHigh = ReadValidatedPositiveDecimal(
+            $"ScaleHigh [default: {config.Scaling.Voltage.ScaleHigh}]: ",
+            config.Scaling.Voltage.ScaleHigh);
+
         Console.WriteLine("\n╔══════════════════════════════════════════════════════════╗");
         Console.WriteLine("║   KONFIGURASI YANG AKAN DIGUNAKAN                        ║");
         Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
@@ -221,6 +256,9 @@ public class Program
         Console.WriteLine($"- SQL Server: {config.Database.Server}");
         Console.WriteLine($"- Database: {config.Database.DatabaseName}");
         Console.WriteLine($"- Sampling: {(config.Sampling.IntervalSeconds > 0 ? $"1 data per {config.Sampling.IntervalSeconds} detik per perangkat" : "tanpa sampling")}");
+        Console.WriteLine($"- Scaling W: {config.Scaling.W} (raw / {config.Scaling.W} = Watt)");
+        Console.WriteLine($"- Scaling Ampere: {config.Scaling.Ampere}, CosPhi: {config.Scaling.CosPhi}, AktifPower: {config.Scaling.AktifPower}, TotalW: {config.Scaling.TotalW}, F: {config.Scaling.Frequency}");
+        Console.WriteLine($"- Scaling Voltage: very high >= {config.Scaling.Voltage.ThresholdVeryHigh} / {config.Scaling.Voltage.ScaleVeryHigh}, high >= {config.Scaling.Voltage.ThresholdHigh} / {config.Scaling.Voltage.ScaleHigh}");
         Console.WriteLine($"- SQL Auth: {(config.Database.UseWindowsAuthentication ? "Windows Authentication" : "SQL Server Authentication")}");
         if (!config.Database.UseWindowsAuthentication)
         {
@@ -557,6 +595,21 @@ public class Program
 
             if (int.TryParse(input, out var value) && value >= 0) return value;
             Console.WriteLine("[!] Nilai harus berupa angka bulat >= 0. Contoh: 0 (tanpa sampling), 5, 10.");
+        }
+    }
+
+    private static decimal ReadValidatedPositiveDecimal(string prompt, decimal defaultValue)
+    {
+        while (true)
+        {
+            Console.Write(prompt);
+            var input = Console.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(input)) return defaultValue;
+
+            if (decimal.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out var value) && value > 0)
+                return value;
+
+            Console.WriteLine("[!] Nilai harus berupa angka desimal > 0. Contoh: 10, 100.");
         }
     }
 

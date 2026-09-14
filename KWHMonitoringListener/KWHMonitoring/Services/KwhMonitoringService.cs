@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
@@ -31,6 +31,12 @@ public class KwhMonitoringService : BackgroundService
     private readonly Dictionary<string, string> _columnMapping = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _lastKwhSaveByDevice = new();
     private readonly ConcurrentDictionary<string, string?> _lastRciValueByDevice = new();
+    private readonly ConcurrentDictionary<string, int> _unrecognizedTopicCounts = new();
+    private string _lastErrorMessage = "";
+    private long _lastErrorMessageCount = 0;
+    private bool _mqttWasConnected = false;
+    private string _lastMqttError = "";
+    private long _mqttErrorRepeatCount = 0;
 
     // ============================================================
     // KOLOM KWHData - SESUAI STRUKTUR DATABASE FINAL (11 kolom data)
@@ -84,6 +90,18 @@ public class KwhMonitoringService : BackgroundService
                 _logger.LogInformation("[*] Sampling data aktif: 1 data per {Interval} detik per perangkat", _config.Sampling.IntervalSeconds);
             else
                 _logger.LogInformation("[*] Sampling data: non-aktif (semua data disimpan)");
+
+            _logger.LogInformation("[*] Scaling: W={W}, Ampere={Ampere}, CosPhi={CosPhi}, AktifPower={AktifPower}, TotalW={TotalW}, F={Frequency}, VoltageVeryHigh>={VoltageVeryHighThreshold}/{VoltageVeryHighScale}, VoltageHigh>={VoltageHighThreshold}/{VoltageHighScale}",
+                _config.Scaling.W,
+                _config.Scaling.Ampere,
+                _config.Scaling.CosPhi,
+                _config.Scaling.AktifPower,
+                _config.Scaling.TotalW,
+                _config.Scaling.Frequency,
+                _config.Scaling.Voltage.ThresholdVeryHigh,
+                _config.Scaling.Voltage.ScaleVeryHigh,
+                _config.Scaling.Voltage.ThresholdHigh,
+                _config.Scaling.Voltage.ScaleHigh);
 
             _ = Task.Run(() => ProcessQueueAsync(stoppingToken), stoppingToken);
             _ = Task.Run(() => MonitorQueueAsync(stoppingToken), stoppingToken);
@@ -387,7 +405,10 @@ public class KwhMonitoringService : BackgroundService
 
                     _mqttClient.ConnectedAsync += async _ =>
                     {
-                        _logger.LogInformation("[✓] MQTT connected");
+                        _mqttWasConnected = true;
+                        _lastMqttError = "";
+                        _mqttErrorRepeatCount = 0;
+                        _logger.LogInformation("[✓] MQTT connected/subscribed");
                         try
                         {
                             await _mqttClient.SubscribeAsync(
@@ -396,7 +417,6 @@ public class KwhMonitoringService : BackgroundService
                                     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
                                     .Build(),
                                 ct);
-                            _logger.LogInformation("[✓] MQTT subscribed to #");
                         }
                         catch (Exception ex)
                         {
@@ -406,7 +426,11 @@ public class KwhMonitoringService : BackgroundService
 
                     _mqttClient.DisconnectedAsync += _ =>
                     {
-                        _logger.LogWarning("[✗] MQTT disconnected");
+                        if (_mqttWasConnected)
+                        {
+                            _mqttWasConnected = false;
+                            _logger.LogWarning("[✗] MQTT disconnected");
+                        }
                         return Task.CompletedTask;
                     };
 
@@ -462,7 +486,19 @@ public class KwhMonitoringService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("[!] MQTT connection error: {Message}. Retry in 5s...", ex.Message);
+                var message = ex.Message;
+                if (_lastMqttError != message)
+                {
+                    _lastMqttError = message;
+                    _mqttErrorRepeatCount = 1;
+                    _logger.LogWarning("[!] MQTT connection error: {Message}. Retry in 5s...", message);
+                }
+                else
+                {
+                    _mqttErrorRepeatCount++;
+                    if (_mqttErrorRepeatCount % 10 == 0)
+                        _logger.LogWarning("[!] MQTT connection error repeated {Count}x: {Message}. Retry in 5s...", _mqttErrorRepeatCount, message);
+                }
             }
 
             await Task.Delay(TimeSpan.FromSeconds(5), ct);
@@ -502,7 +538,7 @@ public class KwhMonitoringService : BackgroundService
             : "Degraded";
 
         _logger.LogInformation(
-            "[STATS] Total={Total} | Success={Success} | Errors={Errors} | Relay={Relay} | Queue={Queue} | MQTT={Mqtt} | DB={Db} | Health={Health}",
+            "[STATS] T={Total} S={Success} E={Errors} R={Relay} Q={Queue} MQTT={Mqtt} DB={Db} H={Health}",
             total, success, errors, relay, _messageQueue.Count, mqttStatus, dbStatus, health);
     }
 
@@ -559,22 +595,33 @@ public class KwhMonitoringService : BackgroundService
 
             if (!hasKwhData && !hasRelayData)
             {
-                _logger.LogWarning("[!] Tidak ada data yang dikenali dari topic: {Topic}", buffer.Topic);
+                var count = _unrecognizedTopicCounts.AddOrUpdate(buffer.Topic, 1, (_, c) => c + 1);
+                if (count == 1 || count % 10 == 0)
+                    _logger.LogWarning("[!] Unrecognized topic '{Topic}' ({Count}x)", buffer.Topic, count);
                 await LogFailedMessage(buffer, "No recognized data fields", ct);
                 return;
             }
 
             Interlocked.Increment(ref _successCount);
             Interlocked.Increment(ref _messageCount);
-
-            if (saved)
-                LogStats("save");
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _errorCount);
             Interlocked.Increment(ref _messageCount);
-            _logger.LogError(ex, $"[✗] Error processing: {buffer.Topic}");
+            var message = $"{ex.GetType().Name}: {ex.Message}";
+            if (_lastErrorMessage != message)
+            {
+                _lastErrorMessage = message;
+                _lastErrorMessageCount = 1;
+                _logger.LogError(ex, "[✗] Error processing topic {Topic}: {Message}", buffer.Topic, message);
+            }
+            else
+            {
+                _lastErrorMessageCount++;
+                if (_lastErrorMessageCount % 10 == 0)
+                    _logger.LogError("[✗] Error processing topic {Topic} repeated {Count}x: {Message}", buffer.Topic, _lastErrorMessageCount, message);
+            }
             await LogFailedMessage(buffer, ex.Message, ct);
         }
     }
@@ -829,7 +876,7 @@ public class KwhMonitoringService : BackgroundService
         return false;
     }
 
-    private static decimal ParseValueWithScale(string col, string? val)
+    private decimal ParseValueWithScale(string col, string? val)
     {
         if (string.IsNullOrEmpty(val) || !decimal.TryParse(val, out var raw)) return 0;
         var c = col.ToUpper();
@@ -837,33 +884,60 @@ public class KwhMonitoringService : BackgroundService
         // VOLTAGE - PHASE_R, PHASE_S, PHASE_T (Dynamic Scaling)
         if (c is "PHASE_R" or "PHASE_S" or "PHASE_T")
         {
+            var voltage = _config.Scaling.Voltage;
             decimal result;
-            if (raw >= 10000m) result = raw / 100m;
-            else if (raw >= 1000m) result = raw / 10m;
-            else if (raw > 500m) result = raw / 10m;
+            if (raw >= voltage.ThresholdVeryHigh) result = raw / voltage.ScaleVeryHigh;
+            else if (raw >= voltage.ThresholdHigh) result = raw / voltage.ScaleHigh;
             else result = raw;
             return Math.Round(result, 2);
         }
 
         // CURRENT
         if (c is "AMPERE_R" or "AMPERE_S" or "AMPERE_T")
-            return Math.Round(raw / 10m, 2);
+        {
+            var scale = _config.Scaling.Ampere;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 2);
+        }
 
         // POWER FACTOR
         if (c == "COSPHI")
-            return Math.Round(raw / 10m, 3);
+        {
+            var scale = _config.Scaling.CosPhi;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 3);
+        }
 
         // ACTIVE POWER
         if (c == "W")
-            return Math.Round(raw / 10m, 1);
+        {
+            var scale = _config.Scaling.W;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 1);
+        }
 
         // ENERGY
-        if (c is "AKTIF_POWER" or "TOTALW")
-            return Math.Round(raw / 100m, 2);
+        if (c == "AKTIF_POWER")
+        {
+            var scale = _config.Scaling.AktifPower;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 2);
+        }
+
+        if (c == "TOTALW")
+        {
+            var scale = _config.Scaling.TotalW;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 2);
+        }
 
         // FREQUENCY
         if (c == "F")
-            return Math.Round(raw / 10m, 2);
+        {
+            var scale = _config.Scaling.Frequency;
+            if (scale == 0) return 0;
+            return Math.Round(raw / scale, 2);
+        }
 
         return raw;
     }
@@ -923,208 +997,93 @@ public class KwhMonitoringService : BackgroundService
     }
 
     #region Embedded Migration Script - SESUAI STRUKTUR FINAL
-    private const string MigrationScript = @"
-USE [master]
+    private const string MigrationScript = @"SET ANSI_NULLS ON
 GO
-CREATE DATABASE [HaiwellElectrical]
+SET QUOTED_IDENTIFIER ON
 GO
-ALTER DATABASE [HaiwellElectrical] SET COMPATIBILITY_LEVEL = 170
+CREATE TABLE [dbo].[RelayControl](
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [varchar](20) NOT NULL,
+	[TerminalTime] [datetime2](7) NULL,
+	[ReceivedTime] [datetime2](7) NOT NULL,
+	[GroupName] [nvarchar](100) NULL,
+	[DeviceId] [nvarchar](50) NULL,
+	[RC] [int] NULL,
+	[RCI] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
 GO
-IF (1 = FULLTEXTSERVICEPROPERTY('IsFullTextInstalled'))
-begin
-EXEC [HaiwellElectrical].[dbo].[sp_fulltext_database] @action = 'enable'
-end
-GO
-ALTER DATABASE [HaiwellElectrical] SET ANSI_NULL_DEFAULT OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ANSI_NULLS OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ANSI_PADDING OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ANSI_WARNINGS OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ARITHABORT OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET AUTO_CLOSE ON 
-GO
-ALTER DATABASE [HaiwellElectrical] SET AUTO_SHRINK OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET AUTO_UPDATE_STATISTICS ON 
-GO
-ALTER DATABASE [HaiwellElectrical] SET CURSOR_CLOSE_ON_COMMIT OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET CURSOR_DEFAULT  GLOBAL 
-GO
-ALTER DATABASE [HaiwellElectrical] SET CONCAT_NULL_YIELDS_NULL OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET NUMERIC_ROUNDABORT OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET QUOTED_IDENTIFIER OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET RECURSIVE_TRIGGERS OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET  DISABLE_BROKER 
-GO
-ALTER DATABASE [HaiwellElectrical] SET AUTO_UPDATE_STATISTICS_ASYNC OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET DATE_CORRELATION_OPTIMIZATION OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET TRUSTWORTHY OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ALLOW_SNAPSHOT_ISOLATION OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET PARAMETERIZATION SIMPLE 
-GO
-ALTER DATABASE [HaiwellElectrical] SET READ_COMMITTED_SNAPSHOT OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET HONOR_BROKER_PRIORITY OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET RECOVERY SIMPLE 
-GO
-ALTER DATABASE [HaiwellElectrical] SET  MULTI_USER 
-GO
-ALTER DATABASE [HaiwellElectrical] SET PAGE_VERIFY CHECKSUM 
-GO
-ALTER DATABASE [HaiwellElectrical] SET DB_CHAINING OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET FILESTREAM( NON_TRANSACTED_ACCESS = OFF ) 
-GO
-ALTER DATABASE [HaiwellElectrical] SET TARGET_RECOVERY_TIME = 60 SECONDS 
-GO
-ALTER DATABASE [HaiwellElectrical] SET DELAYED_DURABILITY = DISABLED 
-GO
-ALTER DATABASE [HaiwellElectrical] SET OPTIMIZED_LOCKING = OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET ACCELERATED_DATABASE_RECOVERY = OFF 
-GO
-ALTER DATABASE [HaiwellElectrical] SET QUERY_STORE = ON 
-GO
-ALTER DATABASE [HaiwellElectrical] SET QUERY_STORE (OPERATION_MODE = READ_WRITE, CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30), DATA_FLUSH_INTERVAL_SECONDS = 900, INTERVAL_LENGTH_MINUTES = 60, MAX_STORAGE_SIZE_MB = 1000, QUERY_CAPTURE_MODE = AUTO, SIZE_BASED_CLEANUP_MODE = AUTO, MAX_PLANS_PER_QUERY = 200, WAIT_STATS_CAPTURE_MODE = ON)
-GO
-USE [HaiwellElectrical]
-GO
-CREATE USER [kwhapp] WITHOUT LOGIN WITH DEFAULT_SCHEMA=[dbo]
-GO
-ALTER ROLE [db_ddladmin] ADD MEMBER [kwhapp]
-GO
-ALTER ROLE [db_datareader] ADD MEMBER [kwhapp]
-GO
-ALTER ROLE [db_datawriter] ADD MEMBER [kwhapp]
-GO
+/****** Object:  Table [dbo].[DeviceRegistry]    Script Date: 11/09/2026 15:39:21 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[DeviceRegistry](
-[Id] [int] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [varchar](20) NOT NULL,
-[DeviceId] [varchar](50) NOT NULL,
-[GroupName] [varchar](100) NULL,
-[Location] [varchar](200) NULL,
-[FirstSeen] [datetime2](7) NOT NULL,
-[LastSeen] [datetime2](7) NOT NULL,
-[IsActive] [bit] NOT NULL,
-[MessageCount] [bigint] NOT NULL,
-[CreatedAt] [datetime2](7) NOT NULL,
-[UpdatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
-UNIQUE NONCLUSTERED ([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
-UNIQUE NONCLUSTERED ([DeviceId] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [varchar](20) NOT NULL,
+	[DeviceId] [varchar](50) NOT NULL,
+	[GroupName] [varchar](100) NULL,
+	[Location] [varchar](200) NULL,
+	[FirstSeen] [datetime2](7) NOT NULL,
+	[LastSeen] [datetime2](7) NOT NULL,
+	[IsActive] [bit] NOT NULL,
+	[MessageCount] [bigint] NOT NULL,
+	[CreatedAt] [datetime2](7) NOT NULL,
+	[UpdatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[DeviceId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[KWHData]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[KWHData](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [varchar](20) NOT NULL,
-[TerminalTime] [datetime2](7) NULL,
-[ReceivedTime] [datetime2](7) NOT NULL,
-[GroupName] [nvarchar](100) NULL,
-[DeviceId] [nvarchar](50) NULL,
-[PHASE_R] [decimal](18, 2) NULL,
-[PHASE_S] [decimal](18, 2) NULL,
-[PHASE_T] [decimal](18, 2) NULL,
-[AMPERE_R] [decimal](18, 3) NULL,
-[AMPERE_S] [decimal](18, 3) NULL,
-[AMPERE_T] [decimal](18, 3) NULL,
-[CosPhi] [decimal](18, 3) NULL,
-[W] [decimal](18, 1) NULL,
-[Aktif_Power] [decimal](18, 2) NULL,
-[TotalW] [decimal](18, 2) NULL,
-[F] [decimal](18, 2) NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [varchar](20) NOT NULL,
+	[TerminalTime] [datetime2](7) NULL,
+	[ReceivedTime] [datetime2](7) NOT NULL,
+	[GroupName] [nvarchar](100) NULL,
+	[DeviceId] [nvarchar](50) NULL,
+	[PHASE_R] [decimal](18, 2) NULL,
+	[PHASE_S] [decimal](18, 2) NULL,
+	[PHASE_T] [decimal](18, 2) NULL,
+	[AMPERE_R] [decimal](18, 3) NULL,
+	[AMPERE_S] [decimal](18, 3) NULL,
+	[AMPERE_T] [decimal](18, 3) NULL,
+	[W] [decimal](18, 1) NULL,
+	[CosPhi] [decimal](18, 3) NULL,
+	[F] [decimal](18, 2) NULL,
+	[Aktif_Power] [decimal](18, 2) NULL,
+	[TotalW] [decimal](18, 2) NULL,
+	[TotalW1M] [decimal](18, 2) NULL,
+	[Haiwell_PLC_1_Curent_R] [decimal](18, 3) NULL,
+	[Haiwell_PLC_1_Daya_Active_Power] [decimal](18, 3) NULL,
+	[Haiwell_PLC_1_Total_power_factor] [decimal](18, 3) NULL,
+	[tes] [decimal](18, 3) NULL,
+	[ngawur] [decimal](18, 3) NULL,
+	[RC] [decimal](18, 3) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[RelayControl](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [varchar](20) NOT NULL,
-[TerminalTime] [datetime2](7) NULL,
-[ReceivedTime] [datetime2](7) NOT NULL,
-[GroupName] [nvarchar](100) NULL,
-[DeviceId] [nvarchar](50) NULL,
-[RC] [int] NULL,
-[RCI] [int] NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE VIEW [dbo].[vLatestKWHData]
-AS
-SELECT
-k.Id, k.DeviceKey, d.DeviceId, d.GroupName,
-k.TerminalTime, k.ReceivedTime,
-k.PHASE_R, k.PHASE_S, k.PHASE_T,
-k.AMPERE_R, k.AMPERE_S, k.AMPERE_T,
-k.CosPhi, k.W, k.Aktif_Power, k.TotalW, k.F
-FROM KWHData k
-INNER JOIN DeviceRegistry d ON k.DeviceKey = d.DeviceKey
-INNER JOIN (
-SELECT DeviceKey, MAX(ReceivedTime) AS MaxTime
-FROM KWHData GROUP BY DeviceKey
-) latest ON k.DeviceKey = latest.DeviceKey AND k.ReceivedTime = latest.MaxTime;
-GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE VIEW [dbo].[vDeviceSummary]
-AS
-SELECT
-d.DeviceKey, d.DeviceId, d.GroupName,
-d.FirstSeen, d.LastSeen, d.IsActive, d.MessageCount,
-COUNT(k.Id) AS TotalRecords,
-MAX(k.ReceivedTime) AS LastDataReceived
-FROM DeviceRegistry d
-LEFT JOIN KWHData k ON d.DeviceKey = k.DeviceKey
-GROUP BY d.DeviceKey, d.DeviceId, d.GroupName,
-d.FirstSeen, d.LastSeen, d.IsActive, d.MessageCount;
-GO
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE VIEW [dbo].[vDailyEnergy]
-AS
-SELECT
-k.DeviceKey, d.GroupName,
-CAST(k.TerminalTime AS DATE) AS ReportDate,
-MIN(k.TotalW) AS EnergyStart_kWh,
-MAX(k.TotalW) AS EnergyEnd_kWh,
-(MAX(k.TotalW) - MIN(k.TotalW)) AS DailyConsumption_kWh,
-COUNT(*) AS ReadingCount
-FROM KWHData k
-INNER JOIN DeviceRegistry d ON k.DeviceKey = d.DeviceKey
-GROUP BY k.DeviceKey, d.GroupName, CAST(k.TerminalTime AS DATE);
-GO
+/****** Object:  View [dbo].[vLatestRelayControl]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1141,278 +1100,615 @@ SELECT DeviceKey, MAX(ReceivedTime) AS MaxTime
 FROM RelayControl GROUP BY DeviceKey
 ) latest ON r.DeviceKey = latest.DeviceKey AND r.ReceivedTime = latest.MaxTime;
 GO
+/****** Object:  View [dbo].[vLatestKWHData]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE VIEW [dbo].[vLatestKWHData]
+AS
+SELECT 
+    k.Id, k.DeviceKey, d.DeviceId, d.GroupName,
+    k.TerminalTime, k.ReceivedTime,
+    k.PHASE_R, k.PHASE_S, k.PHASE_T,
+    k.AMPERE_R, k.AMPERE_S, k.AMPERE_T,
+    k.CosPhi, k.W, k.Aktif_Power, k.TotalW, k.TotalW1M, k.F
+FROM KWHData k
+INNER JOIN DeviceRegistry d ON k.DeviceKey = d.DeviceKey
+INNER JOIN (
+    SELECT DeviceKey, MAX(ReceivedTime) AS MaxTime
+    FROM KWHData GROUP BY DeviceKey
+) latest ON k.DeviceKey = latest.DeviceKey AND k.ReceivedTime = latest.MaxTime;
+GO
+/****** Object:  View [dbo].[vDeviceSummary]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE VIEW [dbo].[vDeviceSummary]
+AS
+SELECT 
+    d.DeviceKey, d.DeviceId, d.GroupName,
+    d.FirstSeen, d.LastSeen, d.IsActive, d.MessageCount,
+    COUNT(k.Id) AS TotalRecords,
+    MAX(k.ReceivedTime) AS LastDataReceived
+FROM DeviceRegistry d
+LEFT JOIN KWHData k ON d.DeviceKey = k.DeviceKey
+GROUP BY d.DeviceKey, d.DeviceId, d.GroupName,
+         d.FirstSeen, d.LastSeen, d.IsActive, d.MessageCount;
+GO
+/****** Object:  View [dbo].[vDailyEnergy]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE VIEW [dbo].[vDailyEnergy]
+AS
+SELECT 
+    k.DeviceKey, d.GroupName,
+    CAST(k.TerminalTime AS DATE) AS ReportDate,
+    MIN(k.TotalW) AS EnergyStart_kWh,
+    MAX(k.TotalW) AS EnergyEnd_kWh,
+    (MAX(k.TotalW) - MIN(k.TotalW)) AS DailyConsumption_kWh,
+    COUNT(*) AS ReadingCount
+FROM KWHData k
+INNER JOIN DeviceRegistry d ON k.DeviceKey = d.DeviceKey
+GROUP BY k.DeviceKey, d.GroupName, CAST(k.TerminalTime AS DATE);
+GO
+/****** Object:  Table [dbo].[__EFMigrationsHistory]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[__EFMigrationsHistory](
-[MigrationId] [nvarchar](150) NOT NULL,
-[ProductVersion] [nvarchar](32) NOT NULL,
-CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY CLUSTERED ([MigrationId] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[MigrationId] [nvarchar](150) NOT NULL,
+	[ProductVersion] [nvarchar](32) NOT NULL,
+ CONSTRAINT [PK___EFMigrationsHistory] PRIMARY KEY CLUSTERED 
+(
+	[MigrationId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[AnomalyLogs]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[AnomalyLogs](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [nvarchar](50) NOT NULL,
-[DeviceId] [nvarchar](50) NULL,
-[AnomalyType] [nvarchar](20) NOT NULL,
-[PowerValue] [decimal](18, 2) NOT NULL,
-[ThresholdValue] [decimal](18, 2) NOT NULL,
-[Deviation] [decimal](5, 2) NOT NULL,
-[DetectedTime] [datetime2](7) NOT NULL,
-[EMAValue] [decimal](18, 2) NULL,
-[ThresholdMode] [nvarchar](20) NULL,
-[Acknowledged] [bit] NULL,
-[AcknowledgedTime] [datetime2](7) NULL,
-[Notes] [nvarchar](500) NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [nvarchar](50) NOT NULL,
+	[DeviceId] [nvarchar](50) NULL,
+	[AnomalyType] [nvarchar](20) NOT NULL,
+	[PowerValue] [decimal](18, 2) NOT NULL,
+	[ThresholdValue] [decimal](18, 2) NOT NULL,
+	[Deviation] [decimal](5, 2) NOT NULL,
+	[DetectedTime] [datetime2](7) NOT NULL,
+	[EMAValue] [decimal](18, 2) NULL,
+	[ThresholdMode] [nvarchar](20) NULL,
+	[Acknowledged] [bit] NULL,
+	[AcknowledgedTime] [datetime2](7) NULL,
+	[Notes] [nvarchar](500) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[ApplicationUsers]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[ApplicationUsers](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[Email] [nvarchar](256) NOT NULL,
+	[NormalizedEmail] [nvarchar](256) NOT NULL,
+	[DisplayName] [nvarchar](256) NOT NULL,
+	[PasswordHash] [nvarchar](500) NOT NULL,
+	[Role] [nvarchar](50) NOT NULL,
+	[CreatedAt] [datetime2](7) NOT NULL,
+	[LastLoginAt] [datetime2](7) NULL,
+	[EmailConfirmed] [bit] NOT NULL,
+	[IsActive] [bit] NOT NULL,
+	[AccessFailedCount] [int] NOT NULL,
+	[LockoutEnd] [datetime2](7) NULL,
+ CONSTRAINT [PK_ApplicationUsers] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[AppLog]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[AppLog](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[LogLevel] [varchar](20) NOT NULL,
-[Message] [nvarchar](max) NOT NULL,
-[Topic] [varchar](200) NULL,
-[DeviceKey] [varchar](20) NULL,
-[CreatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[LogLevel] [varchar](20) NOT NULL,
+	[Message] [nvarchar](max) NOT NULL,
+	[Topic] [varchar](200) NULL,
+	[DeviceKey] [varchar](20) NULL,
+	[CreatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[AppSettings]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[AppSettings](
-[Id] [int] IDENTITY(1,1) NOT NULL,
-[SettingKey] [nvarchar](100) NOT NULL,
-[SettingValue] [nvarchar](500) NOT NULL,
-[UpdatedAt] [datetime2](7) NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
-UNIQUE NONCLUSTERED ([SettingKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[SettingKey] [nvarchar](100) NOT NULL,
+	[SettingValue] [nvarchar](500) NOT NULL,
+	[UpdatedAt] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+UNIQUE NONCLUSTERED 
+(
+	[SettingKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[ColumnMapping]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[ColumnMapping](
-[Id] [int] IDENTITY(1,1) NOT NULL,
-[OldColumnName] [varchar](50) NOT NULL,
-[NewColumnName] [varchar](50) NOT NULL,
-[IsActive] [bit] NOT NULL,
-[CreatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[OldColumnName] [varchar](50) NOT NULL,
+	[NewColumnName] [varchar](50) NOT NULL,
+	[IsActive] [bit] NOT NULL,
+	[CreatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[ColumnScaleConfig]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[ColumnScaleConfig](
-[ColumnName] [varchar](50) NOT NULL,
-[ScaleFactor] [decimal](18, 5) NOT NULL,
-[RegisterAddress] [varchar](10) NULL,
-[DataType] [varchar](20) NOT NULL,
-[Unit] [varchar](50) NULL,
-[Category] [varchar](50) NULL,
-[Description] [varchar](500) NULL,
-[IsDynamic] [bit] NOT NULL,
-[LastUpdated] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([ColumnName] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[ColumnName] [varchar](50) NOT NULL,
+	[ScaleFactor] [decimal](18, 5) NOT NULL,
+	[RegisterAddress] [varchar](10) NULL,
+	[DataType] [varchar](20) NOT NULL,
+	[Unit] [varchar](50) NULL,
+	[Category] [varchar](50) NULL,
+	[Description] [varchar](500) NULL,
+	[IsDynamic] [bit] NOT NULL,
+	[LastUpdated] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[ColumnName] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[DailyEnergy]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[DailyEnergy](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [nvarchar](100) NOT NULL,
-[Date] [date] NOT NULL,
-[EnergyKWh] [decimal](18, 4) NOT NULL,
-[CalculatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [nvarchar](100) NOT NULL,
+	[Date] [date] NOT NULL,
+	[EnergyKWh] [decimal](18, 4) NOT NULL,
+	[CalculatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[EmailVerificationTokens]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[EmailVerificationTokens](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[UserId] [int] NOT NULL,
+	[Email] [nvarchar](256) NOT NULL,
+	[TokenHash] [nvarchar](128) NOT NULL,
+	[Purpose] [int] NOT NULL,
+	[ExpiresAt] [datetime2](7) NOT NULL,
+	[CreatedAt] [datetime2](7) NOT NULL,
+	[IsUsed] [bit] NOT NULL,
+	[UsedAt] [datetime2](7) NULL,
+	[RequestedRole] [nvarchar](50) NULL,
+ CONSTRAINT [PK_EmailVerificationTokens] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[FailedMessages]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[FailedMessages](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[Topic] [varchar](500) NOT NULL,
-[Payload] [nvarchar](max) NOT NULL,
-[Reason] [nvarchar](500) NULL,
-[RetryCount] [int] NOT NULL,
-[IsResolved] [bit] NOT NULL,
-[ReceivedAt] [datetime2](7) NOT NULL,
-[ResolvedAt] [datetime2](7) NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[Topic] [varchar](500) NOT NULL,
+	[Payload] [nvarchar](max) NOT NULL,
+	[Reason] [nvarchar](500) NULL,
+	[RetryCount] [int] NOT NULL,
+	[IsResolved] [bit] NOT NULL,
+	[ReceivedAt] [datetime2](7) NOT NULL,
+	[ResolvedAt] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[HourlyEnergy]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[HourlyEnergy](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [nvarchar](100) NOT NULL,
-[Hour] [datetime2](7) NOT NULL,
-[EnergyKWh] [decimal](18, 4) NOT NULL,
-[CalculatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [nvarchar](100) NOT NULL,
+	[Hour] [datetime2](7) NOT NULL,
+	[EnergyKWh] [decimal](18, 4) NOT NULL,
+	[CalculatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[KWHData_History]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[KWHData_History](
-[HistoryId] [bigint] IDENTITY(1,1) NOT NULL,
-[OriginalId] [bigint] NOT NULL,
-[DeviceKey] [varchar](20) NOT NULL,
-[TerminalTime] [datetime2](7) NULL,
-[ReceivedTime] [datetime2](7) NOT NULL,
-[GroupName] [nvarchar](100) NULL,
-[DeviceId] [nvarchar](50) NULL,
-[PHASE_R] [decimal](18, 2) NULL,
-[PHASE_S] [decimal](18, 2) NULL,
-[PHASE_T] [decimal](18, 2) NULL,
-[AMPERE_R] [decimal](18, 3) NULL,
-[AMPERE_S] [decimal](18, 3) NULL,
-[AMPERE_T] [decimal](18, 3) NULL,
-[CosPhi] [decimal](18, 3) NULL,
-[W] [decimal](18, 1) NULL,
-[Aktif_Power] [decimal](18, 2) NULL,
-[TotalW] [decimal](18, 2) NULL,
-[F] [decimal](18, 2) NULL,
-[ArchivedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([HistoryId] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[HistoryId] [bigint] IDENTITY(1,1) NOT NULL,
+	[OriginalId] [bigint] NOT NULL,
+	[DeviceKey] [varchar](20) NOT NULL,
+	[TerminalTime] [datetime2](7) NULL,
+	[ReceivedTime] [datetime2](7) NOT NULL,
+	[GroupName] [nvarchar](100) NULL,
+	[DeviceId] [nvarchar](50) NULL,
+	[PHASE_R] [decimal](18, 2) NULL,
+	[PHASE_S] [decimal](18, 2) NULL,
+	[PHASE_T] [decimal](18, 2) NULL,
+	[AMPERE_R] [decimal](18, 3) NULL,
+	[AMPERE_S] [decimal](18, 3) NULL,
+	[AMPERE_T] [decimal](18, 3) NULL,
+	[W] [decimal](18, 1) NULL,
+	[CosPhi] [decimal](18, 3) NULL,
+	[F] [decimal](18, 2) NULL,
+	[Aktif_Power] [decimal](18, 2) NULL,
+	[TotalW] [decimal](18, 2) NULL,
+	[ArchivedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[HistoryId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[MonthlyEnergy]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[MonthlyEnergy](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [nvarchar](100) NOT NULL,
-[Year] [int] NOT NULL,
-[Month] [int] NOT NULL,
-[EnergyKWh] [decimal](18, 4) NOT NULL,
-[CalculatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [nvarchar](100) NOT NULL,
+	[Year] [int] NOT NULL,
+	[Month] [int] NOT NULL,
+	[EnergyKWh] [decimal](18, 4) NOT NULL,
+	[CalculatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[SecurityAuditLogs]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[SecurityAuditLogs](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[UserId] [int] NULL,
+	[Email] [nvarchar](256) NULL,
+	[Action] [int] NOT NULL,
+	[TargetDevice] [nvarchar](100) NULL,
+	[IpAddress] [nvarchar](50) NULL,
+	[UserAgent] [nvarchar](500) NULL,
+	[Details] [nvarchar](500) NULL,
+	[Success] [bit] NOT NULL,
+	[Timestamp] [datetime2](7) NOT NULL,
+ CONSTRAINT [PK_SecurityAuditLogs] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[YearlyEnergy]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[YearlyEnergy](
-[Id] [bigint] IDENTITY(1,1) NOT NULL,
-[DeviceKey] [nvarchar](100) NOT NULL,
-[Year] [int] NOT NULL,
-[EnergyKWh] [decimal](18, 4) NOT NULL,
-[CalculatedAt] [datetime2](7) NOT NULL,
-PRIMARY KEY CLUSTERED ([Id] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[DeviceKey] [nvarchar](100) NOT NULL,
+	[Year] [int] NOT NULL,
+	[EnergyKWh] [decimal](18, 4) NOT NULL,
+	[CalculatedAt] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_HourlyEnergy_DeviceKey_Hour] ON [dbo].[HourlyEnergy]([DeviceKey] ASC, [Hour] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_AnomalyLogs_DetectedTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DetectedTime] ON [dbo].[AnomalyLogs]
+(
+	[DetectedTime] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_DailyEnergy_DeviceKey_Date] ON [dbo].[DailyEnergy]([DeviceKey] ASC, [Date] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_AnomalyLogs_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DeviceKey] ON [dbo].[AnomalyLogs]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_MonthlyEnergy_DeviceKey_Year_Month] ON [dbo].[MonthlyEnergy]([DeviceKey] ASC, [Year] ASC, [Month] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_ApplicationUsers_NormalizedEmail]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_ApplicationUsers_NormalizedEmail] ON [dbo].[ApplicationUsers]
+(
+	[NormalizedEmail] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_AppLog_CreatedAt]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AppLog_CreatedAt] ON [dbo].[AppLog]
+(
+	[CreatedAt] DESC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_YearlyEnergy_DeviceKey_Year] ON [dbo].[YearlyEnergy]([DeviceKey] ASC, [Year] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_AppLog_Level]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AppLog_Level] ON [dbo].[AppLog]
+(
+	[LogLevel] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DetectedTime] ON [dbo].[AnomalyLogs]([DetectedTime] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_ColumnMapping_OldName]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_ColumnMapping_OldName] ON [dbo].[ColumnMapping]
+(
+	[OldColumnName] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DeviceKey] ON [dbo].[AnomalyLogs]([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_AppLog_CreatedAt] ON [dbo].[AppLog]([CreatedAt] DESC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-CREATE NONCLUSTERED INDEX [IX_AppLog_Level] ON [dbo].[AppLog]([LogLevel] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [IX_ColumnMapping_OldName] ON [dbo].[ColumnMapping]([OldColumnName] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_DailyEnergy_DeviceKey_Date]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_DailyEnergy_DeviceKey_Date] ON [dbo].[DailyEnergy]
+(
+	[DeviceKey] ASC,
+	[Date] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_DeviceRegistry_DeviceId] ON [dbo].[DeviceRegistry]([DeviceId] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_DeviceRegistry_DeviceId]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_DeviceRegistry_DeviceId] ON [dbo].[DeviceRegistry]
+(
+	[DeviceId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_DeviceRegistry_DeviceKey] ON [dbo].[DeviceRegistry]([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_DeviceRegistry_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_DeviceRegistry_DeviceKey] ON [dbo].[DeviceRegistry]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_FailedMessages_IsResolved] ON [dbo].[FailedMessages]([IsResolved] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_FailedMessages_ReceivedAt] ON [dbo].[FailedMessages]([ReceivedAt] DESC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey] ON [dbo].[KWHData]([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey_ReceivedTime] ON [dbo].[KWHData]([DeviceKey] ASC,[ReceivedTime] DESC)
-INCLUDE([DeviceId],[GroupName],[TerminalTime],[PHASE_R],[PHASE_S],[PHASE_T],[AMPERE_R],[AMPERE_S],[AMPERE_T],[CosPhi],[W],[Aktif_Power],[TotalW],[F]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_EmailVerificationTokens_ExpiresAt]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_EmailVerificationTokens_ExpiresAt] ON [dbo].[EmailVerificationTokens]
+(
+	[ExpiresAt] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey_TerminalTime] ON [dbo].[KWHData]([DeviceKey] ASC,[TerminalTime] DESC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_EmailVerificationTokens_Token_Purpose]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_EmailVerificationTokens_Token_Purpose] ON [dbo].[EmailVerificationTokens]
+(
+	[TokenHash] ASC,
+	[Purpose] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_ReceivedTime] ON [dbo].[KWHData]([ReceivedTime] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_FailedMessages_IsResolved]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_FailedMessages_IsResolved] ON [dbo].[FailedMessages]
+(
+	[IsResolved] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_FailedMessages_ReceivedAt]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_FailedMessages_ReceivedAt] ON [dbo].[FailedMessages]
+(
+	[ReceivedAt] DESC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_ReceivedTime_DeviceKey] ON [dbo].[KWHData]([ReceivedTime] DESC,[DeviceKey] ASC)
-INCLUDE([DeviceId],[GroupName],[TerminalTime],[PHASE_R],[PHASE_S],[PHASE_T],[AMPERE_R],[AMPERE_S],[AMPERE_T],[CosPhi],[W],[Aktif_Power],[TotalW],[F]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_TerminalTime] ON [dbo].[KWHData]([TerminalTime] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-CREATE NONCLUSTERED INDEX [IX_RelayControl_DeviceKey] ON [dbo].[RelayControl]([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_RelayControl_ReceivedTime] ON [dbo].[RelayControl]([ReceivedTime] DESC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_HourlyEnergy_DeviceKey_Hour]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_HourlyEnergy_DeviceKey_Hour] ON [dbo].[HourlyEnergy]
+(
+	[DeviceKey] ASC,
+	[Hour] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_RelayControl_DeviceKey_ReceivedTime] ON [dbo].[RelayControl]([DeviceKey] ASC,[ReceivedTime] DESC)
+/****** Object:  Index [IX_KWHData_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey] ON [dbo].[KWHData]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_KWHData_DeviceKey_Only]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey_Only] ON [dbo].[KWHData]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_KWHData_DeviceKey_ReceivedTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey_ReceivedTime] ON [dbo].[KWHData]
+(
+	[DeviceKey] ASC,
+	[ReceivedTime] DESC
+)
+INCLUDE([DeviceId],[GroupName],[TerminalTime],[PHASE_R],[PHASE_S],[PHASE_T],[AMPERE_R],[AMPERE_S],[AMPERE_T],[CosPhi],[W],[TotalW1M],[Aktif_Power],[TotalW],[F]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_KWHData_DeviceKey_TerminalTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_DeviceKey_TerminalTime] ON [dbo].[KWHData]
+(
+	[DeviceKey] ASC,
+	[TerminalTime] DESC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_KWHData_ReceivedTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_ReceivedTime] ON [dbo].[KWHData]
+(
+	[ReceivedTime] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_KWHData_ReceivedTime_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_ReceivedTime_DeviceKey] ON [dbo].[KWHData]
+(
+	[ReceivedTime] DESC,
+	[DeviceKey] ASC
+)
+INCLUDE([DeviceId],[GroupName],[TerminalTime],[PHASE_R],[PHASE_S],[PHASE_T],[AMPERE_R],[AMPERE_S],[AMPERE_T],[CosPhi],[W],[TotalW1M],[Aktif_Power],[TotalW],[F]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_KWHData_TerminalTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_TerminalTime] ON [dbo].[KWHData]
+(
+	[TerminalTime] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_KWHData_History_ArchivedAt]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_History_ArchivedAt] ON [dbo].[KWHData_History]
+(
+	[ArchivedAt] DESC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_KWHData_History_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_KWHData_History_DeviceKey] ON [dbo].[KWHData_History]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_MonthlyEnergy_DeviceKey_Year_Month]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_MonthlyEnergy_DeviceKey_Year_Month] ON [dbo].[MonthlyEnergy]
+(
+	[DeviceKey] ASC,
+	[Year] ASC,
+	[Month] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_RelayControl_DeviceKey]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_RelayControl_DeviceKey] ON [dbo].[RelayControl]
+(
+	[DeviceKey] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+/****** Object:  Index [IX_RelayControl_DeviceKey_ReceivedTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_RelayControl_DeviceKey_ReceivedTime] ON [dbo].[RelayControl]
+(
+	[DeviceKey] ASC,
+	[ReceivedTime] DESC
+)
 INCLUDE([DeviceId],[GroupName],[TerminalTime],[RC]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_History_ArchivedAt] ON [dbo].[KWHData_History]([ArchivedAt] DESC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_RelayControl_ReceivedTime]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_RelayControl_ReceivedTime] ON [dbo].[RelayControl]
+(
+	[ReceivedTime] DESC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_SecurityAuditLogs_Action]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_SecurityAuditLogs_Action] ON [dbo].[SecurityAuditLogs]
+(
+	[Action] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_SecurityAuditLogs_Timestamp]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_SecurityAuditLogs_Timestamp] ON [dbo].[SecurityAuditLogs]
+(
+	[Timestamp] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_SecurityAuditLogs_UserId]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_SecurityAuditLogs_UserId] ON [dbo].[SecurityAuditLogs]
+(
+	[UserId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_KWHData_History_DeviceKey] ON [dbo].[KWHData_History]([DeviceKey] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+/****** Object:  Index [IX_YearlyEnergy_DeviceKey_Year]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE UNIQUE NONCLUSTERED INDEX [IX_YearlyEnergy_DeviceKey_Year] ON [dbo].[YearlyEnergy]
+(
+	[DeviceKey] ASC,
+	[Year] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT (getdate()) FOR [DetectedTime]
 GO
 ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ('manual') FOR [ThresholdMode]
 GO
 ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ((0)) FOR [Acknowledged]
+GO
+ALTER TABLE [dbo].[ApplicationUsers] ADD  DEFAULT ((0)) FOR [EmailConfirmed]
+GO
+ALTER TABLE [dbo].[ApplicationUsers] ADD  DEFAULT ((1)) FOR [IsActive]
+GO
+ALTER TABLE [dbo].[ApplicationUsers] ADD  DEFAULT ((0)) FOR [AccessFailedCount]
 GO
 ALTER TABLE [dbo].[AppLog] ADD  DEFAULT (getdate()) FOR [CreatedAt]
 GO
@@ -1442,6 +1738,8 @@ ALTER TABLE [dbo].[DeviceRegistry] ADD  DEFAULT (getdate()) FOR [CreatedAt]
 GO
 ALTER TABLE [dbo].[DeviceRegistry] ADD  DEFAULT (getdate()) FOR [UpdatedAt]
 GO
+ALTER TABLE [dbo].[EmailVerificationTokens] ADD  DEFAULT ((0)) FOR [IsUsed]
+GO
 ALTER TABLE [dbo].[FailedMessages] ADD  DEFAULT ((0)) FOR [RetryCount]
 GO
 ALTER TABLE [dbo].[FailedMessages] ADD  DEFAULT ((0)) FOR [IsResolved]
@@ -1452,13 +1750,20 @@ ALTER TABLE [dbo].[HourlyEnergy] ADD  DEFAULT (getdate()) FOR [CalculatedAt]
 GO
 ALTER TABLE [dbo].[KWHData] ADD  DEFAULT (getdate()) FOR [ReceivedTime]
 GO
-ALTER TABLE [dbo].[RelayControl] ADD  DEFAULT (getdate()) FOR [ReceivedTime]
-GO
 ALTER TABLE [dbo].[KWHData_History] ADD  DEFAULT (getdate()) FOR [ArchivedAt]
 GO
 ALTER TABLE [dbo].[MonthlyEnergy] ADD  DEFAULT (getdate()) FOR [CalculatedAt]
 GO
+ALTER TABLE [dbo].[RelayControl] ADD  DEFAULT (getdate()) FOR [ReceivedTime]
+GO
+ALTER TABLE [dbo].[SecurityAuditLogs] ADD  DEFAULT ((0)) FOR [Success]
+GO
 ALTER TABLE [dbo].[YearlyEnergy] ADD  DEFAULT (getdate()) FOR [CalculatedAt]
+GO
+ALTER TABLE [dbo].[EmailVerificationTokens]  WITH CHECK ADD  CONSTRAINT [FK_EmailVerificationTokens_ApplicationUsers_UserId] FOREIGN KEY([UserId])
+REFERENCES [dbo].[ApplicationUsers] ([Id])
+GO
+ALTER TABLE [dbo].[EmailVerificationTokens] CHECK CONSTRAINT [FK_EmailVerificationTokens_ApplicationUsers_UserId]
 GO
 ALTER TABLE [dbo].[KWHData]  WITH CHECK ADD  CONSTRAINT [FK_KWHData_DeviceRegistry] FOREIGN KEY([DeviceKey])
 REFERENCES [dbo].[DeviceRegistry] ([DeviceKey])
@@ -1470,53 +1775,52 @@ REFERENCES [dbo].[DeviceRegistry] ([DeviceKey])
 GO
 ALTER TABLE [dbo].[RelayControl] CHECK CONSTRAINT [FK_RelayControl_DeviceRegistry]
 GO
+/****** Object:  StoredProcedure [dbo].[sp_CleanupOldData]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+
 CREATE PROCEDURE [dbo].[sp_CleanupOldData]
-@DaysToKeep INT = 90
+    @DaysToKeep INT = 90
 AS
 BEGIN
-SET NOCOUNT ON;
-DELETE FROM KWHData WHERE ReceivedTime < DATEADD(DAY, -@DaysToKeep, GETDATE());
-DELETE FROM RelayControl WHERE ReceivedTime < DATEADD(DAY, -@DaysToKeep, GETDATE());
-DELETE FROM AppLog WHERE CreatedAt < DATEADD(DAY, -@DaysToKeep, GETDATE());
-DELETE FROM FailedMessages WHERE ReceivedAt < DATEADD(DAY, -30, GETDATE()) AND IsResolved = 1;
+    SET NOCOUNT ON;
+    DELETE FROM KWHData WHERE ReceivedTime < DATEADD(DAY, -@DaysToKeep, GETDATE());
+    DELETE FROM AppLog WHERE CreatedAt < DATEADD(DAY, -@DaysToKeep, GETDATE());
+    DELETE FROM FailedMessages WHERE ReceivedAt < DATEADD(DAY, -30, GETDATE()) AND IsResolved = 1;
 END;
 GO
+/****** Object:  StoredProcedure [dbo].[sp_RegisterDevice]    Script Date: 11/09/2026 15:39:22 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+
 CREATE PROCEDURE [dbo].[sp_RegisterDevice]
-@DeviceId VARCHAR(50),
-@GroupName VARCHAR(100) = NULL,
-@DeviceKey VARCHAR(20) OUTPUT
+    @DeviceId VARCHAR(50),
+    @GroupName VARCHAR(100) = NULL,
+    @DeviceKey VARCHAR(20) OUTPUT
 AS
 BEGIN
-SET NOCOUNT ON;
-IF NOT EXISTS (SELECT 1 FROM DeviceRegistry WHERE DeviceId = @DeviceId)
-BEGIN
-DECLARE @NextNumber INT;
-SELECT @NextNumber = ISNULL(MAX(CAST(SUBSTRING(DeviceKey, 5, 3) AS INT)), 0) + 1
-FROM DeviceRegistry WHERE DeviceKey LIKE 'KWH-%';
-SET @DeviceKey = 'KWH-' + RIGHT('000' + CAST(@NextNumber AS VARCHAR), 3);
-INSERT INTO DeviceRegistry (DeviceKey, DeviceId, GroupName, FirstSeen, LastSeen)
-VALUES (@DeviceKey, @DeviceId, @GroupName, GETDATE(), GETDATE());
-END
-ELSE
-BEGIN
-SELECT @DeviceKey = DeviceKey FROM DeviceRegistry WHERE DeviceId = @DeviceId;
-UPDATE DeviceRegistry
-SET LastSeen = GETDATE(), GroupName = ISNULL(@GroupName, GroupName), UpdatedAt = GETDATE()
-WHERE DeviceId = @DeviceId;
-END
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM DeviceRegistry WHERE DeviceId = @DeviceId)
+    BEGIN
+        DECLARE @NextNumber INT;
+        SELECT @NextNumber = ISNULL(MAX(CAST(SUBSTRING(DeviceKey, 5, 3) AS INT)), 0) + 1
+        FROM DeviceRegistry WHERE DeviceKey LIKE 'KWH-%';
+        SET @DeviceKey = 'KWH-' + RIGHT('000' + CAST(@NextNumber AS VARCHAR), 3);
+        INSERT INTO DeviceRegistry (DeviceKey, DeviceId, GroupName, FirstSeen, LastSeen)
+        VALUES (@DeviceKey, @DeviceId, @GroupName, GETDATE(), GETDATE());
+    END
+    ELSE
+    BEGIN
+        SELECT @DeviceKey = DeviceKey FROM DeviceRegistry WHERE DeviceId = @DeviceId;
+        UPDATE DeviceRegistry 
+        SET LastSeen = GETDATE(), GroupName = ISNULL(@GroupName, GroupName), UpdatedAt = GETDATE()
+        WHERE DeviceId = @DeviceId;
+    END
 END;
-GO
-USE [master]
-GO
-ALTER DATABASE [HaiwellElectrical] SET  READ_WRITE 
 GO
 ";
     #endregion

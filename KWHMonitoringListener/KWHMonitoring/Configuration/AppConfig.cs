@@ -7,6 +7,70 @@ public class AppConfig
     public MqttConfig Mqtt { get; set; } = new();
     public DatabaseConfig Database { get; set; } = new();
     public SamplingConfig Sampling { get; set; } = new();
+    public ScalingConfig Scaling { get; set; } = new();
+}
+
+public class ScalingConfig
+{
+    /// <summary>
+    /// Faktor scaling untuk kolom daya aktif (W).
+    /// MQTT mengirimkan nilai mentah, sedangkan database menyimpan dalam Watt.
+    /// Default 10 berarti raw / 10 = Watt.
+    /// </summary>
+    public decimal W { get; set; } = 10m;
+
+    /// <summary>
+    /// Faktor scaling untuk arus (AMPERE_R/S/T).
+    /// </summary>
+    public decimal Ampere { get; set; } = 10m;
+
+    /// <summary>
+    /// Faktor scaling untuk power factor (CosPhi).
+    /// </summary>
+    public decimal CosPhi { get; set; } = 10m;
+
+    /// <summary>
+    /// Faktor scaling untuk energi aktif (AKTIF_POWER).
+    /// </summary>
+    public decimal AktifPower { get; set; } = 100m;
+
+    /// <summary>
+    /// Faktor scaling untuk total energi (TOTALW).
+    /// </summary>
+    public decimal TotalW { get; set; } = 100m;
+
+    /// <summary>
+    /// Faktor scaling untuk frekuensi (F).
+    /// </summary>
+    public decimal Frequency { get; set; } = 10m;
+
+    /// <summary>
+    /// Konfigurasi scaling dinamis untuk tegangan (PHASE_R/S/T).
+    /// </summary>
+    public VoltageScalingConfig Voltage { get; set; } = new();
+}
+
+public class VoltageScalingConfig
+{
+    /// <summary>
+    /// Threshold nilai mentah yang memicu pembagian dengan ScaleVeryHigh.
+    /// </summary>
+    public decimal ThresholdVeryHigh { get; set; } = 10000m;
+
+    /// <summary>
+    /// Threshold nilai mentah yang memicu pembagian dengan ScaleHigh.
+    /// </summary>
+    public decimal ThresholdHigh { get; set; } = 500m;
+
+    /// <summary>
+    /// Faktor scaling untuk tegangan mentah dengan nilai sangat tinggi.
+    /// </summary>
+    public decimal ScaleVeryHigh { get; set; } = 100m;
+
+    /// <summary>
+    /// Faktor scaling untuk tegangan mentah dengan nilai tinggi.
+    /// </summary>
+    public decimal ScaleHigh { get; set; } = 10m;
 }
 
 public class SamplingConfig
