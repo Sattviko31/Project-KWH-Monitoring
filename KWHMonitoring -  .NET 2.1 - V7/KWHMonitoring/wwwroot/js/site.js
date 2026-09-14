@@ -238,3 +238,274 @@ document.addEventListener('DOMContentLoaded', function() {
         observeStatCards();
     });
 })();
+
+// ============================================
+// AUTHENTICATION PAGE HELPERS
+// ============================================
+
+// Toggle password visibility on auth pages
+(function() {
+    function initPasswordToggles() {
+        document.querySelectorAll('[data-toggle-password]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var target = document.querySelector(btn.getAttribute('data-toggle-password'));
+                if (!target) return;
+                var icon = btn.querySelector('i');
+                if (target.type === 'password') {
+                    target.type = 'text';
+                    if (icon) {
+                        icon.classList.remove('fa-eye');
+                        icon.classList.add('fa-eye-slash');
+                    }
+                } else {
+                    target.type = 'password';
+                    if (icon) {
+                        icon.classList.remove('fa-eye-slash');
+                        icon.classList.add('fa-eye');
+                    }
+                }
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPasswordToggles);
+    } else {
+        initPasswordToggles();
+    }
+})();
+
+// ============================================
+// INTERACTIVE AUTHENTICATION BACKGROUND
+// Simple 3-phase electrical cable animation
+// ============================================
+(function() {
+    var canvas = document.getElementById('authBackgroundCanvas');
+    if (!canvas) return;
+
+    var ctx = canvas.getContext('2d');
+    var width, height;
+    var cables = [];
+    var sparks = [];
+    var pulses = [];
+    var nextPulse = 0;
+    var nextSpark = 0;
+
+    // Standard 3-phase cable colors (L1, L2, L3)
+    var phases = [
+        { name: 'L1', color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.5)', phaseOffset: 0 },         // Yellow
+        { name: 'L2', color: '#22c55e', glow: 'rgba(34, 197, 94, 0.5)', phaseOffset: 2.09 },        // Green
+        { name: 'L3', color: '#ef4444', glow: 'rgba(239, 68, 68, 0.5)', phaseOffset: 4.18 }         // Red
+    ];
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        cables = [];
+        var centerY = height / 2;
+        var spacing = Math.min(height * 0.15, 100);
+        for (var i = 0; i < phases.length; i++) {
+            cables.push({
+                phase: phases[i],
+                y: centerY + (i - 1) * spacing,
+                amp: 12 + i * 4
+            });
+        }
+    }
+
+    function drawBackground() {
+        var gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#020617');
+        gradient.addColorStop(0.5, '#0a0f2b');
+        gradient.addColorStop(1, '#0f172a');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        // Technical grid
+        ctx.strokeStyle = 'rgba(100, 150, 255, 0.05)';
+        ctx.lineWidth = 1;
+        var gs = 60;
+        for (var x = 0; x <= width; x += gs) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+        for (var y = 0; y <= height; y += gs) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+
+        // Vignette
+        var radial = ctx.createRadialGradient(width / 2, height / 2, height * 0.15, width / 2, height / 2, height * 0.85);
+        radial.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        radial.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+        ctx.fillStyle = radial;
+        ctx.fillRect(0, 0, width, height);
+    }
+
+    function cableY(cable, time) {
+        return cable.y + Math.sin(time * 0.0015 + cable.phase.phaseOffset) * cable.amp;
+    }
+
+    function drawCables(time) {
+        for (var i = 0; i < cables.length; i++) {
+            var cable = cables[i];
+            var phase = cable.phase;
+            var y = cableY(cable, time);
+
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Outer glow
+            ctx.beginPath();
+            ctx.strokeStyle = phase.glow;
+            ctx.lineWidth = 16;
+            ctx.shadowBlur = 28;
+            ctx.shadowColor = phase.color;
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+
+            // Cable sheath
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(25, 25, 35, 0.9)';
+            ctx.lineWidth = 10;
+            ctx.shadowBlur = 0;
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+
+            // Inner conductor
+            ctx.beginPath();
+            ctx.strokeStyle = phase.color;
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = phase.color;
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+    }
+
+    function createSpark(x, y, color) {
+        for (var i = 0; i < 10; i++) {
+            var angle = Math.random() * Math.PI * 2;
+            var speed = Math.random() * 4 + 1;
+            sparks.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                color: color
+            });
+        }
+    }
+
+    function drawSparks() {
+        for (var i = sparks.length - 1; i >= 0; i--) {
+            var s = sparks[i];
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + s.life + ')';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = s.color;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            s.x += s.vx;
+            s.y += s.vy;
+            s.life -= 0.025;
+            if (s.life <= 0) sparks.splice(i, 1);
+        }
+    }
+
+    function drawPulses(time) {
+        for (var i = pulses.length - 1; i >= 0; i--) {
+            var p = pulses[i];
+            var cable = cables[p.cableIndex];
+            var y = cableY(cable, time);
+
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = cable.phase.color;
+            ctx.shadowBlur = 22;
+            ctx.shadowColor = cable.phase.color;
+            ctx.beginPath();
+            ctx.arc(p.x, y, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.arc(p.x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            p.x += p.speed;
+            if (p.x > width + 20) pulses.splice(i, 1);
+        }
+    }
+
+    function animate(timestamp) {
+        try {
+            drawBackground();
+            drawCables(timestamp);
+            drawSparks();
+            drawPulses(timestamp);
+
+            // Spawn traveling pulses
+            if (timestamp > nextPulse) {
+                var idx = Math.floor(Math.random() * cables.length);
+                pulses.push({
+                    cableIndex: idx,
+                    x: -20,
+                    speed: 4 + Math.random() * 3
+                });
+                nextPulse = timestamp + 300 + Math.random() * 700;
+            }
+
+            // Spawn random sparks
+            if (timestamp > nextSpark) {
+                var idx = Math.floor(Math.random() * cables.length);
+                var cable = cables[idx];
+                var y = cableY(cable, timestamp);
+                createSpark(Math.random() * width, y, cable.phase.color);
+                nextSpark = timestamp + 150 + Math.random() * 400;
+            }
+        } catch (err) {
+            if (window.console) console.error('[AuthBg] error:', err);
+        }
+
+        requestAnimationFrame(animate);
+    }
+
+    function init() {
+        if (window.console) console.log('[AuthBg] init');
+        resize();
+        animate(0);
+        window.addEventListener('resize', resize);
+
+        // Click outside auth card creates a spark burst
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.auth-card') || e.target.closest('.erp-topbar')) return;
+            var idx = Math.floor(Math.random() * cables.length);
+            createSpark(e.clientX, e.clientY, cables[idx].phase.color);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})(); 

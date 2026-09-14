@@ -1518,8 +1518,16 @@ namespace KWHMonitoring.Services
                     {
                         mailMessage.From = new MailAddress(_settings.SenderEmail, "KWH Monitoring System");
                         mailMessage.Subject = subject;
+                        mailMessage.SubjectEncoding = Encoding.UTF8;
+                        mailMessage.BodyEncoding = Encoding.UTF8;
                         mailMessage.Body = body;
                         mailMessage.IsBodyHtml = true;
+
+                        // Use only HTML body so email clients always render the rich template.
+                        // (A plain-text alternative caused Gmail/Outlook to sometimes show the plain version.)
+                        var htmlView = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, "text/html");
+                        htmlView.TransferEncoding = System.Net.Mime.TransferEncoding.QuotedPrintable;
+                        mailMessage.AlternateViews.Add(htmlView);
 
                         // Support multiple recipients (separated by comma or semicolon)
                         var recipients = _settings.RecipientEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
@@ -1571,16 +1579,16 @@ namespace KWHMonitoring.Services
                         mailMessage.From = new MailAddress(_settings.SenderEmail, "KWH Monitoring System");
                         mailMessage.ReplyToList.Add(_settings.SenderEmail);
                         mailMessage.Subject = subject;
+                        mailMessage.SubjectEncoding = Encoding.UTF8;
+                        mailMessage.BodyEncoding = Encoding.UTF8;
                         mailMessage.Body = body;
                         mailMessage.IsBodyHtml = true;
 
-                        // Plain-text alternative improves deliverability (reduces spam score).
-                        var plainText = HtmlToPlainText(body);
-                        if (!string.IsNullOrWhiteSpace(plainText))
-                        {
-                            mailMessage.AlternateViews.Add(
-                                AlternateView.CreateAlternateViewFromString(plainText, Encoding.UTF8, "text/plain"));
-                        }
+                        // Use only HTML body so email clients always render the rich template.
+                        // (A plain-text alternative caused Gmail/Outlook to sometimes show the plain version.)
+                        var htmlView = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, "text/html");
+                        htmlView.TransferEncoding = System.Net.Mime.TransferEncoding.QuotedPrintable;
+                        mailMessage.AlternateViews.Add(htmlView);
 
                         var recipients = to.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var recipient in recipients)

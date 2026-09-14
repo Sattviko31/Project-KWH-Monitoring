@@ -15,3 +15,4 @@ namespace KWHMonitoring
                 .UseStartup<Startup>();
     }
 }
+    

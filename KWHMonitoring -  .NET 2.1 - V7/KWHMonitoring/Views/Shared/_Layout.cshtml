@@ -17,6 +17,8 @@
     var _dbServer = _GetFooterSetting("Database.Server", "192.168.6.15");
     var _dbName = _GetFooterSetting("Database.Name", "HaiwellElectrical");
     var _antiforgeryTokens = Antiforgery.GetAndStoreTokens(Context);
+    var controllerName = ViewContext.RouteData.Values["controller"]?.ToString();
+    var isAuthPage = ViewData["AuthPage"] != null || controllerName == "Account" || controllerName == "AdminApproval";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -32,10 +34,18 @@
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
 </head>
 <body>
+    <script>console.log('[LayoutDebug] controller=@controllerName, isAuthPage=@isAuthPage.ToString().ToLowerInvariant()');</script>
     <!-- MAIN WRAPPER (no sidebar) -->
-    <div class="erp-main-wrapper" id="erpMainWrapper">
+    <div class="erp-main-wrapper @(isAuthPage ? "auth-layout" : "")" id="erpMainWrapper">
+        <!-- AUTH BACKGROUND CANVAS -->
+        @if (isAuthPage)
+        {
+            <canvas id="authBackgroundCanvas" class="auth-background-canvas"></canvas>
+            <script src="~/js/auth-bg.js" asp-append-version="true"></script>
+        }
         <!-- TOP HEADER BAR -->
         <header class="erp-topbar">
             <div class="topbar-left">
@@ -134,8 +144,8 @@
         </footer>
     </div>
 
-
-
+@if (!isAuthPage)
+{
                         <!-- Tambahkan Library Marked.js untuk merender Markdown -->
                         <script src="~/js/marked.umd.min.js"></script>
 
@@ -1494,7 +1504,6 @@
 
 
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script>
         // CSRF token helper: attach anti-forgery token to all mutating AJAX requests
         (function() {
@@ -1577,6 +1586,7 @@
             });
         });
     </script>
+}
 
     <!-- MOBILE NAV TOGGLE -->
     <script>

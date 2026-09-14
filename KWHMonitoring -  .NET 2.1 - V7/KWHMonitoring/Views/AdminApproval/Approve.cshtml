@@ -1,69 +1,74 @@
 @{
     ViewData["Title"] = "Persetujuan Akses";
     Layout = "_Layout";
+    ViewData["AuthPage"] = true;
 }
 
-<div class="container-fluid vh-100 d-flex align-items-center justify-content-center" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
-    <div class="row justify-content-center w-100">
-        <div class="col-md-6 col-lg-5">
-            <div class="card shadow-lg border-0">
-                <div class="card-body p-5">
-                    @if (ViewBag.Approved == true)
-                    {
-                        <div class="text-center">
-                            <i class="fas fa-check-circle text-success fa-4x mb-4"></i>
-                            <h3 class="fw-bold text-success">Akses Disetujui</h3>
-                            <p class="text-muted mt-3">
-                                Pengguna <strong>@ViewBag.UserEmail</strong> telah diberikan role <strong>@ViewBag.Role</strong>.<br>
-                                Email konfirmasi telah dikirim ke user.
-                            </p>
-                            <a href="/" class="btn btn-primary mt-3">
-                                <i class="fas fa-arrow-left me-2"></i> Ke Dashboard
-                            </a>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="text-center mb-4">
-                            <i class="fas fa-user-check text-primary fa-3x mb-3"></i>
-                            <h3 class="fw-bold text-primary">Persetujuan Akses</h3>
-                            <p class="text-muted">Setujui atau tolak permintaan akses pengguna baru.</p>
-                        </div>
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="card-body">
+            @if (ViewBag.Approved == true)
+            {
+                <div class="text-center">
+                    <div class="auth-logo auth-logo-success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3 class="auth-title">Akses Disetujui</h3>
+                    <p class="auth-subtitle">Persetujuan berhasil diproses</p>
 
-                        <div class="alert alert-info">
-                            <p class="mb-1"><strong>Email:</strong> @ViewBag.UserEmail</p>
-                            <p class="mb-1"><strong>Nama:</strong> @ViewBag.DisplayName</p>
-                            <p class="mb-0"><strong>Tanggal Daftar:</strong> @ViewBag.RegisteredAt</p>
-                        </div>
+                    <div class="auth-message">
+                        Pengguna <strong>@ViewBag.UserEmail</strong> telah diberikan role <strong>@ViewBag.Role</strong>.<br>
+                        Email konfirmasi telah dikirim ke user.
+                    </div>
 
-                        <form method="post" asp-controller="AdminApproval" asp-action="Approve">
-                            <input type="hidden" name="email" value="@ViewBag.UserEmail" />
-                            <input type="hidden" name="token" value="@ViewBag.Token" />
-
-                            <div class="mb-3">
-                                <label for="role" class="form-label">Pilih Role</label>
-                                <select name="role" id="role" class="form-select" required>
-                                    <option value="">Pilih role...</option>
-                                    <option value="Viewer">Viewer (Hanya melihat)</option>
-                                    <option value="Operator">Operator (Dapat mengontrol device)</option>
-                                </select>
-                            </div>
-
-                            <div class="d-grid gap-2">
-                                <button type="submit" name="action" value="approve" class="btn btn-success">
-                                    <i class="fas fa-check me-2"></i> Setujui Akses
-                                </button>
-                            </div>
-                        </form>
-
-                        <div class="mt-3 text-center">
-                            <a href="/AdminApproval/Reject?email=@Uri.EscapeDataString(ViewBag.UserEmail)&token=@Uri.EscapeDataString(ViewBag.Token)" class="btn btn-outline-danger">
-                                <i class="fas fa-times me-2"></i> Tolak Akses
-                            </a>
-                        </div>
-                    }
+                    <a href="/" class="auth-btn auth-btn-primary">
+                        <i class="fas fa-arrow-left"></i> Ke Dashboard
+                    </a>
                 </div>
-            </div>
+            }
+            else
+            {
+                <div class="text-center">
+                    <div class="auth-logo">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <h3 class="auth-title">Persetujuan Akses</h3>
+                    <p class="auth-subtitle">Setujui atau tolak permintaan akses pengguna baru</p>
+                </div>
+
+                <div class="alert alert-info text-start">
+                    <p class="mb-1"><strong>Email:</strong> @ViewBag.UserEmail</p>
+                    <p class="mb-1"><strong>Nama:</strong> @ViewBag.DisplayName</p>
+                    <p class="mb-0"><strong>Tanggal Daftar:</strong> @ViewBag.RegisteredAt</p>
+                </div>
+
+                <form method="post" asp-controller="AdminApproval" asp-action="Approve" novalidate>
+                    <input type="hidden" name="email" value="@ViewBag.UserEmail" />
+                    <input type="hidden" name="token" value="@ViewBag.Token" />
+
+                    <div class="auth-input-group text-start">
+                        <label for="role" class="auth-input-label">Pilih Role</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
+                            <select name="role" id="role" class="form-control" required>
+                                <option value="">Pilih role...</option>
+                                <option value="Viewer">Viewer (Hanya melihat)</option>
+                                <option value="Operator">Operator (Dapat mengontrol device)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" name="action" value="approve" class="auth-btn auth-btn-success">
+                        <i class="fas fa-check"></i> Setujui Akses
+                    </button>
+                </form>
+
+                <div class="auth-links">
+                    <a href="/AdminApproval/Reject?email=@Uri.EscapeDataString(ViewBag.UserEmail)&token=@Uri.EscapeDataString(ViewBag.Token)" class="btn btn-outline-danger w-100 py-2 fw-bold">
+                        <i class="fas fa-times"></i> Tolak Akses
+                    </a>
+                </div>
+            }
         </div>
     </div>
 </div>
