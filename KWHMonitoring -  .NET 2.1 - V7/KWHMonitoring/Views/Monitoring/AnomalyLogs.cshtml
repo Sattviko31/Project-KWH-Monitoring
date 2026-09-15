@@ -1,21 +1,23 @@
 ﻿@{
-    ViewData["Title"] = "Anomaly Logs";
+    ViewData["Title"] = "Anomaly Information Center";
+    var userRole = ViewBag.CurrentUserRole?.ToString() ?? "Viewer";
 }
 
 <!-- Breadcrumb -->
 <div class="erp-breadcrumb">
     <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
     <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
-    <span class="current">Anomaly Logs</span>
+    <span class="current">Anomaly Information Center</span>
 </div>
 
 <!-- Page Header -->
 <div class="erp-page-header">
     <div>
-        <h2><i class="fas fa-exclamation-triangle text-warning"></i> Anomaly Logs</h2>
+        <h2><i class="fas fa-exclamation-triangle text-warning"></i> Anomaly Information Center</h2>
         <div class="subtitle">
             <i class="fas fa-clock"></i> Last Update: <span class="last-update">-</span>
             <span class="ms-2"><i class="fas fa-circle text-success" id="statusDot" style="font-size:0.5rem"></i> <span class="status-text" id="statusText">Online</span></span>
+            <span class="ms-2 badge badge-light border">Role: <span id="userRoleBadge">@userRole</span></span>
         </div>
     </div>
     <div class="actions">
@@ -44,58 +46,354 @@
         <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
     </a>
     <a class="erp-tab active" asp-controller="Monitoring" asp-action="AnomalyLogs">
-        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Logs</span>
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Center</span>
     </a>
 </div>
 
-    <!-- Summary Cards -->
-    <div class="stats-row mb-3 mb-md-4">
-        <div>
-            <div class="stat-card bg-danger h-100">
-                <div class="stat-label">Overload</div>
-                <div class="stat-value" id="totalOverload">0</div>
-                <i class="fas fa-bolt stat-icon"></i>
+<!-- Anomaly Center Navigation -->
+<ul class="nav nav-pills aic-nav mb-3" id="anomalyCenterTabs" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" id="tab-list" data-toggle="pill" href="#pane-list" role="tab">
+            <i class="fas fa-list"></i> Daftar Anomali
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" id="tab-report" data-toggle="pill" href="#pane-report" role="tab">
+            <i class="fas fa-file-alt"></i> Laporan Bulanan
+        </a>
+    </li>
+    @if (userRole == "Admin")
+    {
+        <li class="nav-item">
+            <a class="nav-link" id="tab-audit" data-toggle="pill" href="#pane-audit" role="tab">
+                <i class="fas fa-user-shield"></i> Audit Operator
+            </a>
+        </li>
+    }
+</ul>
+
+<div class="tab-content" id="anomalyCenterTabContent">
+    <!-- TAB: Daftar Anomali -->
+    <div class="tab-pane fade in active" id="pane-list" role="tabpanel">
+        <!-- KPI Cards -->
+        <div class="stats-row mb-3">
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#0dcaf0,#0d6efd);color:#fff;">
+                    <div class="stat-label">Total Anomali</div>
+                    <div class="stat-value" id="dashTotal">0</div>
+                    <i class="fas fa-list stat-icon"></i>
+                </div>
+            </div>
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#20c997,#198754);color:#fff;">
+                    <div class="stat-label">Hari Ini</div>
+                    <div class="stat-value" id="dashToday">0</div>
+                    <i class="fas fa-calendar-day stat-icon"></i>
+                </div>
+            </div>
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#ffc107,#fd7e14);color:#fff;">
+                    <div class="stat-label">Belum Resolve</div>
+                    <div class="stat-value" id="dashUnresolved">0</div>
+                    <i class="fas fa-exclamation-circle stat-icon"></i>
+                </div>
+            </div>
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#7f1d1d);color:#fff;">
+                    <div class="stat-label">Critical</div>
+                    <div class="stat-value" id="dashCritical">0</div>
+                    <i class="fas fa-bomb stat-icon"></i>
+                </div>
+            </div>
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#6610f2,#6f42c1);color:#fff;">
+                    <div class="stat-label">High</div>
+                    <div class="stat-value" id="dashHigh">0</div>
+                    <i class="fas fa-exclamation-triangle stat-icon"></i>
+                </div>
+            </div>
+            <div>
+                <div class="stat-card" style="background: linear-gradient(135deg,#6c757d,#495057);color:#fff;">
+                    <div class="stat-label">Device Terdampak</div>
+                    <div class="stat-value text-truncate" id="dashTopDevice">-</div>
+                    <i class="fas fa-server stat-icon"></i>
+                </div>
             </div>
         </div>
-        <div>
-            <div class="stat-card bg-warning h-100">
-                <div class="stat-label">Device Drop</div>
-                <div class="stat-value" id="totalDrop">0</div>
-                <i class="fas fa-power-off stat-icon"></i>
+
+        <!-- Charts -->
+        <div class="charts-row mb-3">
+            <div class="charts-col charts-col-main">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                        <h6 class="mb-0"><i class="fas fa-chart-line"></i> Tren Anomali</h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" data-days="7">7 Hari</button>
+                            <button type="button" class="btn btn-outline-secondary" data-days="30">30 Hari</button>
+                        </div>
+                    </div>
+                    <div class="card-body py-2">
+                        <div id="anomalyTrendChart" class="anomaly-chart-container"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="charts-col charts-col-side">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Distribusi Severity</h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <div id="anomalySeverityPieChart" class="anomaly-chart-container"></div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div>
-            <div class="stat-card bg-info h-100">
-                <div class="stat-label">Total Logs</div>
-                <div class="stat-value" id="totalLogs">0</div>
-                <i class="fas fa-list stat-icon"></i>
+
+        <!-- DataGrid -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+                <h6 class="mb-0"><i class="fas fa-list"></i> Daftar Anomali</h6>
+                <div class="d-flex gap-1">
+                    @if (userRole == "Admin")
+                    {
+                        <button class="btn btn-sm btn-danger" id="btnClearAll">
+                            <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Clear All</span>
+                        </button>
+                    }
+                </div>
             </div>
-        </div>
-        <div>
-            <div class="stat-card bg-success h-100">
-                <div class="stat-label">Active Devices</div>
-                <div class="stat-value" id="activeDevices">0</div>
-                <i class="fas fa-check-circle stat-icon"></i>
+            <div class="card-body p-0">
+                <div class="anomaly-grid-scroll-wrapper">
+                    <div id="anomalyDataGrid" style="width:100%;"></div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Anomaly Logs Table Card -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
-            <h6 class="mb-0"><i class="fas fa-list"></i> All Anomaly Logs</h6>
-            <div class="d-flex gap-1">
-                <button class="btn btn-sm btn-danger" id="btnClearAll">
-                    <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Clear All</span>
-                </button>
+    <!-- TAB: Laporan Bulanan -->
+    <div class="tab-pane fade" id="pane-report" role="tabpanel">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-info text-white py-2">
+                <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Bulanan Anomali</h6>
             </div>
-        </div>
-        <div class="card-body p-0">
-            <div class="anomaly-grid-scroll-wrapper">
-                <div id="anomalyDataGrid" style="width:100%;"></div>
+            <div class="card-body">
+                <div class="report-form-row mb-3">
+                    <div class="report-form-field">
+                        <label class="form-label small mb-1">Bulan</label>
+                        <select id="reportMonth" class="form-select form-select-sm">
+                            @for (int m = 1; m <= 12; m++)
+                            {
+                                <option value="@m" selected="@(m == DateTime.Now.Month ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="report-form-field">
+                        <label class="form-label small mb-1">Tahun</label>
+                        <select id="reportYear" class="form-select form-select-sm">
+                            @for (int y = DateTime.Now.Year - 5; y <= DateTime.Now.Year; y++)
+                            {
+                                <option value="@y" selected="@(y == DateTime.Now.Year ? "selected" : null)">@y</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="report-form-actions">
+                        <button class="btn btn-outline-secondary btn-sm" id="btnLoadReport">
+                            <i class="fas fa-search"></i> Tampilkan
+                        </button>
+                        @if (userRole == "Operator" || userRole == "Admin")
+                        {
+                            <button class="btn btn-primary btn-sm ms-1" id="btnGenerateReport">
+                                <i class="fas fa-sync-alt"></i> Generate
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div id="monthlyReportContainer" class="d-none">
+                    <div class="report-stats-row mb-3">
+                        <div class="report-stat-card">
+                            <div class="border rounded p-2 text-center">
+                                <div class="text-muted small">Total Anomali</div>
+                                <div class="h4 mb-0 text-primary" id="repTotal">0</div>
+                            </div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="border rounded p-2 text-center">
+                                <div class="text-muted small">Overload</div>
+                                <div class="h4 mb-0 text-danger" id="repOverload">0</div>
+                            </div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="border rounded p-2 text-center">
+                                <div class="text-muted small">Device Drop</div>
+                                <div class="h4 mb-0 text-warning" id="repDrop">0</div>
+                            </div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="border rounded p-2 text-center">
+                                <div class="text-muted small">Device Terdampak</div>
+                                <div class="h4 mb-0 text-info" id="repAffected">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card bg-light mb-3">
+                        <div class="card-body py-2">
+                            <strong>Ringkasan:</strong>
+                            <p class="mb-1" id="repSummary">-</p>
+                        </div>
+                    </div>
+                    <div class="card mb-3">
+                        <div class="card-header bg-light py-2"><strong>Rekomendasi</strong></div>
+                        <div class="card-body py-2">
+                            <div id="repRecommendations" class="small">-</div>
+                        </div>
+                    </div>
+                    <div class="text-muted small text-end">
+                        Generated by <span id="repGeneratedBy">-</span> at <span id="repGeneratedAt">-</span>
+                    </div>
+                </div>
+                <div id="monthlyReportEmpty" class="text-center text-muted py-4">
+                    Pilih periode dan klik "Tampilkan" untuk melihat laporan.
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- TAB: Audit Operator (Admin only) -->
+    @if (userRole == "Admin")
+    {
+        <div class="tab-pane fade" id="pane-audit" role="tabpanel">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-dark text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-user-shield"></i> Audit Tindakan Operator</h6>
+                </div>
+                <div class="card-body">
+                    <div class="audit-form-row mb-3">
+                        <div class="audit-form-field">
+                            <label class="form-label small mb-1">Dari Tanggal</label>
+                            <input type="date" id="auditFromDate" class="form-control form-control-sm" value="@DateTime.Now.AddDays(-30).ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="audit-form-field">
+                            <label class="form-label small mb-1">Sampai Tanggal</label>
+                            <input type="date" id="auditToDate" class="form-control form-control-sm" value="@DateTime.Now.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="audit-form-actions">
+                            <button class="btn btn-primary btn-sm" id="btnLoadAudit">
+                                <i class="fas fa-search"></i> Muat Audit
+                            </button>
+                        </div>
+                    </div>
+                    <div id="operatorActionsGrid" style="width:100%;min-height:300px;"></div>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Ringkasan Operator</h6>
+                </div>
+                <div class="card-body">
+                    <div id="operatorActionsSummaryGrid" style="width:100%;min-height:200px;"></div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title"><i class="fas fa-info-circle"></i> Detail Anomali #<span id="detailId"></span></h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-info-row">
+                    <div class="detail-info-col">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-info-circle"></i> Informasi Dasar</h6>
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tbody>
+                                        <tr><td class="text-muted">Device</td><td id="detailDevice">-</td></tr>
+                                        <tr><td class="text-muted">Tipe</td><td id="detailType">-</td></tr>
+                                        <tr><td class="text-muted">Severity</td><td id="detailSeverity">-</td></tr>
+                                        <tr><td class="text-muted">Daya</td><td id="detailPower">-</td></tr>
+                                        <tr><td class="text-muted">Threshold</td><td id="detailThreshold">-</td></tr>
+                                        <tr><td class="text-muted">Deviasi</td><td id="detailDeviation">-</td></tr>
+                                        <tr><td class="text-muted">Waktu</td><td id="detailTime">-</td></tr>
+                                        <tr><td class="text-muted">Status</td><td id="detailStatus">-</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-info-col">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-brain"></i> Analisis & Rekomendasi</h6>
+                                <p class="mb-1 font-weight-bold small">Root Cause:</p>
+                                <p class="small text-muted" id="detailRootCause">-</p>
+                                <p class="mb-1 font-weight-bold small">Recommended Action:</p>
+                                <p class="small text-muted" id="detailRecommendedAction">-</p>
+                                <p class="mb-1 font-weight-bold small">Catatan Operator:</p>
+                                <p class="small text-muted" id="detailOperatorNotes">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-chart-area"></i> Chart Snapshot</h6>
+                                <div id="detailChartSnapshotContainer" style="position:relative;height:350px;width:100%;">
+                                    <canvas id="detailChartSnapshot"></canvas>
+                                </div>
+                                <div class="text-center text-muted small mt-2" id="detailSnapshotStatus"></div>
+                            </div>
+                        </div>
+                    </div>
+                    @if (userRole == "Operator" || userRole == "Admin")
+                    {
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-tools"></i> Tindakan Operator</h6>
+                                    <div class="detail-action-btns mb-2">
+                                        <div class="detail-action-btn">
+                                            <button class="btn btn-warning btn-sm w-100" id="btnDetailAcknowledge" disabled>
+                                                <i class="fas fa-check"></i> Acknowledge
+                                            </button>
+                                        </div>
+                                        <div class="detail-action-btn">
+                                            <button class="btn btn-success btn-sm w-100" id="btnDetailResolve" disabled>
+                                                <i class="fas fa-check-double"></i> Resolve
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="detail-action-fields">
+                                        <div class="detail-action-field">
+                                            <label class="form-label small mb-1">Jenis Tindakan</label>
+                                            <input type="text" id="operatorActionInput" class="form-control form-control-sm" placeholder="Contoh: Periksa relay, restart device, dll">
+                                        </div>
+                                        <div class="detail-action-field">
+                                            <label class="form-label small mb-1">Catatan Tindakan</label>
+                                            <textarea id="operatorNotesInput" class="form-control form-control-sm" rows="2" placeholder="Catatan tindakan perbaikan..."></textarea>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm mt-2" id="btnSaveNotes">
+                                        <i class="fas fa-save"></i> Simpan Catatan
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Delete Confirmation Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -144,110 +442,249 @@
 </div>
 
 <style>
-    /* Force full width grid */
-    #anomalyDataGrid {
-        width: 100% !important;
+    /* Anomaly Center Navigation */
+    .aic-nav {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 0.25rem;
+        border: 1px solid #dee2e6;
+        display: inline-flex;
     }
-    #anomalyDataGrid .dx-datagrid {
-        width: 100% !important;
-        border: none !important;
+    .aic-nav .nav-link {
+        color: #495057;
+        font-weight: 500;
+        border-radius: 0.375rem;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s ease;
     }
-    #anomalyDataGrid .dx-datagrid-headers {
-        border-top: none !important;
+    .aic-nav .nav-link:hover {
+        background-color: #e9ecef;
+        color: #212529;
     }
-    #anomalyDataGrid .card:hover {
-        transform: none !important;
-        box-shadow: none !important;
-    }
-
-    /* Center all data cells */
-    #anomalyDataGrid .dx-datagrid .dx-data-row td {
-        text-align: center;
-        vertical-align: middle;
-    }
-
-    /* Center header cells */
-    #anomalyDataGrid .dx-datagrid .dx-header-row td {
-        text-align: center;
+    .aic-nav .nav-link.active {
+        background-color: #0d6efd;
+        color: #fff;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
     }
 
-    .dx-datagrid .badge {
+    /* Tab content layout — ensure inactive panes are fully hidden */
+    #anomalyCenterTabContent > .tab-pane:not(.active) {
+        display: none !important;
+    }
+    #anomalyCenterTabContent > .tab-pane.active {
+        display: block;
+    }
+    #anomalyCenterTabContent .card {
+        margin-bottom: 0.75rem;
+    }
+
+    /* Prevent tab content from stretching into empty space */
+    #anomalyCenterTabContent {
+        flex: 0 1 auto;
+    }
+
+    /* ============================================
+       CHARTS ROW — flexbox, side-by-side
+       ============================================ */
+    .charts-row {
+        display: flex;
+        gap: 0.75rem;
+    }
+    .charts-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .charts-col-main {
+        flex: 2 1 0%;
+    }
+    .charts-col-side {
+        flex: 1 1 0%;
+    }
+    .charts-col .card {
+        width: 100%;
+    }
+    .anomaly-chart-container {
+        width: 100%;
+        height: 300px;
+        min-height: 260px;
+    }
+    @@media (max-width: 767.98px) {
+        .charts-row {
+            flex-direction: column;
+        }
+        .charts-col-main,
+        .charts-col-side {
+            flex: 1 1 100%;
+        }
+    }
+
+    /* ============================================
+       REPORT FORM — flex row
+       ============================================ */
+    .report-form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: flex-end;
+    }
+    .report-form-field {
+        flex: 0 0 auto;
+        min-width: 120px;
+    }
+    .report-form-actions {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    /* ============================================
+       REPORT STATS — auto-fit grid
+       ============================================ */
+    .report-stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+    @@media (max-width: 576px) {
+        .report-stats-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* ============================================
+       AUDIT FORM — flex row
+       ============================================ */
+    .audit-form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: flex-end;
+    }
+    .audit-form-field {
+        flex: 0 0 auto;
+        min-width: 160px;
+    }
+    .audit-form-actions {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+    }
+
+    /* ============================================
+       DETAIL MODAL — info row
+       ============================================ */
+    .detail-info-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .detail-info-col {
+        flex: 1 1 0%;
+        min-width: 280px;
+    }
+    @@media (max-width: 576px) {
+        .detail-info-col {
+            flex: 1 1 100%;
+        }
+    }
+
+    /* Detail modal action buttons & fields */
+    .detail-action-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .detail-action-btn {
+        flex: 1 1 auto;
+        min-width: 140px;
+    }
+    .detail-action-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .detail-action-field {
+        flex: 1 1 0%;
+        min-width: 200px;
+    }
+
+    /* Severity badges */
+    .severity-badge {
         font-size: 0.7rem;
-        padding: 0.3em 0.55em;
         font-weight: 600;
+        padding: 0.25em 0.5em;
+        border-radius: 0.25rem;
+        display: inline-block;
+        text-transform: uppercase;
         letter-spacing: 0.3px;
-        white-space: nowrap;
     }
+    .severity-critical { background-color: #7f1d1d; color: #fff; }
+    .severity-high { background-color: #dc3545; color: #fff; }
+    .severity-medium { background-color: #ffc107; color: #212529; }
+    .severity-low { background-color: #0d6efd; color: #fff; }
 
-    /* Consistent font for all cells */
-    #anomalyDataGrid .dx-datagrid .dx-data-row td {
-        font-size: 12px;
-    }
-
-    .btn-delete-row {
-        padding: 0.15rem 0.4rem;
-        font-size: 0.7rem;
-    }
-
-    /* Horizontal scroll wrapper for DataGrid */
+    /* Grid */
     .anomaly-grid-scroll-wrapper {
         width: 100%;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
+    #anomalyDataGrid { width: 100% !important; }
+    #anomalyDataGrid .dx-datagrid {
+        width: 100% !important;
+        border: none !important;
+    }
+    #anomalyDataGrid .dx-datagrid .dx-data-row td {
+        text-align: center;
+        vertical-align: middle;
+        font-size: 12px;
+    }
+    #anomalyDataGrid .dx-datagrid .dx-header-row td {
+        text-align: center;
+    }
 
-    /* Mobile: horizontal scroll */
+    /* Mobile */
     @@media (max-width: 768px) {
-        .anomaly-grid-scroll-wrapper {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        #anomalyDataGrid .dx-datagrid {
-            min-width: 700px !important;
-        }
-
-        #anomalyDataGrid .dx-datagrid .dx-data-row td {
-            font-size: 11px;
-            padding: 4px 3px !important;
-        }
+        .anomaly-grid-scroll-wrapper { overflow-x: auto; }
+        #anomalyDataGrid .dx-datagrid { min-width: 700px !important; }
+        #anomalyDataGrid .dx-datagrid .dx-data-row td,
         #anomalyDataGrid .dx-datagrid .dx-header-row td {
             font-size: 11px;
             padding: 4px 3px !important;
-            white-space: nowrap !important;
-        }
-        #anomalyDataGrid .dx-datagrid .badge {
-            font-size: 0.6rem;
-            padding: 0.2em 0.4em;
         }
     }
 </style>
 
 @section Scripts {
+    <script src="~/js/chart.umd.min.js"></script>
     <script>
         var autoRefreshTimer = null;
         var autoRefreshEnabled = true;
         var deleteLogId = null;
         var dataGrid = null;
         var allData = [];
+        var currentDetailId = null;
+        var currentUserRole = '@userRole';
+        var trendChart = null;
+        var severityPieChart = null;
+        var detailChart = null;
 
         $(document).ready(function() {
-            console.log('Anomaly Logs page initialized');
-
             updateLastUpdate();
             setInterval(updateLastUpdate, 60000);
 
             initDataGrid();
-            loadSummary();
-            setupAutoRefresh();
+            loadDashboard();
+            loadTrends(7);
 
-            // Refresh button
             $('#btnRefresh').click(function() {
                 if (dataGrid) dataGrid.refresh();
-                loadSummary();
+                loadDashboard();
+                loadTrends(7);
             });
 
-            // Auto-refresh toggle
             $('#autoRefreshCheck').change(function() {
                 autoRefreshEnabled = $(this).is(':checked');
                 if (autoRefreshEnabled) {
@@ -261,33 +698,47 @@
                 }
             });
 
-            // Clear All button
-            $('#btnClearAll').click(function() {
-                $('#clearAllModal').modal('show');
+            $('#btnClearAll').click(function() { $('#clearAllModal').modal('show'); });
+            $('#btnConfirmClearAll').click(function() { clearAllLogs(); });
+            $('#btnConfirmDelete').click(function() { if (deleteLogId) deleteSingleLog(deleteLogId); });
+
+            $('[data-days]').click(function() {
+                $('[data-days]').removeClass('active');
+                $(this).addClass('active');
+                loadTrends(parseInt($(this).data('days')));
             });
 
-            // Confirm Clear All
-            $('#btnConfirmClearAll').click(function() {
-                clearAllLogs();
-            });
+            $('#btnDetailAcknowledge').click(function() { acknowledgeAnomaly(currentDetailId); });
+            $('#btnDetailResolve').click(function() { resolveAnomaly(currentDetailId); });
+            $('#btnSaveNotes').click(function() { saveNotes(currentDetailId); });
 
-            // Confirm Delete single log
-            $('#btnConfirmDelete').click(function() {
-                if (deleteLogId) {
-                    deleteSingleLog(deleteLogId);
+            $('#btnLoadReport').click(function() { loadMonthlyReport(); });
+            $('#btnGenerateReport').click(function() { generateMonthlyReport(); });
+
+            $('#btnLoadAudit').click(function() { loadOperatorActions(); });
+
+            $('a[data-toggle="pill"]').on('shown.bs.tab', function(e) {
+                var target = $(e.target).attr('href');
+                if (target === '#pane-audit' && currentUserRole === 'Admin') {
+                    loadOperatorActions();
                 }
+            });
+
+            setupAutoRefresh();
+
+            $(window).on('resize.anomalyCenter', function() {
+                if (trendChart) trendChart.render();
+                if (severityPieChart) severityPieChart.render();
+                if (detailChart) detailChart.render();
             });
         });
 
-        // ============================================
-        // AUTO REFRESH
-        // ============================================
         function setupAutoRefresh() {
             stopAutoRefresh();
             if (autoRefreshEnabled) {
                 autoRefreshTimer = setInterval(function() {
                     if (dataGrid) dataGrid.refresh();
-                    loadSummary();
+                    loadDashboard();
                 }, 30000);
             }
         }
@@ -299,9 +750,6 @@
             }
         }
 
-        // ============================================
-        // FORMAT HELPERS
-        // ============================================
         function formatDateTime(isoStr) {
             if (!isoStr) return '-';
             try {
@@ -332,30 +780,139 @@
             return Number(num).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
 
-        // ============================================
-        // LOAD SUMMARY (total stats from server)
-        // ============================================
-        function loadSummary() {
-            $.ajax({
-                url: '/api/Api/anomaly-logs/summary',
-                method: 'GET',
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        $('#totalOverload').text(response.totalOverload || 0);
-                        $('#totalDrop').text(response.totalDrop || 0);
-                        $('#totalLogs').text(response.totalLogs || 0);
-                        $('#activeDevices').text(response.activeDevices || 0);
-                    }
-                },
-                error: function() {
-                    // silently fail — summary cards are non-critical
-                }
-            });
+        function severityClass(severity) {
+            switch ((severity || '').toLowerCase()) {
+                case 'critical': return 'severity-critical';
+                case 'high': return 'severity-high';
+                case 'medium': return 'severity-medium';
+                case 'low': return 'severity-low';
+                default: return 'severity-medium';
+            }
         }
 
         // ============================================
-        // INIT DATA GRID
+        // DASHBOARD
+        // ============================================
+        function loadDashboard() {
+            $.ajax({
+                url: '/api/Api/anomaly-dashboard',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        var d = response.data;
+                        $('#dashTotal').text(d.total || 0);
+                        $('#dashToday').text(d.today || 0);
+                        $('#dashUnresolved').text(d.unresolved || 0);
+                        $('#dashCritical').text(d.critical || 0);
+                        $('#dashHigh').text(d.high || 0);
+                        $('#dashTopDevice').text(d.topDevice || '-').attr('title', d.topDevice || '-');
+
+                        var critical = d.critical || 0;
+                        var high = d.high || 0;
+                        var mediumLow = Math.max(0, (d.total || 0) - critical - high);
+                        renderSeverityPieChart(mediumLow, critical, high);
+                    }
+                },
+                error: function() { }
+            });
+        }
+
+        function renderSeverityPieChart(mediumLow, critical, high) {
+            var data = [];
+            if (critical > 0) data.push({ type: 'Critical', count: critical });
+            if (high > 0) data.push({ type: 'High', count: high });
+            if (mediumLow > 0) data.push({ type: 'Medium/Low', count: mediumLow });
+
+            if (data.length === 0) {
+                $('#anomalySeverityPieChart').html('<div class="d-flex align-items-center justify-content-center h-100 text-muted">Tidak ada data</div>');
+                return;
+            }
+
+            var container = $('#anomalySeverityPieChart');
+            if (severityPieChart) {
+                severityPieChart.option('dataSource', data);
+                return;
+            }
+
+            severityPieChart = container.dxPieChart({
+                dataSource: data,
+                argumentField: 'type',
+                valueField: 'count',
+                palette: ['#7f1d1d', '#dc3545', '#0d6efd'],
+                legend: { verticalAlignment: 'bottom', horizontalAlignment: 'center', itemCount: 3 },
+                tooltip: {
+                    enabled: true,
+                    customizeTooltip: function(arg) {
+                        return { text: arg.argumentText + ': ' + arg.valueText };
+                    }
+                },
+                size: { height: 260 },
+                adaptiveLayout: { width: 150, height: 150 },
+                series: [{ type: 'pie', label: { visible: true, format: 'fixedPoint', connector: { visible: true } } }]
+            }).dxPieChart('instance');
+
+            setTimeout(function() { if (severityPieChart) severityPieChart.render(); }, 200);
+        }
+
+        // ============================================
+        // TRENDS
+        // ============================================
+        function loadTrends(days) {
+            $.ajax({
+                url: '/api/Api/anomaly-trends',
+                method: 'GET',
+                data: { days: days },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        renderTrendChart(response.data);
+                    }
+                },
+                error: function() { }
+            });
+        }
+
+        function renderTrendChart(data) {
+            var chartData = data.map(function(item) {
+                return {
+                    date: new Date(item.date + 'T00:00:00'),
+                    total: item.total,
+                    overload: item.overload,
+                    drop: item.drop,
+                    critical: item.critical
+                };
+            });
+
+            if (trendChart) {
+                trendChart.option('dataSource', chartData);
+                return;
+            }
+
+            trendChart = $('#anomalyTrendChart').dxChart({
+                dataSource: chartData,
+                commonSeriesSettings: {
+                    argumentField: 'date',
+                    type: 'spline',
+                    point: { size: 5 }
+                },
+                series: [
+                    { valueField: 'total', name: 'Total', color: '#0d6efd' },
+                    { valueField: 'overload', name: 'Overload', color: '#dc3545' },
+                    { valueField: 'drop', name: 'Drop', color: '#ffc107' },
+                    { valueField: 'critical', name: 'Critical', color: '#7f1d1d' }
+                ],
+                legend: { verticalAlignment: 'bottom', horizontalAlignment: 'center', itemCount: 4 },
+                tooltip: { enabled: true },
+                valueAxis: { title: { text: 'Jumlah' }, minValueMargin: 0.1, label: { format: { type: 'fixedPoint', precision: 0 } } },
+                argumentAxis: { label: { format: 'dd/MM', rotationAngle: -30 } },
+                size: { height: 260 },
+                adaptiveLayout: { width: 200, height: 150 }
+            }).dxChart('instance');
+        }
+
+        // ============================================
+        // DATA GRID
         // ============================================
         function initDataGrid() {
             dataGrid = $('#anomalyDataGrid').dxDataGrid({
@@ -364,14 +921,8 @@
                         key: 'id',
                         load: function(loadOptions) {
                             var d = $.Deferred();
-                            var params = {
-                                skip: loadOptions.skip || 0,
-                                take: loadOptions.take || 10
-                            };
-
-                            if (loadOptions.sort) {
-                                params.sort = JSON.stringify(loadOptions.sort);
-                            }
+                            var params = { skip: loadOptions.skip || 0, take: loadOptions.take || 10 };
+                            if (loadOptions.sort) params.sort = JSON.stringify(loadOptions.sort);
 
                             $.ajax({
                                 url: '/api/Api/anomaly-logs/ALL',
@@ -392,14 +943,18 @@
                                             detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
                                             emaValue: item.emaValue || item.EMAValue,
                                             thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
+                                            severity: item.severity || item.Severity || 'medium',
+                                            rootCause: item.rootCause || item.RootCause || '',
+                                            recommendedAction: item.recommendedAction || item.RecommendedAction || '',
                                             acknowledged: item.acknowledged || item.Acknowledged || false,
                                             acknowledgedTime: item.acknowledgedTime || item.AcknowledgedTime,
+                                            isResolved: item.isResolved || item.IsResolved || false,
+                                            operatorAction: item.operatorAction || item.OperatorAction || '',
+                                            operatorNotes: item.operatorNotes || item.OperatorNotes || '',
                                             notes: item.notes || item.Notes || ''
                                         };
                                     });
-
                                     allData = mapped;
-
                                     d.resolve(mapped, { totalCount: response.totalCount || 0 });
                                 },
                                 error: function(xhr, status, error) {
@@ -422,14 +977,7 @@
                     }),
                     reshapeOnPush: true
                 }),
-
-                remoteOperations: {
-                    sorting: true,
-                    paging: true,
-                    filtering: true
-                },
-
-                // Paging
+                remoteOperations: { sorting: true, paging: true, filtering: true },
                 paging: { pageSize: 10 },
                 pager: {
                     showPageSizeSelector: true,
@@ -438,102 +986,42 @@
                     showNavigationButtons: true,
                     visible: true
                 },
-
-                // Scrolling
-                scrolling: {
-                    mode: 'standard',
-                    showScrollbar: 'always',
-                    useNative: true
-                },
-
-                // Search
-                searchPanel: {
-                    visible: true,
-                    width: 180,
-                    placeholder: 'Cari anomali...'
-                },
-
-                // Column Chooser
+                scrolling: { mode: 'standard', showScrollbar: 'always', useNative: true },
+                searchPanel: { visible: true, width: 180, placeholder: 'Cari anomali...' },
                 columnChooser: { enabled: true, mode: 'select' },
-
-                // Column Fixing
                 columnFixing: { enabled: true },
-
-                // Grouping
                 grouping: { autoExpandAll: false },
                 groupPanel: { visible: false },
-
-                // Header Filter
                 headerFilter: { visible: true },
-
-                // Filter Row
                 filterRow: { visible: true },
-
-                // Sorting
                 sorting: { mode: 'single' },
-
-                // Selection
                 selection: { mode: 'none' },
-
-                // State Storing
                 stateStoring: { enabled: false },
-
-                // Row Alternation
                 rowAlternationEnabled: true,
-
-                // Borders
                 showBorders: true,
                 showColumnLines: true,
                 showRowLines: false,
-
-                // Resize/reorder
                 allowColumnResizing: true,
                 allowColumnReordering: true,
                 columnAutoWidth: true,
-
-                // Load panel
                 loadPanel: { enabled: true, text: 'Memuat data...' },
-
-                // No data text
                 noDataText: 'Tidak ada data anomali',
-
-                // Toolbar
                 onToolbarPreparing: function(e) {
                     var items = e.toolbarOptions.items;
                     items.push({
-                        location: 'after',
-                        widget: 'dxButton',
-                        options: {
-                            text: 'Columns',
-                            hint: 'Show/Hide Columns',
-                            onClick: function() { dataGrid.showColumnChooser(); }
-                        }
+                        location: 'after', widget: 'dxButton',
+                        options: { text: 'Columns', hint: 'Show/Hide Columns', onClick: function() { dataGrid.showColumnChooser(); } }
                     });
                     items.push({
-                        location: 'after',
-                        widget: 'dxButton',
-                        options: {
-                            text: 'Clear',
-                            hint: 'Clear all filters',
-                            onClick: function() {
-                                dataGrid.clearFilter();
-                                dataGrid.refresh();
-                            }
-                        }
+                        location: 'after', widget: 'dxButton',
+                        options: { text: 'Clear', hint: 'Clear all filters', onClick: function() { dataGrid.clearFilter(); dataGrid.refresh(); } }
                     });
                 },
-
-                // Cell customization
                 onCellPrepared: function(e) {
                     if (e.rowType !== 'data') return;
-                    if (e.column.dataField === 'powerValue' && e.value > 20000) {
-                        e.cellElement.css('background-color', 'rgba(220,53,69,0.10)');
-                    } else if (e.column.dataField === 'powerValue' && e.value > 10000) {
-                        e.cellElement.css('background-color', 'rgba(255,193,7,0.1)');
-                    }
+                    if (e.column.dataField === 'powerValue' && e.value > 20000) e.cellElement.css('background-color', 'rgba(220,53,69,0.10)');
+                    else if (e.column.dataField === 'powerValue' && e.value > 10000) e.cellElement.css('background-color', 'rgba(255,193,7,0.1)');
                 },
-
-                // Row customization
                 onRowPrepared: function(e) {
                     if (e.rowType !== 'data') return;
                     var t = e.data.anomalyType;
@@ -541,32 +1029,12 @@
                     else if (t === 'DROP' || t === 'DEVICE_DROP' || t === 'DEVICE DROP') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
-
-                // Columns
                 columns: [
+                    { dataField: 'id', caption: '#', width: 50, alignment: 'center', allowGrouping: false, allowFiltering: false, allowHeaderFiltering: false },
                     {
-                        dataField: 'id',
-                        caption: '#',
-                        width: 50,
-                        allowGrouping: false,
-                        allowFiltering: false,
-                        allowHeaderFiltering: false,
-                        alignment: 'center'
-                    },
-                    {
-                        dataField: 'detectedTime',
-                        caption: 'Time',
-                        dataType: 'datetime',
-                        sortOrder: 'desc',
-                        alignment: 'center',
-                        allowHeaderFiltering: false,
-                        filterOperations: ['between', '>=', '<=', '>', '<', '='],
-                        selectedFilterOperation: 'between',
+                        dataField: 'detectedTime', caption: 'Time', dataType: 'datetime', sortOrder: 'desc', alignment: 'center',
+                        allowHeaderFiltering: false, filterOperations: ['between', '>=', '<=', '>', '<', '='], selectedFilterOperation: 'between',
                         format: { type: 'dd/MM/yyyy HH:mm:ss' },
-                        editorOptions: {
-                            type: 'datetime',
-                            displayFormat: 'dd/MM/yyyy HH:mm:ss'
-                        },
                         cellTemplate: function(container, options) {
                             var val = options.value;
                             var text = '-';
@@ -586,59 +1054,38 @@
                             $('<span>').text(text).appendTo(container);
                         }
                     },
+                    { dataField: 'deviceKey', caption: 'Device', alignment: 'center', headerFilter: { allowSelectAll: true } },
                     {
-                        dataField: 'deviceKey',
-                        caption: 'Device',
-                        alignment: 'center',
-                        headerFilter: { allowSelectAll: true }
-                    },
-                    {
-                        dataField: 'anomalyType',
-                        caption: 'Type',
-                        alignment: 'center',
-                        headerFilter: {
-                            dataSource: [
-                                { text: 'OVERLOAD', value: 'OVERLOAD' },
-                                { text: 'DEVICE DROP', value: 'DROP' },
-                                { text: 'DEVICE DROP', value: 'DEVICE_DROP' }
-                            ]
-                        },
+                        dataField: 'anomalyType', caption: 'Type', alignment: 'center',
+                        headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE DROP', value: 'DEVICE_DROP' }] },
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls, icon, text;
-                            if (v === 'OVERLOAD') {
-                                cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD';
-                            } else if (v === 'DROP' || v === 'DEVICE_DROP' || v === 'DEVICE DROP') {
-                                cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP';
-                            } else {
-                                cls = 'bg-info'; icon = 'fa-question'; text = v;
-                            }
+                            if (v === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD'; }
+                            else if (v === 'DROP' || v === 'DEVICE_DROP' || v === 'DEVICE DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else { cls = 'bg-info'; icon = 'fa-question'; text = v; }
                             $('<span>').addClass('badge ' + cls).html('<i class="fas ' + icon + '"></i> ' + text).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'powerValue',
-                        caption: 'Power (W)',
-                        dataType: 'number',
-                        alignment: 'center',
+                        dataField: 'severity', caption: 'Severity', alignment: 'center',
+                        headerFilter: { dataSource: [{ text: 'Critical', value: 'critical' }, { text: 'High', value: 'high' }, { text: 'Medium', value: 'medium' }, { text: 'Low', value: 'low' }] },
+                        cellTemplate: function(container, options) {
+                            var v = options.value || 'medium';
+                            $('<span>').addClass('severity-badge ' + severityClass(v)).text(v).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'powerValue', caption: 'Power (W)', dataType: 'number', alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls = v > 20000 ? 'text-danger' : v > 10000 ? 'text-warning' : 'text-dark';
                             $('<span>').addClass('anomaly-power ' + cls).text(formatNumber(v) + ' W').appendTo(container);
                         }
                     },
+                    { dataField: 'thresholdValue', caption: 'Threshold (W)', dataType: 'number', alignment: 'center', format: { type: 'fixedPoint', precision: 0 } },
                     {
-                        dataField: 'thresholdValue',
-                        caption: 'Threshold (W)',
-                        dataType: 'number',
-                        alignment: 'center',
-                        format: { type: 'fixedPoint', precision: 0 }
-                    },
-                    {
-                        dataField: 'deviation',
-                        caption: 'Deviation',
-                        dataType: 'number',
-                        alignment: 'center',
+                        dataField: 'deviation', caption: 'Deviation', dataType: 'number', alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls = v > 100 ? 'text-danger' : v > 50 ? 'text-warning' : 'text-success';
@@ -646,64 +1093,523 @@
                         }
                     },
                     {
-                        dataField: 'thresholdMode',
-                        caption: 'Mode',
-                        alignment: 'center',
-                        headerFilter: {
-                            dataSource: [
-                                { text: 'MANUAL', value: 'manual' },
-                                { text: 'EMA', value: 'ema' }
-                            ]
-                        },
+                        dataField: 'thresholdMode', caption: 'Mode', alignment: 'center',
+                        headerFilter: { dataSource: [{ text: 'MANUAL', value: 'manual' }, { text: 'EMA', value: 'ema' }] },
+                        cellTemplate: function(container, options) { $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container); }
+                    },
+                    {
+                        dataField: 'isResolved', caption: 'Status', dataType: 'boolean', alignment: 'center',
+                        headerFilter: { dataSource: [{ text: 'New', value: false }, { text: 'Resolved', value: true }] },
                         cellTemplate: function(container, options) {
-                            $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container);
+                            var data = options.row.data;
+                            if (data.isResolved) $('<span>').addClass('badge bg-success').html('<i class="fas fa-check-double"></i> Resolved').appendTo(container);
+                            else if (data.acknowledged) $('<span>').addClass('badge bg-info').html('<i class="fas fa-check"></i> Acknowledged').appendTo(container);
+                            else $('<span>').addClass('badge bg-secondary').html('<i class="fas fa-circle"></i> New').appendTo(container);
                         }
                     },
                     {
-                        dataField: 'acknowledged',
-                        caption: 'Status',
-                        dataType: 'boolean',
-                        alignment: 'center',
-                        headerFilter: {
-                            dataSource: [
-                                { text: 'New', value: false },
-                                { text: 'Acknowledged', value: true }
-                            ]
-                        },
-                        cellTemplate: function(container, options) {
-                            if (options.value) {
-                                $('<span>').addClass('badge bg-success').text('Acknowledged').appendTo(container);
-                            } else {
-                                $('<span>').addClass('badge bg-secondary').text('New').appendTo(container);
-                            }
-                        }
-                    },
-                    {
-                        caption: 'Action',
-                        width: 60,
-                        alignment: 'center',
-                        allowFiltering: false,
-                        allowSorting: false,
-                        allowGrouping: false,
-                        allowHeaderFiltering: false,
+                        caption: 'Action', width: 100, alignment: 'center',
+                        allowFiltering: false, allowSorting: false, allowGrouping: false, allowHeaderFiltering: false,
                         cellTemplate: function(container, options) {
                             var data = options.data;
-                            $('<button>')
-                                .addClass('btn btn-sm btn-outline-danger btn-delete-row')
-                                .attr('title', 'Delete log')
-                                .html('<i class="fas fa-trash"></i>')
-                                .on('click', function() {
-                                    confirmDelete(data.id, data.deviceKey, data.anomalyType);
-                                })
-                                .appendTo(container);
+                            var buttons = $('<div class="d-flex justify-content-center gap-1">');
+                            $('<button>').addClass('btn btn-sm btn-info').attr('title', 'View detail').html('<i class="fas fa-eye"></i>')
+                                .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(buttons);
+                            if (currentUserRole === 'Admin') {
+                                $('<button>').addClass('btn btn-sm btn-outline-danger').attr('title', 'Delete log').html('<i class="fas fa-trash"></i>')
+                                    .on('click', function(e) { e.stopPropagation(); confirmDelete(data.id, data.deviceKey, data.anomalyType); }).appendTo(buttons);
+                            }
+                            buttons.appendTo(container);
                         }
                     }
                 ]
+            }).dxDataGrid('instance');
+        }
+
+        // ============================================
+        // DETAIL MODAL
+        // ============================================
+        var pendingChartSnapshot = null;
+
+        function openDetailModal(id) {
+            currentDetailId = id;
+            $.ajax({
+                url: '/api/Api/anomaly-logs/detail/' + id,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        renderDetailModal(response.data);
+                        // Defer chart rendering until modal is visible (DevExtreme needs container dimensions)
+                        pendingChartSnapshot = response.data.chartSnapshot;
+                        $('#detailModal').modal('show');
+                    } else {
+                        showNotification('Gagal memuat detail anomali', 'danger');
+                    }
+                },
+                error: function() { showNotification('Gagal memuat detail anomali', 'danger'); }
+            });
+        }
+
+        // Render chart AFTER modal is shown so Chart.js can measure the container
+        $('#detailModal').on('shown.bs.modal', function() {
+            if (pendingChartSnapshot !== null) {
+                renderDetailChart(pendingChartSnapshot);
+                pendingChartSnapshot = null;
+            }
+            // Force chart resize after modal animation completes
+            setTimeout(function() {
+                if (detailChart) detailChart.resize();
+            }, 150);
+        });
+
+        // Clean up chart when modal is hidden — replace container DOM to fully reset Chart.js state
+        $('#detailModal').on('hidden.bs.modal', function() {
+            if (detailChart) {
+                try { detailChart.destroy(); } catch(e) {}
+                detailChart = null;
+            }
+            // Replace container element entirely to avoid stale Chart.js canvas state
+            $('#detailChartSnapshotContainer').replaceWith('<div id="detailChartSnapshotContainer" style="position:relative;height:350px;width:100%;"><canvas id="detailChartSnapshot"></canvas></div>');
+            pendingChartSnapshot = null;
+        });
+
+        function renderDetailModal(data) {
+            data = data || {};
+            $('#detailId').text(data.id || '-');
+            $('#detailDevice').text((data.deviceKey || '-') + (data.deviceId ? ' (' + data.deviceId + ')' : ''));
+            $('#detailType').html(renderTypeBadge(data.anomalyType));
+            $('#detailSeverity').html('<span class="severity-badge ' + severityClass(data.severity) + '">' + (data.severity || 'medium') + '</span>');
+            $('#detailPower').text(formatNumber(data.powerValue) + ' W');
+            $('#detailThreshold').text(formatNumber(data.thresholdValue) + ' W');
+            $('#detailDeviation').text(fmt(data.deviation, 1) + '%');
+            $('#detailTime').text(formatDateTime(data.detectedTime) || '-');
+
+            var statusHtml;
+            if (data.isResolved) statusHtml = '<span class="badge bg-success">Resolved</span>';
+            else if (data.acknowledged) statusHtml = '<span class="badge bg-info">Acknowledged</span>';
+            else statusHtml = '<span class="badge bg-secondary">New</span>';
+            $('#detailStatus').html(statusHtml);
+
+            $('#detailRootCause').text(data.rootCause || '-');
+            $('#detailRecommendedAction').text(data.recommendedAction || '-');
+            $('#detailOperatorNotes').text(data.operatorNotes || '-');
+
+            if (currentUserRole === 'Operator' || currentUserRole === 'Admin') {
+                $('#btnDetailAcknowledge').prop('disabled', data.acknowledged).toggleClass('disabled', data.acknowledged);
+                $('#btnDetailResolve').prop('disabled', data.isResolved).toggleClass('disabled', data.isResolved);
+                $('#operatorNotesInput').val(data.operatorNotes || '');
+                $('#operatorActionInput').val(data.operatorAction || '');
+            }
+
+            // Chart rendering deferred to 'shown.bs.modal' event — see openDetailModal()
+        }
+
+        function renderTypeBadge(type) {
+            var cls, icon, text;
+            if (type === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD'; }
+            else if (type === 'DROP' || type === 'DEVICE_DROP' || type === 'DEVICE DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+            else { cls = 'bg-info'; icon = 'fa-question'; text = type; }
+            return '<span class="badge ' + cls + '"><i class="fas ' + icon + '"></i> ' + text + '</span>';
+        }
+
+        function renderDetailChart(snapshot) {
+            if (!snapshot || (!snapshot.beforeDataJson && !snapshot.afterDataJson)) {
+                // Replace container with placeholder message
+                $('#detailChartSnapshotContainer').replaceWith('<div id="detailChartSnapshotContainer" class="text-center text-muted py-5" style="height:350px;display:flex;align-items:center;justify-content:center;">Tidak ada chart snapshot</div>');
+                $('#detailSnapshotStatus').text('');
+                return;
+            }
+
+            var beforeData = [], afterData = [];
+            try {
+                beforeData = JSON.parse(snapshot.beforeDataJson || '[]') || [];
+                afterData = JSON.parse(snapshot.afterDataJson || '[]') || [];
+            } catch (e) {
+                $('#detailChartSnapshotContainer').replaceWith('<div id="detailChartSnapshotContainer" class="text-center text-muted py-5" style="height:350px;display:flex;align-items:center;justify-content:center;">Gagal memuat chart snapshot</div>');
+                return;
+            }
+
+            // Ensure container has a canvas element (may have been replaced with a placeholder)
+            if (!$('#detailChartSnapshot').length || $('#detailChartSnapshot').is('div')) {
+                $('#detailChartSnapshotContainer').replaceWith('<div id="detailChartSnapshotContainer" style="position:relative;height:350px;width:100%;"><canvas id="detailChartSnapshot"></canvas></div>');
+            }
+
+            // Build labels and data arrays for Chart.js
+            var labels = [];
+            var powerArr = [], upperArr = [], lowerArr = [], emaArr = [];
+
+            function fmtTime(ts) {
+                if (!ts) return null;
+                var d = new Date(ts);
+                if (isNaN(d.getTime())) return null;
+                var hh = String(d.getHours()).padStart(2, '0');
+                var mm = String(d.getMinutes()).padStart(2, '0');
+                var ss = String(d.getSeconds()).padStart(2, '0');
+                return hh + ':' + mm + ':' + ss;
+            }
+
+            var allData = beforeData.concat(afterData);
+            var hasValidTime = false;
+            allData.forEach(function(p, i) {
+                var ts = p.Timestamp || p.timestamp;
+                var label = fmtTime(ts);
+                if (label) hasValidTime = true;
+                if (!label) label = '#' + (i + 1);
+                labels.push(label);
+                powerArr.push(p.Power || p.power || 0);
+                upperArr.push(p.Upper || p.upper || null);
+                lowerArr.push(p.Lower || p.lower || null);
+                emaArr.push(p.EMA || p.ema || null);
+            });
+
+            // Anomaly marker index: boundary between before/after
+            var anomalyIdx = beforeData.length > 0 ? beforeData.length - 1 : -1;
+
+            var statusLabel;
+            if (snapshot.snapshotStatus === 'complete') statusLabel = 'Lengkap';
+            else if (snapshot.snapshotStatus === 'partial') statusLabel = 'Sebagian (masih mengumpulkan data setelah anomali)';
+            else statusLabel = 'Belum ada data setelah anomali';
+            $('#detailSnapshotStatus').text('Status: ' + statusLabel + ' | Data sebelum: ' + beforeData.length + ' | Data sesudah: ' + afterData.length);
+
+            // Build Chart.js datasets — same style as All Charts page
+            var datasets = [{
+                label: 'Power (W)',
+                data: powerArr,
+                borderColor: '#00cc66',
+                backgroundColor: 'rgba(0,204,102,0.15)',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                order: 3
+            }];
+
+            if (upperArr.some(function(v) { return v != null; })) {
+                datasets.push({
+                    label: 'Upper Threshold',
+                    data: upperArr,
+                    borderColor: '#ff0000',
+                    backgroundColor: 'rgba(255,0,0,0.05)',
+                    fill: '+1',
+                    tension: 0,
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    order: 1
+                });
+            }
+
+            if (lowerArr.some(function(v) { return v != null; })) {
+                datasets.push({
+                    label: 'Lower Threshold',
+                    data: lowerArr,
+                    borderColor: '#ff9900',
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    tension: 0,
+                    borderWidth: 2,
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    order: 1
+                });
+            }
+
+            if (emaArr.some(function(v) { return v != null; })) {
+                datasets.push({
+                    label: 'EMA',
+                    data: emaArr,
+                    borderColor: '#ff6600',
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    order: 2
+                });
+            }
+
+            // Chart.js annotation plugin for anomaly marker — use a custom plugin instead
+            var anomalyMarkerPlugin = {
+                id: 'anomalyMarker',
+                afterDraw: function(chart) {
+                    if (anomalyIdx < 0 || anomalyIdx >= labels.length) return;
+                    var meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data || !meta.data[anomalyIdx]) return;
+                    var x = meta.data[anomalyIdx].x;
+                    var yAxis = chart.scales.y;
+                    var ctx = chart.ctx;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 3]);
+                    ctx.strokeStyle = '#dc3545';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.stroke();
+                    // Label
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#dc3545';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('⚡ Anomali', x, yAxis.top - 6);
+                    ctx.restore();
+                }
+            };
+
+            var ctx = document.getElementById('detailChartSnapshot');
+            detailChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: {
+                            ticks: { font: { size: 9 }, maxRotation: 45 },
+                            grid: { color: '#e0e0e0', drawBorder: false },
+                            title: { display: true, text: hasValidTime ? 'Waktu' : 'Data Point' }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                font: { size: 9 },
+                                callback: function(v) { return v.toLocaleString('id-ID') + 'W'; }
+                            },
+                            grid: { color: '#e0e0e0', drawBorder: false },
+                            title: { display: true, text: 'Power (W)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                        title: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: '#444',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: true,
+                            callbacks: {
+                                title: function(ctx) { return 'Waktu: ' + ctx[0].label; },
+                                label: function(ctx) {
+                                    var lbl = ctx.dataset.label || '';
+                                    var val = ctx.parsed.y;
+                                    if (lbl) lbl += ': ';
+                                    return lbl + val.toLocaleString('id-ID', { maximumFractionDigits: 0 }) + ' W';
+                                }
+                            }
+                        }
+                    },
+                    layout: { padding: { top: 20 } }
+                },
+                plugins: [anomalyMarkerPlugin]
+            });
+        }
+
+        function updateAnomalyMarker(anomalyTime, argField) {
+            // No longer needed — Chart.js plugin handles anomaly marker inline
+        }
+
+        // ============================================
+        // OPERATOR ACTIONS
+        // ============================================
+        function acknowledgeAnomaly(id) {
+            if (!id) return;
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + id + '/acknowledge',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({}),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('Anomali di-acknowledge', 'success');
+                        $('#btnDetailAcknowledge').prop('disabled', true).addClass('disabled');
+                        if (dataGrid) dataGrid.refresh();
+                        loadDashboard();
+                    } else {
+                        showNotification(response.error || 'Gagal acknowledge', 'danger');
+                    }
+                },
+                error: function(xhr) { showNotification('Gagal acknowledge: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
+            });
+        }
+
+        function resolveAnomaly(id) {
+            if (!id) return;
+            var action = $('#operatorActionInput').val();
+            var notes = $('#operatorNotesInput').val();
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + id + '/resolve',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: action, notes: notes }),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('Anomali ditandai resolved', 'success');
+                        $('#btnDetailResolve').prop('disabled', true).addClass('disabled');
+                        if (dataGrid) dataGrid.refresh();
+                        loadDashboard();
+                    } else {
+                        showNotification(response.error || 'Gagal resolve', 'danger');
+                    }
+                },
+                error: function(xhr) { showNotification('Gagal resolve: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
+            });
+        }
+
+        function saveNotes(id) {
+            if (!id) return;
+            var action = $('#operatorActionInput').val();
+            var notes = $('#operatorNotesInput').val();
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + id + '/notes',
+                method: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: action, notes: notes }),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        showNotification('Catatan disimpan', 'success');
+                        if (dataGrid) dataGrid.refresh();
+                    } else {
+                        showNotification(response.error || 'Gagal menyimpan catatan', 'danger');
+                    }
+                },
+                error: function(xhr) { showNotification('Gagal menyimpan catatan: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
             });
         }
 
         // ============================================
-        // DELETE SINGLE LOG
+        // MONTHLY REPORT
+        // ============================================
+        function loadMonthlyReport() {
+            var year = parseInt($('#reportYear').val());
+            var month = parseInt($('#reportMonth').val());
+            $.ajax({
+                url: '/api/Api/anomaly-monthly-report',
+                method: 'GET',
+                data: { year: year, month: month },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        renderMonthlyReport(response.data);
+                    } else {
+                        $('#monthlyReportEmpty').removeClass('d-none').text('Laporan belum tersedia untuk periode ini.');
+                        $('#monthlyReportContainer').addClass('d-none');
+                    }
+                },
+                error: function() { showNotification('Gagal memuat laporan', 'danger'); }
+            });
+        }
+
+        function generateMonthlyReport() {
+            var year = parseInt($('#reportYear').val());
+            var month = parseInt($('#reportMonth').val());
+            $.ajax({
+                url: '/api/Api/anomaly-monthly-report/generate',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ year: year, month: month }),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        showNotification('Laporan berhasil dibuat', 'success');
+                        renderMonthlyReport(response.data);
+                    } else {
+                        showNotification(response.error || 'Gagal membuat laporan', 'danger');
+                    }
+                },
+                error: function() { showNotification('Gagal membuat laporan', 'danger'); }
+            });
+        }
+
+        function renderMonthlyReport(data) {
+            $('#monthlyReportEmpty').addClass('d-none');
+            $('#monthlyReportContainer').removeClass('d-none');
+            $('#repTotal').text(data.totalAnomalies || 0);
+            $('#repOverload').text(data.overloadCount || 0);
+            $('#repDrop').text(data.dropCount || 0);
+            $('#repAffected').text(data.affectedDevices || 0);
+            $('#repSummary').text(data.summaryText || '-');
+            $('#repRecommendations').html((data.recommendations || '-').replace(/\n/g, '<br>'));
+            $('#repGeneratedBy').text(data.generatedBy || '-');
+            $('#repGeneratedAt').text(data.generatedAt ? formatDateTime(data.generatedAt) : '-');
+        }
+
+        // ============================================
+        // OPERATOR ACTIONS AUDIT
+        // ============================================
+        function loadOperatorActions() {
+            var fromDate = $('#auditFromDate').val();
+            var toDate = $('#auditToDate').val();
+
+            $.ajax({
+                url: '/api/Api/anomaly-operator-actions',
+                method: 'GET',
+                data: { fromDate: fromDate, toDate: toDate, page: 1, pageSize: 100 },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) renderOperatorActionsGrid(response.data || []);
+                },
+                error: function() { }
+            });
+
+            $.ajax({
+                url: '/api/Api/anomaly-operator-actions/summary',
+                method: 'GET',
+                data: { fromDate: fromDate, toDate: toDate },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) renderOperatorSummaryGrid(response.data || []);
+                },
+                error: function() { }
+            });
+        }
+
+        function renderOperatorActionsGrid(data) {
+            $('#operatorActionsGrid').dxDataGrid({
+                dataSource: data,
+                columns: [
+                    { dataField: 'id', caption: 'ID', width: 60, alignment: 'center' },
+                    { dataField: 'email', caption: 'Operator' },
+                    { dataField: 'action', caption: 'Action' },
+                    { dataField: 'targetDevice', caption: 'Device' },
+                    { dataField: 'details', caption: 'Details' },
+                    { dataField: 'timestamp', caption: 'Waktu', cellTemplate: function(c, o) { c.text(formatDateTime(o.value)); } }
+                ],
+                paging: { pageSize: 10 },
+                showBorders: true
+            });
+        }
+
+        function renderOperatorSummaryGrid(data) {
+            $('#operatorActionsSummaryGrid').dxDataGrid({
+                dataSource: data,
+                columns: [
+                    { dataField: 'email', caption: 'Operator' },
+                    { dataField: 'total', caption: 'Total', alignment: 'center' },
+                    { dataField: 'acknowledged', caption: 'Acknowledged', alignment: 'center' },
+                    { dataField: 'resolved', caption: 'Resolved', alignment: 'center' },
+                    { dataField: 'actionTaken', caption: 'Action Taken', alignment: 'center' }
+                ],
+                paging: { pageSize: 10 },
+                showBorders: true
+            });
+        }
+
+        // ============================================
+        // DELETE / CLEAR
         // ============================================
         function confirmDelete(logId, deviceKey, anomalyType) {
             deleteLogId = logId;
@@ -716,7 +1622,6 @@
 
         function deleteSingleLog(logId) {
             $('#btnConfirmDelete').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Deleting...');
-
             $.ajax({
                 url: '/api/Api/anomaly-logs/' + logId,
                 method: 'DELETE',
@@ -725,10 +1630,10 @@
                     $('#deleteModal').modal('hide');
                     $('#btnConfirmDelete').prop('disabled', false).html('<i class="fas fa-trash"></i> Delete');
                     dataGrid.refresh();
-                    loadSummary();
+                    loadDashboard();
                     showNotification('Log deleted successfully', 'success');
                 },
-                error: function(xhr, status, error) {
+                error: function() {
                     $('#deleteModal').modal('hide');
                     $('#btnConfirmDelete').prop('disabled', false).html('<i class="fas fa-trash"></i> Delete');
                     showNotification('Error deleting log', 'danger');
@@ -736,12 +1641,8 @@
             });
         }
 
-        // ============================================
-        // CLEAR ALL LOGS
-        // ============================================
         function clearAllLogs() {
             $('#btnConfirmClearAll').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Clearing...');
-
             $.ajax({
                 url: '/api/Api/anomaly-logs/clear-all',
                 method: 'DELETE',
@@ -750,19 +1651,19 @@
                     $('#clearAllModal').modal('hide');
                     $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
                     dataGrid.refresh();
-                    loadSummary();
+                    loadDashboard();
                     showNotification('Cleared ' + (response.message || 'all logs'), 'success');
                 },
-                error: function(xhr, status, error) {
+                error: function() {
                     $('#clearAllModal').modal('hide');
                     $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
-                    showNotification('Error clearing logs: ' + error, 'danger');
+                    showNotification('Error clearing logs', 'danger');
                 }
             });
         }
 
         // ============================================
-        // NOTIFICATION HELPER
+        // NOTIFICATION
         // ============================================
         function showNotification(message, type) {
             var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
@@ -778,9 +1679,6 @@
             setTimeout(function() { notification.alert('close'); }, 3000);
         }
 
-        // ============================================
-        // LAST UPDATE
-        // ============================================
         function updateLastUpdate() {
             $('.last-update').text(new Date().toLocaleString('id-ID'));
         }

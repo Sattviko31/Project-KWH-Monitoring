@@ -1190,8 +1190,65 @@ CREATE TABLE [dbo].[AnomalyLogs](
 	[ThresholdMode] [nvarchar](20) NULL,
 	[Acknowledged] [bit] NULL,
 	[AcknowledgedTime] [datetime2](7) NULL,
+	[AcknowledgedBy] [nvarchar](256) NULL,
+	[ResolvedBy] [nvarchar](256) NULL,
+	[ResolvedTime] [datetime2](7) NULL,
+	[IsResolved] [bit] NOT NULL DEFAULT ((0)),
+	[OperatorAction] [nvarchar](100) NULL,
+	[OperatorNotes] [nvarchar](1000) NULL,
+	[Severity] [nvarchar](20) NULL DEFAULT ('medium'),
+	[RootCause] [nvarchar](500) NULL,
+	[RecommendedAction] [nvarchar](1000) NULL,
 	[Notes] [nvarchar](500) NULL,
-PRIMARY KEY CLUSTERED 
+PRIMARY KEY CLUSTERED
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[AnomalyChartSnapshots]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[AnomalyChartSnapshots](
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[AnomalyLogId] [bigint] NOT NULL,
+	[DetectedTime] [datetime2](7) NOT NULL,
+	[BeforeDataJson] [nvarchar](max) NULL,
+	[AfterDataJson] [nvarchar](max) NULL,
+	[UpperThreshold] [decimal](18, 2) NOT NULL,
+	[LowerThreshold] [decimal](18, 2) NOT NULL,
+	[EMAValue] [decimal](18, 2) NULL,
+	[SnapshotStatus] [nvarchar](20) NULL DEFAULT ('before'),
+	[CreatedAt] [datetime2](7) NOT NULL DEFAULT (getdate()),
+	[UpdatedAt] [datetime2](7) NULL,
+PRIMARY KEY CLUSTERED
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[AnomalyMonthlyReports]    Script Date: 11/09/2026 15:39:22 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[AnomalyMonthlyReports](
+	[Id] [bigint] IDENTITY(1,1) NOT NULL,
+	[Year] [int] NOT NULL,
+	[Month] [int] NOT NULL,
+	[TotalAnomalies] [int] NOT NULL,
+	[OverloadCount] [int] NOT NULL,
+	[DropCount] [int] NOT NULL,
+	[AffectedDevices] [int] NOT NULL,
+	[AverageDeviation] [decimal](5, 2) NOT NULL,
+	[TopAffectedDevice] [nvarchar](50) NULL,
+	[SummaryText] [nvarchar](2000) NULL,
+	[Recommendations] [nvarchar](2000) NULL,
+	[GeneratedBy] [nvarchar](256) NULL,
+	[GeneratedAt] [datetime2](7) NOT NULL DEFAULT (getdate()),
+PRIMARY KEY CLUSTERED
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
@@ -1477,6 +1534,33 @@ CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_DeviceKey] ON [dbo].[AnomalyLogs]
 GO
 SET ANSI_PADDING ON
 GO
+/****** Object:  Index [IX_AnomalyLogs_Severity]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_Severity] ON [dbo].[AnomalyLogs]
+(
+	[Severity] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_AnomalyLogs_IsResolved]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyLogs_IsResolved] ON [dbo].[AnomalyLogs]
+(
+	[IsResolved] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_AnomalyChartSnapshots_AnomalyLogId]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyChartSnapshots_AnomalyLogId] ON [dbo].[AnomalyChartSnapshots]
+(
+	[AnomalyLogId] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+/****** Object:  Index [IX_AnomalyMonthlyReports_Year_Month]    Script Date: 11/09/2026 15:39:22 ******/
+CREATE NONCLUSTERED INDEX [IX_AnomalyMonthlyReports_Year_Month] ON [dbo].[AnomalyMonthlyReports]
+(
+	[Year] ASC,
+	[Month] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
 /****** Object:  Index [IX_ApplicationUsers_NormalizedEmail]    Script Date: 11/09/2026 15:39:22 ******/
 CREATE UNIQUE NONCLUSTERED INDEX [IX_ApplicationUsers_NormalizedEmail] ON [dbo].[ApplicationUsers]
 (
@@ -1703,6 +1787,19 @@ GO
 ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ('manual') FOR [ThresholdMode]
 GO
 ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ((0)) FOR [Acknowledged]
+GO
+ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ((0)) FOR [IsResolved]
+GO
+ALTER TABLE [dbo].[AnomalyLogs] ADD  DEFAULT ('medium') FOR [Severity]
+GO
+ALTER TABLE [dbo].[AnomalyChartSnapshots] ADD  DEFAULT ('before') FOR [SnapshotStatus]
+GO
+ALTER TABLE [dbo].[AnomalyChartSnapshots] ADD  DEFAULT (getdate()) FOR [CreatedAt]
+GO
+ALTER TABLE [dbo].[AnomalyChartSnapshots]  WITH CHECK ADD  CONSTRAINT [FK_AnomalyChartSnapshots_AnomalyLogs_AnomalyLogId] FOREIGN KEY([AnomalyLogId])
+REFERENCES [dbo].[AnomalyLogs] ([Id])
+GO
+ALTER TABLE [dbo].[AnomalyChartSnapshots] CHECK CONSTRAINT [FK_AnomalyChartSnapshots_AnomalyLogs_AnomalyLogId]
 GO
 ALTER TABLE [dbo].[ApplicationUsers] ADD  DEFAULT ((0)) FOR [EmailConfirmed]
 GO

@@ -13,6 +13,8 @@ namespace KWHMonitoring.Models
         public DbSet<KWHDataHistory> KWHData_History { get; set; }
         public DbSet<DeviceRegistry> DeviceRegistry { get; set; }
         public DbSet<AnomalyLog> AnomalyLogs { get; set; }
+        public DbSet<AnomalyChartSnapshot> AnomalyChartSnapshots { get; set; }
+        public DbSet<AnomalyMonthlyReport> AnomalyMonthlyReports { get; set; }
         public DbSet<AppLog> AppLogs { get; set; }
         public DbSet<AppSettingsRecord> AppSettingsRecords { get; set; }
         public DbSet<ColumnMapping> ColumnMappings { get; set; }
@@ -135,10 +137,70 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.ThresholdMode).HasColumnType("nvarchar(20)").HasMaxLength(20);
                 entity.Property(x => x.Acknowledged);
                 entity.Property(x => x.AcknowledgedTime).HasColumnType("datetime2");
+                entity.Property(x => x.AcknowledgedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.ResolvedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.ResolvedTime).HasColumnType("datetime2");
+                entity.Property(x => x.IsResolved);
+                entity.Property(x => x.OperatorAction).HasColumnType("nvarchar(100)").HasMaxLength(100);
+                entity.Property(x => x.OperatorNotes).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
+                entity.Property(x => x.Severity).HasColumnType("nvarchar(20)").HasMaxLength(20);
+                entity.Property(x => x.RootCause).HasColumnType("nvarchar(500)").HasMaxLength(500);
+                entity.Property(x => x.RecommendedAction).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
                 entity.Property(x => x.Notes).HasColumnType("nvarchar(500)").HasMaxLength(500);
 
                 entity.HasIndex(x => x.DetectedTime).HasName("IX_AnomalyLogs_DetectedTime");
                 entity.HasIndex(x => x.DeviceKey).HasName("IX_AnomalyLogs_DeviceKey");
+                entity.HasIndex(x => x.Severity).HasName("IX_AnomalyLogs_Severity");
+                entity.HasIndex(x => x.IsResolved).HasName("IX_AnomalyLogs_IsResolved");
+            });
+
+            modelBuilder.Entity<AnomalyChartSnapshot>(entity =>
+            {
+                entity.ToTable("AnomalyChartSnapshots");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.AnomalyLogId);
+                entity.Property(x => x.DetectedTime).HasColumnType("datetime2");
+                entity.Property(x => x.BeforeDataJson).HasColumnType("nvarchar(max)");
+                entity.Property(x => x.AfterDataJson).HasColumnType("nvarchar(max)");
+                entity.Property(x => x.UpperThreshold).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.LowerThreshold).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.EMAValue).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.SnapshotStatus).HasColumnType("nvarchar(20)").HasMaxLength(20);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
+
+                entity.HasIndex(x => x.AnomalyLogId)
+                    .HasName("IX_AnomalyChartSnapshots_AnomalyLogId")
+                    .IsUnique();
+
+                entity.HasOne(x => x.AnomalyLog)
+                    .WithOne(x => x.ChartSnapshot)
+                    .HasForeignKey<AnomalyChartSnapshot>(x => x.AnomalyLogId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AnomalyMonthlyReport>(entity =>
+            {
+                entity.ToTable("AnomalyMonthlyReports");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.Year);
+                entity.Property(x => x.Month);
+                entity.Property(x => x.TotalAnomalies);
+                entity.Property(x => x.OverloadCount);
+                entity.Property(x => x.DropCount);
+                entity.Property(x => x.AffectedDevices);
+                entity.Property(x => x.AverageDeviation).HasColumnType("decimal(5,2)");
+                entity.Property(x => x.TopAffectedDevice).HasColumnType("nvarchar(50)").HasMaxLength(50);
+                entity.Property(x => x.SummaryText).HasColumnType("nvarchar(2000)");
+                entity.Property(x => x.Recommendations).HasColumnType("nvarchar(2000)");
+                entity.Property(x => x.GeneratedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.GeneratedAt).HasColumnType("datetime2");
+
+                entity.HasIndex(x => new { x.Year, x.Month }).HasName("IX_AnomalyMonthlyReports_Year_Month");
             });
 
             modelBuilder.Entity<AppLog>(entity =>

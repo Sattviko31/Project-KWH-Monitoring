@@ -208,6 +208,16 @@ namespace KWHMonitoring.Controllers
                     });
                 }
 
+                // Role untuk RBAC di Anomaly Information Center
+                if (User.IsInRole(UserRoles.Admin))
+                    ViewBag.CurrentUserRole = "Admin";
+                else if (User.IsInRole(UserRoles.Operator))
+                    ViewBag.CurrentUserRole = "Operator";
+                else if (User.IsInRole(UserRoles.Viewer))
+                    ViewBag.CurrentUserRole = "Viewer";
+                else
+                    ViewBag.CurrentUserRole = "Viewer";
+
                 return View(viewModel);
             }
             catch (Exception ex)

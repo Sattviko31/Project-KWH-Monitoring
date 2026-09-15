@@ -24,7 +24,13 @@ namespace KWHMonitoring.Models
         RelayOn,
         RelayOff,
         RelayPulse,
-        UnauthorizedAttempt
+        UnauthorizedAttempt,
+        AnomalyAcknowledged,
+        AnomalyResolved,
+        AnomalyActionTaken,
+        AnomalyLogDeleted,
+        AnomalyLogsCleared,
+        AnomalyMonthlyReportGenerated
     }
 
     [Table("SecurityAuditLogs")]

@@ -1,4 +1,5 @@
 using System.Linq;
+using System;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -42,6 +43,7 @@ namespace KWHMonitoring
             services.AddScoped<NotificationService>();
             services.AddScoped<AesEncryptionService>();
             services.AddSingleton<MqttService>();
+            services.AddScoped<IAnomalyAnalysisService, AnomalyAnalysisService>();
 
             services.AddScoped<IEmailService, EmailService>();
 
@@ -65,7 +67,13 @@ namespace KWHMonitoring
                 options.AddPolicy("RequireViewer", policy => policy.RequireRole("Viewer", "Operator", "Admin"));
             });
 
-            services.AddHostedService<AnomalyNotificationBackgroundService>();
+            // Optional: disable background notification service for testing/staging
+            // Set environment variable KWH_DISABLE_NOTIFICATION_BG=1 to skip registration.
+            var disableNotificationBg = Environment.GetEnvironmentVariable("KWH_DISABLE_NOTIFICATION_BG");
+            if (string.IsNullOrEmpty(disableNotificationBg) || disableNotificationBg == "0" || disableNotificationBg.Equals("false", StringComparison.OrdinalIgnoreCase))
+            {
+                services.AddHostedService<AnomalyNotificationBackgroundService>();
+            }
 
             // =========================================================
             // TAMBAHAN KHUSUS CHATBOT QWEN

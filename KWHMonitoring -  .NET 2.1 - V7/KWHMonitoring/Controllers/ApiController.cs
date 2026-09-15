@@ -38,8 +38,9 @@ namespace KWHMonitoring.Controllers
         private readonly MqttService _mqttService;
         private readonly IHostingEnvironment _environment;
         private readonly IEmailService _emailService;
+        private readonly IAnomalyAnalysisService _analysisService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService)
         {
             _context = context;
             _cache = cache;
@@ -49,6 +50,7 @@ namespace KWHMonitoring.Controllers
             _mqttService = mqttService;
             _environment = environment;
             _emailService = emailService;
+            _analysisService = analysisService;
         }
 
         private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
@@ -2557,6 +2559,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ANOMALY LOGS - GET (Server-Side Pagination)
         // ============================================
+        [Authorize(Policy = "RequireViewer")]
         [HttpGet("anomaly-logs/summary")]
         public async Task<IActionResult> GetAnomalyLogsSummary()
         {
@@ -2568,6 +2571,8 @@ namespace KWHMonitoring.Controllers
                 var overloadCount = await query.CountAsync(x => x.AnomalyType == "OVERLOAD");
                 var dropCount = await query.CountAsync(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
                 var activeDeviceCount = await query.Select(x => x.DeviceKey).Distinct().CountAsync();
+                var unresolvedCount = await query.CountAsync(x => !x.IsResolved);
+                var criticalCount = await query.CountAsync(x => x.Severity == "critical");
 
                 return Ok(new
                 {
@@ -2575,7 +2580,9 @@ namespace KWHMonitoring.Controllers
                     totalLogs = totalCount,
                     totalOverload = overloadCount,
                     totalDrop = dropCount,
-                    activeDevices = activeDeviceCount
+                    activeDevices = activeDeviceCount,
+                    unresolved = unresolvedCount,
+                    critical = criticalCount
                 });
             }
             catch (Exception ex)
@@ -2584,10 +2591,11 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        [Authorize(Policy = "RequireViewer")]
         [HttpGet("anomaly-logs/{deviceKey}")]
         public async Task<IActionResult> GetAnomalyLogs(
-            string deviceKey, 
-            int skip = 0, 
+            string deviceKey,
+            int skip = 0,
             int take = 10,
             string sort = null,
             string filter = null)
@@ -2635,8 +2643,17 @@ namespace KWHMonitoring.Controllers
                         detectedTime = x.DetectedTime,
                         emaValue = x.EMAValue,
                         thresholdMode = x.ThresholdMode,
+                        severity = x.Severity,
+                        rootCause = x.RootCause,
+                        recommendedAction = x.RecommendedAction,
                         acknowledged = x.Acknowledged ?? false,
+                        acknowledgedBy = x.AcknowledgedBy,
                         acknowledgedTime = x.AcknowledgedTime,
+                        isResolved = x.IsResolved,
+                        resolvedBy = x.ResolvedBy,
+                        resolvedTime = x.ResolvedTime,
+                        operatorAction = x.OperatorAction,
+                        operatorNotes = x.OperatorNotes,
                         notes = x.Notes
                     })
                     .ToListAsync();
@@ -2902,6 +2919,53 @@ namespace KWHMonitoring.Controllers
                 _context.AnomalyLogs.Add(log);
                 await _context.SaveChangesAsync();
 
+                // ============================================================
+                // ANALISIS OTOMATIS & SNAPSHOT CHART
+                // ============================================================
+                try
+                {
+                    // Ambil riwayat 24 jam terakhir untuk device yang sama
+                    var recentHistory = await _context.AnomalyLogs
+                        .Where(x => x.DeviceKey == data.DeviceKey && x.DetectedTime >= DateTime.Now.AddHours(-24))
+                        .ToListAsync();
+
+                    var analysis = _analysisService.Analyze(log, recentHistory);
+
+                    log.Severity = analysis.Severity;
+                    log.RootCause = analysis.RootCause;
+                    log.RecommendedAction = analysis.RecommendedAction;
+
+                    // Simpan chart snapshot jika ada
+                    if (data.ChartSnapshot != null)
+                    {
+                        var beforeJson = data.ChartSnapshot.Before != null
+                            ? JsonConvert.SerializeObject(data.ChartSnapshot.Before)
+                            : null;
+                        var afterJson = data.ChartSnapshot.After != null && data.ChartSnapshot.After.Count > 0
+                            ? JsonConvert.SerializeObject(data.ChartSnapshot.After)
+                            : null;
+
+                        _context.AnomalyChartSnapshots.Add(new AnomalyChartSnapshot
+                        {
+                            AnomalyLogId = log.Id,
+                            DetectedTime = log.DetectedTime,
+                            BeforeDataJson = beforeJson,
+                            AfterDataJson = afterJson,
+                            UpperThreshold = data.ChartSnapshot.UpperThreshold,
+                            LowerThreshold = data.ChartSnapshot.LowerThreshold,
+                            EMAValue = data.ChartSnapshot.EMAValue,
+                            SnapshotStatus = string.IsNullOrEmpty(afterJson) ? "before" : "complete"
+                        });
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+                catch (Exception analysisEx)
+                {
+                    _logger.LogWarning(analysisEx, "Failed to analyze anomaly #{LogId}", log.Id);
+                    // Jangan gagalkan logging anomali karena analisis gagal
+                }
+
                 // Kirim notifikasi
                 if (downtime.IsDowntime && data.AnomalyType == "OVERLOAD")
                 {
@@ -3000,6 +3064,637 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resetting anomaly alert for {DeviceKey}", data.DeviceKey);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // GET SINGLE ANOMALY WITH ANALYSIS & SNAPSHOT
+        // ============================================
+        [Authorize(Policy = "RequireViewer")]
+        [HttpGet("anomaly-logs/detail/{id}")]
+        public async Task<IActionResult> GetAnomalyLog(long id)
+        {
+            try
+            {
+                var log = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == id);
+
+                if (log == null)
+                    return NotFound(new { success = false, error = "Anomaly log not found" });
+
+                var snapshot = await _context.AnomalyChartSnapshots
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.AnomalyLogId == id);
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        id = log.Id,
+                        deviceKey = log.DeviceKey,
+                        deviceId = log.DeviceId,
+                        anomalyType = log.AnomalyType,
+                        powerValue = log.PowerValue,
+                        thresholdValue = log.ThresholdValue,
+                        deviation = log.Deviation,
+                        detectedTime = log.DetectedTime,
+                        emaValue = log.EMAValue,
+                        thresholdMode = log.ThresholdMode,
+                        severity = log.Severity,
+                        rootCause = log.RootCause,
+                        recommendedAction = log.RecommendedAction,
+                        notes = log.Notes,
+                        acknowledged = log.Acknowledged ?? false,
+                        acknowledgedBy = log.AcknowledgedBy,
+                        acknowledgedTime = log.AcknowledgedTime,
+                        isResolved = log.IsResolved,
+                        resolvedBy = log.ResolvedBy,
+                        resolvedTime = log.ResolvedTime,
+                        operatorAction = log.OperatorAction,
+                        operatorNotes = log.OperatorNotes,
+                        chartSnapshot = snapshot == null ? null : new
+                        {
+                            detectedTime = snapshot.DetectedTime,
+                            beforeDataJson = snapshot.BeforeDataJson,
+                            afterDataJson = snapshot.AfterDataJson,
+                            upperThreshold = snapshot.UpperThreshold,
+                            lowerThreshold = snapshot.LowerThreshold,
+                            emaValue = snapshot.EMAValue,
+                            snapshotStatus = snapshot.SnapshotStatus
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // ACKNOWLEDGE ANOMALY (Operator / Admin)
+        // ============================================
+        [Authorize(Policy = "RequireOperator")]
+        [HttpPost("anomaly-logs/{id}/acknowledge")]
+        public async Task<IActionResult> AcknowledgeAnomaly(long id, [FromBody] AcknowledgeAnomalyRequest data)
+        {
+            try
+            {
+                var log = await _context.AnomalyLogs.FindAsync(id);
+                if (log == null)
+                    return NotFound(new { success = false, error = "Anomaly log not found" });
+
+                var username = User.Identity.Name ?? "system";
+
+                log.Acknowledged = true;
+                log.AcknowledgedTime = DateTime.Now;
+                log.AcknowledgedBy = username;
+
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyAcknowledged,
+                    log.DeviceKey,
+                    $"Anomaly #{id} acknowledged by {username}",
+                    true);
+
+                return Ok(new { success = true, message = "Anomaly acknowledged" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // RESOLVE ANOMALY (Operator / Admin)
+        // ============================================
+        [Authorize(Policy = "RequireOperator")]
+        [HttpPost("anomaly-logs/{id}/resolve")]
+        public async Task<IActionResult> ResolveAnomaly(long id, [FromBody] ResolveAnomalyRequest data)
+        {
+            try
+            {
+                var log = await _context.AnomalyLogs.FindAsync(id);
+                if (log == null)
+                    return NotFound(new { success = false, error = "Anomaly log not found" });
+
+                var username = User.Identity.Name ?? "system";
+
+                log.IsResolved = true;
+                log.ResolvedTime = DateTime.Now;
+                log.ResolvedBy = username;
+                log.OperatorAction = data?.Action;
+                log.OperatorNotes = data?.Notes;
+
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyResolved,
+                    log.DeviceKey,
+                    $"Anomaly #{id} resolved by {username}. Action: {data?.Action ?? "-"}. Notes: {data?.Notes ?? "-"}",
+                    true);
+
+                return Ok(new { success = true, message = "Anomaly resolved" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // UPDATE ANOMALY NOTES (Operator / Admin)
+        // ============================================
+        [Authorize(Policy = "RequireOperator")]
+        [HttpPut("anomaly-logs/{id}/notes")]
+        public async Task<IActionResult> UpdateAnomalyNotes(long id, [FromBody] UpdateAnomalyNotesRequest data)
+        {
+            try
+            {
+                var log = await _context.AnomalyLogs.FindAsync(id);
+                if (log == null)
+                    return NotFound(new { success = false, error = "Anomaly log not found" });
+
+                var username = User.Identity.Name ?? "system";
+
+                log.OperatorNotes = data?.Notes;
+                log.OperatorAction = data?.Action ?? "notes_updated";
+
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyActionTaken,
+                    log.DeviceKey,
+                    $"Anomaly #{id} notes updated by {username}",
+                    true);
+
+                return Ok(new { success = true, message = "Notes updated" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // DELETE SINGLE ANOMALY LOG (Admin only)
+        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
+        [HttpDelete("anomaly-logs/{id}")]
+        public async Task<IActionResult> DeleteAnomalyLog(long id)
+        {
+            try
+            {
+                var log = await _context.AnomalyLogs.FindAsync(id);
+                if (log == null)
+                    return NotFound(new { success = false, error = "Anomaly log not found" });
+
+                var deviceKey = log.DeviceKey;
+                _context.AnomalyLogs.Remove(log);
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyLogDeleted,
+                    deviceKey,
+                    $"Anomaly log #{id} deleted by {User.Identity.Name ?? "system"}",
+                    true);
+
+                return Ok(new { success = true, message = "Anomaly log deleted" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // CLEAR ALL ANOMALY LOGS (Admin only)
+        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
+        [HttpDelete("anomaly-logs/clear-all")]
+        public async Task<IActionResult> ClearAllAnomalyLogs()
+        {
+            try
+            {
+                var allLogs = await _context.AnomalyLogs.ToListAsync();
+                _context.AnomalyLogs.RemoveRange(allLogs);
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyLogsCleared,
+                    null,
+                    $"All anomaly logs cleared by {User.Identity.Name ?? "system"}",
+                    true);
+
+                return Ok(new { success = true, message = "All anomaly logs cleared" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // ANOMALY DASHBOARD SUMMARY
+        // ============================================
+        [Authorize(Policy = "RequireViewer")]
+        [HttpGet("anomaly-dashboard")]
+        public async Task<IActionResult> GetAnomalyDashboard()
+        {
+            try
+            {
+                var today = DateTime.Now.Date;
+                var startOfDay = today;
+                var endOfDay = today.AddDays(1);
+
+                var totalQuery = _context.AnomalyLogs.AsNoTracking();
+                var todayQuery = totalQuery.Where(x => x.DetectedTime >= startOfDay && x.DetectedTime < endOfDay);
+
+                var totalCount = await totalQuery.CountAsync();
+                var todayCount = await todayQuery.CountAsync();
+                var unresolvedCount = await totalQuery.CountAsync(x => !x.IsResolved);
+                var criticalCount = await totalQuery.CountAsync(x => x.Severity == "critical");
+                var highCount = await totalQuery.CountAsync(x => x.Severity == "high");
+
+                var topDevice = await totalQuery
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new { DeviceKey = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                .FirstOrDefaultAsync();
+
+                var recentAnomalies = await totalQuery
+                    .OrderByDescending(x => x.DetectedTime)
+                    .Take(5)
+                    .Select(x => new
+                    {
+                        x.Id,
+                        x.DeviceKey,
+                        x.AnomalyType,
+                        x.Severity,
+                        x.DetectedTime,
+                        x.IsResolved
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        total = totalCount,
+                        today = todayCount,
+                        unresolved = unresolvedCount,
+                        critical = criticalCount,
+                        high = highCount,
+                        topDevice = topDevice?.DeviceKey,
+                        topDeviceCount = topDevice?.Count ?? 0,
+                        recentAnomalies
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // ANOMALY TRENDS (7 atau 30 hari terakhir)
+        // ============================================
+        [Authorize(Policy = "RequireViewer")]
+        [HttpGet("anomaly-trends")]
+        public async Task<IActionResult> GetAnomalyTrends([FromQuery] int days = 7)
+        {
+            try
+            {
+                if (days < 1) days = 7;
+                if (days > 90) days = 90;
+
+                var startDate = DateTime.Now.Date.AddDays(-days + 1);
+
+                var logs = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .Where(x => x.DetectedTime >= startDate)
+                    .Select(x => new { x.DetectedTime, x.AnomalyType, x.DeviceKey, x.Severity })
+                    .ToListAsync();
+
+                var trend = Enumerable.Range(0, days)
+                    .Select(i => startDate.AddDays(i))
+                    .Select(date => new
+                    {
+                        date = date.ToString("yyyy-MM-dd"),
+                        total = logs.Count(x => x.DetectedTime.Date == date),
+                        overload = logs.Count(x => x.DetectedTime.Date == date && x.AnomalyType == "OVERLOAD"),
+                        drop = logs.Count(x => x.DetectedTime.Date == date && (x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP")),
+                        critical = logs.Count(x => x.DetectedTime.Date == date && x.Severity == "critical")
+                    })
+                    .ToList();
+
+                return Ok(new { success = true, data = trend });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // GENERATE MONTHLY ANOMALY REPORT
+        // ============================================
+        [Authorize(Policy = "RequireOperator")]
+        [HttpPost("anomaly-monthly-report/generate")]
+        public async Task<IActionResult> GenerateMonthlyReport([FromBody] GenerateMonthlyReportRequest request)
+        {
+            try
+            {
+                var year = request?.Year ?? DateTime.Now.Year;
+                var month = request?.Month ?? DateTime.Now.Month;
+
+                var startDate = new DateTime(year, month, 1);
+                var endDate = startDate.AddMonths(1);
+
+                var logs = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .Where(x => x.DetectedTime >= startDate && x.DetectedTime < endDate)
+                    .ToListAsync();
+
+                var total = logs.Count;
+                var overload = logs.Count(x => x.AnomalyType == "OVERLOAD");
+                var drop = logs.Count(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
+                var affectedDevices = logs.Select(x => x.DeviceKey).Distinct().Count();
+                var avgDeviation = total > 0 ? logs.Average(x => (double)x.Deviation) : 0;
+
+                var topDevice = logs
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new { DeviceKey = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .FirstOrDefault();
+
+                var recommendations = new List<string>();
+                if (overload > drop)
+                    recommendations.Add("Overload mendominasi. Pertimbangkan untuk meninjau kapasitas panel dan mengurangi beban puncak.");
+                if (drop > overload)
+                    recommendations.Add("Device drop mendominasi. Periksa kualitas koneksi dan power supply.");
+                if (affectedDevices > 1)
+                    recommendations.Add($"{affectedDevices} device terdampak. Lakukan audit perangkat secara menyeluruh.");
+                if (logs.Any(x => x.Severity == "critical"))
+                    recommendations.Add("Terdapat anomali kritis. Segera lakukan tindak lanjut.");
+
+                var report = new AnomalyMonthlyReport
+                {
+                    Year = year,
+                    Month = month,
+                    TotalAnomalies = total,
+                    OverloadCount = overload,
+                    DropCount = drop,
+                    AffectedDevices = affectedDevices,
+                    AverageDeviation = (decimal)avgDeviation,
+                    TopAffectedDevice = topDevice?.DeviceKey,
+                    SummaryText = $"Laporan anomali untuk {startDate:MMMM yyyy}. Total {total} anomali.",
+                    Recommendations = string.Join("\n", recommendations),
+                    GeneratedBy = User.Identity.Name ?? "system",
+                    GeneratedAt = DateTime.Now
+                };
+
+                _context.AnomalyMonthlyReports.Add(report);
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyMonthlyReportGenerated,
+                    null,
+                    $"Monthly anomaly report generated for {year}-{month} by {report.GeneratedBy}",
+                    true);
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        report.Id,
+                        report.Year,
+                        report.Month,
+                        report.TotalAnomalies,
+                        report.OverloadCount,
+                        report.DropCount,
+                        report.AffectedDevices,
+                        report.AverageDeviation,
+                        report.TopAffectedDevice,
+                        report.SummaryText,
+                        report.Recommendations,
+                        report.GeneratedBy,
+                        report.GeneratedAt
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // GET MONTHLY ANOMALY REPORT
+        // ============================================
+        [Authorize(Policy = "RequireViewer")]
+        [HttpGet("anomaly-monthly-report")]
+        public async Task<IActionResult> GetMonthlyReport([FromQuery] int year, [FromQuery] int month)
+        {
+            try
+            {
+                var report = await _context.AnomalyMonthlyReports
+                    .AsNoTracking()
+                    .OrderByDescending(x => x.GeneratedAt)
+                    .FirstOrDefaultAsync(x => x.Year == year && x.Month == month);
+
+                if (report == null)
+                    return Ok(new { success = true, data = (object)null, message = "No report found" });
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        report.Id,
+                        report.Year,
+                        report.Month,
+                        report.TotalAnomalies,
+                        report.OverloadCount,
+                        report.DropCount,
+                        report.AffectedDevices,
+                        report.AverageDeviation,
+                        report.TopAffectedDevice,
+                        report.SummaryText,
+                        report.Recommendations,
+                        report.GeneratedBy,
+                        report.GeneratedAt
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // OPERATOR ACTIONS AUDIT
+        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
+        [HttpGet("anomaly-operator-actions")]
+        public async Task<IActionResult> GetOperatorActions([FromQuery] string fromDate, [FromQuery] string toDate, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                if (page < 1) page = 1;
+                if (pageSize < 1) pageSize = 20;
+
+                var query = _context.SecurityAuditLogs
+                    .AsNoTracking()
+                    .Where(x => x.Action == SecurityAction.AnomalyAcknowledged
+                        || x.Action == SecurityAction.AnomalyResolved
+                        || x.Action == SecurityAction.AnomalyActionTaken);
+
+                if (DateTime.TryParse(fromDate, out var from) && DateTime.TryParse(toDate, out var to))
+                {
+                    query = query.Where(x => x.Timestamp >= from && x.Timestamp < to.AddDays(1));
+                }
+
+                var total = await query.CountAsync();
+                var items = await query
+                    .OrderByDescending(x => x.Timestamp)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(x => new
+                    {
+                        x.Id,
+                        x.Email,
+                        Action = x.Action.ToString(),
+                        x.TargetDevice,
+                        x.Details,
+                        x.Success,
+                        x.Timestamp
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    data = items,
+                    total,
+                    page,
+                    pageSize
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // OPERATOR ACTIONS SUMMARY
+        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
+        [HttpGet("anomaly-operator-actions/summary")]
+        public async Task<IActionResult> GetOperatorActionsSummary([FromQuery] string fromDate, [FromQuery] string toDate)
+        {
+            try
+            {
+                var query = _context.SecurityAuditLogs
+                    .AsNoTracking()
+                    .Where(x => x.Action == SecurityAction.AnomalyAcknowledged
+                        || x.Action == SecurityAction.AnomalyResolved
+                        || x.Action == SecurityAction.AnomalyActionTaken);
+
+                if (DateTime.TryParse(fromDate, out var from) && DateTime.TryParse(toDate, out var to))
+                {
+                    query = query.Where(x => x.Timestamp >= from && x.Timestamp < to.AddDays(1));
+                }
+
+                var summary = await query
+                    .GroupBy(x => x.Email)
+                    .Select(g => new
+                    {
+                        Email = g.Key,
+                        Total = g.Count(),
+                        Acknowledged = g.Count(x => x.Action == SecurityAction.AnomalyAcknowledged),
+                        Resolved = g.Count(x => x.Action == SecurityAction.AnomalyResolved),
+                        ActionTaken = g.Count(x => x.Action == SecurityAction.AnomalyActionTaken)
+                    })
+                    .OrderByDescending(x => x.Total)
+                    .ToListAsync();
+
+                return Ok(new { success = true, data = summary });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // UPDATE CHART SNAPSHOT (After data - incremental)
+        // No [Authorize] — consistent with log-anomaly endpoint;
+        // logId in URL provides adequate access control
+        // ============================================
+        [HttpPost("anomaly-logs/{id}/chart-snapshot")]
+        public async Task<IActionResult> UpdateChartSnapshot(long id, [FromBody] ChartSnapshotRequest data)
+        {
+            try
+            {
+                var snapshot = await _context.AnomalyChartSnapshots
+                    .FirstOrDefaultAsync(x => x.AnomalyLogId == id);
+
+                if (snapshot == null)
+                    return NotFound(new { success = false, error = "Chart snapshot not found" });
+
+                if (data?.After != null && data.After.Count > 0)
+                {
+                    // Merge with existing after-data: keep whichever has MORE points
+                    // Client sends ALL accumulated points each time (not just new ones)
+                    var existingCount = 0;
+                    if (!string.IsNullOrEmpty(snapshot.AfterDataJson))
+                    {
+                        try
+                        {
+                            var existingList = JsonConvert.DeserializeObject<List<ChartDataPointRequest>>(snapshot.AfterDataJson);
+                            existingCount = existingList?.Count ?? 0;
+                        }
+                        catch { }
+                    }
+
+                    // Only replace if new data has more points than what we already have
+                    if (data.After.Count > existingCount)
+                    {
+                        snapshot.AfterDataJson = JsonConvert.SerializeObject(data.After);
+                        snapshot.UpdatedAt = DateTime.Now;
+                    }
+
+                    // Mark complete when we have enough data OR client says it's final
+                    var isFinal = data.IsFinal || data.After.Count >= 50;
+                    if (isFinal)
+                    {
+                        snapshot.SnapshotStatus = "complete";
+                        snapshot.UpdatedAt = DateTime.Now;
+                    }
+                    else
+                    {
+                        snapshot.SnapshotStatus = "partial";
+                        if (snapshot.UpdatedAt == null)
+                            snapshot.UpdatedAt = DateTime.Now;
+                    }
+
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = "Chart snapshot updated", status = snapshot.SnapshotStatus, afterCount = data?.After?.Count ?? 0 });
+            }
+            catch (Exception ex)
+            {
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -3737,49 +4432,9 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
-        // DELETE SINGLE ANOMALY LOG
+        // CLEAR ANOMALY LOGS BY DEVICE (Admin only)
         // ============================================
-        [HttpDelete("anomaly-logs/{id}")]
-        public async Task<IActionResult> DeleteAnomalyLog(long id)
-        {
-            try
-            {
-                var log = await _context.AnomalyLogs.FindAsync(id);
-                if (log == null)
-                    return NotFound(new { error = "Log not found" });
-
-                _context.AnomalyLogs.Remove(log);
-                await _context.SaveChangesAsync();
-                return Ok(new { success = true, message = "Log deleted successfully" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message });
-            }
-        }
-
-        // ============================================
-        // CLEAR ALL ANOMALY LOGS
-        // ============================================
-        [HttpDelete("anomaly-logs/clear-all")]
-        public async Task<IActionResult> ClearAllAnomalyLogs()
-        {
-            try
-            {
-                var logs = await _context.AnomalyLogs.ToListAsync();
-                _context.AnomalyLogs.RemoveRange(logs);
-                await _context.SaveChangesAsync();
-                return Ok(new { success = true, message = string.Format("Cleared {0} logs", logs.Count) });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message });
-            }
-        }
-
-        // ============================================
-        // CLEAR ANOMALY LOGS BY DEVICE
-        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
         [HttpDelete("anomaly-logs/clear/{deviceKey}")]
         public async Task<IActionResult> ClearAnomalyLogsByDevice(string deviceKey)
         {
@@ -3791,6 +4446,13 @@ namespace KWHMonitoring.Controllers
 
                 _context.AnomalyLogs.RemoveRange(logs);
                 await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.AnomalyLogsCleared,
+                    deviceKey,
+                    $"Anomaly logs for device {deviceKey} cleared by {User.Identity.Name ?? "system"}",
+                    true);
+
                 return Ok(new { success = true, message = string.Format("Cleared {0} logs for {1}", logs.Count, deviceKey) });
             }
             catch (Exception ex)
@@ -4742,6 +5404,26 @@ namespace KWHMonitoring.Controllers
         public decimal Deviation { get; set; }
         public decimal? EMAValue { get; set; }
         public string ThresholdMode { get; set; }
+        public ChartSnapshotRequest ChartSnapshot { get; set; }
+    }
+
+    public class ChartSnapshotRequest
+    {
+        public List<ChartDataPointRequest> Before { get; set; } = new List<ChartDataPointRequest>();
+        public List<ChartDataPointRequest> After { get; set; } = new List<ChartDataPointRequest>();
+        public decimal UpperThreshold { get; set; }
+        public decimal LowerThreshold { get; set; }
+        public decimal? EMAValue { get; set; }
+        public bool IsFinal { get; set; }
+    }
+
+    public class ChartDataPointRequest
+    {
+        public DateTime? Timestamp { get; set; }
+        public decimal Power { get; set; }
+        public decimal? Upper { get; set; }
+        public decimal? Lower { get; set; }
+        public decimal? EMA { get; set; }
     }
 
     public class DateFilterRequest
@@ -4848,6 +5530,29 @@ namespace KWHMonitoring.Controllers
         public string ApiKey { get; set; }
         public string Model { get; set; } = "qwen-plus-2025-04-28";
         public string ApiUrl { get; set; } = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+    }
+
+    public class AcknowledgeAnomalyRequest
+    {
+        public string Notes { get; set; }
+    }
+
+    public class ResolveAnomalyRequest
+    {
+        public string Action { get; set; }
+        public string Notes { get; set; }
+    }
+
+    public class UpdateAnomalyNotesRequest
+    {
+        public string Action { get; set; }
+        public string Notes { get; set; }
+    }
+
+    public class GenerateMonthlyReportRequest
+    {
+        public int? Year { get; set; }
+        public int? Month { get; set; }
     }
 }
 

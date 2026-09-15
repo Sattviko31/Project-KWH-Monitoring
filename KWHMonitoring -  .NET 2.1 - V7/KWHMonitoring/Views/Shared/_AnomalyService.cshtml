@@ -39,6 +39,83 @@
         // Ini adalah SATU-SATUNYA mekanisme cooldown sekarang
         let anomalyCooldownState = {};  // deviceKey -> { type: 'OVERLOAD'/'DROP', loggedAt: timestamp, waitingForNormal: boolean }
 
+        // ============================================
+        // CHART SNAPSHOT BUFFER
+        // Menangkap 50 titik sebelum & 50 titik sesudah anomali
+        // ============================================
+        const CHART_SNAPSHOT_SIZE = 50;
+        let anomalyChartBuffers = {};  // deviceKey -> { logId, beforeData, afterBuffer, afterCount, thresholds }
+
+        function buildChartDataPoints(powerData, ema, thresholds, timestamps) {
+            // Build array of ChartDataPoint-compatible objects from current chart data
+            var points = [];
+            var len = powerData.length;
+            for (var i = 0; i < len; i++) {
+                points.push({
+                    Timestamp: timestamps ? timestamps[i] : null,
+                    Power: powerData[i],
+                    Upper: thresholds.upper[i] || null,
+                    Lower: thresholds.lower[i] || null,
+                    EMA: ema[i] || null
+                });
+            }
+            return points;
+        }
+
+        function getTimestampsFromChart(data) {
+            // Build DateTime timestamps from chart labels if available
+            if (data && data.labels && Array.isArray(data.labels) && data.labels.length > 0) {
+                var today = new Date();
+                var yyyy = today.getFullYear();
+                var MM = String(today.getMonth() + 1).padStart(2, '0');
+                var dd = String(today.getDate()).padStart(2, '0');
+                return data.labels.map(function(label) {
+                    // label format: "HH:mm:ss"
+                    try {
+                        return new Date(yyyy + '-' + MM + '-' + dd + 'T' + label);
+                    } catch(e) {
+                        return null;
+                    }
+                });
+            }
+            return null;
+        }
+
+        const CHART_SNAPSHOT_SEND_INTERVAL = 10; // Send every 10 points (~5 min at 30s)
+        const CHART_SNAPSHOT_SEND_TIMEOUT = 300000; // Force send after 5 minutes even with few points
+
+        function sendChartSnapshotAfter(logId, deviceKey, isFinal) {
+            var buf = anomalyChartBuffers[deviceKey];
+            if (!buf || !buf.afterBuffer || buf.afterBuffer.length === 0) return;
+
+            var afterData = buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE);
+            isFinal = isFinal || afterData.length >= CHART_SNAPSHOT_SIZE;
+            console.log('📊 Sending chart snapshot AFTER data for anomaly #' + logId + ' (' + afterData.length + ' points' + (isFinal ? ', FINAL' : ', incremental') + ')');
+
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + logId + '/chart-snapshot',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ After: afterData, IsFinal: isFinal }),
+                success: function() {
+                    console.log('✅ Chart snapshot AFTER data saved for anomaly #' + logId + ' (' + afterData.length + ' points)');
+                    if (isFinal) {
+                        delete anomalyChartBuffers[deviceKey];
+                    } else {
+                        buf.lastSentCount = afterData.length;
+                        buf.lastSentTime = Date.now();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('❌ Error saving chart snapshot AFTER data:', error, xhr.status);
+                    if (xhr.status === 401 || xhr.status === 403) {
+                        console.warn('⚠️ Auth error on chart-snapshot endpoint — will retry via sendBeacon on page unload');
+                    }
+                    // Keep buffer for retry on next check or sendBeacon on unload
+                }
+            });
+        }
+
         // Device category mapping & per-category downtime cache
         // Updated periodically alongside settings reload
         let deviceCategoryMap = {};             // deviceKey -> category name (dynamic from API)
@@ -469,7 +546,8 @@
             }
 
             // Gunakan chartDataPoints yang sudah diload dari system settings
-            const pointsToFetch = chartDataPoints || 20;
+            // Fetch MORE points for snapshot buffer: max(chartDataPoints, CHART_SNAPSHOT_SIZE)
+            const pointsToFetch = Math.max(chartDataPoints || 20, CHART_SNAPSHOT_SIZE);
 
             // ============================================
             // TAHAP 1: Ambil data chart
@@ -483,6 +561,7 @@
                     if (!data || !data.power || data.power.length === 0) return;
 
                     const powerData = data.power;
+                    const timestamps = getTimestampsFromChart(data);
 
                     // ============================================
                     // TAHAP 2: Hitung EMA atau ambil baseline statis
@@ -495,14 +574,14 @@
                         fetchInitialEmaBaseline(deviceKey).then(function(baseline) {
                             baselineValue = baseline;
                             emaValues = calculateEMAWithBaseline(powerData, anomalyServiceConfig.emaPeriod, baseline);
-                            
-                            processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue);
+
+                            processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue, timestamps);
                         });
                     } else {
                         // NORMAL MODE: Calculate EMA from current data points
                         emaValues = calculateEMA(powerData, anomalyServiceConfig.emaPeriod);
-                        
-                        processAnomalyCheck(deviceKey, powerData, emaValues, null);
+
+                        processAnomalyCheck(deviceKey, powerData, emaValues, null, timestamps);
                     }
                 },
                 error: function() {}
@@ -510,7 +589,7 @@
         }
 
         // Fungsi helper untuk melakukan pengecekan anomali setelah EMA/baseline didapat
-        function processAnomalyCheck(deviceKey, powerData, ema, baselineValue) {
+        function processAnomalyCheck(deviceKey, powerData, ema, baselineValue, timestamps) {
             let upperValue, lowerValue;
             if (anomalyServiceConfig.mode === 'fibonacci') {
                 upperValue = anomalyServiceConfig.fibUpper;
@@ -538,6 +617,38 @@
 
             if (currentPower === null || currentPower === undefined) return;
             if (upper === undefined || lower === undefined) return;
+
+            // ============================================
+            // CHART SNAPSHOT: Collect AFTER data if buffer active
+            // Sends incrementally every CHART_SNAPSHOT_SEND_INTERVAL points
+            // to survive page reloads / navigation
+            // ============================================
+            var chartBuf = anomalyChartBuffers[deviceKey];
+            if (chartBuf && chartBuf.afterBuffer.length < CHART_SNAPSHOT_SIZE) {
+                // Add latest data point to the after-buffer
+                var ts = timestamps ? timestamps[lastIndex] : null;
+                chartBuf.afterBuffer.push({
+                    Timestamp: ts,
+                    Power: currentPower,
+                    Upper: upper,
+                    Lower: lower,
+                    EMA: emaValue
+                });
+                console.log('📊 Chart snapshot after-buffer: ' + chartBuf.afterBuffer.length + '/' + CHART_SNAPSHOT_SIZE + ' for ' + deviceKey);
+
+                // Send incrementally: every N points OR after timeout, OR when buffer is full
+                var timeSinceLastSend = chartBuf.lastSentTime ? (Date.now() - chartBuf.lastSentTime) : (Date.now() - chartBuf.createdAt);
+                if (chartBuf.afterBuffer.length >= CHART_SNAPSHOT_SIZE) {
+                    console.log('📊 Chart snapshot after-buffer COMPLETE for ' + deviceKey + ', sending final...');
+                    sendChartSnapshotAfter(chartBuf.logId, deviceKey, true);
+                } else if (chartBuf.afterBuffer.length % CHART_SNAPSHOT_SEND_INTERVAL === 0) {
+                    console.log('📊 Chart snapshot after-buffer incremental send (' + chartBuf.afterBuffer.length + ' points) for ' + deviceKey);
+                    sendChartSnapshotAfter(chartBuf.logId, deviceKey, false);
+                } else if (timeSinceLastSend >= CHART_SNAPSHOT_SEND_TIMEOUT && chartBuf.afterBuffer.length > 0) {
+                    console.log('📊 Chart snapshot after-buffer timeout send (' + chartBuf.afterBuffer.length + ' points, ' + Math.round(timeSinceLastSend/1000) + 's elapsed) for ' + deviceKey);
+                    sendChartSnapshotAfter(chartBuf.logId, deviceKey, false);
+                }
+            }
 
             // Debug logging - pastikan nilai SAMA dengan yang ditampilkan di chart
             // Tampilkan juga threshold settings yang digunakan
@@ -691,6 +802,31 @@
                 console.log(`✅ ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutive samples outside threshold`);
                 console.log(`   Final: Power=${currentPower.toFixed(1)}W, Threshold=${thresholdValue.toFixed(1)}W, Deviation=${deviation.toFixed(1)}%`);
 
+                // ============================================
+                // CHART SNAPSHOT: Capture BEFORE data (last 50 points before anomaly)
+                // ============================================
+                var beforeStart = Math.max(0, powerData.length - CHART_SNAPSHOT_SIZE);
+                var beforeData = [];
+                for (var bi = beforeStart; bi < powerData.length; bi++) {
+                    beforeData.push({
+                        Timestamp: timestamps ? timestamps[bi] : null,
+                        Power: powerData[bi],
+                        Upper: thresholds.upper[bi] || null,
+                        Lower: thresholds.lower[bi] || null,
+                        EMA: ema[bi] || null
+                    });
+                }
+
+                var chartSnapshotPayload = {
+                    Before: beforeData,
+                    After: [],  // Will be collected and sent separately
+                    UpperThreshold: upper,
+                    LowerThreshold: lower,
+                    EMAValue: emaValue
+                };
+
+                console.log('📊 Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey);
+
                 $.ajax({
                     url: '/api/Api/log-anomaly',
                     method: 'POST',
@@ -703,10 +839,27 @@
                         thresholdValue: thresholdValue,
                         deviation: Math.round(deviation * 10) / 10,
                         emaValue: emaValue,
-                        thresholdMode: anomalyServiceConfig.mode
+                        thresholdMode: anomalyServiceConfig.mode,
+                        chartSnapshot: chartSnapshotPayload
                     }),
                     success: function(response) {
                         console.log(`✅ Anomaly logged: ${anomalyType} for ${deviceKey}`);
+
+                        // ============================================
+                        // CHART SNAPSHOT: Initialize AFTER buffer
+                        // ============================================
+                        if (response.success && response.logId) {
+                            anomalyChartBuffers[deviceKey] = {
+                                logId: response.logId,
+                                beforeData: beforeData,
+                                afterBuffer: [],
+                                thresholds: { upper: upper, lower: lower },
+                                createdAt: Date.now(),
+                                lastSentCount: 0,
+                                lastSentTime: null
+                            };
+                            console.log('📊 Chart snapshot after-buffer initialized for anomaly #' + response.logId);
+                        }
 
                         // Set cooldown STATE - TUNGGU SAMPAI KEMBALI NORMAL
                         // Tidak ada timer! Hanya kondisi power normal yang bisa clear cooldown
@@ -715,7 +868,7 @@
                             loggedAt: Date.now(),
                             waitingForNormal: true  // Akan di-clear HANYA saat power normal
                         };
-                        
+
                         // Notify UI (panel header colors, chips, etc)
                         notifyCooldownChanged(deviceKey, true, anomalyType);
 
@@ -807,6 +960,22 @@
                 var blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/Api/save-anomaly-state', blob);
             } catch (e) { /* fallback: state akan di-save pada next load */ }
+
+            // Save any remaining chart snapshot after-buffers via sendBeacon
+            try {
+                Object.keys(anomalyChartBuffers).forEach(function(deviceKey) {
+                    var buf = anomalyChartBuffers[deviceKey];
+                    if (buf && buf.afterBuffer && buf.afterBuffer.length > 0 && buf.logId) {
+                        var snapPayload = JSON.stringify({ After: buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE), IsFinal: true });
+                        var snapBlob = new Blob([snapPayload], { type: 'application/json' });
+                        var sent = navigator.sendBeacon('/api/Api/anomaly-logs/' + buf.logId + '/chart-snapshot', snapBlob);
+                        console.log('📊 Sent chart snapshot via sendBeacon for #' + buf.logId + ' (' + buf.afterBuffer.length + ' points, sent=' + sent + ')');
+                    }
+                });
+            } catch (e) {
+                console.error('❌ Error sending chart snapshot via sendBeacon:', e);
+            }
+
             if (anomalyTimer) clearInterval(anomalyTimer);
             if (settingsReloadTimer) clearInterval(settingsReloadTimer);
             console.log('🛑 Anomaly service stopped');
