@@ -2627,6 +2627,11 @@ namespace KWHMonitoring.Controllers
                     query = query.OrderByDescending(x => x.DetectedTime);
                 }
 
+                // Load device group names from DeviceRegistry
+                var deviceGroupNames = await _context.DeviceRegistry
+                    .Where(x => x.GroupName != null && x.GroupName != "")
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
+
                 var totalCount = await query.CountAsync();
                 var logs = await query
                     .Skip(skip)
@@ -2636,6 +2641,7 @@ namespace KWHMonitoring.Controllers
                         id = x.Id,
                         deviceKey = x.DeviceKey,
                         deviceId = x.DeviceId,
+                        groupName = (string)null,
                         anomalyType = x.AnomalyType,
                         powerValue = x.PowerValue,
                         thresholdValue = x.ThresholdValue,
@@ -2658,10 +2664,42 @@ namespace KWHMonitoring.Controllers
                     })
                     .ToListAsync();
 
+                // Resolve groupName from DeviceRegistry
+                var result = logs.Select(x =>
+                {
+                    var dict = new Dictionary<string, object>
+                    {
+                        { "id", x.id },
+                        { "deviceKey", x.deviceKey },
+                        { "deviceId", x.deviceId },
+                        { "groupName", deviceGroupNames.ContainsKey(x.deviceKey) ? deviceGroupNames[x.deviceKey] : x.deviceKey },
+                        { "anomalyType", x.anomalyType },
+                        { "powerValue", x.powerValue },
+                        { "thresholdValue", x.thresholdValue },
+                        { "deviation", x.deviation },
+                        { "detectedTime", x.detectedTime },
+                        { "emaValue", x.emaValue },
+                        { "thresholdMode", x.thresholdMode },
+                        { "severity", x.severity },
+                        { "rootCause", x.rootCause },
+                        { "recommendedAction", x.recommendedAction },
+                        { "acknowledged", x.acknowledged },
+                        { "acknowledgedBy", x.acknowledgedBy },
+                        { "acknowledgedTime", x.acknowledgedTime },
+                        { "isResolved", x.isResolved },
+                        { "resolvedBy", x.resolvedBy },
+                        { "resolvedTime", x.resolvedTime },
+                        { "operatorAction", x.operatorAction },
+                        { "operatorNotes", x.operatorNotes },
+                        { "notes", x.notes }
+                    };
+                    return dict;
+                }).ToList();
+
                 return Ok(new
                 {
                     success = true,
-                    data = logs,
+                    data = result,
                     totalCount = totalCount,
                     skip = skip,
                     take = take
@@ -3084,6 +3122,12 @@ namespace KWHMonitoring.Controllers
                 if (log == null)
                     return NotFound(new { success = false, error = "Anomaly log not found" });
 
+                var deviceGroupNames = await _context.DeviceRegistry
+                    .Where(x => x.GroupName != null && x.GroupName != "")
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
+
+                var groupName = deviceGroupNames.ContainsKey(log.DeviceKey) ? deviceGroupNames[log.DeviceKey] : log.DeviceKey;
+
                 var snapshot = await _context.AnomalyChartSnapshots
                     .AsNoTracking()
                     .FirstOrDefaultAsync(x => x.AnomalyLogId == id);
@@ -3096,6 +3140,7 @@ namespace KWHMonitoring.Controllers
                         id = log.Id,
                         deviceKey = log.DeviceKey,
                         deviceId = log.DeviceId,
+                        groupName = groupName,
                         anomalyType = log.AnomalyType,
                         powerValue = log.PowerValue,
                         thresholdValue = log.ThresholdValue,
@@ -3395,6 +3440,47 @@ namespace KWHMonitoring.Controllers
                     .ToList();
 
                 return Ok(new { success = true, data = trend });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // ANOMALY DEVICE DISTRIBUTION (pie chart data)
+        // ============================================
+        [Authorize(Policy = "RequireViewer")]
+        [HttpGet("anomaly-device-distribution")]
+        public async Task<IActionResult> GetAnomalyDeviceDistribution()
+        {
+            try
+            {
+                var deviceGroupNames = await _context.DeviceRegistry
+                    .Where(x => x.GroupName != null && x.GroupName != "")
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
+
+                var distribution = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new { DeviceKey = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .ToListAsync();
+
+                var result = distribution.Select(d => new
+                {
+                    group = deviceGroupNames.ContainsKey(d.DeviceKey) ? deviceGroupNames[d.DeviceKey] : d.DeviceKey,
+                    count = d.Count
+                }).ToList();
+
+                // Merge entries with the same group name
+                var merged = result
+                    .GroupBy(x => x.group)
+                    .Select(g => new { group = g.Key, count = g.Sum(x => x.count) })
+                    .OrderByDescending(x => x.count)
+                    .ToList();
+
+                return Ok(new { success = true, data = merged });
             }
             catch (Exception ex)
             {

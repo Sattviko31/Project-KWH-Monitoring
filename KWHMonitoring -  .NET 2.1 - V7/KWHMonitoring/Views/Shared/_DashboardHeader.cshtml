@@ -7,14 +7,16 @@
     @{
         var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
         string pageName;
-        if (currentAction == "Index") { pageName = "Panel Monitoring"; }
-        else if (currentAction == "Charts") { pageName = "All Charts"; }
-        else if (currentAction == "UsageStatistics") { pageName = "Usage Statistics"; }
-        else if (currentAction == "AnomalyLogs") { pageName = "Anomaly Logs"; }
-        else if (currentAction == "History") { pageName = "History"; }
-        else if (currentAction == "Settings") { pageName = "Settings"; }
-        else if (currentAction == "Details") { pageName = "Details"; }
-        else { pageName = currentAction; }
+        string pageIcon;
+        string pageIconColor;
+        if (currentAction == "Index") { pageName = "Panel Monitoring"; pageIcon = "fa-th"; pageIconColor = "text-primary"; }
+        else if (currentAction == "Charts") { pageName = "All Charts"; pageIcon = "fa-chart-line"; pageIconColor = "text-primary"; }
+        else if (currentAction == "UsageStatistics") { pageName = "Usage Statistics"; pageIcon = "fa-chart-bar"; pageIconColor = "text-primary"; }
+        else if (currentAction == "AnomalyLogs") { pageName = "Anomaly Center"; pageIcon = "fa-exclamation-triangle"; pageIconColor = "text-warning"; }
+        else if (currentAction == "History") { pageName = "History"; pageIcon = "fa-history"; pageIconColor = "text-info"; }
+        else if (currentAction == "Settings") { pageName = "Settings"; pageIcon = "fa-cog"; pageIconColor = "text-secondary"; }
+        else if (currentAction == "Details") { pageName = "Details"; pageIcon = "fa-info-circle"; pageIconColor = "text-primary"; }
+        else { pageName = currentAction; pageIcon = "fa-bolt"; pageIconColor = "text-warning"; }
     }
     <span class="current">@pageName</span>
 </div>
@@ -23,11 +25,11 @@
 <div class="erp-page-header">
     <div>
         <h2>
-            <i class="fas fa-bolt text-warning"></i> KWH Monitoring Dashboard
+            <i class="fas @pageIcon @pageIconColor"></i> @pageName
         </h2>
         <div class="subtitle">
             <i class="fas fa-clock"></i> Last Update: <span id="lastUpdate">-</span>
-            <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
+            <span class="ms-2"><i class="fas fa-circle text-success" id="statusDot" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
         </div>
     </div>
     <div class="actions">
@@ -62,7 +64,7 @@
     </a>
     <a class="erp-tab @(currentAction == "AnomalyLogs" ? "active" : "")"
        asp-controller="Monitoring" asp-action="AnomalyLogs">
-        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Logs</span>
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Center</span>
         <span class="badge bg-danger" id="anomalyBadge">0</span>
     </a>
 </div>

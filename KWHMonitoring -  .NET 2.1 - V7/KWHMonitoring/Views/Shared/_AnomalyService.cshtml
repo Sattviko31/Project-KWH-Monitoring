@@ -735,32 +735,63 @@
             }
 
             // ============================================
-            // COOLDOWN CHECK - Condition-based (tunggu sampai Kembali Normal)
+            // TYPE TRANSITION: Reset counter tipe berlawanan
+            // Untuk beban volatile (videotron/LED), perpindahan DROP↔OVERLOAD
+            // adalah pola normal — counter tipe sebelumnya harus di-reset
+            // agar tidak terakumulasi saat daya bouncing antar zona
             // ============================================
-            // Tidak ada timer! Hanya trigger saat power kembali normal.
+            const oppositeType = anomalyType === 'OVERLOAD' ? 'DROP' : 'OVERLOAD';
+            const oppositeKey = deviceKey + '_' + oppositeType;
+            if (anomalyConfirmation.counts[oppositeKey] > 0) {
+                console.log(`🔄 Anomaly type transition: ${oppositeType} → ${anomalyType} for ${deviceKey}, resetting ${oppositeType} counter from ${anomalyConfirmation.counts[oppositeKey]} to 0`);
+                anomalyConfirmation.counts[oppositeKey] = 0;
+                saveAnomalyState(); // Debounced: save counter reset
+            }
+
+            // ============================================
+            // COOLDOWN CHECK - Condition-based
+            // ============================================
+            // Dua cara cooldown bisa clear:
+            // 1. Power kembali ke zona normal (antara lower & upper)
+            // 2. Anomaly type berpindah (DROP → OVERLOAD atau OVERLOAD → DROP)
+            //    Untuk beban volatile videotron, transisi ini menandakan siklus normal
+            // ============================================
             const cooldownState = anomalyCooldownState[deviceKey];
 
             if (cooldownState && cooldownState.waitingForNormal) {
-                console.log(`🛑 ${anomalyType.toUpperCase()} for ${deviceKey} - IN COOLDOWN, waiting for power to return to normal`);
+                // Jika tipe anomali berbeda dari cooldown, clear cooldown
+                // (misal: cooldown OVERLOAD tapi power sekarang DROP)
+                // Untuk videotron, DROP↔OVERLOAD transition = pola normal
+                if (anomalyType !== cooldownState.type) {
+                    console.log(`🔄 Anomaly type transition (${cooldownState.type} → ${anomalyType}) for ${deviceKey}, clearing cooldown`);
+                    console.log(`   For volatile videotron loads, DROP↔OVERLOAD transition indicates normal cycling`);
+                    anomalyCooldownState[deviceKey] = null;
+                    notifyCooldownChanged(deviceKey, false, null);
+                    saveAnomalyStateImmediate();
+                    resetServerAnomalyAlert(deviceKey);
+                    // Don't return — lanjut proses tipe anomali baru dengan counter fresh
+                } else {
+                    console.log(`🛑 ${anomalyType.toUpperCase()} for ${deviceKey} - IN COOLDOWN, waiting for power to return to normal`);
 
-                // Check apakah sudah kembali normal
-                if (!isDowntime && currentPower >= lower && currentPower <= upper) {
-                    console.log(`✅ Power returned to normal for ${deviceKey}, clearing cooldown...`);
-                    anomalyCooldownState[deviceKey] = null;
-                    notifyCooldownChanged(deviceKey, false, null);
-                    saveAnomalyStateImmediate(); // Critical: cooldown cleared
-                    resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
-                    return; // Skip processing, will be checked in next interval
-                } else if (isDowntime && currentPower <= emaValue) {
-                    console.log(`✅ DOWNTIME ended (power back to zero), clearing cooldown for ${deviceKey}...`);
-                    anomalyCooldownState[deviceKey] = null;
-                    notifyCooldownChanged(deviceKey, false, null);
-                    saveAnomalyStateImmediate(); // Critical: cooldown cleared
-                    resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
-                    return; // Skip processing
+                    // Check apakah sudah kembali normal
+                    if (!isDowntime && currentPower >= lower && currentPower <= upper) {
+                        console.log(`✅ Power returned to normal for ${deviceKey}, clearing cooldown...`);
+                        anomalyCooldownState[deviceKey] = null;
+                        notifyCooldownChanged(deviceKey, false, null);
+                        saveAnomalyStateImmediate(); // Critical: cooldown cleared
+                        resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
+                        return; // Skip processing, will be checked in next interval
+                    } else if (isDowntime && currentPower <= emaValue) {
+                        console.log(`✅ DOWNTIME ended (power back to zero), clearing cooldown for ${deviceKey}...`);
+                        anomalyCooldownState[deviceKey] = null;
+                        notifyCooldownChanged(deviceKey, false, null);
+                        saveAnomalyStateImmediate(); // Critical: cooldown cleared
+                        resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
+                        return; // Skip processing
+                    }
+
+                    return; // Still in cooldown, skip this check
                 }
-
-                return; // Still in cooldown, skip this check
             }
 
             // Time-based cooldown DIHAPUS - hanya condition-based yang berlaku

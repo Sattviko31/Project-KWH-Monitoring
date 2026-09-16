@@ -1,302 +1,237 @@
 ﻿@{
-    ViewData["Title"] = "Anomaly Information Center";
+    ViewData["Title"] = "Anomaly Center";
     var userRole = ViewBag.CurrentUserRole?.ToString() ?? "Viewer";
 }
 
-<!-- Breadcrumb -->
-<div class="erp-breadcrumb">
-    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
-    <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
-    <span class="current">Anomaly Information Center</span>
+@await Html.PartialAsync("_DashboardHeader")
+
+<!-- Anomaly Center Page Controls -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge badge-light border">Role: <span id="userRoleBadge">@userRole</span></span>
+    </div>
+    <label class="form-check mb-0 d-flex align-items-center">
+        <input type="checkbox" id="autoRefreshCheck" checked class="form-check-input me-1">
+        <small class="text-muted">Auto Refresh</small>
+    </label>
 </div>
 
-<!-- Page Header -->
-<div class="erp-page-header">
+<!-- KPI Cards -->
+<div class="stats-row mb-3">
     <div>
-        <h2><i class="fas fa-exclamation-triangle text-warning"></i> Anomaly Information Center</h2>
-        <div class="subtitle">
-            <i class="fas fa-clock"></i> Last Update: <span class="last-update">-</span>
-            <span class="ms-2"><i class="fas fa-circle text-success" id="statusDot" style="font-size:0.5rem"></i> <span class="status-text" id="statusText">Online</span></span>
-            <span class="ms-2 badge badge-light border">Role: <span id="userRoleBadge">@userRole</span></span>
+        <div class="stat-card" style="background: linear-gradient(135deg,#0dcaf0,#0d6efd);color:#fff;">
+            <div class="stat-label">Total Anomali</div>
+            <div class="stat-value" id="dashTotal">0</div>
+            <i class="fas fa-list stat-icon"></i>
         </div>
     </div>
-    <div class="actions">
-        <label class="form-check mb-0 d-none d-sm-flex align-items-center me-2">
-            <input type="checkbox" id="autoRefreshCheck" checked class="form-check-input me-1">
-            <small class="text-muted">Auto Refresh</small>
-        </label>
-        <button class="btn btn-erp-action" id="btnRefresh">
-            <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
-        </button>
-        <a asp-action="Settings" class="btn btn-erp-action">
-            <i class="fas fa-cog"></i> <span class="d-none d-sm-inline">Settings</span>
-        </a>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#20c997,#198754);color:#fff;">
+            <div class="stat-label">Hari Ini</div>
+            <div class="stat-value" id="dashToday">0</div>
+            <i class="fas fa-calendar-day stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#ffc107,#fd7e14);color:#fff;">
+            <div class="stat-label">Belum Resolve</div>
+            <div class="stat-value" id="dashUnresolved">0</div>
+            <i class="fas fa-exclamation-circle stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#7f1d1d);color:#fff;">
+            <div class="stat-label">Critical</div>
+            <div class="stat-value" id="dashCritical">0</div>
+            <i class="fas fa-bomb stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#6610f2,#6f42c1);color:#fff;">
+            <div class="stat-label">High</div>
+            <div class="stat-value" id="dashHigh">0</div>
+            <i class="fas fa-exclamation-triangle stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#6c757d,#495057);color:#fff;">
+            <div class="stat-label">Device Terdampak</div>
+            <div class="stat-value" id="dashTopDevice" title="-">-</div>
+            <i class="fas fa-server stat-icon"></i>
+        </div>
     </div>
 </div>
 
-<!-- Tabs (ERP Style) -->
-<div class="erp-tabs">
-    <a class="erp-tab" asp-controller="Monitoring" asp-action="Index">
-        <i class="fas fa-th"></i> <span>Panel Monitoring</span>
-    </a>
-    <a class="erp-tab" asp-controller="Monitoring" asp-action="Charts">
-        <i class="fas fa-chart-line"></i> <span>All Charts</span>
-    </a>
-    <a class="erp-tab" asp-controller="Monitoring" asp-action="UsageStatistics">
-        <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
-    </a>
-    <a class="erp-tab active" asp-controller="Monitoring" asp-action="AnomalyLogs">
-        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Center</span>
-    </a>
+<!-- Charts -->
+<div class="charts-row mb-3">
+    <div class="charts-col charts-col-main">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+                <h6 class="mb-0"><i class="fas fa-chart-line text-muted"></i> Tren Anomali</h6>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary active" data-days="7">7 Hari</button>
+                    <button type="button" class="btn btn-outline-secondary" data-days="30">30 Hari</button>
+                </div>
+            </div>
+            <div class="card-body py-2">
+                <div id="anomalyTrendChart" class="anomaly-chart-container"></div>
+            </div>
+        </div>
+    </div>
+    <div class="charts-col charts-col-side">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white py-2">
+                <h6 class="mb-0"><i class="fas fa-chart-pie text-muted"></i> Anomali per Device</h6>
+            </div>
+            <div class="card-body py-2">
+                <div id="anomalySeverityPieChart" class="anomaly-chart-container"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- Anomaly Center Navigation -->
-<ul class="nav nav-pills aic-nav mb-3" id="anomalyCenterTabs" role="tablist">
-    <li class="nav-item">
-        <a class="nav-link active" id="tab-list" data-toggle="pill" href="#pane-list" role="tab">
-            <i class="fas fa-list"></i> Daftar Anomali
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link" id="tab-report" data-toggle="pill" href="#pane-report" role="tab">
-            <i class="fas fa-file-alt"></i> Laporan Bulanan
-        </a>
-    </li>
-    @if (userRole == "Admin")
-    {
-        <li class="nav-item">
-            <a class="nav-link" id="tab-audit" data-toggle="pill" href="#pane-audit" role="tab">
-                <i class="fas fa-user-shield"></i> Audit Operator
-            </a>
-        </li>
-    }
-</ul>
-
-<div class="tab-content" id="anomalyCenterTabContent">
-    <!-- TAB: Daftar Anomali -->
-    <div class="tab-pane fade in active" id="pane-list" role="tabpanel">
-        <!-- KPI Cards -->
-        <div class="stats-row mb-3">
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#0dcaf0,#0d6efd);color:#fff;">
-                    <div class="stat-label">Total Anomali</div>
-                    <div class="stat-value" id="dashTotal">0</div>
-                    <i class="fas fa-list stat-icon"></i>
-                </div>
-            </div>
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#20c997,#198754);color:#fff;">
-                    <div class="stat-label">Hari Ini</div>
-                    <div class="stat-value" id="dashToday">0</div>
-                    <i class="fas fa-calendar-day stat-icon"></i>
-                </div>
-            </div>
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#ffc107,#fd7e14);color:#fff;">
-                    <div class="stat-label">Belum Resolve</div>
-                    <div class="stat-value" id="dashUnresolved">0</div>
-                    <i class="fas fa-exclamation-circle stat-icon"></i>
-                </div>
-            </div>
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#7f1d1d);color:#fff;">
-                    <div class="stat-label">Critical</div>
-                    <div class="stat-value" id="dashCritical">0</div>
-                    <i class="fas fa-bomb stat-icon"></i>
-                </div>
-            </div>
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#6610f2,#6f42c1);color:#fff;">
-                    <div class="stat-label">High</div>
-                    <div class="stat-value" id="dashHigh">0</div>
-                    <i class="fas fa-exclamation-triangle stat-icon"></i>
-                </div>
-            </div>
-            <div>
-                <div class="stat-card" style="background: linear-gradient(135deg,#6c757d,#495057);color:#fff;">
-                    <div class="stat-label">Device Terdampak</div>
-                    <div class="stat-value text-truncate" id="dashTopDevice">-</div>
-                    <i class="fas fa-server stat-icon"></i>
-                </div>
-            </div>
+<!-- DataGrid -->
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+        <h6 class="mb-0"><i class="fas fa-list text-muted"></i> Daftar Anomali</h6>
+        <div class="d-flex gap-1">
+            @if (userRole == "Admin")
+            {
+                <button class="btn btn-sm btn-danger" id="btnClearAll">
+                    <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Clear All</span>
+                </button>
+            }
         </div>
-
-        <!-- Charts -->
-        <div class="charts-row mb-3">
-            <div class="charts-col charts-col-main">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-                        <h6 class="mb-0"><i class="fas fa-chart-line"></i> Tren Anomali</h6>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-secondary active" data-days="7">7 Hari</button>
-                            <button type="button" class="btn btn-outline-secondary" data-days="30">30 Hari</button>
-                        </div>
-                    </div>
-                    <div class="card-body py-2">
-                        <div id="anomalyTrendChart" class="anomaly-chart-container"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="charts-col charts-col-side">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header bg-white py-2">
-                        <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Distribusi Severity</h6>
-                    </div>
-                    <div class="card-body py-2">
-                        <div id="anomalySeverityPieChart" class="anomaly-chart-container"></div>
-                    </div>
-                </div>
-            </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="anomaly-grid-scroll-wrapper">
+            <div id="anomalyDataGrid" style="width:100%;"></div>
         </div>
+    </div>
+</div>
 
-        <!-- DataGrid -->
-        <div class="card shadow-sm">
-            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
-                <h6 class="mb-0"><i class="fas fa-list"></i> Daftar Anomali</h6>
-                <div class="d-flex gap-1">
-                    @if (userRole == "Admin")
+<!-- Laporan Bulanan -->
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white py-2">
+        <h6 class="mb-0"><i class="fas fa-file-alt text-muted"></i> Laporan Bulanan Anomali</h6>
+    </div>
+    <div class="card-body">
+        <div class="report-form-row mb-3">
+            <div class="report-form-field">
+                <label class="form-label small mb-1">Bulan</label>
+                <select id="reportMonth" class="form-select form-select-sm">
+                    @for (int m = 1; m <= 12; m++)
                     {
-                        <button class="btn btn-sm btn-danger" id="btnClearAll">
-                            <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Clear All</span>
-                        </button>
+                        <option value="@m" selected="@(m == DateTime.Now.Month ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
                     }
+                </select>
+            </div>
+            <div class="report-form-field">
+                <label class="form-label small mb-1">Tahun</label>
+                <select id="reportYear" class="form-select form-select-sm">
+                    @for (int y = DateTime.Now.Year - 5; y <= DateTime.Now.Year; y++)
+                    {
+                        <option value="@y" selected="@(y == DateTime.Now.Year ? "selected" : null)">@y</option>
+                    }
+                </select>
+            </div>
+            <div class="report-form-actions">
+                <button class="btn btn-outline-secondary btn-sm" id="btnLoadReport">
+                    <i class="fas fa-search"></i> Tampilkan
+                </button>
+                @if (userRole == "Operator" || userRole == "Admin")
+                {
+                    <button class="btn btn-primary btn-sm ms-1" id="btnGenerateReport">
+                        <i class="fas fa-sync-alt"></i> Generate
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div id="monthlyReportContainer" class="d-none">
+            <div class="report-stats-row mb-3">
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Total Anomali</div>
+                        <div class="h5 mb-0 fw-bold text-primary" id="repTotal">0</div>
+                    </div>
+                </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Overload</div>
+                        <div class="h5 mb-0 fw-bold text-danger" id="repOverload">0</div>
+                    </div>
+                </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Device Drop</div>
+                        <div class="h5 mb-0 fw-bold text-warning" id="repDrop">0</div>
+                    </div>
+                </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Device Terdampak</div>
+                        <div class="h5 mb-0 fw-bold text-info" id="repAffected">0</div>
+                    </div>
                 </div>
             </div>
-            <div class="card-body p-0">
-                <div class="anomaly-grid-scroll-wrapper">
-                    <div id="anomalyDataGrid" style="width:100%;"></div>
+            <div class="card bg-light mb-3">
+                <div class="card-body py-2">
+                    <strong><i class="fas fa-clipboard-list text-muted me-1"></i>Ringkasan:</strong>
+                    <p class="mb-1" id="repSummary">-</p>
                 </div>
             </div>
+            <div class="card mb-3">
+                <div class="card-header bg-white py-2"><strong><i class="fas fa-lightbulb text-muted me-1"></i>Rekomendasi</strong></div>
+                <div class="card-body py-2">
+                    <div id="repRecommendations" class="small">-</div>
+                </div>
+            </div>
+            <div class="text-muted small text-end">
+                Generated by <span id="repGeneratedBy">-</span> at <span id="repGeneratedAt">-</span>
+            </div>
+        </div>
+        <div id="monthlyReportEmpty" class="text-center text-muted py-4">
+            Pilih periode dan klik "Tampilkan" untuk melihat laporan.
         </div>
     </div>
-
-    <!-- TAB: Laporan Bulanan -->
-    <div class="tab-pane fade" id="pane-report" role="tabpanel">
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-info text-white py-2">
-                <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Bulanan Anomali</h6>
-            </div>
-            <div class="card-body">
-                <div class="report-form-row mb-3">
-                    <div class="report-form-field">
-                        <label class="form-label small mb-1">Bulan</label>
-                        <select id="reportMonth" class="form-select form-select-sm">
-                            @for (int m = 1; m <= 12; m++)
-                            {
-                                <option value="@m" selected="@(m == DateTime.Now.Month ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="report-form-field">
-                        <label class="form-label small mb-1">Tahun</label>
-                        <select id="reportYear" class="form-select form-select-sm">
-                            @for (int y = DateTime.Now.Year - 5; y <= DateTime.Now.Year; y++)
-                            {
-                                <option value="@y" selected="@(y == DateTime.Now.Year ? "selected" : null)">@y</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="report-form-actions">
-                        <button class="btn btn-outline-secondary btn-sm" id="btnLoadReport">
-                            <i class="fas fa-search"></i> Tampilkan
-                        </button>
-                        @if (userRole == "Operator" || userRole == "Admin")
-                        {
-                            <button class="btn btn-primary btn-sm ms-1" id="btnGenerateReport">
-                                <i class="fas fa-sync-alt"></i> Generate
-                            </button>
-                        }
-                    </div>
-                </div>
-
-                <div id="monthlyReportContainer" class="d-none">
-                    <div class="report-stats-row mb-3">
-                        <div class="report-stat-card">
-                            <div class="border rounded p-2 text-center">
-                                <div class="text-muted small">Total Anomali</div>
-                                <div class="h4 mb-0 text-primary" id="repTotal">0</div>
-                            </div>
-                        </div>
-                        <div class="report-stat-card">
-                            <div class="border rounded p-2 text-center">
-                                <div class="text-muted small">Overload</div>
-                                <div class="h4 mb-0 text-danger" id="repOverload">0</div>
-                            </div>
-                        </div>
-                        <div class="report-stat-card">
-                            <div class="border rounded p-2 text-center">
-                                <div class="text-muted small">Device Drop</div>
-                                <div class="h4 mb-0 text-warning" id="repDrop">0</div>
-                            </div>
-                        </div>
-                        <div class="report-stat-card">
-                            <div class="border rounded p-2 text-center">
-                                <div class="text-muted small">Device Terdampak</div>
-                                <div class="h4 mb-0 text-info" id="repAffected">0</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card bg-light mb-3">
-                        <div class="card-body py-2">
-                            <strong>Ringkasan:</strong>
-                            <p class="mb-1" id="repSummary">-</p>
-                        </div>
-                    </div>
-                    <div class="card mb-3">
-                        <div class="card-header bg-light py-2"><strong>Rekomendasi</strong></div>
-                        <div class="card-body py-2">
-                            <div id="repRecommendations" class="small">-</div>
-                        </div>
-                    </div>
-                    <div class="text-muted small text-end">
-                        Generated by <span id="repGeneratedBy">-</span> at <span id="repGeneratedAt">-</span>
-                    </div>
-                </div>
-                <div id="monthlyReportEmpty" class="text-center text-muted py-4">
-                    Pilih periode dan klik "Tampilkan" untuk melihat laporan.
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- TAB: Audit Operator (Admin only) -->
-    @if (userRole == "Admin")
-    {
-        <div class="tab-pane fade" id="pane-audit" role="tabpanel">
-            <div class="card shadow-sm mb-3">
-                <div class="card-header bg-dark text-white py-2">
-                    <h6 class="mb-0"><i class="fas fa-user-shield"></i> Audit Tindakan Operator</h6>
-                </div>
-                <div class="card-body">
-                    <div class="audit-form-row mb-3">
-                        <div class="audit-form-field">
-                            <label class="form-label small mb-1">Dari Tanggal</label>
-                            <input type="date" id="auditFromDate" class="form-control form-control-sm" value="@DateTime.Now.AddDays(-30).ToString("yyyy-MM-dd")">
-                        </div>
-                        <div class="audit-form-field">
-                            <label class="form-label small mb-1">Sampai Tanggal</label>
-                            <input type="date" id="auditToDate" class="form-control form-control-sm" value="@DateTime.Now.ToString("yyyy-MM-dd")">
-                        </div>
-                        <div class="audit-form-actions">
-                            <button class="btn btn-primary btn-sm" id="btnLoadAudit">
-                                <i class="fas fa-search"></i> Muat Audit
-                            </button>
-                        </div>
-                    </div>
-                    <div id="operatorActionsGrid" style="width:100%;min-height:300px;"></div>
-                </div>
-            </div>
-            <div class="card shadow-sm">
-                <div class="card-header bg-secondary text-white py-2">
-                    <h6 class="mb-0"><i class="fas fa-chart-pie"></i> Ringkasan Operator</h6>
-                </div>
-                <div class="card-body">
-                    <div id="operatorActionsSummaryGrid" style="width:100%;min-height:200px;"></div>
-                </div>
-            </div>
-        </div>
-    }
 </div>
+
+<!-- Audit Operator (Admin only) -->
+@if (userRole == "Admin")
+{
+    <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white py-2">
+            <h6 class="mb-0"><i class="fas fa-user-shield text-muted"></i> Audit Tindakan Operator</h6>
+        </div>
+        <div class="card-body">
+            <div class="audit-form-row mb-3">
+                <div class="audit-form-field">
+                    <label class="form-label small mb-1">Dari Tanggal</label>
+                    <input type="date" id="auditFromDate" class="form-control form-control-sm" value="@DateTime.Now.AddDays(-30).ToString("yyyy-MM-dd")">
+                </div>
+                <div class="audit-form-field">
+                    <label class="form-label small mb-1">Sampai Tanggal</label>
+                    <input type="date" id="auditToDate" class="form-control form-control-sm" value="@DateTime.Now.ToString("yyyy-MM-dd")">
+                </div>
+                <div class="audit-form-actions">
+                    <button class="btn btn-primary btn-sm" id="btnLoadAudit">
+                        <i class="fas fa-search"></i> Muat Audit
+                    </button>
+                </div>
+            </div>
+            <div id="operatorActionsGrid" style="width:100%;min-height:300px;"></div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white py-2">
+            <h6 class="mb-0"><i class="fas fa-chart-pie text-muted"></i> Ringkasan Operator</h6>
+        </div>
+        <div class="card-body">
+            <div id="operatorActionsSummaryGrid" style="width:100%;min-height:200px;"></div>
+        </div>
+    </div>
+}
 
 <!-- Detail Modal -->
 <div class="modal fade" id="detailModal" tabindex="-1">
@@ -311,7 +246,7 @@
                     <div class="detail-info-col">
                         <div class="card h-100">
                             <div class="card-body">
-                                <h6 class="card-title"><i class="fas fa-info-circle"></i> Informasi Dasar</h6>
+                                <h6 class="card-title"><i class="fas fa-info-circle text-muted"></i> Informasi Dasar</h6>
                                 <table class="table table-sm table-borderless mb-0">
                                     <tbody>
                                         <tr><td class="text-muted">Device</td><td id="detailDevice">-</td></tr>
@@ -330,7 +265,7 @@
                     <div class="detail-info-col">
                         <div class="card h-100">
                             <div class="card-body">
-                                <h6 class="card-title"><i class="fas fa-brain"></i> Analisis & Rekomendasi</h6>
+                                <h6 class="card-title"><i class="fas fa-brain text-muted"></i> Analisis & Rekomendasi</h6>
                                 <p class="mb-1 font-weight-bold small">Root Cause:</p>
                                 <p class="small text-muted" id="detailRootCause">-</p>
                                 <p class="mb-1 font-weight-bold small">Recommended Action:</p>
@@ -343,7 +278,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <h6 class="card-title"><i class="fas fa-chart-area"></i> Chart Snapshot</h6>
+                                <h6 class="card-title"><i class="fas fa-chart-area text-muted"></i> Chart Snapshot</h6>
                                 <div id="detailChartSnapshotContainer" style="position:relative;height:350px;width:100%;">
                                     <canvas id="detailChartSnapshot"></canvas>
                                 </div>
@@ -356,7 +291,7 @@
                         <div class="col-12">
                             <div class="card">
                                 <div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-tools"></i> Tindakan Operator</h6>
+                                    <h6 class="card-title"><i class="fas fa-tools text-muted"></i> Tindakan Operator</h6>
                                     <div class="detail-action-btns mb-2">
                                         <div class="detail-action-btn">
                                             <button class="btn btn-warning btn-sm w-100" id="btnDetailAcknowledge" disabled>
@@ -442,45 +377,33 @@
 </div>
 
 <style>
-    /* Anomaly Center Navigation */
-    .aic-nav {
-        background: #f8f9fa;
+    /* ============================================
+       KPI STAT CARDS — consistent with main theme
+       ============================================ */
+    .stats-row .stat-card {
+        position: relative;
+        overflow: hidden;
         border-radius: 0.5rem;
-        padding: 0.25rem;
-        border: 1px solid #dee2e6;
-        display: inline-flex;
+        padding: 0.75rem 1rem;
     }
-    .aic-nav .nav-link {
-        color: #495057;
-        font-weight: 500;
-        border-radius: 0.375rem;
-        padding: 0.5rem 1rem;
-        transition: all 0.2s ease;
+    .stats-row .stat-card .stat-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        opacity: 0.9;
     }
-    .aic-nav .nav-link:hover {
-        background-color: #e9ecef;
-        color: #212529;
+    .stats-row .stat-card .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
     }
-    .aic-nav .nav-link.active {
-        background-color: #0d6efd;
-        color: #fff;
-        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
-    }
-
-    /* Tab content layout — ensure inactive panes are fully hidden */
-    #anomalyCenterTabContent > .tab-pane:not(.active) {
-        display: none !important;
-    }
-    #anomalyCenterTabContent > .tab-pane.active {
-        display: block;
-    }
-    #anomalyCenterTabContent .card {
-        margin-bottom: 0.75rem;
-    }
-
-    /* Prevent tab content from stretching into empty space */
-    #anomalyCenterTabContent {
-        flex: 0 1 auto;
+    .stats-row .stat-card .stat-icon {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.75rem;
+        font-size: 1.8rem;
+        opacity: 0.15;
     }
 
     /* ============================================
@@ -503,11 +426,28 @@
     }
     .charts-col .card {
         width: 100%;
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+    }
+    .charts-col .card .card-header {
+        border-bottom: 1px solid #e9ecef;
+    }
+    .charts-col .card .card-header h6 {
+        font-size: 0.85rem;
+        color: #495057;
+    }
+    .charts-col .card .card-header h6 i {
+        color: #6c757d;
     }
     .anomaly-chart-container {
         width: 100%;
         height: 300px;
         min-height: 260px;
+    }
+    /* DevExtreme chart theming */
+    .anomaly-chart-container .dx-chart,
+    .anomaly-chart-container .dx-piechart {
+        font-family: inherit;
     }
     @@media (max-width: 767.98px) {
         .charts-row {
@@ -614,7 +554,7 @@
     .severity-badge {
         font-size: 0.7rem;
         font-weight: 600;
-        padding: 0.25em 0.5em;
+        padding: 0.3em 0.6em;
         border-radius: 0.25rem;
         display: inline-block;
         text-transform: uppercase;
@@ -643,6 +583,12 @@
     }
     #anomalyDataGrid .dx-datagrid .dx-header-row td {
         text-align: center;
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #495057;
+    }
+    #anomalyDataGrid .dx-datagrid .dx-data-row.dx-row-alt > td {
+        background-color: #f8f9fa;
     }
 
     /* Mobile */
@@ -672,6 +618,14 @@
         var detailChart = null;
 
         $(document).ready(function() {
+            // Hide page-specific buttons not applicable to this page
+            $('#btnRescan, #btnExport').hide();
+
+            // Settings button
+            $('#btnSettings').click(function() {
+                window.location.href = '/Monitoring/Settings';
+            });
+
             updateLastUpdate();
             setInterval(updateLastUpdate, 60000);
 
@@ -716,13 +670,6 @@
             $('#btnGenerateReport').click(function() { generateMonthlyReport(); });
 
             $('#btnLoadAudit').click(function() { loadOperatorActions(); });
-
-            $('a[data-toggle="pill"]').on('shown.bs.tab', function(e) {
-                var target = $(e.target).attr('href');
-                if (target === '#pane-audit' && currentUserRole === 'Admin') {
-                    loadOperatorActions();
-                }
-            });
 
             setupAutoRefresh();
 
@@ -807,49 +754,71 @@
                         $('#dashCritical').text(d.critical || 0);
                         $('#dashHigh').text(d.high || 0);
                         $('#dashTopDevice').text(d.topDevice || '-').attr('title', d.topDevice || '-');
+                    }
+                },
+                error: function() { }
+            });
+            loadDeviceDistribution();
+        }
 
-                        var critical = d.critical || 0;
-                        var high = d.high || 0;
-                        var mediumLow = Math.max(0, (d.total || 0) - critical - high);
-                        renderSeverityPieChart(mediumLow, critical, high);
+        function loadDeviceDistribution() {
+            $.ajax({
+                url: '/api/Api/anomaly-device-distribution',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.data) {
+                        renderDevicePieChart(response.data);
                     }
                 },
                 error: function() { }
             });
         }
 
-        function renderSeverityPieChart(mediumLow, critical, high) {
-            var data = [];
-            if (critical > 0) data.push({ type: 'Critical', count: critical });
-            if (high > 0) data.push({ type: 'High', count: high });
-            if (mediumLow > 0) data.push({ type: 'Medium/Low', count: mediumLow });
+        function renderDevicePieChart(data) {
+            var chartData = data.map(function(item) {
+                return { arg: item.group, val: item.count };
+            });
 
-            if (data.length === 0) {
-                $('#anomalySeverityPieChart').html('<div class="d-flex align-items-center justify-content-center h-100 text-muted">Tidak ada data</div>');
+            if (chartData.length === 0) {
+                $('#anomalySeverityPieChart').html('<div class="d-flex align-items-center justify-content-center h-100 text-muted"><i class="fas fa-chart-pie me-2"></i>Tidak ada data</div>');
                 return;
             }
 
             var container = $('#anomalySeverityPieChart');
             if (severityPieChart) {
-                severityPieChart.option('dataSource', data);
+                severityPieChart.option('dataSource', chartData);
                 return;
             }
 
             severityPieChart = container.dxPieChart({
-                dataSource: data,
-                argumentField: 'type',
-                valueField: 'count',
-                palette: ['#7f1d1d', '#dc3545', '#0d6efd'],
-                legend: { verticalAlignment: 'bottom', horizontalAlignment: 'center', itemCount: 3 },
+                dataSource: chartData,
+                palette: ['#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6c757d', '#17a2b8'],
+                legend: {
+                    verticalAlignment: 'bottom',
+                    horizontalAlignment: 'center',
+                    font: { size: 11 }
+                },
                 tooltip: {
                     enabled: true,
+                    percentPrecision: 1,
                     customizeTooltip: function(arg) {
-                        return { text: arg.argumentText + ': ' + arg.valueText };
+                        return { text: arg.argumentText + ': ' + arg.valueText + ' anomali (' + arg.percentText + ')' };
                     }
                 },
                 size: { height: 260 },
                 adaptiveLayout: { width: 150, height: 150 },
-                series: [{ type: 'pie', label: { visible: true, format: 'fixedPoint', connector: { visible: true } } }]
+                series: [{
+                    type: 'pie',
+                    argumentField: 'arg',
+                    valueField: 'val',
+                    label: {
+                        visible: true,
+                        format: 'fixedPoint',
+                        connector: { visible: true, width: 1 },
+                        customizeText: function() { return this.argumentText + ': ' + this.valueText; }
+                    }
+                }]
             }).dxPieChart('instance');
 
             setTimeout(function() { if (severityPieChart) severityPieChart.render(); }, 200);
@@ -936,6 +905,7 @@
                                             id: item.id || item.Id || 0,
                                             deviceKey: item.deviceKey || item.DeviceKey || '',
                                             deviceId: item.deviceId || item.DeviceId || '',
+                                            groupName: item.groupName || item.GroupName || item.deviceKey || '',
                                             anomalyType: item.anomalyType || item.AnomalyType || '',
                                             powerValue: item.powerValue || item.PowerValue || 0,
                                             thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
@@ -1054,7 +1024,7 @@
                             $('<span>').text(text).appendTo(container);
                         }
                     },
-                    { dataField: 'deviceKey', caption: 'Device', alignment: 'center', headerFilter: { allowSelectAll: true } },
+                    { dataField: 'groupName', caption: 'Device', alignment: 'center', headerFilter: { allowSelectAll: true } },
                     {
                         dataField: 'anomalyType', caption: 'Type', alignment: 'center',
                         headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE DROP', value: 'DEVICE_DROP' }] },
@@ -1117,7 +1087,7 @@
                                 .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(buttons);
                             if (currentUserRole === 'Admin') {
                                 $('<button>').addClass('btn btn-sm btn-outline-danger').attr('title', 'Delete log').html('<i class="fas fa-trash"></i>')
-                                    .on('click', function(e) { e.stopPropagation(); confirmDelete(data.id, data.deviceKey, data.anomalyType); }).appendTo(buttons);
+                                    .on('click', function(e) { e.stopPropagation(); confirmDelete(data.id, data.groupName || data.deviceKey, data.anomalyType); }).appendTo(buttons);
                             }
                             buttons.appendTo(container);
                         }
@@ -1177,7 +1147,7 @@
         function renderDetailModal(data) {
             data = data || {};
             $('#detailId').text(data.id || '-');
-            $('#detailDevice').text((data.deviceKey || '-') + (data.deviceId ? ' (' + data.deviceId + ')' : ''));
+            $('#detailDevice').text((data.groupName || data.deviceKey || '-') + (data.deviceId ? ' (' + data.deviceId + ')' : ''));
             $('#detailType').html(renderTypeBadge(data.anomalyType));
             $('#detailSeverity').html('<span class="severity-badge ' + severityClass(data.severity) + '">' + (data.severity || 'medium') + '</span>');
             $('#detailPower').text(formatNumber(data.powerValue) + ' W');
@@ -1680,7 +1650,7 @@
         }
 
         function updateLastUpdate() {
-            $('.last-update').text(new Date().toLocaleString('id-ID'));
+            $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
         }
     </script>
 }

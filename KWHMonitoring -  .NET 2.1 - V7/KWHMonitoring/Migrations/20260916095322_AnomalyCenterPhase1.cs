@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace KWHMonitoring.Migrations
@@ -9,27 +8,11 @@ namespace KWHMonitoring.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // ═══════════════════════════════════════════════
-            // 1. AnomalyLogs: tambah kolom baru
-            // ═══════════════════════════════════════════════
             migrationBuilder.AddColumn<string>(
                 name: "AcknowledgedBy",
                 table: "AnomalyLogs",
                 type: "nvarchar(256)",
                 maxLength: 256,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "ResolvedBy",
-                table: "AnomalyLogs",
-                type: "nvarchar(256)",
-                maxLength: 256,
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ResolvedTime",
-                table: "AnomalyLogs",
-                type: "datetime2",
                 nullable: true);
 
             migrationBuilder.AddColumn<bool>(
@@ -53,12 +36,24 @@ namespace KWHMonitoring.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "Severity",
+                name: "RecommendedAction",
                 table: "AnomalyLogs",
-                type: "nvarchar(20)",
-                maxLength: 20,
-                nullable: true,
-                defaultValue: "medium");
+                type: "nvarchar(1000)",
+                maxLength: 1000,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "ResolvedBy",
+                table: "AnomalyLogs",
+                type: "nvarchar(256)",
+                maxLength: 256,
+                nullable: true);
+
+            migrationBuilder.AddColumn<DateTime>(
+                name: "ResolvedTime",
+                table: "AnomalyLogs",
+                type: "datetime2",
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "RootCause",
@@ -68,25 +63,13 @@ namespace KWHMonitoring.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "RecommendedAction",
+                name: "Severity",
                 table: "AnomalyLogs",
-                type: "nvarchar(1000)",
-                maxLength: 1000,
-                nullable: true);
+                type: "nvarchar(20)",
+                maxLength: 20,
+                nullable: true,
+                defaultValue: "medium");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_AnomalyLogs_Severity",
-                table: "AnomalyLogs",
-                column: "Severity");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AnomalyLogs_IsResolved",
-                table: "AnomalyLogs",
-                column: "IsResolved");
-
-            // ═══════════════════════════════════════════════
-            // 2. AnomalyChartSnapshots
-            // ═══════════════════════════════════════════════
             migrationBuilder.CreateTable(
                 name: "AnomalyChartSnapshots",
                 columns: table => new
@@ -115,15 +98,6 @@ namespace KWHMonitoring.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_AnomalyChartSnapshots_AnomalyLogId",
-                table: "AnomalyChartSnapshots",
-                column: "AnomalyLogId",
-                unique: true);
-
-            // ═══════════════════════════════════════════════
-            // 3. AnomalyMonthlyReports
-            // ═══════════════════════════════════════════════
             migrationBuilder.CreateTable(
                 name: "AnomalyMonthlyReports",
                 columns: table => new
@@ -138,8 +112,8 @@ namespace KWHMonitoring.Migrations
                     AffectedDevices = table.Column<int>(nullable: false),
                     AverageDeviation = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
                     TopAffectedDevice = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    SummaryText = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
-                    Recommendations = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
+                    SummaryText = table.Column<string>(type: "nvarchar(2000)", nullable: true),
+                    Recommendations = table.Column<string>(type: "nvarchar(2000)", nullable: true),
                     GeneratedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     GeneratedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "getdate()")
                 },
@@ -147,6 +121,22 @@ namespace KWHMonitoring.Migrations
                 {
                     table.PrimaryKey("PK_AnomalyMonthlyReports", x => x.Id);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AnomalyLogs_IsResolved",
+                table: "AnomalyLogs",
+                column: "IsResolved");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AnomalyLogs_Severity",
+                table: "AnomalyLogs",
+                column: "Severity");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AnomalyChartSnapshots_AnomalyLogId",
+                table: "AnomalyChartSnapshots",
+                column: "AnomalyLogId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_AnomalyMonthlyReports_Year_Month",
@@ -163,23 +153,15 @@ namespace KWHMonitoring.Migrations
                 name: "AnomalyMonthlyReports");
 
             migrationBuilder.DropIndex(
-                name: "IX_AnomalyLogs_Severity",
+                name: "IX_AnomalyLogs_IsResolved",
                 table: "AnomalyLogs");
 
             migrationBuilder.DropIndex(
-                name: "IX_AnomalyLogs_IsResolved",
+                name: "IX_AnomalyLogs_Severity",
                 table: "AnomalyLogs");
 
             migrationBuilder.DropColumn(
                 name: "AcknowledgedBy",
-                table: "AnomalyLogs");
-
-            migrationBuilder.DropColumn(
-                name: "ResolvedBy",
-                table: "AnomalyLogs");
-
-            migrationBuilder.DropColumn(
-                name: "ResolvedTime",
                 table: "AnomalyLogs");
 
             migrationBuilder.DropColumn(
@@ -195,7 +177,15 @@ namespace KWHMonitoring.Migrations
                 table: "AnomalyLogs");
 
             migrationBuilder.DropColumn(
-                name: "Severity",
+                name: "RecommendedAction",
+                table: "AnomalyLogs");
+
+            migrationBuilder.DropColumn(
+                name: "ResolvedBy",
+                table: "AnomalyLogs");
+
+            migrationBuilder.DropColumn(
+                name: "ResolvedTime",
                 table: "AnomalyLogs");
 
             migrationBuilder.DropColumn(
@@ -203,7 +193,7 @@ namespace KWHMonitoring.Migrations
                 table: "AnomalyLogs");
 
             migrationBuilder.DropColumn(
-                name: "RecommendedAction",
+                name: "Severity",
                 table: "AnomalyLogs");
         }
     }

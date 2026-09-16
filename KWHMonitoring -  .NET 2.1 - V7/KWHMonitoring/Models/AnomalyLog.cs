@@ -86,7 +86,7 @@ namespace KWHMonitoring.Models
 
         [Column("Notes", TypeName = "nvarchar(500)")]
         [MaxLength(500)]
-        public string Notes { get; set; }
+        public string Notes { get; set; } = string.Empty;
 
         public AnomalyChartSnapshot ChartSnapshot { get; set; }
     }
