@@ -508,4 +508,304 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         init();
     }
+})();
+
+// ============================================
+// MOBILE RESPONSIVE HELPERS
+// ============================================
+(function() {
+    function scrollActiveTabIntoView() {
+        var tabs = document.querySelectorAll('.erp-tabs');
+        tabs.forEach(function(tabContainer) {
+            var active = tabContainer.querySelector('.erp-tab.active');
+            if (active) {
+                // Scroll the active tab into view on mobile
+                var containerRect = tabContainer.getBoundingClientRect();
+                var activeRect = active.getBoundingClientRect();
+                if (activeRect.left < containerRect.left || activeRect.right > containerRect.right) {
+                    active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+            }
+        });
+    }
+
+    // Fix 100vh on mobile browsers (address bar issues)
+    function setMobileVh() {
+        var vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', vh + 'px');
+    }
+
+    // Prevent double-tap zoom on interactive elements
+    function preventDoubleTapZoom() {
+        var elements = document.querySelectorAll('.btn, .erp-tab, .topbar-icon-btn, .panel-card-clickable, .nav-link');
+        var lastTouchEnd = 0;
+        elements.forEach(function(el) {
+            el.addEventListener('touchend', function(e) {
+                var now = Date.now();
+                if (now - lastTouchEnd <= 300) {
+                    e.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, { passive: false });
+        });
+    }
+
+    function init() {
+        scrollActiveTabIntoView();
+        setMobileVh();
+        preventDoubleTapZoom();
+        window.addEventListener('resize', setMobileVh);
+        window.addEventListener('orientationchange', function() {
+            setTimeout(setMobileVh, 100);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+// ============================================
+// THEME TOGGLE — Dark/Light Mode
+// ============================================
+(function() {
+    var STORAGE_KEY = 'kwh_theme';
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        try { localStorage.setItem(STORAGE_KEY, theme); } catch(e) {}
+        if (window.__dashboardBg) {
+            window.__dashboardBg.setMode(theme === 'dark' ? 'dark' : 'light');
+        }
+    }
+
+    function getStoredTheme() {
+        try { return localStorage.getItem(STORAGE_KEY); } catch(e) { return null; }
+    }
+
+    function init() {
+        var stored = getStoredTheme();
+        if (stored) {
+            applyTheme(stored);
+        }
+
+        var btn = document.getElementById('themeToggle');
+        if (!btn) return;
+
+        btn.addEventListener('click', function() {
+            var current = document.documentElement.getAttribute('data-theme');
+            var next = (current === 'dark') ? 'light' : 'dark';
+            applyTheme(next);
+        });
+    }
+
+    // Apply theme BEFORE DOMContentLoaded to avoid flash
+    var stored = getStoredTheme();
+    if (stored) {
+        document.documentElement.setAttribute('data-theme', stored);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+// ============================================
+// DASHBOARD BACKGROUND ANIMATION
+// Subtle particle grid for dark mode,
+// soft gradient waves for light mode
+// ============================================
+(function() {
+    var canvas = document.getElementById('dashboardBgCanvas');
+    if (!canvas) return;
+
+    var ctx = canvas.getContext('2d');
+    var width, height;
+    var mode = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'dark' : 'light';
+    var particles = [];
+    var waves = [];
+
+    var PARTICLE_COUNT = 40;
+    var WAVE_COUNT = 4;
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+
+    function initParticles() {
+        particles = [];
+        for (var i = 0; i < PARTICLE_COUNT; i++) {
+            particles.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * 0.3,
+                vy: (Math.random() - 0.5) * 0.3,
+                r: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.3 + 0.1
+            });
+        }
+    }
+
+    function initWaves() {
+        waves = [];
+        for (var i = 0; i < WAVE_COUNT; i++) {
+            waves.push({
+                y: height * (0.25 + i * 0.2),
+                amplitude: 20 + i * 8,
+                frequency: 0.003 + i * 0.001,
+                speed: 0.008 + i * 0.003,
+                phase: Math.random() * Math.PI * 2,
+                opacity: 0.03 - i * 0.005
+            });
+        }
+    }
+
+    function drawDark(time) {
+        var gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#0b0f1a');
+        gradient.addColorStop(0.5, '#0f1424');
+        gradient.addColorStop(1, '#0b0f1a');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = 'rgba(92, 160, 255, 0.025)';
+        ctx.lineWidth = 1;
+        var gs = 60;
+        for (var x = 0; x <= width; x += gs) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+        for (var y = 0; y <= height; y += gs) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0) p.x = width;
+            if (p.x > width) p.x = 0;
+            if (p.y < 0) p.y = height;
+            if (p.y > height) p.y = 0;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(92, 160, 255,' + p.opacity + ')';
+            ctx.fill();
+        }
+
+        ctx.lineWidth = 0.5;
+        for (var i = 0; i < particles.length; i++) {
+            for (var j = i + 1; j < particles.length; j++) {
+                var dx = particles[i].x - particles[j].x;
+                var dy = particles[i].y - particles[j].y;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 150) {
+                    var opacity = 0.04 * (1 - dist / 150);
+                    ctx.strokeStyle = 'rgba(92, 160, 255,' + opacity + ')';
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        var radial = ctx.createRadialGradient(width / 2, height / 2, height * 0.3, width / 2, height / 2, height * 0.9);
+        radial.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        radial.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+        ctx.fillStyle = radial;
+        ctx.fillRect(0, 0, width, height);
+    }
+
+    function drawLight(time) {
+        var gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#eef2f8');
+        gradient.addColorStop(0.5, '#f0f2f5');
+        gradient.addColorStop(1, '#e8ecf2');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        for (var w = 0; w < waves.length; w++) {
+            var wave = waves[w];
+            ctx.beginPath();
+            ctx.moveTo(0, wave.y);
+            for (var x = 0; x <= width; x += 4) {
+                var y = wave.y + Math.sin(x * wave.frequency + wave.phase + time * wave.speed) * wave.amplitude;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(width, height);
+            ctx.lineTo(0, height);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(13, 110, 253,' + wave.opacity + ')';
+            ctx.fill();
+        }
+
+        ctx.fillStyle = 'rgba(13, 110, 253, 0.03)';
+        var gs = 40;
+        for (var gx = gs / 2; gx < width; gx += gs) {
+            for (var gy = gs / 2; gy < height; gy += gs) {
+                ctx.beginPath();
+                ctx.arc(gx, gy, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    function animate(timestamp) {
+        try {
+            if (mode === 'dark') {
+                drawDark(timestamp);
+            } else {
+                drawLight(timestamp);
+            }
+        } catch (err) {
+            if (window.console) console.error('[DashBg] error:', err);
+        }
+        requestAnimationFrame(animate);
+    }
+
+    window.__dashboardBg = {
+        setMode: function(newMode) {
+            mode = newMode;
+            if (mode === 'dark') {
+                initParticles();
+            } else {
+                initWaves();
+            }
+        }
+    };
+
+    function init() {
+        resize();
+        if (mode === 'dark') {
+            initParticles();
+        } else {
+            initWaves();
+        }
+        animate(0);
+        window.addEventListener('resize', function() {
+            resize();
+            if (mode === 'dark') initParticles();
+            else initWaves();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })(); 

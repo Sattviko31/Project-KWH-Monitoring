@@ -48,23 +48,23 @@
     </div>
 </div>
 
-<!-- Tabs Navigation (ERP Style) -->
-<div class="erp-tabs" id="dashboardTabs">
+<!-- Tabs Navigation (ERP Style) — mobile scrollable -->
+<div class="erp-tabs" id="dashboardTabs" role="tablist" style="position: relative;">
     <a class="erp-tab @(currentAction == "Index" ? "active" : "")"
        asp-controller="Monitoring" asp-action="Index">
-        <i class="fas fa-th"></i> <span>Panel Monitoring</span>
+        <i class="fas fa-th"></i> <span>Panel</span>
     </a>
     <a class="erp-tab @(currentAction == "Charts" ? "active" : "")"
        asp-controller="Monitoring" asp-action="Charts">
-        <i class="fas fa-chart-line"></i> <span>All Charts</span>
+        <i class="fas fa-chart-line"></i> <span>Charts</span>
     </a>
     <a class="erp-tab @(currentAction == "UsageStatistics" ? "active" : "")"
        asp-controller="Monitoring" asp-action="UsageStatistics">
-        <i class="fas fa-chart-bar"></i> <span>Usage Stats</span>
+        <i class="fas fa-chart-bar"></i> <span>Usage</span>
     </a>
     <a class="erp-tab @(currentAction == "AnomalyLogs" ? "active" : "")"
        asp-controller="Monitoring" asp-action="AnomalyLogs">
-        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly Center</span>
+        <i class="fas fa-exclamation-triangle"></i> <span>Anomaly</span>
         <span class="badge bg-danger" id="anomalyBadge">0</span>
     </a>
 </div>
