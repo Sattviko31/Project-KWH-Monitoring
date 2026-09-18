@@ -1,13 +1,13 @@
 ﻿@using KWHMonitoring.Models
 @using Microsoft.Extensions.Caching.Memory
 @inject IMemoryCache MemoryCache
-@inject ApplicationDbContext Db
+@inject KWHMonitoring.Services.AppSettingsCache SettingsCache
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @{
     const string cacheKey = "Layout_FooterSettings";
     if (!MemoryCache.TryGetValue(cacheKey, out Dictionary<string, string> _footerSettings))
     {
-        _footerSettings = Db.AppSettingsRecords.ToDictionary(x => x.SettingKey, x => x.SettingValue);
+        _footerSettings = SettingsCache.GetAll();
         MemoryCache.Set(cacheKey, _footerSettings, TimeSpan.FromMinutes(5));
     }
     string _GetFooterSetting(string key, string defaultValue = "")

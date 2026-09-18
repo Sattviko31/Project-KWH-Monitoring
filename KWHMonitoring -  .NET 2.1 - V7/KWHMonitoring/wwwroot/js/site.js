@@ -579,6 +579,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.__dashboardBg) {
             window.__dashboardBg.setMode(theme === 'dark' ? 'dark' : 'light');
         }
+        // Notify charts to refresh their theme colors
+        window.dispatchEvent(new CustomEvent('kwh-theme-changed', { detail: { theme: theme } }));
     }
 
     function getStoredTheme() {
@@ -611,6 +613,87 @@ document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
+    }
+})();
+
+// ============================================
+// CHART THEME HELPERS — Dynamic grid/tick colors
+// Returns colors based on current data-theme
+// ============================================
+window.getChartGridColor = function() {
+    return document.documentElement.getAttribute('data-theme') === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'   // dark mode: subtle white grid
+        : 'rgba(0, 0, 0, 0.08)';        // light mode: subtle black grid
+};
+
+window.getChartTickColor = function() {
+    return document.documentElement.getAttribute('data-theme') === 'dark'
+        ? '#8a9ab8'   // dark mode: muted blue-gray ticks
+        : '#6c757d';  // light mode: bootstrap secondary
+};
+
+window.getChartGridBorderColor = function() {
+    return document.documentElement.getAttribute('data-theme') === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.12)';
+};
+
+window.isDarkMode = function() {
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+};
+
+// Patch Chart.js defaults on theme change
+(function() {
+    function patchChartDefaults() {
+        if (typeof Chart === 'undefined') return;
+        var dark = window.isDarkMode();
+        var tick = dark ? '#8a9ab8' : '#666';
+        var grid = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+        var border = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+
+        // Tick labels
+        try { Chart.defaults.color = tick; } catch(e) {}
+
+        // Grid lines (Chart.js v3)
+        try {
+            if (Chart.defaults.scale) Chart.defaults.scale.grid = Chart.defaults.scale.grid || {};
+            if (Chart.defaults.scale.grid) Chart.defaults.scale.grid.color = grid;
+        } catch(e) {}
+
+        // Border / grid default
+        try { Chart.defaults.borderColor = border; } catch(e) {}
+
+        // Tooltip
+        try {
+            if (Chart.defaults.plugins && Chart.defaults.plugins.tooltip) {
+                Chart.defaults.plugins.tooltip.backgroundColor = dark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.95)';
+                Chart.defaults.plugins.tooltip.titleColor = dark ? '#fff' : '#1a1d23';
+                Chart.defaults.plugins.tooltip.bodyColor = dark ? '#d0d8e8' : '#333';
+                Chart.defaults.plugins.tooltip.borderColor = dark ? '#444' : '#ccc';
+            }
+        } catch(e) {}
+
+        // Refresh all existing charts
+        try {
+            if (Chart.helpers && Chart.helpers.each && Chart.instances) {
+                Chart.helpers.each(Chart.instances, function(chart) {
+                    if (chart && chart.update) chart.update('none');
+                });
+            }
+        } catch(e) {}
+    }
+
+    // Listen for theme changes
+    window.addEventListener('kwh-theme-changed', function() {
+        // Small delay to ensure DOM has updated
+        setTimeout(patchChartDefaults, 100);
+    });
+
+    // Patch defaults on load (if Chart.js is already loaded)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', patchChartDefaults);
+    } else {
+        patchChartDefaults();
     }
 })();
 

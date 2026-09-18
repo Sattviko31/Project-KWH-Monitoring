@@ -17,6 +17,7 @@ namespace KWHMonitoring.Services
     public class NotificationService
     {
         private readonly ApplicationDbContext _context;
+        private readonly AppSettingsCache _settingsCache;
         private readonly ILogger<NotificationService> _logger;
         private NotificationSettings _settings;
         private static readonly HttpClient _httpClient = new HttpClient
@@ -24,20 +25,36 @@ namespace KWHMonitoring.Services
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public NotificationService(ApplicationDbContext context, ILogger<NotificationService> logger)
+        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger)
         {
             _context = context;
+            _settingsCache = settingsCache;
             _logger = logger;
-            LoadSettings();
+            // Lazy-load settings on first use, not in constructor
+            _settings = null;
+        }
+
+        /// <summary>
+        /// Ensure settings are loaded. Called lazily on first actual use.
+        /// </summary>
+        private void EnsureSettingsLoaded()
+        {
+            if (_settings != null) return;
+
+            lock (this)
+            {
+                if (_settings != null) return;
+                LoadSettings();
+            }
         }
 
         private void LoadSettings()
         {
             try
             {
-                var settingsRecord = _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Notification"))
-                    .ToDictionary(x => x.SettingKey, x => x.SettingValue);
+                var settingsRecord = _settingsCache.GetAll()
+                    .Where(kvp => kvp.Key.StartsWith("Notification"))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 var phoneNumbers = new List<string>();
                 var phonesRaw = GetVal(settingsRecord, "Notification.WablasPhoneNumbers", "");
@@ -120,6 +137,7 @@ namespace KWHMonitoring.Services
 
         public NotificationSettings GetSettings()
         {
+            EnsureSettingsLoaded();
             return _settings;
         }
 
@@ -146,6 +164,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendAnomalyAlertAsync(string deviceKey, string anomalyType, decimal powerValue, decimal thresholdValue, decimal deviation)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -161,6 +180,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendRealtimeInstantAlertAsync(string deviceKey, string anomalyType, decimal powerValue, decimal thresholdValue, decimal deviation, bool isTest = true)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -347,6 +367,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendDowntimePowerAlertAsync(string deviceKey, decimal powerValue, int startHour, int endHour)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -526,6 +547,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendHourlyReportAsync()
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -587,6 +609,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendRealtimeHourlyReportAsync(bool isTest = true)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -829,6 +852,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendDailyReportAsync()
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -888,6 +912,7 @@ namespace KWHMonitoring.Services
 
         public async Task SendRealtimeDailyReportAsync(bool isTest = true)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -1158,6 +1183,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendMonthlyReportAsync()
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -1222,6 +1248,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendRealtimeMonthlyReportAsync(bool isTest = true)
         {
+            EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
 
@@ -1498,6 +1525,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendEmailAsync(string subject, string body)
         {
+            EnsureSettingsLoaded();
             if (string.IsNullOrEmpty(_settings.SmtpServer) ||
                 string.IsNullOrEmpty(_settings.SenderEmail) ||
                 string.IsNullOrEmpty(_settings.SenderPassword) ||
@@ -1558,6 +1586,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task<bool> SendEmailAsync(string to, string subject, string body)
         {
+            EnsureSettingsLoaded();
             if (string.IsNullOrEmpty(_settings.SmtpServer) ||
                 string.IsNullOrEmpty(_settings.SenderEmail) ||
                 string.IsNullOrEmpty(_settings.SenderPassword) ||
@@ -1660,6 +1689,7 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task<WablasResponse> SendWablasAsync(string message, string phone = null)
         {
+            EnsureSettingsLoaded();
             var response = new WablasResponse();
 
             if (string.IsNullOrEmpty(_settings.WablasServerUrl) || string.IsNullOrEmpty(_settings.WablasToken))
@@ -2071,6 +2101,7 @@ namespace KWHMonitoring.Services
             }
 
             await _context.SaveChangesAsync();
+            await _settingsCache.ReloadAsync();
             LoadSettings();
         }
 

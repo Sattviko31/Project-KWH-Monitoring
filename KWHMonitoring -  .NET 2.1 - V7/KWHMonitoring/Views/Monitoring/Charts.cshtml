@@ -782,24 +782,26 @@
         // GRID CONFIG HELPER
         // ============================================
         function getGridConfig() {
+            var gridColor = (typeof window.getChartGridColor === 'function') ? window.getChartGridColor() : systemSettings.gridColor;
             return {
                 display: systemSettings.showGrid,
                 drawOnChartArea: systemSettings.showGrid,
                 drawTicks: systemSettings.showGrid,
-                color: systemSettings.gridColor,
+                color: gridColor,
                 lineWidth: 1
             };
         }
 
         function getScaleConfig(beginAtZero, yCallback) {
+            var tickColor = (typeof window.getChartTickColor === 'function') ? window.getChartTickColor() : '#666';
             return {
                 x: {
-                    ticks: { font: { size: 9 }, maxRotation: 45 },
+                    ticks: { font: { size: 9 }, maxRotation: 45, color: tickColor },
                     grid: getGridConfig()
                 },
                 y: {
                     beginAtZero: beginAtZero,
-                    ticks: { font: { size: 9 }, callback: yCallback },
+                    ticks: { font: { size: 9 }, callback: yCallback, color: tickColor },
                     grid: getGridConfig()
                 }
             };

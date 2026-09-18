@@ -30,7 +30,10 @@ namespace KWHMonitoring.Models
         AnomalyActionTaken,
         AnomalyLogDeleted,
         AnomalyLogsCleared,
-        AnomalyMonthlyReportGenerated
+        AnomalyMonthlyReportGenerated,
+        RelayOtpRequested,
+        RelayOtpVerified,
+        RelayOtpFailed
     }
 
     [Table("SecurityAuditLogs")]

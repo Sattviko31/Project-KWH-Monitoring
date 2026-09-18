@@ -102,19 +102,78 @@
 <!-- Relay Confirmation Modal -->
 <div class="modal fade" id="relayConfirmModal" tabindex="-1" role="dialog" aria-labelledby="relayConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="relayConfirmModalLabel"><i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Aksi</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <div class="modal-content" style="background: var(--bg-surface); border: 1px solid var(--border-color); box-shadow: var(--shadow-lg); border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color, #dee2e6); padding: 16px 20px;">
+                <h5 class="modal-title" id="relayConfirmModalLabel" style="color: var(--text-primary, #212529); font-weight: 600; font-size: 1rem;"><i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Aksi</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: var(--text-secondary, #6c757d);">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body">
-                <p id="relayConfirmMessage">Apakah Anda yakin ingin melakukan aksi ini?</p>
+            <div class="modal-body" style="padding: 20px;">
+                <p id="relayConfirmMessage" style="color: var(--text-secondary, #495057); font-size: 0.95rem; line-height: 1.6;">Apakah Anda yakin ingin melakukan aksi ini?</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-primary" id="relayConfirmOk">Ya, Lanjutkan</button>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color, #dee2e6); padding: 12px 20px;">
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-sm btn-primary" id="relayConfirmOk">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Relay State Info Modal (device already on/off) -->
+<div class="modal fade" id="relayStateInfoModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+        <div class="modal-content" id="relayStateInfoContent" style="background: var(--bg-surface); border: 1px solid var(--border-color); box-shadow: var(--shadow-lg); border-radius: 12px; overflow: hidden;">
+            <div class="modal-body text-center py-4" style="padding: 28px 20px;">
+                <div id="relayStateInfoIcon" style="font-size: 3rem; margin-bottom: 0.75rem;"></div>
+                <h6 id="relayStateInfoTitle" class="mb-2" style="color: var(--text-primary, #212529); font-weight: 600;"></h6>
+                <p id="relayStateInfoMessage" class="mb-0 small" style="color: var(--text-secondary, #6c757d); line-height: 1.5;"></p>
+            </div>
+            <div class="modal-footer justify-content-center border-0 pt-0" style="padding: 8px 20px 16px;">
+                <button type="button" class="btn btn-sm px-4" data-dismiss="modal" id="relayStateInfoOkBtn" style="background: var(--bg-muted); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; font-weight: 500;">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Relay OTP Verification Modal -->
+<div class="modal fade" id="relayOtpModal" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+        <div class="modal-content" id="relayOtpModalContent" style="background: var(--bg-surface); border: 2px solid #dc3545; box-shadow: var(--shadow-lg); transition: border-color 0.4s, box-shadow 0.4s;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color, #dee2e6);">
+                <h6 class="modal-title" id="relayOtpModalTitle" style="color: var(--text-primary, #212529);"><i class="fas fa-shield-alt text-danger" id="relayOtpModalIcon"></i> Verifikasi OTP</h6>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: var(--text-secondary, #6c757d);">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center py-3">
+                <div id="relayOtpDeviceBox" style="background: rgba(220,53,69,0.08); border: 1px solid rgba(220,53,69,0.2); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; transition: background 0.4s, border-color 0.4s;">
+                    <p id="relayOtpDeviceInfo" class="mb-1 small" style="color: var(--text-secondary, #6c757d);">Mematikan perangkat:</p>
+                    <p id="relayOtpDeviceName" class="mb-0" style="color: var(--text-primary, #212529); font-weight: 700; font-size: 1.05rem;"></p>
+                </div>
+                <p class="small mb-2" style="color: var(--text-secondary, #6c757d);">Masukkan kode 6-digit yang dikirim ke email Anda</p>
+                <div class="mb-3" style="position: relative;">
+                    <input type="text" id="relayOtpInput" maxlength="6" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*"
+                           style="position: absolute; opacity: 0; width: 1px; height: 1px; top: 0; left: 50%;" />
+                    <div id="relayOtpSlots" style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                        <span class="otp-slot" style="width: 40px; height: 52px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; border: 2px solid var(--border-color); border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-primary); transition: border-color 0.2s, transform 0.15s, background 0.2s;">•</span>
+                    </div>
+                </div>
+                <div id="relayOtpCountdown" class="small mb-2" style="color: var(--text-secondary, #6c757d); display: none;">
+                    <i class="fas fa-clock"></i> <span id="relayOtpCountdownText"></span>
+                </div>
+                <div id="relayOtpError" class="small mb-2" style="display: none; color: #dc3545;"></div>
+                <button type="button" id="relayOtpActionBtn" class="btn btn-sm btn-danger px-4 w-100" disabled>
+                    <i class="fas fa-shield-alt"></i> Verifikasi Kode
+                </button>
+                <a href="javascript:void(0)" id="relayOtpResendLink" class="d-block small mt-2" style="color: var(--primary-color); display: none; text-decoration: underline; cursor: pointer;">
+                    Kirim ulang kode OTP
+                </a>
             </div>
         </div>
     </div>
@@ -122,6 +181,284 @@
 
 @section Scripts {
     <script>
+        // ============================================
+        // OTP VERIFICATION FOR RELAY OFF COMMANDS
+        // ============================================
+        var pendingOtpRelay = null;
+        var otpCountdownTimer = null;
+        var otpCountdownSeconds = 0;
+        var otpSending = false;
+
+        function openRelayOtpModal(deviceId, rcValue, pulse, groupName, $btn, $wrapper, actionText, onComplete) {
+            pendingOtpRelay = {
+                deviceId: deviceId,
+                rcValue: rcValue,
+                pulse: pulse,
+                groupName: groupName,
+                $btn: $btn,
+                $wrapper: $wrapper,
+                actionText: actionText,
+                onComplete: onComplete
+            };
+
+            // Reset modal state
+            $('#relayOtpInput').val('');
+            updateOtpSlots('');
+            var $actionBtn = $('#relayOtpActionBtn');
+            $actionBtn.prop('disabled', true)
+                .removeClass('btn-success btn-outline-warning').addClass('btn-danger')
+                .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+            $('#relayOtpCountdown').hide();
+            $('#relayOtpError').hide();
+            $('#relayOtpResendLink').hide();
+            $('#relayOtpDeviceName').text(groupName);
+            $('#relayOtpDeviceInfo').text('Mematikan perangkat:');
+            // Reset visual state
+            $('#relayOtpModalContent').css('border-color', '#dc3545');
+            $('#relayOtpModalTitle').html('<i class="fas fa-shield-alt text-danger" id="relayOtpModalIcon"></i> Verifikasi OTP');
+            $('#relayOtpModalIcon').removeClass('text-success').addClass('text-danger');
+            $('#relayOtpDeviceBox').css({ 'background': 'rgba(220,53,69,0.08)', 'border-color': 'rgba(220,53,69,0.2)' });
+            // Reset slot styles
+            $('.otp-slot').css({ 'border-color': 'var(--border-color)', 'background': 'var(--bg-surface-hover)' });
+
+            // Clear any existing countdown
+            if (otpCountdownTimer) {
+                clearInterval(otpCountdownTimer);
+                otpCountdownTimer = null;
+            }
+
+            var $modal = $('#relayOtpModal');
+            $modal.modal('show');
+
+            // Auto-send OTP on open
+            setTimeout(function() { requestRelayOtp(); }, 400);
+        }
+
+        function requestRelayOtp() {
+            if (!pendingOtpRelay || otpSending) return;
+            otpSending = true;
+
+            var $actionBtn = $('#relayOtpActionBtn');
+            $actionBtn.prop('disabled', true)
+                .removeClass('btn-danger btn-success').addClass('btn-outline-warning')
+                .html('<i class="fas fa-paper-plane"></i> Mengirim OTP...');
+            $('#relayOtpError').hide();
+
+            $.ajax({
+                url: '/api/Api/request-relay-otp',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    DeviceId: pendingOtpRelay.deviceId,
+                    RCValue: pendingOtpRelay.rcValue,
+                    Pulse: pendingOtpRelay.pulse || false,
+                    GroupName: pendingOtpRelay.groupName
+                }),
+                success: function(response) {
+                    otpSending = false;
+                    if (response.success) {
+                        startOtpCountdown(300); // 5 min
+                        $('#relayOtpInput').focus();
+                        showNotification(response.message, 'success');
+                        // Switch to verify mode
+                        $actionBtn.removeClass('btn-outline-warning btn-success').addClass('btn-danger')
+                            .prop('disabled', true)
+                            .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+                    } else {
+                        $actionBtn.removeClass('btn-outline-warning btn-success').addClass('btn-danger')
+                            .prop('disabled', true)
+                            .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+                        $('#relayOtpError').text(response.error).show();
+                        $('#relayOtpResendLink').show();
+                    }
+                },
+                error: function(xhr) {
+                    otpSending = false;
+                    var errorMsg = 'Gagal mengirim OTP';
+                    try { errorMsg = JSON.parse(xhr.responseText).error || errorMsg; } catch(e) {}
+                    $actionBtn.removeClass('btn-outline-warning btn-success').addClass('btn-danger')
+                        .prop('disabled', true)
+                        .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+                    $('#relayOtpError').text(errorMsg).show();
+                    $('#relayOtpResendLink').show();
+                }
+            });
+        }
+
+        function startOtpCountdown(seconds) {
+            if (otpCountdownTimer) clearInterval(otpCountdownTimer);
+            otpCountdownSeconds = seconds;
+            var $countdown = $('#relayOtpCountdown');
+            var $text = $('#relayOtpCountdownText');
+            $countdown.show();
+
+            function updateDisplay() {
+                var m = Math.floor(otpCountdownSeconds / 60);
+                var s = otpCountdownSeconds % 60;
+                $text.text('Kode berlaku ' + m + ':' + (s < 10 ? '0' : '') + s);
+            }
+            updateDisplay();
+
+            otpCountdownTimer = setInterval(function() {
+                otpCountdownSeconds--;
+                if (otpCountdownSeconds <= 0) {
+                    clearInterval(otpCountdownTimer);
+                    otpCountdownTimer = null;
+                    $countdown.hide();
+                    $('#relayOtpError').text('Kode OTP sudah kadaluarsa.').show();
+                    $('#relayOtpResendLink').show();
+                    $('#relayOtpActionBtn').prop('disabled', true);
+                    return;
+                }
+                updateDisplay();
+            }, 1000);
+        }
+
+        // Update visual OTP slots from input value
+        // Filled slots get focused blue border, empty slots get default border
+        function updateOtpSlots(val) {
+            var $slots = $('.otp-slot');
+            for (var i = 0; i < 6; i++) {
+                var ch = val.length > i ? val[i] : '•';
+                $slots.eq(i).text(ch);
+                if (val.length > i) {
+                    $slots.eq(i).css({ 'border-color': 'var(--primary-color)', 'transform': 'scale(1.05)' });
+                    setTimeout((function(idx) {
+                        return function() { $slots.eq(idx).css('transform', 'scale(1)'); };
+                    })(i), 150);
+                } else {
+                    $slots.eq(i).css('border-color', 'var(--border-color)');
+                }
+            }
+        }
+
+        function verifyOtpCode() {
+            if (!pendingOtpRelay || otpSending) return;
+
+            var otpCode = $('#relayOtpInput').val().trim();
+            if (otpCode.length !== 6 || !/^\d{6}$/.test(otpCode)) {
+                $('#relayOtpError').text('Masukkan 6 digit angka.').show();
+                // Flash red on slots
+                $('.otp-slot').css('border-color', '#dc3545');
+                setTimeout(function() { updateOtpSlots(otpCode); }, 600);
+                return;
+            }
+
+            var $actionBtn = $('#relayOtpActionBtn');
+            $actionBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Memverifikasi...');
+
+            var savedOnComplete = pendingOtpRelay.onComplete;
+
+            publishRelayCommand(
+                pendingOtpRelay.deviceId,
+                pendingOtpRelay.rcValue,
+                pendingOtpRelay.$btn,
+                pendingOtpRelay.pulse,
+                function(success) {
+                    if (success) {
+                        // OTP correct — visual green feedback
+                        $('#relayOtpModalContent').css('border-color', '#198754');
+                        $('#relayOtpModalIcon').removeClass('text-danger').addClass('text-success');
+                        $('#relayOtpModalTitle').html('<i class="fas fa-check-circle text-success" id="relayOtpModalIcon"></i> OTP Terverifikasi');
+                        $('#relayOtpDeviceBox').css({ 'background': 'rgba(25,135,84,0.08)', 'border-color': 'rgba(25,135,84,0.25)' });
+                        $('.otp-slot').css({ 'border-color': '#198754', 'background': 'rgba(25,135,84,0.08)' });
+                        $('#relayOtpError').hide();
+
+                        // Button turns green
+                        $actionBtn.removeClass('btn-danger btn-outline-warning').addClass('btn-success')
+                            .html('<i class="fas fa-check-circle"></i> Berhasil!');
+
+                        // Stop countdown
+                        if (otpCountdownTimer) { clearInterval(otpCountdownTimer); otpCountdownTimer = null; }
+                        $('#relayOtpCountdown').hide();
+
+                        // Auto-close modal after brief green flash
+                        setTimeout(function() {
+                            $('#relayOtpModal').modal('hide');
+                        }, 800);
+                    } else {
+                        // OTP wrong — reset to red
+                        $actionBtn.removeClass('btn-success btn-outline-warning').addClass('btn-danger')
+                            .prop('disabled', false)
+                            .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+                        // Flash red on slots, then back to blue for filled
+                        $('.otp-slot').css('border-color', '#dc3545');
+                        setTimeout(function() { updateOtpSlots(otpCode); }, 600);
+                    }
+                    if (typeof savedOnComplete === 'function') {
+                        savedOnComplete(success);
+                    }
+                },
+                pendingOtpRelay.groupName,
+                otpCode
+            );
+        }
+
+        // Single action button: verify OTP (when 6 digits entered)
+        $(document).on('click', '#relayOtpActionBtn', function() {
+            verifyOtpCode();
+        });
+
+        // Resend link
+        $(document).on('click', '#relayOtpResendLink', function(e) {
+            e.preventDefault();
+            $(this).hide();
+            $('#relayOtpError').hide();
+            requestRelayOtp();
+        });
+
+        // Click on OTP slot area focuses the hidden input
+        $(document).on('click', '#relayOtpSlots', function() {
+            $('#relayOtpInput').focus();
+        });
+
+        // OTP input: only digits, update visual slots, enable/disable verify button
+        $(document).on('input', '#relayOtpInput', function() {
+            var val = $(this).val().replace(/\D/g, '');
+            $(this).val(val);
+            updateOtpSlots(val);
+            $('#relayOtpError').hide();
+            // Enable verify button only when 6 digits entered AND not currently sending OTP
+            var $actionBtn = $('#relayOtpActionBtn');
+            if (!otpSending && val.length === 6) {
+                $actionBtn.prop('disabled', false);
+            } else {
+                $actionBtn.prop('disabled', true);
+            }
+        });
+
+        // OTP input: Enter key triggers verify
+        $(document).on('keydown', '#relayOtpInput', function(e) {
+            if (e.key === 'Enter') {
+                if (!$('#relayOtpActionBtn').prop('disabled')) {
+                    verifyOtpCode();
+                }
+            }
+            // Backspace: ensure slots update
+            if (e.key === 'Backspace') {
+                setTimeout(function() { updateOtpSlots($('#relayOtpInput').val()); }, 0);
+            }
+        });
+
+        // Reset OTP state when modal closes
+        $(document).on('hidden.bs.modal', '#relayOtpModal', function() {
+            if (otpCountdownTimer) { clearInterval(otpCountdownTimer); otpCountdownTimer = null; }
+            pendingOtpRelay = null;
+            otpSending = false;
+            $('#relayOtpInput').val('');
+            updateOtpSlots('');
+            $('#relayOtpError').hide();
+            $('#relayOtpResendLink').hide();
+            $('#relayOtpActionBtn').prop('disabled', true)
+                .removeClass('btn-success btn-outline-warning').addClass('btn-danger')
+                .html('<i class="fas fa-shield-alt"></i> Verifikasi Kode');
+            $('#relayOtpModalContent').css('border-color', '#dc3545');
+            $('#relayOtpModalIcon').removeClass('text-success').addClass('text-danger');
+            $('#relayOtpModalTitle').html('<i class="fas fa-shield-alt text-danger" id="relayOtpModalIcon"></i> Verifikasi OTP');
+            $('#relayOtpDeviceBox').css({ 'background': 'rgba(220,53,69,0.08)', 'border-color': 'rgba(220,53,69,0.2)' });
+            $('.otp-slot').css({ 'border-color': 'var(--border-color)', 'background': 'var(--bg-surface-hover)' });
+        });
+
         // Global relay confirmation modal helper
         var pendingRelayAction = null;
         function confirmRelayAction(title, message, callback) {
@@ -139,6 +476,33 @@
             }
             $('#relayConfirmModal').modal('hide');
         });
+
+        function showRelayStateInfo(groupName, currentState, requestedAction) {
+            var $modal = $('#relayStateInfoModal');
+            var $content = $('#relayStateInfoContent');
+            var bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim() || '#ffffff';
+            var borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim() || '#dee2e6';
+
+            if (currentState === 'on' && (requestedAction === 'on' || requestedAction === 'on-all')) {
+                $content.css({ 'border-left': '4px solid #198754', 'background': bgColor, 'border-color': borderColor });
+                $('#relayStateInfoIcon').html('<i class="fas fa-check-circle" style="color:#198754;"></i>');
+                $('#relayStateInfoTitle').html('<strong>' + groupName + '</strong> sudah menyala');
+                $('#relayStateInfoMessage').text('Perangkat ini sedang dalam kondisi ON. Tidak perlu menyalakan ulang.');
+            } else if (currentState === 'off' && (requestedAction === 'off' || requestedAction === 'off-all')) {
+                $content.css({ 'border-left': '4px solid #dc3545', 'background': bgColor, 'border-color': borderColor });
+                $('#relayStateInfoIcon').html('<i class="fas fa-power-off" style="color:#dc3545;"></i>');
+                $('#relayStateInfoTitle').html('<strong>' + groupName + '</strong> sudah mati');
+                $('#relayStateInfoMessage').text('Perangkat ini sedang dalam kondisi OFF. Tidak perlu mematikan ulang.');
+            } else if (currentState === 'unknown') {
+                $content.css({ 'border-left': '4px solid #6c757d', 'background': bgColor, 'border-color': borderColor });
+                $('#relayStateInfoIcon').html('<i class="fas fa-question-circle" style="color:#6c757d;"></i>');
+                $('#relayStateInfoTitle').html('Status <strong>' + groupName + '</strong> tidak diketahui');
+                $('#relayStateInfoMessage').text('Status relay belum tersedia. Menunggu data dari perangkat…');
+            }
+
+            $modal.modal('show');
+            setTimeout(function() { if ($modal.hasClass('show')) $modal.modal('hide'); }, 3000);
+        }
 
                 // Load system settings dari database
         let systemSettings = {
@@ -840,8 +1204,10 @@
         // ============================================
         function updateRelayIndicator($wrapper, state) {
             if (!$wrapper || $wrapper.length === 0) return;
-            $wrapper.removeClass('on off unknown').addClass(state || 'unknown');
-            $wrapper.attr('data-relay-state', state || 'unknown');
+            state = state || 'unknown';
+            $wrapper.removeClass('on off unknown').addClass(state);
+            $wrapper.data('relay-state', state);
+            $wrapper.attr('data-relay-state', state);
             syncToggleButtonUi($wrapper, state);
         }
 
@@ -851,6 +1217,7 @@
             if ($btn.length === 0) return;
 
             var mode = $wrapper.data('control-mode');
+            var relay = String($btn.data('relay') || '1');
             $btn.data('state', state);
 
             if (mode === 'ToggleAll') {
@@ -860,6 +1227,15 @@
                 } else {
                     $btn.removeClass('btn-danger').addClass('btn-success');
                     $btn.find('span').text('ON ALL');
+                }
+            } else if (mode === 'Toggle2Relay') {
+                var label = 'R' + relay;
+                if (state === 'on') {
+                    $btn.removeClass('btn-success').addClass('btn-danger');
+                    $btn.find('span').text(label + ' OFF');
+                } else {
+                    $btn.removeClass('btn-danger').addClass('btn-success');
+                    $btn.find('span').text(label + ' ON');
                 }
             } else {
                 if (state === 'on') {
@@ -926,7 +1302,7 @@
                         var mode = $wrapper.data('control-mode') || 'OnOff';
                         var relay = $wrapper.data('relay');
                         var info = states[deviceKey] || states[deviceId] || states[groupName];
-                        var rci = info && info.rci !== undefined && info.rci !== null ? info.rci : '';
+                        var rci = (info && info.rciRaw != null && info.rciRaw !== '') ? String(info.rciRaw).trim() : '';
                         var state = getRelayStateFromRci(mode, relay, rci);
                         updateRelayIndicator($wrapper, state);
                         console.log('Relay state:', { deviceKey: deviceKey, deviceId: deviceId, groupName: groupName, rci: rci, rciRaw: info ? info.rciRaw : null, rcRaw: info ? info.rcRaw : null, state: state, mode: mode, relay: relay });
@@ -1125,9 +1501,10 @@
         // ============================================
         // DEVICE CONTROL (MQTT PUBLISH)
         // ============================================
-        function publishRelayCommand(deviceId, rcValue, $btn, pulse, onComplete) {
+        function publishRelayCommand(deviceId, rcValue, $btn, pulse, onComplete, groupName, otpCode) {
+            var displayName = groupName || deviceId;
             if (!deviceId) {
-                showNotification('Device ID tidak ditemukan', 'danger');
+                showNotification('Perangkat tidak ditemukan', 'danger');
                 if (typeof onComplete === 'function') onComplete(false);
                 return;
             }
@@ -1135,24 +1512,27 @@
             var originalHtml = $btn.html();
             $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
 
+            var payload = { DeviceId: deviceId, RCValue: rcValue, Pulse: pulse || false };
+            if (otpCode) payload.OtpCode = otpCode;
+
             $.ajax({
                 url: '/api/Api/publish-relay',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ DeviceId: deviceId, RCValue: rcValue, Pulse: pulse || false }),
+                data: JSON.stringify(payload),
                 success: function(response) {
                     $btn.prop('disabled', false).html(originalHtml);
                     if (response.success) {
-                        showNotification(response.message || 'Perintah terkirim', 'success');
+                        showNotification('Perintah terkirim ke ' + displayName, 'success');
                         if (typeof onComplete === 'function') onComplete(true);
                     } else {
-                        showNotification(response.error || 'Gagal mengirim perintah', 'danger');
+                        showNotification(response.error || 'Gagal mengirim perintah ke ' + displayName, 'danger');
                         if (typeof onComplete === 'function') onComplete(false);
                     }
                 },
                 error: function(xhr) {
                     $btn.prop('disabled', false).html(originalHtml);
-                    var errorMsg = 'Gagal mengirim perintah';
+                    var errorMsg = 'Gagal mengirim perintah ke ' + displayName;
                     try {
                         var response = JSON.parse(xhr.responseText);
                         errorMsg = response.error || errorMsg;
@@ -1170,20 +1550,46 @@
 
             var $btn = $(this);
             var deviceId = $btn.data('device-id');
+            var $wrapper = $btn.closest('.device-control-wrapper');
+            var groupName = $wrapper.data('group-name') || deviceId;
+            var currentState = $wrapper.data('relay-state') || 'unknown';
             var isOn = $btn.hasClass('btn-device-on');
             var rcValue = isOn ? '1' : '0';
+
+            if (isOn && currentState === 'on') {
+                showRelayStateInfo(groupName, 'on', 'on');
+                return;
+            }
+            if (!isOn && currentState === 'off') {
+                showRelayStateInfo(groupName, 'off', 'off');
+                return;
+            }
+
             var actionText = isOn ? 'menyalakan (ON)' : 'mematikan (OFF)';
 
+            // OFF requires OTP verification
+            if (!isOn) {
+                confirmRelayAction(
+                    '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                    'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + groupName + '?',
+                    function() {
+                        openRelayOtpModal(deviceId, '0', false, groupName, $btn, $wrapper, actionText, function(success) {
+                            if (success) updateRelayIndicator($wrapper, 'off');
+                            setTimeout(updateRelayStates, success ? 1500 : 0);
+                        });
+                    }
+                );
+                return;
+            }
+
             confirmRelayAction(
-                'Konfirmasi Kontrol Perangkat',
-                'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + deviceId + '?',
+                '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + groupName + '?',
                 function() {
-                    var $wrapper = $btn.closest('.device-control-wrapper');
-                    updateRelayIndicator($wrapper, isOn ? 'on' : 'off');
+                    updateRelayIndicator($wrapper, 'on');
                     publishRelayCommand(deviceId, rcValue, $btn, false, function(success) {
-                        // Sync indicator with actual database state after device responds
                         setTimeout(updateRelayStates, success ? 1500 : 0);
-                    });
+                    }, groupName);
                 }
             );
         });
@@ -1195,20 +1601,46 @@
 
             var $btn = $(this);
             var deviceId = $btn.data('device-id');
+            var $wrapper = $btn.closest('.device-control-wrapper');
+            var groupName = $wrapper.data('group-name') || deviceId;
+            var currentState = $wrapper.data('relay-state') || 'unknown';
             var rcValue = String($btn.data('rc'));
             var isOn = rcValue === '1';
+
+            if (isOn && currentState === 'on') {
+                showRelayStateInfo(groupName, 'on', 'on');
+                return;
+            }
+            if (!isOn && currentState === 'off') {
+                showRelayStateInfo(groupName, 'off', 'off');
+                return;
+            }
+
             var actionText = isOn ? 'menyalakan (Pulse ON)' : 'mematikan (Pulse OFF)';
 
+            // Pulse OFF requires OTP verification
+            if (!isOn) {
+                confirmRelayAction(
+                    '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                    'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + groupName + '?',
+                    function() {
+                        openRelayOtpModal(deviceId, rcValue, true, groupName, $btn, $wrapper, actionText, function(success) {
+                            if (success) updateRelayIndicator($wrapper, 'off');
+                            setTimeout(updateRelayStates, success ? 1500 : 0);
+                        });
+                    }
+                );
+                return;
+            }
+
             confirmRelayAction(
-                'Konfirmasi Kontrol Perangkat',
-                'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + deviceId + '?',
+                '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + groupName + '?',
                 function() {
-                    var $wrapper = $btn.closest('.device-control-wrapper');
-                    updateRelayIndicator($wrapper, isOn ? 'on' : 'off');
+                    updateRelayIndicator($wrapper, 'on');
                     publishRelayCommand(deviceId, rcValue, $btn, true, function(success) {
-                        // Sync indicator with actual database state after device responds
                         setTimeout(updateRelayStates, success ? 1500 : 0);
-                    });
+                    }, groupName);
                 }
             );
         });
@@ -1220,10 +1652,11 @@
 
             var $btn = $(this);
             var deviceId = $btn.data('device-id');
-            var relay = String($btn.data('relay'));
             var $wrapper = $btn.closest('.device-control-wrapper');
-            var currentState = $wrapper.data('relay-state') || 'off';
-            var isOff = currentState === 'off';
+            var groupName = $wrapper.data('group-name') || deviceId;
+            var relay = String($btn.data('relay'));
+            var currentState = $wrapper.data('relay-state') || 'unknown';
+            var isOff = currentState === 'off' || currentState === 'unknown';
 
             var rcValue;
             if (relay === 'all') {
@@ -1235,16 +1668,29 @@
             var actionText = isOff ? 'menyalakan' : 'mematikan';
             var targetText = relay === 'all' ? 'semua relay' : 'relay ' + relay;
 
+            // Toggle OFF requires OTP verification
+            if (!isOff) {
+                confirmRelayAction(
+                    '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                    'Apakah Anda yakin ingin ' + actionText + ' ' + targetText + ' pada perangkat ' + groupName + '?',
+                    function() {
+                        openRelayOtpModal(deviceId, rcValue, false, groupName, $btn, $wrapper, actionText + ' ' + targetText, function(success) {
+                            if (success) updateRelayIndicator($wrapper, 'off');
+                            setTimeout(updateRelayStates, success ? 1500 : 0);
+                        });
+                    }
+                );
+                return;
+            }
+
             confirmRelayAction(
-                'Konfirmasi Kontrol Perangkat',
-                'Apakah Anda yakin ingin ' + actionText + ' ' + targetText + ' pada perangkat ' + deviceId + '?',
+                '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
+                'Apakah Anda yakin ingin ' + actionText + ' ' + targetText + ' pada perangkat ' + groupName + '?',
                 function() {
                     publishRelayCommand(deviceId, rcValue, $btn, false, function(success) {
-                        // Sync indicator with actual database state after device responds
                         setTimeout(updateRelayStates, success ? 1500 : 0);
-                    });
+                    }, groupName);
 
-                    // Update UI state immediately for responsive feedback
                     var newState = isOff ? 'on' : 'off';
                     updateRelayIndicator($wrapper, newState);
                 }

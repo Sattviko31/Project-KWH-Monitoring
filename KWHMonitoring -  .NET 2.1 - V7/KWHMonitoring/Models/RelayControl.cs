@@ -9,15 +9,13 @@ namespace KWHMonitoring.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }
+        public long Id { get; set; }
 
         [Column(TypeName = "nvarchar(100)")]
         [MaxLength(100)]
         public string DeviceKey { get; set; } = string.Empty;
 
-        [Column(TypeName = "nvarchar(10)")]
-        [MaxLength(10)]
-        public string RCI { get; set; } = string.Empty;
+        public int? RCI { get; set; }
 
         [Column(TypeName = "nvarchar(50)")]
         [MaxLength(50)]

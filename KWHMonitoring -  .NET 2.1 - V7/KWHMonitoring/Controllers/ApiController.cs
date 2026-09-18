@@ -2240,6 +2240,43 @@ namespace KWHMonitoring.Controllers
                     return BadRequest(new { success = false, error = "RC value must be 0, 1, 2, or 3" });
                 }
 
+                // OTP validation for OFF (RC=0) and Pulse OFF (Pulse=true, RC=2)
+                var requiresOtp = request.RCValue == "0" || (request.Pulse && request.RCValue == "2");
+                if (requiresOtp)
+                {
+                    var otpKey = $"RelayOtp_{userIdentifier}_{request.DeviceId}_{request.RCValue}";
+                    if (!_cache.TryGetValue(otpKey, out string storedCode) || string.IsNullOrWhiteSpace(storedCode))
+                    {
+                        await LogSecurityActionAsync(SecurityAction.RelayOtpFailed, request.DeviceId,
+                            "OTP required but not found or expired", false);
+                        return BadRequest(new { success = false, error = "Kode OTP belum diminta atau sudah kadaluarsa. Silakan minta kode baru." });
+                    }
+
+                    var failKey = $"RelayOtpFail_{userIdentifier}_{request.DeviceId}";
+                    var failCount = _cache.TryGetValue(failKey, out int fc) ? fc : 0;
+                    if (failCount >= 3)
+                    {
+                        await LogSecurityActionAsync(SecurityAction.RelayOtpFailed, request.DeviceId,
+                            "OTP max attempts exceeded", false);
+                        _cache.Remove(otpKey);
+                        _cache.Remove(failKey);
+                        return StatusCode(429, new { success = false, error = "Terlalu banyak percobaan kode salah. Silakan minta kode baru." });
+                    }
+
+                    if (string.IsNullOrWhiteSpace(request.OtpCode) || request.OtpCode.Trim() != storedCode.Trim())
+                    {
+                        _cache.Set(failKey, failCount + 1, TimeSpan.FromMinutes(5));
+                        await LogSecurityActionAsync(SecurityAction.RelayOtpFailed, request.DeviceId,
+                            $"Invalid OTP code (attempt {failCount + 1}/3)", false);
+                        return BadRequest(new { success = false, error = $"Kode OTP salah. Sisa percobaan: {2 - failCount}" });
+                    }
+
+                    _cache.Remove(otpKey);
+                    _cache.Remove(failKey);
+                    await LogSecurityActionAsync(SecurityAction.RelayOtpVerified, request.DeviceId,
+                        "OTP verified successfully", true);
+                }
+
                 // Rate limiting: max 10 relay commands per 60 seconds per user
                 if (IsRelayControlRateLimited(userIdentifier))
                 {
@@ -2283,7 +2320,88 @@ namespace KWHMonitoring.Controllers
             {
                 _logger.LogError(ex, "Failed to publish relay control command");
                 await LogSecurityActionAsync(SecurityAction.RelayOn, request.DeviceId, "Exception: " + ex.Message, false);
-                return StatusCode(500, new { error = ex.Message });
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
+
+        // ============================================
+        // REQUEST RELAY OTP (for OFF / Pulse OFF)
+        // ============================================
+        [HttpPost("request-relay-otp")]
+        [Authorize(Roles = "Operator,Admin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RequestRelayOtp([FromBody] RelayControlRequest request)
+        {
+            var userIdentifier = User.Identity.Name ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.DeviceId))
+                    return BadRequest(new { success = false, error = "DeviceId is required" });
+
+                // Only allow OTP for OFF (RC=0) or Pulse OFF (Pulse=true, RC=2)
+                var requiresOtp = request.RCValue == "0" || (request.Pulse && request.RCValue == "2");
+                if (!requiresOtp)
+                    return BadRequest(new { success = false, error = "OTP hanya diperlukan untuk perintah OFF." });
+
+                // Rate limit OTP requests: max 3 per 5 minutes
+                var rateKey = $"RelayOtpRate_{userIdentifier}";
+                var otpRequestCount = _cache.TryGetValue(rateKey, out int orc) ? orc : 0;
+                if (otpRequestCount >= 3)
+                {
+                    await LogSecurityActionAsync(SecurityAction.RelayOtpFailed, request.DeviceId,
+                        "OTP request rate limit exceeded", false);
+                    return StatusCode(429, new { success = false, error = "Terlalu banyak permintaan OTP. Tunggu 5 menit." });
+                }
+
+                // Get user email
+                var userEmail = User.FindFirst(ClaimTypes.Email)?.Value
+                    ?? User.FindFirst(ClaimTypes.Name)?.Value;
+                if (string.IsNullOrWhiteSpace(userEmail))
+                {
+                    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    if (int.TryParse(userIdClaim, out int uid))
+                    {
+                        var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == uid);
+                        userEmail = user?.Email;
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(userEmail))
+                    return BadRequest(new { success = false, error = "Email user tidak ditemukan. Tidak dapat mengirim OTP." });
+
+                // Get device group name: prefer from request (frontend), fallback to DeviceId
+                var groupName = !string.IsNullOrWhiteSpace(request.GroupName) ? request.GroupName : request.DeviceId;
+
+                // Generate 6-digit OTP
+                var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+                var bytes = new byte[4];
+                rng.GetBytes(bytes);
+                var code = (Math.Abs(BitConverter.ToInt32(bytes, 0)) % 900000 + 100000).ToString("D6");
+
+                // Store OTP in cache (5 min TTL)
+                var otpKey = $"RelayOtp_{userIdentifier}_{request.DeviceId}_{request.RCValue}";
+                _cache.Set(otpKey, code, TimeSpan.FromMinutes(5));
+
+                // Reset fail counter
+                var failKey = $"RelayOtpFail_{userIdentifier}_{request.DeviceId}";
+                _cache.Remove(failKey);
+
+                // Update rate limit counter
+                _cache.Set(rateKey, otpRequestCount + 1, TimeSpan.FromMinutes(5));
+
+                // Send OTP via email
+                var actionText = request.Pulse ? "Pulse OFF" : "OFF";
+                await _emailService.SendRelayOtpAsync(userEmail, code, groupName, actionText);
+
+                await LogSecurityActionAsync(SecurityAction.RelayOtpRequested, request.DeviceId,
+                    $"OTP requested for {actionText}, sent to {userEmail}", true);
+
+                return Ok(new { success = true, message = "Kode OTP telah dikirim ke email Anda." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to request relay OTP");
+                return StatusCode(500, new { success = false, error = ex.Message });
             }
         }
 
@@ -2332,22 +2450,17 @@ namespace KWHMonitoring.Controllers
                                 var deviceKey = (reader["DeviceKey"] as string)?.Trim();
                                 var deviceId = (reader["DeviceId"] as string)?.Trim();
                                 var groupName = (reader["GroupName"] as string)?.Trim();
-                                var rciRaw = reader["RCI"] as string;
-                                var rcRaw = reader["RC"];
+                                var rciObj = reader["RCI"];
+                                var rciRaw = (rciObj != null && rciObj != DBNull.Value) ? rciObj.ToString().Trim() : null;
+                                var rcObj = reader["RC"];
+                                var rcRaw = (rcObj != null && rcObj != DBNull.Value) ? rcObj.ToString().Trim() : null;
                                 var receivedTime = reader.GetDateTime(reader.GetOrdinal("ReceivedTime"));
 
-                                // Prefer RCI, fallback ke RC
-                                string effectiveValue = null;
-                                if (!string.IsNullOrWhiteSpace(rciRaw))
-                                {
-                                    effectiveValue = rciRaw.Trim();
-                                }
-                                else if (rcRaw != null && rcRaw != DBNull.Value)
-                                {
-                                    effectiveValue = rcRaw.ToString().Trim();
-                                }
+                                // Indikator border hanya membaca kolom RCI; tidak fallback ke RC.
+                                // Jika RCI kosong/null, indikator menampilkan 'unknown'.
+                                string effectiveValue = !string.IsNullOrWhiteSpace(rciRaw) ? rciRaw : null;
 
-                                // Lewati device yang tidak punya nilai RCI/RC sama sekali
+                                // Lewati device yang tidak punya nilai RCI sama sekali
                                 if (string.IsNullOrWhiteSpace(effectiveValue))
                                     continue;
 
@@ -2355,7 +2468,7 @@ namespace KWHMonitoring.Controllers
                                 {
                                     rci = effectiveValue,
                                     rciRaw = rciRaw,
-                                    rcRaw = rcRaw?.ToString(),
+                                    rcRaw = rcRaw,
                                     receivedTime = receivedTime
                                 };
 
@@ -5419,6 +5532,8 @@ namespace KWHMonitoring.Controllers
         public string DeviceId { get; set; } = string.Empty;
         public string RCValue { get; set; } = string.Empty;
         public bool Pulse { get; set; } = false;
+        public string OtpCode { get; set; } = string.Empty;
+        public string GroupName { get; set; } = string.Empty;
     }
 
     public class DeviceControlModeRequest

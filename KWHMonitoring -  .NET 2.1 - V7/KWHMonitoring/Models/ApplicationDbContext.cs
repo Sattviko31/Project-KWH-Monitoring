@@ -1,12 +1,46 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace KWHMonitoring.Models
 {
     public class ApplicationDbContext : DbContext
     {
+        /// <summary>
+        /// Invoked after a successful SaveChanges that touched AppSettings rows,
+        /// so the in-memory AppSettingsCache can refresh immediately.
+        /// </summary>
+        public static Action AppSettingsChanged;
+
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            var appSettingsTouched = HasAppSettingsChanges();
+            var result = base.SaveChanges(acceptAllChangesOnSuccess);
+            if (appSettingsTouched) AppSettingsChanged?.Invoke();
+            return result;
+        }
+
+        public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var appSettingsTouched = HasAppSettingsChanges();
+            var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            if (appSettingsTouched) AppSettingsChanged?.Invoke();
+            return result;
+        }
+
+        private bool HasAppSettingsChanges()
+        {
+            return ChangeTracker.Entries<AppSettingsRecord>().Any(e =>
+                e.State == EntityState.Added ||
+                e.State == EntityState.Modified ||
+                e.State == EntityState.Deleted);
         }
 
         public DbSet<KWHData> KWH_Monitoring { get; set; }

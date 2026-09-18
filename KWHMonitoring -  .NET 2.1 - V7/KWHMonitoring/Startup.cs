@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using KWHMonitoring.Models;
 using KWHMonitoring.Services;
+using KWHMonitoring.Filters;
 
 namespace KWHMonitoring
 {
@@ -31,7 +32,11 @@ namespace KWHMonitoring
             });
 
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"),
+                    sql => sql.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: System.TimeSpan.FromSeconds(10),
+                        errorNumbersToAdd: null)));
 
             services.AddMemoryCache();
 
@@ -44,6 +49,7 @@ namespace KWHMonitoring
             services.AddScoped<AesEncryptionService>();
             services.AddSingleton<MqttService>();
             services.AddScoped<IAnomalyAnalysisService, AnomalyAnalysisService>();
+            services.AddSingleton<AppSettingsCache>();
 
             services.AddScoped<IEmailService, EmailService>();
 
@@ -81,7 +87,10 @@ namespace KWHMonitoring
             // =========================================================
             services.AddHttpClient("QwenClient");
 
-            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            services.AddMvc(options =>
+            {
+                options.Filters.Add<DatabaseExceptionFilter>();
+            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
         }
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
@@ -134,6 +143,18 @@ namespace KWHMonitoring
                     var seedLogger = loggerFactory.CreateLogger("DbInitializer");
                     seedLogger.LogWarning(ex, "Failed to seed admin user.");
                 }
+            }
+
+            // Warm up AppSettings cache (sync-over-async is safe here: no SynchronizationContext at startup)
+            try
+            {
+                var settingsCache = app.ApplicationServices.GetRequiredService<AppSettingsCache>();
+                settingsCache.WarmUpAsync().GetAwaiter().GetResult();
+            }
+            catch (System.Exception ex)
+            {
+                var cacheLogger = loggerFactory.CreateLogger("AppSettingsCache");
+                cacheLogger.LogWarning(ex, "Failed to warm up AppSettingsCache. Will load on demand.");
             }
 
             if (env.IsDevelopment())

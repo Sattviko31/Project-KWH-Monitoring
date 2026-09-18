@@ -46,7 +46,15 @@ namespace KWHMonitoring.Services
 
         private async void DoWork(object state)
         {
-            await DoWorkAsync();
+            // async void: any escaping exception would crash the process, so guard the tick here
+            try
+            {
+                await DoWorkAsync();
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled error in notification background service tick");
+            }
         }
 
         private async Task DoWorkAsync()

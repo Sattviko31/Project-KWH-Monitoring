@@ -613,6 +613,24 @@
                 }
             };
 
+            // Theme-aware grid/tick helper
+            function themeScales(base) {
+                var gridColor = (typeof window.getChartGridColor === 'function') ? window.getChartGridColor() : 'rgba(0,0,0,0.08)';
+                var tickColor = (typeof window.getChartTickColor === 'function') ? window.getChartTickColor() : '#666';
+                base = base || {};
+                var y = base.y || {};
+                var x = base.x || {};
+                y.ticks = y.ticks || {};
+                x.ticks = x.ticks || {};
+                y.ticks.color = tickColor;
+                x.ticks.color = tickColor;
+                y.grid = y.grid || {};
+                x.grid = x.grid || {};
+                if (!y.grid.color) y.grid.color = gridColor;
+                if (!x.grid.color) x.grid.color = gridColor;
+                return { y: y, x: x };
+            }
+
             // Hourly chart
             var hourlyCtx = document.getElementById('hourlyChart');
             if (hourlyCtx) {
@@ -657,10 +675,10 @@
                     },
                     options: {
                         ...commonOptions,
-                        scales: {
+                        scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
-                        }
+                        })
                     }
                 });
             }
@@ -709,10 +727,10 @@
                     },
                     options: {
                         ...commonOptions,
-                        scales: {
+                        scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
-                        }
+                        })
                     }
                 });
             }
@@ -761,10 +779,10 @@
                     },
                     options: {
                         ...commonOptions,
-                        scales: {
+                        scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 9 } } }
-                        }
+                        })
                     }
                 });
             }

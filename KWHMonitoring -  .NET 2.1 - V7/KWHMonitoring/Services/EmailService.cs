@@ -189,6 +189,51 @@ namespace KWHMonitoring.Services
             return await _notificationService.SendEmailAsync(email, subject, body);
         }
 
+        public async Task<bool> SendRelayOtpAsync(string email, string code, string groupName, string actionText)
+        {
+            var subject = "[KWH Monitoring] Kode OTP Verifikasi Relay";
+            var title = "Kode Verifikasi OTP";
+            var maskedEmail = email.Length > 3
+                ? email.Substring(0, 3) + "***" + email.Substring(email.IndexOf('@'))
+                : "***";
+
+            var content = $@"<p style=""margin:0 0 16px 0;"">Halo,</p>
+<p style=""margin:0 0 16px 0;"">Anda telah meminta kode verifikasi untuk perintah relay di <strong>KWH Monitoring</strong>:</p>
+<table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""background:#fef3c7;border:1px solid #fde68a;border-radius:10px;margin:16px 0;"">
+    <tr>
+        <td style=""padding:16px 20px;text-align:center;"">
+            <p style=""margin:0 0 4px 0;font-size:13px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:1px;"">Kode OTP Anda</p>
+            <p style=""margin:0;font-size:36px;font-weight:800;color:#1a1d23;letter-spacing:8px;font-family:'Courier New',monospace;"">{WebUtility.HtmlEncode(code)}</p>
+        </td>
+    </tr>
+</table>
+<table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""border-collapse:collapse;background:#ffffff;border:1px solid #e9ecef;border-radius:10px;overflow:hidden;margin:16px 0;"">
+    <tr style=""border-bottom:1px solid #e9ecef;"">
+        <td style=""padding:12px 16px;width:120px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Perangkat</td>
+        <td style=""padding:12px 16px;color:#495057;"">{WebUtility.HtmlEncode(groupName)}</td>
+    </tr>
+    <tr style=""border-bottom:1px solid #e9ecef;"">
+        <td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Aksi</td>
+        <td style=""padding:12px 16px;color:#dc3545;font-weight:600;"">{WebUtility.HtmlEncode(actionText)}</td>
+    </tr>
+    <tr>
+        <td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Waktu</td>
+        <td style=""padding:12px 16px;color:#495057;"">{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</td>
+    </tr>
+</table>
+<div style=""background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px 20px;margin:16px 0;"">
+    <p style=""margin:0 0 8px 0;color:#842029;font-weight:600;"">&#9888;&#65039; Catatan Keamanan:</p>
+    <ul style=""margin:0;padding-left:20px;color:#842029;line-height:1.8;"">
+        <li>Kode ini berlaku selama <strong>5 menit</strong>.</li>
+        <li>Jangan berikan kode ini kepada siapa pun.</li>
+        <li>Jika Anda tidak merasa melakukan permintaan ini, segera hubungi administrator.</li>
+    </ul>
+</div>";
+
+            var body = BuildEmailTemplate(title, content, "#dc3545");
+            return await _notificationService.SendEmailAsync(email, subject, body);
+        }
+
         public async Task<bool> SendCriticalActionNotificationAsync(string actorEmail, string action, string details)
         {
             var masterAdminEmail = await _notificationService.GetMasterAdminEmailAsync();

@@ -11,5 +11,6 @@ namespace KWHMonitoring.Services
         Task<bool> SendAccessRejectedNoticeAsync(string email);
         Task<bool> SendPasswordResetEmailAsync(string email, string resetLink);
         Task<bool> SendCriticalActionNotificationAsync(string actorEmail, string action, string details);
+        Task<bool> SendRelayOtpAsync(string email, string code, string groupName, string actionText);
     }
 }
