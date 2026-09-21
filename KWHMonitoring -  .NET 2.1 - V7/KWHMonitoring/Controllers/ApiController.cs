@@ -4446,7 +4446,6 @@ namespace KWHMonitoring.Controllers
                     smtpPort = GetInt(settings, "Notification.SmtpPort", 587),
                     senderEmail = GetString(settings, "Notification.SenderEmail", ""),
                     senderPassword = GetString(settings, "Notification.SenderPassword", ""),
-                    recipientEmail = GetString(settings, "Notification.RecipientEmail", ""),
                     masterAdminEmail = GetString(settings, "Notification.MasterAdminEmail", ""),
                     whatsappGatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "https://api.fonnte.com/send"),
                     whatsappToken = GetString(settings, "Notification.WhatsAppToken", ""),
@@ -4679,7 +4678,6 @@ namespace KWHMonitoring.Controllers
                     { "Notification.SmtpPort", data.smtpPort.ToString() },
                     { "Notification.SenderEmail", data.senderEmail ?? "" },
                     { "Notification.SenderPassword", data.senderPassword ?? "" },
-                    { "Notification.RecipientEmail", data.recipientEmail ?? "" },
                     { "Notification.MasterAdminEmail", data.masterAdminEmail ?? "" },
                     { "Notification.WhatsAppGatewayUrl", data.whatsappGatewayUrl ?? "" },
                     { "Notification.WhatsAppToken", data.whatsappToken ?? "" },
@@ -4746,11 +4744,18 @@ namespace KWHMonitoring.Controllers
                 var smtpPort = GetInt(settings, "Notification.SmtpPort", 587);
                 var senderEmail = GetString(settings, "Notification.SenderEmail", "");
                 var senderPassword = GetString(settings, "Notification.SenderPassword", "");
-                var recipientEmail = GetString(settings, "Notification.RecipientEmail", "");
 
-                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(senderPassword) || string.IsNullOrEmpty(recipientEmail))
+                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(senderPassword))
                 {
-                    return BadRequest(new { error = "Email settings not configured" });
+                    return BadRequest(new { error = "Email SMTP settings not configured (sender email/password)" });
+                }
+
+                var notificationService = HttpContext.RequestServices.GetService(typeof(NotificationService)) as NotificationService;
+                var recipients = await notificationService.GetReportRecipientEmailsAsync();
+
+                if (recipients.Count == 0)
+                {
+                    return BadRequest(new { error = "No active Operator/Admin users found to send test email to" });
                 }
 
                 using (var client = new SmtpClient(smtpServer, smtpPort))
@@ -4766,7 +4771,6 @@ namespace KWHMonitoring.Controllers
                         IsBodyHtml = true
                     };
 
-                    var recipients = recipientEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var recipient in recipients)
                     {
                         mailMessage.To.Add(recipient.Trim());
@@ -4775,7 +4779,7 @@ namespace KWHMonitoring.Controllers
                     await client.SendMailAsync(mailMessage);
                 }
 
-                return Ok(new { success = true, message = "Test email sent successfully" });
+                return Ok(new { success = true, message = string.Format("Test email sent successfully to {0} recipient(s)", recipients.Count) });
             }
             catch (Exception ex)
             {
@@ -5563,7 +5567,6 @@ namespace KWHMonitoring.Controllers
         public int smtpPort { get; set; } = 587;
         public string senderEmail { get; set; }
         public string senderPassword { get; set; }
-        public string recipientEmail { get; set; }
         public string masterAdminEmail { get; set; }
         public string whatsappGatewayUrl { get; set; }
         public string whatsappToken { get; set; }

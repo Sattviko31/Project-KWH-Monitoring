@@ -552,9 +552,12 @@
                             <small class="text-muted">Email admin master untuk verifikasi pendaftaran user baru</small>
                         </div>
                         <div class="settings-field settings-field-full">
-                            <label class="form-label">Recipient Email</label>
-                            <input type="text" class="form-control" id="recipientEmail" placeholder="admin@pabrik.com, manager@pabrik.com">
-                            <small class="text-muted">Pisahkan dengan tanda koma (,) untuk lebih dari 1 email</small>
+                            <div class="settings-info-banner settings-info-banner-info">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Penerima Laporan Otomatis</strong> — Semua laporan (Alert, Hourly, Daily, Monthly) dikirim otomatis ke seluruh user aktif dengan role <strong>Operator</strong> dan <strong>Admin</strong>. Tidak perlu input manual.
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="settings-section-footer">
@@ -1581,7 +1584,6 @@
                     $('#senderEmail').val(data.senderEmail || '');
                     $('#senderPassword').val(data.senderPassword || '');
                     $('#masterAdminEmail').val(data.masterAdminEmail || '');
-                    $('#recipientEmail').val(data.recipientEmail || '');
                     $('#enableEmail').prop('checked', data.enableEmail || false);
                     $('#enableWhatsApp').prop('checked', data.enableWhatsApp || false);
                     $('#sendInstantAlert').prop('checked', data.sendInstantAlert !== false);
@@ -1625,7 +1627,6 @@
                 senderEmail: $('#senderEmail').val(),
                 senderPassword: $('#senderPassword').val(),
                 masterAdminEmail: $('#masterAdminEmail').val(),
-                recipientEmail: $('#recipientEmail').val(),
                 enableEmail: $('#enableEmail').is(':checked'),
                 enableWhatsApp: $('#enableWhatsApp').is(':checked'),
                 sendInstantAlert: $('#sendInstantAlert').is(':checked'),
@@ -1772,7 +1773,6 @@
             $('#senderEmail').val('');
             $('#senderPassword').val('');
             $('#masterAdminEmail').val('');
-            $('#recipientEmail').val('');
             $('#wablasServerUrl').val('');
             $('#wablasToken').val('');
             $('#wablasSecretKey').val('');
@@ -1782,7 +1782,10 @@
             $('#sendInstantAlert').prop('checked', true);
             $('#sendHourlyReport').prop('checked', true);
             $('#sendDailyReport').prop('checked', false);
+            $('#sendMonthlyReport').prop('checked', false);
             $('#dailyReportTime').val('08:00');
+            $('#monthlyReportDay').val(1);
+            $('#monthlyReportTime').val('08:00');
             showNotification('Notification settings reset to default. Click Save to apply.', 'info');
         }
 

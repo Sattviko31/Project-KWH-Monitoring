@@ -9,7 +9,6 @@ namespace KWHMonitoring.Models
         public int SmtpPort { get; set; } = 587;
         public string SenderEmail { get; set; }
         public string SenderPassword { get; set; }
-        public string RecipientEmail { get; set; }
         public bool EnableEmailNotification { get; set; } = false;
 
         // Wablas WhatsApp Settings

@@ -593,6 +593,14 @@ document.addEventListener('DOMContentLoaded', function() {
             applyTheme(stored);
         }
 
+        // Remove no-transition class and mark theme ready after page load
+        window.addEventListener('load', function() {
+            document.documentElement.classList.remove('no-transition');
+            document.documentElement.setAttribute('data-theme-ready', '');
+            // Clean up inline background color
+            document.documentElement.style.backgroundColor = '';
+        });
+
         var btn = document.getElementById('themeToggle');
         if (!btn) return;
 

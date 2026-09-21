@@ -60,6 +60,21 @@
 }
 
 /* ============================================
+   FOUC PREVENTION — hide page until theme ready
+   ============================================ */
+html:not([data-theme-ready]) {
+    visibility: hidden;
+}
+
+html.no-transition,
+html.no-transition *,
+html.no-transition *::before,
+html.no-transition *::after {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* ============================================
    DARK THEME
    ============================================ */
 [data-theme="dark"] {

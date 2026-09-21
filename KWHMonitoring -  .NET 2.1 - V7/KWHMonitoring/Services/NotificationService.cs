@@ -72,7 +72,6 @@ namespace KWHMonitoring.Services
                     SmtpPort = int.TryParse(GetVal(settingsRecord, "Notification.SmtpPort", "587"), out var port) ? port : 587,
                     SenderEmail = GetVal(settingsRecord, "Notification.SenderEmail", null),
                     SenderPassword = GetVal(settingsRecord, "Notification.SenderPassword", null),
-                    RecipientEmail = GetVal(settingsRecord, "Notification.RecipientEmail", null),
                     EnableEmailNotification = bool.TryParse(GetVal(settingsRecord, "Notification.EnableEmail", "false"), out var emailOn) && emailOn,
 
                     WablasServerUrl = GetVal(settingsRecord, "Notification.WablasServerUrl", null),
@@ -1521,17 +1520,46 @@ namespace KWHMonitoring.Services
         }
 
         // ============================================
-        // EMAIL SENDER
+        // REPORT RECIPIENTS — all active Operator/Admin users
+        // ============================================
+        public async Task<List<string>> GetReportRecipientEmailsAsync()
+        {
+            try
+            {
+                var emails = await _context.ApplicationUsers
+                    .Where(u => (u.Role == UserRoles.Operator || u.Role == UserRoles.Admin)
+                             && u.EmailConfirmed && u.IsActive)
+                    .Select(u => u.Email)
+                    .Distinct()
+                    .ToListAsync();
+
+                return emails.Where(e => !string.IsNullOrWhiteSpace(e)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to query report recipients from ApplicationUsers");
+                return new List<string>();
+            }
+        }
+
+        // ============================================
+        // EMAIL SENDER (for reports — sends to all Operator/Admin users)
         // ============================================
         public async Task SendEmailAsync(string subject, string body)
         {
             EnsureSettingsLoaded();
             if (string.IsNullOrEmpty(_settings.SmtpServer) ||
                 string.IsNullOrEmpty(_settings.SenderEmail) ||
-                string.IsNullOrEmpty(_settings.SenderPassword) ||
-                string.IsNullOrEmpty(_settings.RecipientEmail))
+                string.IsNullOrEmpty(_settings.SenderPassword))
             {
-                _logger.LogWarning("Email settings not configured");
+                _logger.LogWarning("Email SMTP settings not configured");
+                return;
+            }
+
+            var recipients = await GetReportRecipientEmailsAsync();
+            if (recipients.Count == 0)
+            {
+                _logger.LogWarning("No Operator/Admin recipients found — report email skipped");
                 return;
             }
 
@@ -1551,32 +1579,28 @@ namespace KWHMonitoring.Services
                         mailMessage.Body = body;
                         mailMessage.IsBodyHtml = true;
 
-                        // Use only HTML body so email clients always render the rich template.
-                        // (A plain-text alternative caused Gmail/Outlook to sometimes show the plain version.)
                         var htmlView = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, "text/html");
                         htmlView.TransferEncoding = System.Net.Mime.TransferEncoding.QuotedPrintable;
                         mailMessage.AlternateViews.Add(htmlView);
 
-                        // Support multiple recipients (separated by comma or semicolon)
-                        var recipients = _settings.RecipientEmail.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var recipient in recipients)
                         {
                             var trimmedEmail = recipient.Trim();
                             if (!string.IsNullOrEmpty(trimmedEmail))
                             {
                                 mailMessage.To.Add(trimmedEmail);
-                                _logger.LogInformation("Adding email recipient: {0}", trimmedEmail);
+                                _logger.LogInformation("Adding report recipient: {0}", trimmedEmail);
                             }
                         }
 
                         await client.SendMailAsync(mailMessage);
-                        _logger.LogInformation("Email sent successfully to {0} recipient(s)", recipients.Length);
+                        _logger.LogInformation("Report email sent successfully to {0} recipient(s)", recipients.Count);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending email to {0}: {1}", _settings.RecipientEmail, ex.Message);
+                _logger.LogError(ex, "Error sending report email to {0} recipient(s): {1}", recipients.Count, ex.Message);
             }
         }
 
