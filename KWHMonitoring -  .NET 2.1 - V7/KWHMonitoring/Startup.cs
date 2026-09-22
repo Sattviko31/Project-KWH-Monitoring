@@ -52,6 +52,7 @@ namespace KWHMonitoring
             services.AddSingleton<AppSettingsCache>();
 
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<IDeviceSettingsService, DeviceSettingsService>();
 
             services.AddAuthentication("Cookies")
                 .AddCookie("Cookies", options =>
@@ -142,6 +143,20 @@ namespace KWHMonitoring
                 {
                     var seedLogger = loggerFactory.CreateLogger("DbInitializer");
                     seedLogger.LogWarning(ex, "Failed to seed admin user.");
+                }
+            }
+
+            using (var deviceSettingsScope = app.ApplicationServices.CreateScope())
+            {
+                try
+                {
+                    var deviceSettingsContext = deviceSettingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    DbInitializer.SeedDeviceSettingsAsync(deviceSettingsContext).GetAwaiter().GetResult();
+                }
+                catch (System.Exception ex)
+                {
+                    var seedLogger = loggerFactory.CreateLogger("DbInitializer");
+                    seedLogger.LogWarning(ex, "Failed to seed device settings.");
                 }
             }
 

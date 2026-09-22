@@ -21,7 +21,7 @@
     var isAuthPage = ViewData["AuthPage"] != null || controllerName == "Account" || controllerName == "AdminApproval";
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="@(isAuthPage ? "auth-page" : "")">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <script>(function(){var t;try{t=localStorage.getItem('kwh_theme')}catch(e){}if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.backgroundColor='#0b0f1a'}document.documentElement.classList.add('no-transition')})();</script>
+    <script>(function(){var t;try{t=localStorage.getItem('kwh_theme')}catch(e){}if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.backgroundColor='#0b0f1a'}document.documentElement.classList.add('no-transition');function s(){document.documentElement.setAttribute('data-theme-ready','')}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',s)}else{s()}setTimeout(s,800)})();</script>
     <noscript><style>html{visibility:visible!important}</style></noscript>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
 </head>
@@ -1580,6 +1580,66 @@
         });
     </script>
 }
+
+    <!-- PER-DEVICE SETTINGS LOADER -->
+    <script>
+        (function() {
+            window._deviceSettings = window._deviceSettings || {};
+            window._deviceSettingsLoaded = false;
+
+            function fetchDeviceSettings() {
+                return $.ajax({
+                    url: '/api/Api/device-settings',
+                    method: 'GET',
+                    dataType: 'json',
+                    cache: false
+                }).then(function(resp) {
+                    if (resp.success && resp.settings) {
+                        window._deviceSettings = resp.settings;
+                        window._deviceSettingsLoaded = true;
+                        var keys = Object.keys(resp.settings);
+                        var sample = keys.length > 0 ? resp.settings[keys[0]] : null;
+                        console.log('DeviceSettings loaded:', keys.length, 'devices. Keys:', keys.join(','), 'Sample:', JSON.stringify(sample));
+                    } else {
+                        console.warn('DeviceSettings: API returned no settings', resp);
+                    }
+                }).fail(function(xhr, status, error) {
+                    console.error('DeviceSettings: Failed to load:', error || status);
+                });
+            }
+
+            window._deviceSettingsPromise = fetchDeviceSettings();
+
+            window.getDeviceSettings = function(deviceKey) {
+                var s = (window._deviceSettings || {})[deviceKey];
+                if (!s) {
+                    console.warn('getDeviceSettings: no settings for deviceKey="' + deviceKey + '"');
+                    return null;
+                }
+                return {
+                    maxCapacity: s.maxCapacity || s.MaxCapacity || 0,
+                    loadNormalThreshold: (s.loadNormalThreshold != null && s.loadNormalThreshold > 0) ? s.loadNormalThreshold : (s.LoadNormalThreshold != null && s.LoadNormalThreshold > 0 ? s.LoadNormalThreshold : 30),
+                    loadMediumThreshold: (s.loadMediumThreshold != null && s.loadMediumThreshold > 0) ? s.loadMediumThreshold : (s.LoadMediumThreshold != null && s.LoadMediumThreshold > 0 ? s.LoadMediumThreshold : 70),
+                    emaUpperThreshold: s.emaUpperThreshold || s.EmaUpperThreshold || 0,
+                    emaLowerThreshold: s.emaLowerThreshold || s.EmaLowerThreshold || 0,
+                    emaFibUpper: s.emaFibUpper || s.EmaFibUpper || 0,
+                    emaFibLower: s.emaFibLower || s.EmaFibLower || 0,
+                    tariffPerKWh: (s.tariffPerKWh != null && s.tariffPerKWh > 0) ? s.tariffPerKWh : (s.TariffPerKWh != null && s.TariffPerKWh > 0 ? s.TariffPerKWh : 1500),
+                    downtimeEnabled: s.downtimeEnabled === true || s.DowntimeEnabled === true,
+                    downtimeStart: s.downtimeStart || s.DowntimeStart,
+                    downtimeEnd: s.downtimeEnd || s.DowntimeEnd,
+                    controlMode: s.controlMode || s.ControlMode || 'OnOff',
+                    deviceCategory: s.deviceCategory || s.DeviceCategory || 'Billboard'
+                };
+            };
+
+            window.getDeviceSetting = function(deviceKey, field, defaultValue) {
+                var ds = window.getDeviceSettings(deviceKey);
+                if (!ds) return defaultValue;
+                return ds[field] !== undefined ? ds[field] : defaultValue;
+            };
+        })();
+    </script>
 
     <!-- MOBILE NAV TOGGLE -->
     <script>

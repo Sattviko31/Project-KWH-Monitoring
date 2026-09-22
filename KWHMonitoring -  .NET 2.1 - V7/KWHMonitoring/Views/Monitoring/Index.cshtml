@@ -511,9 +511,6 @@
             detailsInterval: 10,
             anomalyInterval: 10,
             chartDataPoints: 20,
-            maxCapacity: 30000,
-            normalThreshold: 30,
-            mediumThreshold: 70,
             showGrid: true,
             showGridX: true,
             showGridY: true,
@@ -549,9 +546,6 @@
                             systemSettings.detailsInterval = parseInt(data.settings['Interval.Details']) || 10;
                             systemSettings.anomalyInterval = parseInt(data.settings['Interval.Anomaly']) || 10;
                             systemSettings.chartDataPoints = parseInt(data.settings['Chart.DataPoints']) || 20;  // ← TAMBAHKAN
-                            systemSettings.maxCapacity = parseInt(data.settings['Load.MaxCapacity']) || 30000;
-                            systemSettings.normalThreshold = parseInt(data.settings['Load.NormalThreshold']) || 30;
-                            systemSettings.mediumThreshold = parseInt(data.settings['Load.MediumThreshold']) || 70;
                             systemSettings.showGrid = data.settings['Chart.ShowGrid'] !== 'false';
                             systemSettings.showGridX = data.settings['Chart.ShowGridX'] !== 'false';
                             systemSettings.showGridY = data.settings['Chart.ShowGridY'] !== 'false';
@@ -689,11 +683,14 @@
                 if (show && status && status !== 'all') {
                     const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
                     const daya = data ? data.dayaWatt : 0;
-                    const maxCap = systemSettings.maxCapacity || 30000;
-                    const loadPercent = Math.min((daya / maxCap) * 100, 100);
+                    const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
+                    const maxCap = ds.maxCapacity || 0;
+                    const normalThresh = ds.loadNormalThreshold || 30;
+                    const mediumThresh = ds.loadMediumThreshold || 70;
+                    const loadPercent = maxCap > 0 ? Math.min((daya / maxCap) * 100, 100) : 0;
                     let panelStatus = 'NORMAL';
-                    if (loadPercent > systemSettings.mediumThreshold || loadPercent > 70) panelStatus = 'HIGH';
-                    else if (loadPercent > systemSettings.normalThreshold || loadPercent > 30) panelStatus = 'MEDIUM';
+                    if (maxCap > 0 && loadPercent > mediumThresh) panelStatus = 'HIGH';
+                    else if (maxCap > 0 && loadPercent > normalThresh) panelStatus = 'MEDIUM';
                     if (panelStatus !== status) show = false;
                 }
 
@@ -888,8 +885,8 @@
         }
 
         $(document).ready(function() {
-            // Load settings dari database TERLEBIH DAHULU
-            loadSystemSettings().then(function() {
+            // Load settings dari database TERLEBIH DAHULU (including per-device settings)
+            Promise.all([loadSystemSettings(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
                 loadAnomalyMaxConfirmations();
                 loadCategoriesMeta().then(function() {
                     loadDeviceCategories();
@@ -1170,25 +1167,30 @@
                     else pfBar.addClass('bg-danger');
                 }
 
-                // Update Load gauge MENGGUNAKAN systemSettings
-                const maxCap = systemSettings.maxCapacity || 30000;
-                const normalThresh = systemSettings.normalThreshold || 30;
-                const mediumThresh = systemSettings.mediumThreshold || 70;
+                // Update Load gauge MENGGUNAKAN per-device settings
+                const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
+                const maxCap = ds.maxCapacity || 0;
+                const normalThresh = ds.loadNormalThreshold || 30;
+                const mediumThresh = ds.loadMediumThreshold || 70;
 
-                const loadPercent = Math.min((dayaWatt / maxCap) * 100, 100);
+                const loadPercent = maxCap > 0 ? Math.min((dayaWatt / maxCap) * 100, 100) : 0;
                 const loadBar = panelCard.find('[data-gauge="load"]');
 
                 if (loadBar.length > 0) {
-                    loadBar.css('width', loadPercent.toFixed(1) + '%');
-                    loadBar.removeClass('bg-info bg-warning bg-danger');
-
-                    // Gunakan threshold dinamis dari settings
-                    if (loadPercent > mediumThresh) {
-                        loadBar.addClass('bg-danger'); // High
-                    } else if (loadPercent > normalThresh) {
-                        loadBar.addClass('bg-warning'); // Medium
+                    if (maxCap > 0) {
+                        loadBar.css('width', loadPercent.toFixed(1) + '%');
+                        loadBar.removeClass('bg-info bg-warning bg-danger bg-secondary');
+                        if (loadPercent > mediumThresh) {
+                            loadBar.addClass('bg-danger');
+                        } else if (loadPercent > normalThresh) {
+                            loadBar.addClass('bg-warning');
+                        } else {
+                            loadBar.addClass('bg-info');
+                        }
                     } else {
-                        loadBar.addClass('bg-info'); // Normal
+                        loadBar.css('width', '100%');
+                        loadBar.removeClass('bg-info bg-warning bg-danger').addClass('bg-secondary');
+                        loadBar.text('-');
                     }
                 }
             });
@@ -1455,25 +1457,30 @@
                             else pfBar.addClass('bg-danger');
                         }
 
-                        // Update Load Gauge MENGGUNAKAN systemSettings
-                        const maxCap = systemSettings.maxCapacity || 30000;
-                        const normalThresh = systemSettings.normalThreshold || 30;
-                        const mediumThresh = systemSettings.mediumThreshold || 70;
+                        // Update Load Gauge MENGGUNAKAN per-device settings
+                        const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
+                        const maxCap = ds.maxCapacity || 0;
+                        const normalThresh = ds.loadNormalThreshold || 30;
+                        const mediumThresh = ds.loadMediumThreshold || 70;
 
-                        const loadPercent = Math.min((dayaWatt / maxCap) * 100, 100);
+                        const loadPercent = maxCap > 0 ? Math.min((dayaWatt / maxCap) * 100, 100) : 0;
                         const loadBar = panelCard.find('[data-gauge="load"]');
 
                         if (loadBar.length > 0) {
-                            loadBar.css('width', loadPercent.toFixed(1) + '%');
-                            loadBar.removeClass('bg-info bg-warning bg-danger');
-
-                            // Gunakan threshold dinamis dari settings
-                            if (loadPercent > mediumThresh) {
-                                loadBar.addClass('bg-danger'); // High
-                            } else if (loadPercent > normalThresh) {
-                                loadBar.addClass('bg-warning'); // Medium
+                            if (maxCap > 0) {
+                                loadBar.css('width', loadPercent.toFixed(1) + '%');
+                                loadBar.removeClass('bg-info bg-warning bg-danger bg-secondary');
+                                if (loadPercent > mediumThresh) {
+                                    loadBar.addClass('bg-danger');
+                                } else if (loadPercent > normalThresh) {
+                                    loadBar.addClass('bg-warning');
+                                } else {
+                                    loadBar.addClass('bg-info');
+                                }
                             } else {
-                                loadBar.addClass('bg-info'); // Normal
+                                loadBar.css('width', '100%');
+                                loadBar.removeClass('bg-info bg-warning bg-danger').addClass('bg-secondary');
+                                loadBar.text('-');
                             }
                         }
 

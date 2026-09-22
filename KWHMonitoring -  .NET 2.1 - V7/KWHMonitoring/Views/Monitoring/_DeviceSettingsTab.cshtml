@@ -1,0 +1,311 @@
+@using System.Globalization
+@{
+    var devices = ViewBag.Devices as List<KWHMonitoring.Models.DeviceSettingsListItem> ?? new List<KWHMonitoring.Models.DeviceSettingsListItem>();
+    var deviceSettings = ViewBag.DeviceSettings as Dictionary<string, KWHMonitoring.Models.DeviceSettings> ?? new Dictionary<string, KWHMonitoring.Models.DeviceSettings>();
+    var categoryOptions = new[] { "Billboard", "Videotron", "LED", "Lainnya" };
+}
+
+<style>
+.device-form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+.device-form-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.375rem 0.5rem;
+}
+.device-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+.device-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+[data-bs-theme="dark"] .device-label {
+    color: #adb5bd;
+}
+.device-settings-card .card-body {
+    padding: 0.5rem;
+}
+.device-settings-card .form-control-sm,
+.device-settings-card .form-select-sm {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+    height: calc(1.5em + 0.4rem + 2px);
+}
+.device-settings-card .form-check-input {
+    width: 2em;
+    height: 1em;
+}
+.device-settings-card .form-check-label {
+    font-size: 0.7rem;
+    margin-left: 0.25rem;
+}
+#deviceSettingsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+</style>
+
+<div class="settings-section-list">
+    <div class="settings-section">
+        <div class="settings-section-header">
+            <div class="settings-section-icon bg-primary-soft">
+                <i class="fas fa-sliders-h text-primary"></i>
+            </div>
+            <div class="settings-section-title">
+                <h5>Per-Device Settings</h5>
+                <p>Konfigurasi spesifik untuk setiap device</p>
+            </div>
+            <div class="settings-section-action">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnSaveAllDeviceSettings">
+                    <i class="fas fa-save"></i> Simpan Semua
+                </button>
+            </div>
+        </div>
+        <div class="settings-section-body">
+            @if (!devices.Any())
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Belum ada device yang terdaftar.
+                </div>
+            }
+            else
+            {
+                <div class="panel-grid mb-3" id="deviceSettingsGrid">
+                    @foreach (var device in devices)
+                    {
+                        var settings = deviceSettings.ContainsKey(device.DeviceKey) ? deviceSettings[device.DeviceKey] : new KWHMonitoring.Models.DeviceSettings { DeviceKey = device.DeviceKey };
+                        var safeKey = device.DeviceKey.Replace("-", "_");
+                        <div class="device-settings-card" data-device-key="@device.DeviceKey" data-safe-key="@safeKey">
+                            <div class="card shadow-sm h-100 border-0">
+                                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                                    <h6 class="mb-0 text-truncate" style="font-size: 0.9rem;">
+                                        <i class="fas fa-plug"></i> @device.GroupName
+                                    </h6>
+                                    <span class="badge bg-info">@device.DeviceKey</span>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="device-form-grid">
+                                        <div class="device-form-row">
+                                            <label class="device-label">Kategori</label>
+                                            <select class="form-select form-select-sm device-category" data-field="DeviceCategory">
+                                                @foreach (var cat in categoryOptions)
+                                                {
+                                                    var isSelected = settings.DeviceCategory == cat;
+                                                    <option value="@cat" selected="@(isSelected ? "selected" : null)">@cat</option>
+                                                }
+                                                @if (!categoryOptions.Contains(settings.DeviceCategory))
+                                                {
+                                                    <option value="@settings.DeviceCategory" selected="selected">@settings.DeviceCategory</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Max Cap (W)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="MaxCapacity" value="@settings.MaxCapacity.ToString(CultureInfo.InvariantCulture)" min="0" step="100">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Tarif (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@settings.TariffPerKWh.ToString(CultureInfo.InvariantCulture)" min="0" step="50">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Normal (%)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="LoadNormalThreshold" value="@settings.LoadNormalThreshold" min="1" max="100">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Medium (%)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="LoadMediumThreshold" value="@settings.LoadMediumThreshold" min="1" max="100">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">EMA ↑ (%)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="EmaUpperThreshold" value="@settings.EmaUpperThreshold" min="0" max="1000">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">EMA ↓ (%)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="EmaLowerThreshold" value="@settings.EmaLowerThreshold" min="0" max="100">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Start</label>
+                                                <input type="time" class="form-control form-control-sm" data-field="DowntimeStart" value="@settings.DowntimeStart.ToString(@"hh\:mm")">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">End</label>
+                                                <input type="time" class="form-control form-control-sm" data-field="DowntimeEnd" value="@settings.DowntimeEnd.ToString(@"hh\:mm")">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Control</label>
+                                                <select class="form-select form-select-sm device-control-mode" data-field="ControlMode">
+                                                    <option value="OnOff" selected="@(settings.ControlMode == "OnOff" ? "selected" : null)">ON/OFF</option>
+                                                    <option value="Toggle" selected="@(settings.ControlMode == "Toggle" ? "selected" : null)">Toggle</option>
+                                                    <option value="Pulse" selected="@(settings.ControlMode == "Pulse" ? "selected" : null)">Pulse</option>
+                                                    <option value="Toggle2Relay" selected="@(settings.ControlMode == "Toggle2Relay" ? "selected" : null)">2 Relay</option>
+                                                    <option value="ToggleAll" selected="@(settings.ControlMode == "ToggleAll" ? "selected" : null)">All</option>
+                                                </select>
+                                            </div>
+                                            <div class="device-form-row align-self-center">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" data-field="DowntimeEnabled" @(settings.DowntimeEnabled ? "checked" : "")>
+                                                    <label class="form-check-label device-label">Downtime</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-light py-2 d-flex justify-content-between align-items-center">
+                                    <small class="text-muted status-text" style="font-size: 0.75rem;">Belum disimpan</small>
+                                    <button type="button" class="btn btn-primary btn-sm btn-save-device-settings" data-device-key="@device.DeviceKey">
+                                        <i class="fas fa-save"></i> Simpan
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        function collectDeviceSettings($card) {
+            return {
+                deviceKey: $card.data('device-key'),
+                maxCapacity: parseFloat($card.find('[data-field="MaxCapacity"]').val()) || 0,
+                deviceCategory: $card.find('[data-field="DeviceCategory"]').val() || 'Billboard',
+                downtimeEnabled: $card.find('[data-field="DowntimeEnabled"]').is(':checked'),
+                downtimeStart: $card.find('[data-field="DowntimeStart"]').val() || '22:00',
+                downtimeEnd: $card.find('[data-field="DowntimeEnd"]').val() || '06:00',
+                tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
+                loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
+                loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
+                emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,
+                emaLowerThreshold: parseInt($card.find('[data-field="EmaLowerThreshold"]').val()) || 0,
+                emaFibUpper: 0,
+                emaFibLower: 0,
+                controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff'
+            };
+        }
+
+        function timeSpanFromString(timeStr) {
+            var parts = timeStr.split(':');
+            var hours = parseInt(parts[0]) || 0;
+            var minutes = parseInt(parts[1]) || 0;
+            return hours.toString().padStart(2, '0') + ':' + minutes.toString().padStart(2, '0') + ':00';
+        }
+
+        function saveDeviceSettings(deviceKey, settings, $card) {
+            var $status = $card.find('.status-text');
+            $status.text('Menyimpan...');
+
+            var payload = {
+                maxCapacity: settings.maxCapacity,
+                deviceCategory: settings.deviceCategory,
+                downtimeEnabled: settings.downtimeEnabled,
+                downtimeStart: timeSpanFromString(settings.downtimeStart),
+                downtimeEnd: timeSpanFromString(settings.downtimeEnd),
+                tariffPerKWh: settings.tariffPerKWh,
+                loadNormalThreshold: settings.loadNormalThreshold,
+                loadMediumThreshold: settings.loadMediumThreshold,
+                emaUpperThreshold: settings.emaUpperThreshold,
+                emaLowerThreshold: settings.emaLowerThreshold,
+                emaFibUpper: settings.emaFibUpper,
+                emaFibLower: settings.emaFibLower,
+                controlMode: settings.controlMode
+            };
+
+            $.ajax({
+                url: '/api/Api/device-settings/' + encodeURIComponent(deviceKey),
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function(response) {
+                    if (response.success) {
+                        $status.text('Tersimpan').removeClass('text-muted').addClass('text-success');
+                        setTimeout(function() {
+                            $status.text('Belum disimpan').removeClass('text-success').addClass('text-muted');
+                        }, 3000);
+                    } else {
+                        $status.text('Gagal: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Error';
+                    try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
+                    $status.text('Gagal: ' + msg);
+                }
+            });
+        }
+
+        $(document).on('click', '.btn-save-device-settings', function() {
+            var $card = $(this).closest('.device-settings-card');
+            var deviceKey = $card.data('device-key');
+            var settings = collectDeviceSettings($card);
+            saveDeviceSettings(deviceKey, settings, $card);
+        });
+
+        $('#btnSaveAllDeviceSettings').on('click', function() {
+            var allSettings = [];
+            $('.device-settings-card').each(function() {
+                var $card = $(this);
+                allSettings.push({
+                    deviceKey: $card.data('device-key'),
+                    maxCapacity: parseFloat($card.find('[data-field="MaxCapacity"]').val()) || 0,
+                    deviceCategory: $card.find('[data-field="DeviceCategory"]').val() || 'Billboard',
+                    downtimeEnabled: $card.find('[data-field="DowntimeEnabled"]').is(':checked'),
+                    downtimeStart: timeSpanFromString($card.find('[data-field="DowntimeStart"]').val() || '22:00'),
+                    downtimeEnd: timeSpanFromString($card.find('[data-field="DowntimeEnd"]').val() || '06:00'),
+                    tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
+                    loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
+                    loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
+                    emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,
+                    emaLowerThreshold: parseInt($card.find('[data-field="EmaLowerThreshold"]').val()) || 0,
+                    emaFibUpper: 0,
+                    emaFibLower: 0,
+                    controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff'
+                });
+            });
+
+            $.ajax({
+                url: '/api/Api/device-settings/bulk',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ settings: allSettings }),
+                success: function(response) {
+                    if (response.success) {
+                        $('.status-text').text('Tersimpan').removeClass('text-muted').addClass('text-success');
+                        setTimeout(function() {
+                            $('.status-text').text('Belum disimpan').removeClass('text-success').addClass('text-muted');
+                        }, 3000);
+                    } else {
+                        alert('Gagal menyimpan: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Error';
+                    try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
+                    alert('Gagal menyimpan: ' + msg);
+                }
+            });
+        });
+    })();
+</script>

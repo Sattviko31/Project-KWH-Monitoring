@@ -49,6 +49,7 @@ namespace KWHMonitoring.Models
         public DbSet<AnomalyLog> AnomalyLogs { get; set; }
         public DbSet<AnomalyChartSnapshot> AnomalyChartSnapshots { get; set; }
         public DbSet<AnomalyMonthlyReport> AnomalyMonthlyReports { get; set; }
+        public DbSet<DeviceSettings> DeviceSettings { get; set; }
         public DbSet<AppLog> AppLogs { get; set; }
         public DbSet<AppSettingsRecord> AppSettingsRecords { get; set; }
         public DbSet<ColumnMapping> ColumnMappings { get; set; }
@@ -213,6 +214,31 @@ namespace KWHMonitoring.Models
                     .WithOne(x => x.ChartSnapshot)
                     .HasForeignKey<AnomalyChartSnapshot>(x => x.AnomalyLogId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<DeviceSettings>(entity =>
+            {
+                entity.ToTable("DeviceSettings");
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.MaxCapacity).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.DeviceCategory).HasColumnType("nvarchar(100)").HasMaxLength(100);
+                entity.Property(x => x.DowntimeEnabled);
+                entity.Property(x => x.DowntimeStart).HasColumnType("time");
+                entity.Property(x => x.DowntimeEnd).HasColumnType("time");
+                entity.Property(x => x.TariffPerKWh).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.LoadNormalThreshold);
+                entity.Property(x => x.LoadMediumThreshold);
+                entity.Property(x => x.EmaUpperThreshold);
+                entity.Property(x => x.EmaLowerThreshold);
+                entity.Property(x => x.EmaFibUpper).HasColumnType("float");
+                entity.Property(x => x.EmaFibLower).HasColumnType("float");
+                entity.Property(x => x.ControlMode).HasColumnType("varchar(50)").HasMaxLength(50);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
+
+                entity.HasIndex(x => x.DeviceKey).IsUnique().HasName("IX_DeviceSettings_DeviceKey");
             });
 
             modelBuilder.Entity<AnomalyMonthlyReport>(entity =>

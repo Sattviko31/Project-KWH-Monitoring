@@ -10,6 +10,9 @@ namespace KWHMonitoring.Models
         public string GroupName { get; set; } = string.Empty;
         public string DeviceCategory { get; set; } = "Billboard";
         public string ControlMode { get; set; } = "OnOff";
+        public decimal MaxCapacity { get; set; } = 0m;
+        public int LoadNormalThreshold { get; set; } = 30;
+        public int LoadMediumThreshold { get; set; } = 70;
         public DateTime Waktu_Server { get; set; }
         public decimal Volt_R { get; set; }
         public decimal? Volt_S { get; set; }
@@ -50,19 +53,19 @@ namespace KWHMonitoring.Models
 
         private string GetStatus()
         {
-            const decimal maxCapacity = 30000m;
-            var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
-            if (loadPercent > 70) return "HIGH";
-            if (loadPercent > 30) return "MEDIUM";
+            if (MaxCapacity <= 0) return "NORMAL";
+            var loadPercent = Math.Min((Daya_Watt / MaxCapacity) * 100, 100);
+            if (loadPercent > LoadMediumThreshold) return "HIGH";
+            if (loadPercent > LoadNormalThreshold) return "MEDIUM";
             return "NORMAL";
         }
 
         private string GetStatusColor()
         {
-            const decimal maxCapacity = 30000m;
-            var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
-            if (loadPercent > 70) return "danger";
-            if (loadPercent > 30) return "warning";
+            if (MaxCapacity <= 0) return "success";
+            var loadPercent = Math.Min((Daya_Watt / MaxCapacity) * 100, 100);
+            if (loadPercent > LoadMediumThreshold) return "danger";
+            if (loadPercent > LoadNormalThreshold) return "warning";
             return "success";
         }
 
@@ -75,10 +78,10 @@ namespace KWHMonitoring.Models
 
         private string GetLoadColor()
         {
-            const decimal maxCapacity = 30000m;
-            var loadPercent = Math.Min((Daya_Watt / maxCapacity) * 100, 100);
-            if (loadPercent > 80) return "danger";
-            if (loadPercent > 60) return "warning";
+            if (MaxCapacity <= 0) return "secondary";
+            var loadPercent = Math.Min((Daya_Watt / MaxCapacity) * 100, 100);
+            if (loadPercent > LoadMediumThreshold) return "danger";
+            if (loadPercent > LoadNormalThreshold) return "warning";
             return "info";
         }
 

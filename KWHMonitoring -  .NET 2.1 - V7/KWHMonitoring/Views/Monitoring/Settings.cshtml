@@ -37,12 +37,12 @@
     </li>
     <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="categories-tab" data-toggle="tab" href="#categories" role="tab">
-            <i class="fas fa-tags"></i> <span>Categories</span>
+            <i class="fas fa-sliders-h"></i> <span>Per-Device</span>
         </a>
     </li>
     <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="ema-tab" data-toggle="tab" href="#ema" role="tab">
-            <i class="fas fa-chart-line"></i> <span>EMA & Downtime</span>
+            <i class="fas fa-chart-line"></i> <span>EMA Settings</span>
         </a>
     </li>
     <li class="nav-item" role="presentation">
@@ -269,108 +269,7 @@
                 </div>
             </div>
 
-            <!-- 3. LOAD GAUGE -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-warning-soft">
-                        <i class="fas fa-tachometer-alt text-warning"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Load Gauge Capacity & Threshold</h5>
-                        <p>Konfigurasi kapasitas maksimal dan batas status beban</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <div class="settings-grid">
-                        <div class="settings-field">
-                            <label class="form-label">Maximal Capacity (Watt)</label>
-                            <input type="number" class="form-control" id="maxCapacity"
-                                   value="@GetSetting("Load.MaxCapacity", "30000")"
-                                   min="1000" max="1000000" step="1000" placeholder="30000">
-                            <small class="text-muted">Nilai 100% pada Load Gauge</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">Normal Threshold (%)</label>
-                            <input type="number" class="form-control" id="normalThreshold"
-                                   value="@GetSetting("Load.NormalThreshold", "30")"
-                                   min="10" max="50" placeholder="30">
-                            <small class="text-muted">Batas atas Normal (default: 30%)</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">Medium Threshold (%)</label>
-                            <input type="number" class="form-control" id="mediumThreshold"
-                                   value="@GetSetting("Load.MediumThreshold", "70")"
-                                   min="50" max="90" placeholder="70">
-                            <small class="text-muted">Batas atas Medium (default: 70%)</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">High Threshold (%)</label>
-                            <input type="text" class="form-control" id="highThreshold"
-                                   value="> 70%" readonly>
-                            <small class="text-muted">Otomatis > Medium Threshold</small>
-                        </div>
-                    </div>
-
-                    @* <!-- Preview Load Gauge -->
-                    <div class="settings-preview-box">
-                        <div class="settings-preview-label"><i class="fas fa-eye"></i> Preview</div>
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <div class="settings-threshold-card settings-threshold-normal">
-                                    <div class="settings-threshold-label">Normal</div>
-                                    <div class="settings-threshold-value" id="previewNormal">9,000 W</div>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar bg-success" style="width: 30%"></div>
-                                    </div>
-                                    <small>≤ 30%</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="settings-threshold-card settings-threshold-medium">
-                                    <div class="settings-threshold-label">Medium</div>
-                                    <div class="settings-threshold-value" id="previewMedium">21,000 W</div>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar bg-warning" style="width: 70%"></div>
-                                    </div>
-                                    <small>31% - 70%</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="settings-threshold-card settings-threshold-high">
-                                    <div class="settings-threshold-label">High</div>
-                                    <div class="settings-threshold-value" id="previewHigh">30,000 W</div>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar bg-danger" style="width: 100%"></div>
-                                    </div>
-                                    <small>> 70%</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div> *@
-                </div>
-            </div>
-
-            <!-- 4. TARIFF -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-success-soft">
-                        <i class="fas fa-money-bill-wave text-success"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Tarif Listrik per kWh</h5>
-                        <p>Atur tarif listrik untuk menghitung estimasi biaya penggunaan energi</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <div class="settings-grid">
-                        <div class="settings-field">
-                            <label class="form-label">Tarif per kWh (Rp)</label>
-                            <input type="number" class="form-control" id="tariffPerKWh" value="1500" min="0" step="50">
-                            <small class="text-muted">/kWh — digunakan untuk estimasi biaya di Usage Statistics</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Per-device settings now manage load thresholds, capacity, tariff and EMA per device -->
 
         </div>
 
@@ -397,109 +296,9 @@
         </form>
     </div>
 
-    <!-- ==================== CATEGORIES SETTINGS TAB ==================== -->
+    <!-- ==================== DEVICE SETTINGS TAB ==================== -->
     <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
-        <div class="settings-section-list">
-
-            <!-- Device Control Mode -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-primary-soft">
-                        <i class="fas fa-toggle-on text-primary"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Device Control Mode</h5>
-                        <p>Atur preset mode kontrol relay untuk semua device</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <div class="row align-items-end g-3">
-                        <div class="col-md-6 col-lg-5 col-xl-4">
-                            <label class="form-label">Global Control Mode</label>
-                            <select class="form-select" id="globalControlMode">
-                                <option value="OnOff">ON/OFF (1 relay)</option>
-                                <option value="Toggle">Toggle (1 relay)</option>
-                                <option value="Pulse">Pulse (2 relay)</option>
-                                <option value="Toggle2Relay">Toggle 2 Relay</option>
-                                <option value="ToggleAll">Toggle All</option>
-                            </select>
-                            <small class="text-muted d-block mt-1">Preset ini diterapkan ke semua device</small>
-                        </div>
-                        <div class="col-md-6 col-lg-4">
-                            <button type="button" class="btn btn-primary btn-sm" id="btnSaveControlMode">
-                                <i class="fas fa-save"></i> Simpan Preset
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add New Category -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-success-soft">
-                        <i class="fas fa-plus-circle text-success"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Tambah Kategori Baru</h5>
-                        <p>Buat kategori device baru dengan konfigurasi icon, warna, dan deskripsi</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <div class="settings-grid">
-                        <div class="settings-field">
-                            <label class="form-label">Nama Kategori</label>
-                            <input type="text" class="form-control" id="newCategoryName" placeholder="Contoh: Videotron" maxlength="50">
-                            <small class="text-muted">Nama unik tanpa spasi (maks 50 karakter)</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">Icon Emoji</label>
-                            <input type="text" class="form-control" id="newCategoryIcon" placeholder="🟢" maxlength="4" style="font-size:1.2rem;">
-                            <small class="text-muted">Emoji untuk identifikasi visual</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">Warna</label>
-                            <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="newCategoryColor" value="#6c757d" title="Pilih warna kategori">
-                                <input type="text" class="form-control" id="newCategoryColorHex" value="#6c757d" placeholder="#6c757d" maxlength="7">
-                            </div>
-                            <small class="text-muted">Warna badge dan selector kategori</small>
-                        </div>
-                        <div class="settings-field">
-                            <label class="form-label">Deskripsi</label>
-                            <input type="text" class="form-control" id="newCategoryDescription" placeholder="Deskripsi singkat kategori ini">
-                            <small class="text-muted">Opsional — penjelasan kegunaan kategori</small>
-                        </div>
-                    </div>
-                    <div class="settings-section-footer">
-                        <button type="button" class="btn btn-success btn-sm" id="btnAddCategory">
-                            <i class="fas fa-plus"></i> Tambah Kategori
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Existing Categories List -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-primary-soft">
-                        <i class="fas fa-tags text-primary"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Daftar Kategori</h5>
-                        <p>Semua kategori yang tersedia — klik edit untuk mengubah, hapus untuk menghapus</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <div id="categoriesListContainer">
-                        <div class="text-center py-4">
-                            <i class="fas fa-spinner fa-spin text-muted"></i> Memuat daftar kategori...
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
+        @await Html.PartialAsync("_DeviceSettingsTab")
     </div>
 
     <!-- ==================== NOTIFICATION SETTINGS TAB ==================== -->
@@ -770,7 +569,7 @@
         </form>
     </div>
 
-    <!-- ==================== EMA & DOWNTIME SETTINGS TAB ==================== -->
+    <!-- ==================== EMA SETTINGS TAB ==================== -->
     <div class="tab-pane fade" id="ema" role="tabpanel" aria-labelledby="ema-tab">
         <form id="emaSettingsForm">
         <div class="settings-section-list">
@@ -787,64 +586,6 @@
                     </div>
                 </div>
                 <div class="settings-section-body">
-                    <!-- Threshold Mode -->
-                    <div class="settings-field settings-field-full mb-3">
-                        <label class="form-label fw-bold">Threshold Mode</label>
-                        <div class="settings-btn-group" role="group">
-                            <input type="radio" class="btn-check" name="thresholdMode" id="emaModeManual" value="manual" checked>
-                            <label class="btn btn-outline-primary btn-sm" for="emaModeManual">
-                                <i class="fas fa-percentage"></i> Manual (%)
-                            </label>
-                            <input type="radio" class="btn-check" name="thresholdMode" id="emaModeFibonacci" value="fibonacci">
-                            <label class="btn btn-outline-primary btn-sm" for="emaModeFibonacci">
-                                <i class="fas fa-infinity"></i> Fibonacci (φ)
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="emaManualSettings">
-                        <div class="settings-grid">
-                            <div class="settings-field">
-                                <label class="form-label">Upper Threshold Deviation (%)</label>
-                                <input type="number" class="form-control" id="emaUpperThreshold" value="30" min="1" max="1000">
-                                <small class="text-muted">Persentase di atas EMA → deteksi OVERLOAD</small>
-                            </div>
-                            <div class="settings-field">
-                                <label class="form-label">Lower Threshold Deviation (%)</label>
-                                <input type="number" class="form-control" id="emaLowerThreshold" value="50" min="1" max="100">
-                                <small class="text-muted">Persentase di bawah EMA → deteksi DEVICE DROP</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="emaFibonacciSettings" style="display: none;">
-                        <div class="settings-grid">
-                            <div class="settings-field">
-                                <label class="form-label">Upper Threshold (φ)</label>
-                                <select class="form-select" id="emaFibUpper">
-                                    <option value="1.272">1.272 (√φ)</option>
-                                    <option value="1.618" selected>1.618 (φ - Golden Ratio)</option>
-                                    <option value="2.000">2.000 (2×)</option>
-                                    <option value="2.618">2.618 (φ²)</option>
-                                    <option value="3.236">3.236 (2φ)</option>
-                                    <option value="4.236">4.236 (φ³)</option>
-                                </select>
-                            </div>
-                            <div class="settings-field">
-                                <label class="form-label">Lower Threshold (1/φ)</label>
-                                <select class="form-select" id="emaFibLower">
-                                    <option value="0.236">0.236</option>
-                                    <option value="0.382">0.382</option>
-                                    <option value="0.500">0.500</option>
-                                    <option value="0.618" selected>0.618 (1/φ)</option>
-                                    <option value="0.786">0.786</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr class="settings-divider">
-
                     <div class="settings-grid">
                         <div class="settings-field">
                             <label class="form-label">EMA Period</label>
@@ -895,68 +636,6 @@
                 </div>
             </div>
 
-            <!-- Downtime Period — Per Category -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <div class="settings-section-icon bg-dark-soft">
-                        <i class="fas fa-moon text-dark"></i>
-                    </div>
-                    <div class="settings-section-title">
-                        <h5>Downtime Period</h5>
-                        <p>Periode listrik sengaja dimatikan per kategori — DROP ditahan, OVERLOAD = alert</p>
-                    </div>
-                </div>
-                <div class="settings-section-body">
-                    <!-- Preset Buttons -->
-                    <div class="settings-field settings-field-full mb-3">
-                        <label class="form-label fw-bold">Preset Waktu <small class="text-muted">(kategori aktif)</small></label>
-                        <div class="settings-preset-grid">
-                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="22" data-end="6" data-desc="Shift Malam - Listrik dimatikan">
-                                <i class="fas fa-moon"></i> Malam
-                                <small>22:00-06:00</small>
-                            </button>
-                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="12" data-end="13" data-desc="Istirahat Siang - Listrik dimatikan">
-                                <i class="fas fa-utensils"></i> Istirahat
-                                <small>12:00-13:00</small>
-                            </button>
-                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="21" data-end="5" data-desc="Shift Malam Awal - Listrik dimatikan">
-                                <i class="fas fa-cloud-moon"></i> Malam Awal
-                                <small>21:00-05:00</small>
-                            </button>
-                            <button type="button" class="btn btn-outline-dark btn-sm preset-btn" data-start="0" data-end="0" data-desc="Custom downtime period">
-                                <i class="fas fa-sliders-h"></i> Custom
-                                <small>Atur manual</small>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Timeline Visual -->
-                    <div class="settings-preview-box">
-                        <div class="settings-preview-label"><i class="fas fa-clock"></i> Timeline</div>
-                        <div style="position: relative; height: 28px; background: #198754; border-radius: 8px; overflow: hidden;">
-                            <div id="downtimeTimelineBar" style="position: absolute; top: 0; height: 100%; background: #1a1d23; transition: all 0.3s;"></div>
-                        </div>
-                        <div class="d-flex justify-content-between mt-1" style="font-size: 0.7rem; color: #6c757d;">
-                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-                        </div>
-                        <div class="d-flex justify-content-between" style="font-size: 0.7rem;">
-                            <span class="text-success"><i class="fas fa-circle"></i> Normal</span>
-                            <span class="text-dark"><i class="fas fa-circle"></i> Downtime</span>
-                        </div>
-                    </div>
-
-                    <!-- Category Sub-tabs (dynamically populated) -->
-                    <ul class="nav nav-tabs mb-3" id="downtimeCategoryTabs" role="tablist">
-                    </ul>
-
-                    <div class="tab-content" id="downtimeCategoryTabContent">
-                        <div class="text-center py-4 text-muted">
-                            <i class="fas fa-spinner fa-spin"></i> Memuat kategori...
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
         <!-- Sticky Save Bar -->
@@ -964,14 +643,14 @@
             <div class="settings-save-bar-inner">
                 @* <div class="settings-save-bar-info">
                     <i class="fas fa-info-circle text-muted"></i>
-                    <span>Pengaturan EMA & Downtime akan tersimpan ke database</span>
+                    <span>Pengaturan EMA akan tersimpan ke database</span>
                 </div> *@
                 <div class="settings-save-bar-actions">
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetEmaSettings">
                         <i class="fas fa-undo"></i> Reset Default
                     </button>
                     <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSettings">
-                        <i class="fas fa-save"></i> Save Settings
+                        <i class="fas fa-save"></i> Save EMA Settings
                     </button>
                 </div>
             </div>
@@ -1200,13 +879,6 @@
                 loadUserManagementTab();
             }
 
-            updatePreview();
-
-            // Update preview saat nilai berubah
-            $('#maxCapacity, #normalThreshold, #mediumThreshold').on('input change', function() {
-                updatePreview();
-            });
-
             // Sync all intervals
             $('#btnSyncIntervals').click(function() {
                 var dashboardValue = $('#dashboardInterval').val();
@@ -1280,11 +952,7 @@
                             'Interval.Details': $('#detailsInterval').val(),
                             'Interval.Anomaly': $('#anomalyInterval').val(),
                             'Chart.DataPoints': $('#chartDataPoints').val(),
-                            'Interval.AutoScan': $('#autoScanInterval').val(),
-                            'Load.MaxCapacity': $('#maxCapacity').val(),
-                            'Load.NormalThreshold': $('#normalThreshold').val(),
-                            'Load.MediumThreshold': $('#mediumThreshold').val(),
-                            'Tariff.PerKWh': $('#tariffPerKWh').val()
+                            'Interval.AutoScan': $('#autoScanInterval').val()
                         };
 
                         $.ajax({
@@ -1326,11 +994,6 @@
                     $('#anomalyInterval').val('10');
                     $('#chartDataPoints').val('20');
                     $('#autoScanInterval').val('60');
-                    $('#maxCapacity').val('30000');
-                    $('#normalThreshold').val('30');
-                    $('#mediumThreshold').val('70');
-                    $('#tariffPerKWh').val('1500');
-                    updatePreview();
                     showNotification('Settings reset to default. Click Save to apply.', 'info');
                 }
             });
@@ -1451,12 +1114,10 @@
                         AutoScan: $('#autoScanInterval').val()
                     },
                     LoadGauge: {
-                        MaxCapacity: $('#maxCapacity').val(),
-                        NormalThreshold: $('#normalThreshold').val(),
-                        MediumThreshold: $('#mediumThreshold').val()
+                        // Per-device: managed in Per-Device Settings tab
                     },
                     Tariff: {
-                        PerKWh: $('#tariffPerKWh').val()
+                        // Per-device: managed in Per-Device Settings tab
                     }
                 };
 
@@ -1787,19 +1448,6 @@
             $('#monthlyReportDay').val(1);
             $('#monthlyReportTime').val('08:00');
             showNotification('Notification settings reset to default. Click Save to apply.', 'info');
-        }
-
-        function updatePreview() {
-            var maxCapacity = parseInt($('#maxCapacity').val()) || 30000;
-            var normalThreshold = parseInt($('#normalThreshold').val()) || 30;
-            var mediumThreshold = parseInt($('#mediumThreshold').val()) || 70;
-
-            var normalWatt = Math.round(maxCapacity * (normalThreshold / 100));
-            var mediumWatt = Math.round(maxCapacity * (mediumThreshold / 100));
-
-            $('#previewNormal').text(formatNumber(normalWatt) + ' W');
-            $('#previewMedium').text(formatNumber(mediumWatt) + ' W');
-            $('#previewHigh').text(formatNumber(maxCapacity) + ' W');
         }
 
         function formatNumber(num) {
@@ -2341,201 +1989,10 @@
         }
 
         // ============================================
-        // CATEGORY MANAGEMENT
-        // ============================================
-
-        var allCategories = [];
-
-        // Sync color picker with hex input
-        $('#newCategoryColor').on('input', function() {
-            $('#newCategoryColorHex').val($(this).val());
-        });
-        $('#newCategoryColorHex').on('input', function() {
-            var val = $(this).val();
-            if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-                $('#newCategoryColor').val(val);
-            }
-        });
-
-        // Add new category
-        $('#btnAddCategory').click(function() {
-            var name = $('#newCategoryName').val().trim();
-            var icon = $('#newCategoryIcon').val().trim() || '⚪';
-            var color = $('#newCategoryColorHex').val().trim() || '#6c757d';
-            var description = $('#newCategoryDescription').val().trim();
-
-            if (!name) {
-                showNotification('Nama kategori wajib diisi', 'danger');
-                return;
-            }
-
-            var btn = $(this);
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
-
-            $.ajax({
-                url: '/api/Api/categories',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ name: name, icon: icon, color: color, description: description }),
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Kategori "' + name + '" berhasil ditambahkan!', 'success');
-                        $('#newCategoryName').val('');
-                        $('#newCategoryIcon').val('');
-                        $('#newCategoryColor').val('#6c757d');
-                        $('#newCategoryColorHex').val('#6c757d');
-                        $('#newCategoryDescription').val('');
-                        loadCategoriesList();
-                    }
-                },
-                error: function(xhr) {
-                    var msg = 'Gagal menambahkan kategori';
-                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
-                    showNotification(msg, 'danger');
-                },
-                complete: function() {
-                    btn.prop('disabled', false).html('<i class="fas fa-plus"></i> Tambah Kategori');
-                }
-            });
-        });
-
-        // Load categories list
-        function loadCategoriesList() {
-            $.ajax({
-                url: '/api/Api/categories',
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    allCategories = data || [];
-                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
-                    renderCategoriesList();
-                },
-                error: function() {
-                    $('#categoriesListContainer').html('<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle"></i> Gagal memuat daftar kategori</div>');
-                }
-            });
-        }
-
-        function renderCategoriesList() {
-            if (allCategories.length === 0) {
-                $('#categoriesListContainer').html('<div class="text-center py-4 text-muted"><i class="fas fa-tags"></i> Belum ada kategori</div>');
-                return;
-            }
-
-            var html = '<div class="list-group">';
-            allCategories.forEach(function(cat) {
-                html += '<div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-category="' + cat.name + '">';
-                html += '  <div class="d-flex align-items-center gap-3">';
-                html += '    <span class="cat-dot" style="display:inline-block;width:24px;height:24px;border-radius:50%;background:' + cat.color + ';text-align:center;line-height:24px;font-size:0.8rem;">' + cat.icon + '</span>';
-                html += '    <div>';
-                html += '      <strong>' + cat.name + '</strong>';
-                html += '      <div class="text-muted small">' + (cat.description || 'Tidak ada deskripsi') + '</div>';
-                html += '    </div>';
-                html += '  </div>';
-                html += '  <div class="d-flex gap-2 align-items-center">';
-                html += '    <span class="badge" style="background:' + cat.color + ';color:#fff;font-size:0.7rem;">' + cat.icon + ' ' + cat.name + '</span>';
-                html += '    <button class="btn btn-outline-primary btn-sm btn-edit-category" data-name="' + cat.name + '" data-icon="' + cat.icon + '" data-color="' + cat.color + '" data-desc="' + (cat.description || '') + '" title="Edit"><i class="fas fa-pen"></i></button>';
-                html += '    <button class="btn btn-outline-danger btn-sm btn-delete-category" data-name="' + cat.name + '" title="Hapus"><i class="fas fa-trash"></i></button>';
-                html += '  </div>';
-                html += '</div>';
-            });
-            html += '</div>';
-            $('#categoriesListContainer').html(html);
-        }
-
-        // Edit category
-        $(document).on('click', '.btn-edit-category', function() {
-            var name = $(this).data('name');
-            var icon = $(this).data('icon');
-            var color = $(this).data('color');
-            var desc = $(this).data('desc');
-
-            var $item = $(this).closest('.list-group-item');
-            var html = '<div class="d-flex align-items-center gap-2 flex-wrap w-100">';
-            html += '  <input type="text" class="form-control form-control-sm" id="editCatIcon" value="' + icon + '" style="width:60px;font-size:1.1rem;" placeholder="Icon">';
-            html += '  <input type="color" class="form-control form-control-sm form-control-color" id="editCatColor" value="' + color + '" style="width:40px;padding:2px;">';
-            html += '  <input type="text" class="form-control form-control-sm" id="editCatDesc" value="' + desc + '" style="flex:1;min-width:150px;" placeholder="Deskripsi">';
-            html += '  <button class="btn btn-success btn-sm btn-save-edit" data-name="' + name + '"><i class="fas fa-check"></i></button>';
-            html += '  <button class="btn btn-secondary btn-sm btn-cancel-edit"><i class="fas fa-times"></i></button>';
-            html += '</div>';
-
-            $item.html(html);
-        });
-
-        $(document).on('click', '.btn-save-edit', function() {
-            var name = $(this).data('name');
-            var icon = $('#editCatIcon').val().trim() || '⚪';
-            var color = $('#editCatColor').val() || '#6c757d';
-            var desc = $('#editCatDesc').val().trim();
-
-            $.ajax({
-                url: '/api/Api/categories/' + encodeURIComponent(name),
-                method: 'PUT',
-                contentType: 'application/json',
-                data: JSON.stringify({ name: name, icon: icon, color: color, description: desc }),
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Kategori "' + name + '" berhasil diperbarui', 'success');
-                        loadCategoriesList();
-                    }
-                },
-                error: function(xhr) {
-                    var msg = 'Gagal memperbarui kategori';
-                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
-                    showNotification(msg, 'danger');
-                }
-            });
-        });
-
-        $(document).on('click', '.btn-cancel-edit', function() {
-            renderCategoriesList();
-        });
-
-        // Delete category
-        $(document).on('click', '.btn-delete-category', function() {
-            var name = $(this).data('name');
-            if (!confirm('Hapus kategori "' + name + '"?\n\nSemua device dengan kategori ini akan dipindahkan ke "Billboard".')) return;
-
-            $.ajax({
-                url: '/api/Api/categories/' + encodeURIComponent(name),
-                method: 'DELETE',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification(response.message, 'success');
-                        loadCategoriesList();
-                    }
-                },
-                error: function(xhr) {
-                    var msg = 'Gagal menghapus kategori';
-                    try { msg = xhr.responseJSON.error || msg; } catch(e) {}
-                    showNotification(msg, 'danger');
-                }
-            });
-        });
-
-        // Load categories when tab is shown
-        $(document).on('shown.bs.tab', '#categories-tab', function() {
-            loadCategoriesList();
-        });
-
-        // Also load on page init in case tab is already visible
-        loadCategoriesList();
-
-        // ============================================
         // EMA SETTINGS
         // ============================================
 
         loadEmaSettings();
-
-        $('input[name="thresholdMode"]').change(function() {
-            if ($(this).val() === 'manual') {
-                $('#emaManualSettings').show();
-                $('#emaFibonacciSettings').hide();
-            } else {
-                $('#emaManualSettings').hide();
-                $('#emaFibonacciSettings').show();
-            }
-        });
 
         $('#btnSaveEmaSettings').click(function() {
             saveEmaSettings();
@@ -2551,24 +2008,10 @@
             // Helper: apply EMA values to form
             function applyEmaValues(data) {
                 $('#emaPeriod').val(data.emaPeriod || 20);
-                $('#emaUpperThreshold').val(data.emaUpperThreshold || 30);
-                $('#emaLowerThreshold').val(data.emaLowerThreshold || 50);
-                $('#emaFibUpper').val(data.emaFibUpper || 1.618);
-                $('#emaFibLower').val(data.emaFibLower || 0.618);
                 $('#emaRefreshInterval').val(data.refreshInterval || 10);
                 $('#emaShowLine').prop('checked', data.emaShowLine !== false);
                 $('#emaShowThresholds').prop('checked', data.emaShowThresholds !== false);
                 $('#useInitial100ForEma').prop('checked', data.useInitial100ForEma || false);
-
-                if (data.emaMode === 'fibonacci') {
-                    $('#emaModeFibonacci').prop('checked', true);
-                    $('#emaManualSettings').hide();
-                    $('#emaFibonacciSettings').show();
-                } else {
-                    $('#emaModeManual').prop('checked', true);
-                    $('#emaManualSettings').show();
-                    $('#emaFibonacciSettings').hide();
-                }
             }
 
             // Load EMA settings first
@@ -2598,7 +2041,7 @@
                             console.log('Using default anomalyMaxConfirmations: 3');
                         },
                         complete: function() {
-                            loadAllCategoryDowntimeSettings();
+                            console.log('EMA settings loaded');
                         }
                     });
                 }
@@ -2611,11 +2054,6 @@
 
             var emaSettingsData = {
                 emaPeriod: parseInt($('#emaPeriod').val()),
-                emaMode: $('input[name="thresholdMode"]:checked').val(),
-                emaUpperThreshold: parseInt($('#emaUpperThreshold').val()),
-                emaLowerThreshold: parseInt($('#emaLowerThreshold').val()),
-                emaFibUpper: parseFloat($('#emaFibUpper').val()),
-                emaFibLower: parseFloat($('#emaFibLower').val()),
                 emaShowLine: $('#emaShowLine').is(':checked'),
                 emaShowThresholds: $('#emaShowThresholds').is(':checked'),
                 useInitial100ForEma: $('#useInitial100ForEma').is(':checked'),
@@ -2641,385 +2079,26 @@
                 })
             });
 
-            // Per-category downtime save
-            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
-            var catDowntimeRequests = categories.map(function(cat) {
-                var catData = {
-                    enabled: $('#downtime' + cat + 'Enabled').is(':checked'),
-                    startHour: parseInt($('#downtime' + cat + 'StartHour').val()) || 22,
-                    endHour: parseInt($('#downtime' + cat + 'EndHour').val()) || 6,
-                    description: $('#downtime' + cat + 'Description').val() || ''
-                };
-                categoryDowntimeSettings[cat] = catData;
-                return $.ajax({
-                    url: '/api/Api/downtime-settings/' + cat,
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(catData)
-                });
-            });
-
-            var allRequests = [emaReq, anomalyMaxConfirmationsReq].concat(catDowntimeRequests);
-
-            $.when.apply($, allRequests).done(function() {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                showNotification('EMA & Downtime settings saved successfully!', 'success');
-                loadAllCategoryDowntimeStatus();
+            $.when(emaReq, anomalyMaxConfirmationsReq).done(function() {
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save EMA Settings');
+                showNotification('EMA settings saved successfully!', 'success');
             }).fail(function() {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                showNotification('Error saving settings', 'danger');
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save EMA Settings');
+                showNotification('Error saving EMA settings', 'danger');
             });
         }
 
         function resetEmaSettings() {
             $('#emaPeriod').val(20);
-            $('#emaUpperThreshold').val(30);
-            $('#emaLowerThreshold').val(50);
-            $('#emaFibUpper').val(1.618);
-            $('#emaFibLower').val(0.618);
             $('#emaRefreshInterval').val(10);
             $('#anomalyMaxConfirmations').val(3);
             $('#emaShowLine').prop('checked', true);
             $('#emaShowThresholds').prop('checked', true);
             $('#useInitial100ForEma').prop('checked', false);
-            $('#emaModeManual').prop('checked', true);
-            $('#emaManualSettings').show();
-            $('#emaFibonacciSettings').hide();
 
-            // Reset per-category downtime
-            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
-            categories.forEach(function(cat) {
-                $('#downtime' + cat + 'Enabled').prop('checked', false);
-                $('#downtime' + cat + 'StartHour').val(22);
-                $('#downtime' + cat + 'EndHour').val(6);
-                $('#downtime' + cat + 'Description').val('');
-                updateCategoryDuration(cat);
-            });
-            clearPresetHighlight();
-            updateDowntimeTimeline();
-
-            showNotification('EMA & Downtime settings reset to default. Click Save to apply.', 'info');
+            showNotification('EMA settings reset to default. Click Save to apply.', 'info');
         }
 
-        // ============================================
-        // TARIFF SETTINGS (loaded into System tab)
-        // ============================================
-
-        loadTariffSettings();
-
-        function loadTariffSettings() {
-            $.ajax({
-                url: '/api/Api/get-tariff',
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    var tariffNumber = data.tariffPerKWh || 1500;
-                    if (typeof tariffNumber === 'string') {
-                        tariffNumber = parseFloat(tariffNumber) || 1500;
-                    }
-                    $('#tariffPerKWh').val(tariffNumber);
-                },
-                error: function() {
-                    console.log('Using default tariff: 1500');
-                }
-            });
-        }
-
-        // ============================================
-        // PER-CATEGORY DOWNTIME SETTINGS (Dynamic)
-        // ============================================
-
-        var categoryDowntimeSettings = {};
-        var categoryDowntimeMap = {};
-        var downtimeCategoriesMeta = []; // [{name, icon, color, description}]
-
-        function buildDowntimeCategoryTabs() {
-            var $tabs = $('#downtimeCategoryTabs');
-            var $content = $('#downtimeCategoryTabContent');
-            $tabs.empty();
-            $content.empty();
-
-            if (downtimeCategoriesMeta.length === 0) {
-                $content.html('<div class="text-center py-4 text-muted"><i class="fas fa-tags"></i> Tidak ada kategori. Tambahkan kategori di tab Categories.</div>');
-                return;
-            }
-
-            downtimeCategoriesMeta.forEach(function(cat, idx) {
-                var isActive = idx === 0;
-                var tabId = 'settingsDowntime' + cat.name;
-
-                // Build tab link
-                var $li = $('<li class="nav-item" role="presentation"></li>');
-                var $a = $('<a class="nav-link' + (isActive ? ' active' : '') + '" data-toggle="tab" href="#' + tabId + '" role="tab"></a>');
-                $a.html('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + cat.color + ';vertical-align:middle;margin-right:2px"></span> ' + cat.name);
-                $li.append($a);
-                $tabs.append($li);
-
-                // Build tab pane
-                var $pane = $('<div class="tab-pane' + (isActive ? ' active' : '') + '" id="' + tabId + '" role="tabpanel"></div>');
-                var html = '<div class="settings-grid">';
-                html += '<div class="settings-field settings-field-full">';
-                html += '  <div class="form-check form-switch">';
-                html += '    <input class="form-check-input cat-downtime-enabled" type="checkbox" id="downtime' + cat.name + 'Enabled" data-category="' + cat.name + '" style="width: 2.5em; height: 1.3em;">';
-                html += '    <label class="form-check-label fw-bold" for="downtime' + cat.name + 'Enabled">Aktifkan Downtime ' + cat.name + '</label>';
-                html += '  </div>';
-                html += '</div>';
-                html += '<div class="settings-field">';
-                html += '  <label class="form-label">Jam Mulai</label>';
-                html += '  <select class="form-select cat-downtime-start" id="downtime' + cat.name + 'StartHour" data-category="' + cat.name + '"></select>';
-                html += '</div>';
-                html += '<div class="settings-field">';
-                html += '  <label class="form-label">Jam Selesai</label>';
-                html += '  <select class="form-select cat-downtime-end" id="downtime' + cat.name + 'EndHour" data-category="' + cat.name + '"></select>';
-                html += '</div>';
-                html += '<div class="settings-field">';
-                html += '  <label class="form-label">Durasi</label>';
-                html += '  <div class="form-control bg-light text-center" id="downtime' + cat.name + 'Duration" readonly>8 jam</div>';
-                html += '</div>';
-                html += '<div class="settings-field">';
-                html += '  <label class="form-label">Deskripsi</label>';
-                html += '  <input type="text" class="form-control cat-downtime-desc" id="downtime' + cat.name + 'Description" data-category="' + cat.name + '" placeholder="Contoh: ' + cat.name + ' mati malam hari">';
-                html += '</div>';
-                html += '</div>';
-                html += '<div class="card border mt-3" id="downtime' + cat.name + 'StatusCard">';
-                html += '  <div class="card-body text-center">';
-                html += '    <h6 class="mb-1"><i class="fas fa-signal"></i> Status ' + cat.name + '</h6>';
-                html += '    <div id="downtime' + cat.name + 'Status" class="fs-5 fw-bold">';
-                html += '      <i class="fas fa-spinner fa-spin"></i> Memuat...';
-                html += '    </div>';
-                html += '  </div>';
-                html += '</div>';
-                $pane.html(html);
-                $content.append($pane);
-            });
-        }
-
-        function populateCategoryHourDropdowns() {
-            downtimeCategoriesMeta.forEach(function(cat) {
-                var $start = $('#downtime' + cat.name + 'StartHour');
-                var $end = $('#downtime' + cat.name + 'EndHour');
-                $start.empty();
-                $end.empty();
-                for (var h = 0; h < 24; h++) {
-                    var label = (h < 10 ? '0' : '') + h + ':00';
-                    $start.append('<option value="' + h + '">' + label + '</option>');
-                    $end.append('<option value="' + h + '">' + label + '</option>');
-                }
-                var s = categoryDowntimeSettings[cat.name];
-                if (s) {
-                    $start.val(s.startHour);
-                    $end.val(s.endHour);
-                }
-            });
-        }
-
-        function updateCategoryDuration(cat) {
-            var start = parseInt($('#downtime' + cat + 'StartHour').val());
-            var end = parseInt($('#downtime' + cat + 'EndHour').val());
-            var duration;
-            if (start === end) duration = 24;
-            else if (start < end) duration = end - start;
-            else duration = (24 - start) + end;
-            $('#downtime' + cat + 'Duration').text(duration + ' jam');
-        }
-
-        function loadCategoryDowntimeSettings() {
-            var categories = downtimeCategoriesMeta.map(function(c) { return c.name; });
-            var promises = categories.map(function(cat) {
-                return $.ajax({
-                    url: '/api/Api/downtime-settings/' + cat,
-                    method: 'GET',
-                    dataType: 'json',
-                    timeout: 10000,
-                    success: function(data) {
-                        categoryDowntimeSettings[cat] = {
-                            enabled: data.enabled || false,
-                            startHour: data.startHour != null ? data.startHour : 22,
-                            endHour: data.endHour != null ? data.endHour : 6,
-                            description: data.description || ''
-                        };
-                    }
-                });
-            });
-            return $.when.apply($, promises);
-        }
-
-        function loadAllCategoryDowntimeSettings() {
-            // Load categories from API first
-            $.ajax({
-                url: '/api/Api/categories',
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    downtimeCategoriesMeta = data || [];
-                    // Expose globally for _AnomalyService
-                    window._categoryMetaMap = {};
-                    (data || []).forEach(function(cat) {
-                        window._categoryMetaMap[cat.name] = { icon: cat.icon, color: cat.color, description: cat.description };
-                    });
-                    if (typeof injectCategoryStyles === 'function') injectCategoryStyles(data);
-                    buildDowntimeCategoryTabs();
-                    populateCategoryHourDropdowns();
-                    loadCategoryDowntimeSettings().then(function() {
-                        downtimeCategoriesMeta.forEach(function(cat) {
-                            var s = categoryDowntimeSettings[cat.name];
-                            if (s) {
-                                $('#downtime' + cat.name + 'Enabled').prop('checked', s.enabled);
-                                $('#downtime' + cat.name + 'StartHour').val(s.startHour);
-                                $('#downtime' + cat.name + 'EndHour').val(s.endHour);
-                                $('#downtime' + cat.name + 'Description').val(s.description);
-                                updateCategoryDuration(cat.name);
-                            }
-                        });
-                        updateDowntimeTimeline();
-                        loadAllCategoryDowntimeStatus();
-                    });
-                },
-                error: function() {
-                    $('#downtimeCategoryTabContent').html('<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle"></i> Gagal memuat kategori</div>');
-                }
-            });
-        }
-
-        function loadAllCategoryDowntimeStatus() {
-            downtimeCategoriesMeta.forEach(function(cat) {
-                checkCategoryDowntimeStatus(cat.name);
-            });
-        }
-
-        function checkCategoryDowntimeStatus(cat) {
-            $.ajax({
-                url: '/api/Api/downtime-status?category=' + encodeURIComponent(cat),
-                method: 'GET',
-                dataType: 'json',
-                timeout: 5000,
-                success: function(data) {
-                    categoryDowntimeMap[cat] = data.isDowntime || false;
-                    updateCategoryDowntimeStatusUI(cat);
-                },
-                error: function() {
-                    categoryDowntimeMap[cat] = false;
-                    updateCategoryDowntimeStatusUI(cat);
-                }
-            });
-        }
-
-        function updateCategoryDowntimeStatusUI(cat) {
-            var firstCat = Object.keys(categoryDowntimeSettings)[0];
-            if (!categoryDowntimeSettings[cat] && !categoryDowntimeSettings[firstCat]) {
-                console.log('⏳ Downtime settings not loaded yet, skipping UI update for ' + cat);
-                return;
-            }
-
-            var $status = $('#downtime' + cat + 'Status');
-            var $card = $('#downtime' + cat + 'StatusCard');
-            var isDowntime = categoryDowntimeMap[cat] || false;
-            var s = categoryDowntimeSettings[cat] || categoryDowntimeSettings[firstCat] || { enabled: false, startHour: 22, endHour: 6 };
-            var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
-            var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
-            if (isDowntime) {
-                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">Downtime period active (' + startLabel + '–' + endLabel + ') - Lower threshold disabled</small>');
-                $card.removeClass('border-success').addClass('border-danger');
-            } else {
-                $status.html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">Normal operation - All thresholds active</small>');
-                $card.removeClass('border-danger').addClass('border-success');
-            }
-        }
-
-        // Preset buttons — apply to active category
-        $('.preset-btn').click(function() {
-            var start = parseInt($(this).data('start'));
-            var end = parseInt($(this).data('end'));
-            var desc = $(this).data('desc');
-
-            clearPresetHighlight();
-            $(this).addClass('preset-active');
-
-            // Find currently active category
-            var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
-            var href = $activeTab.attr('href') || '';
-            var cat = href.replace('#settingsDowntime', '');
-
-            if (!cat) return;
-
-            if (start === 0 && end === 0) {
-                $('#downtime' + cat + 'StartHour').focus();
-            } else {
-                $('#downtime' + cat + 'StartHour').val(start);
-                $('#downtime' + cat + 'EndHour').val(end);
-                $('#downtime' + cat + 'Description').val(desc);
-                updateCategoryDuration(cat);
-            }
-
-            updateDowntimeTimeline();
-        });
-
-        // Category sub-tab switch — update timeline and clear preset highlight
-        $(document).on('shown.bs.tab', '#downtimeCategoryTabs .nav-link', function() {
-            updateDowntimeTimeline();
-            clearPresetHighlight();
-        });
-
-        // Per-category downtime hour change — update duration + timeline
-        $(document).on('change', '.cat-downtime-start, .cat-downtime-end', function() {
-            var cat = $(this).data('category');
-            updateCategoryDuration(cat);
-            updateDowntimeTimeline();
-        });
-
-        function clearPresetHighlight() {
-            $('.preset-btn').removeClass('preset-active');
-        }
-
-        function updateDowntimeTimeline() {
-            var $activeTab = $('#downtimeCategoryTabs .nav-link.active');
-            var href = $activeTab.attr('href') || '';
-            var activeCat = href.replace('#settingsDowntime', '');
-
-            if (!activeCat) return;
-
-            var start = parseInt($('#downtime' + activeCat + 'StartHour').val()) || 22;
-            var end = parseInt($('#downtime' + activeCat + 'EndHour').val()) || 6;
-            var bar = $('#downtimeTimelineBar');
-
-            var pctPerHour = 100 / 24;
-
-            if (start === end) {
-                bar.css({
-                    left: '0%',
-                    width: '100%',
-                    borderRadius: '8px',
-                    background: '#1a1d23'
-                });
-            } else if (start < end) {
-                bar.css({
-                    left: (start * pctPerHour) + '%',
-                    width: ((end - start) * pctPerHour) + '%',
-                    borderRadius: '0',
-                    background: '#1a1d23'
-                });
-            } else {
-                var startPct = start * pctPerHour;
-                var endPct = end * pctPerHour;
-                bar.css({
-                    left: '0%',
-                    width: '100%',
-                    borderRadius: '0',
-                    background: 'linear-gradient(to right, #1a1d23 0%, #1a1d23 ' + endPct + '%, #198754 ' + endPct + '%, #198754 ' + startPct + '%, #1a1d23 ' + startPct + '%, #1a1d23 100%)'
-                });
-                return;
-            }
-        }
-
-        function highlightMatchingPreset(startHour, endHour) {
-            clearPresetHighlight();
-            $('.preset-btn').each(function() {
-                var btnStart = parseInt($(this).data('start'));
-                var btnEnd = parseInt($(this).data('end'));
-                if (btnStart === startHour && btnEnd === endHour) {
-                    $(this).addClass('preset-active');
-                }
-            });
-        }
+        // Per-device settings handles its own downtime configuration
     </script>
 }

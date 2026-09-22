@@ -102,19 +102,13 @@ namespace KWHMonitoring.Models
 
         private string GetStatus()
         {
-            const decimal maxCapacity = 30000m;
-            var loadPercent = Math.Min(((Daya_Watt ?? 0) / maxCapacity) * 100, 100);
-            if (loadPercent > 70) return "HIGH";
-            if (loadPercent > 30) return "MEDIUM";
+            // Status is now computed per-device in controllers/API via GetDeviceStatus()
             return "NORMAL";
         }
 
         private string GetStatusColor()
         {
-            const decimal maxCapacity = 30000m;
-            var loadPercent = Math.Min(((Daya_Watt ?? 0) / maxCapacity) * 100, 100);
-            if (loadPercent > 70) return "danger";
-            if (loadPercent > 30) return "warning";
+            // Status is now computed per-device in controllers/API via GetDeviceStatus()
             return "success";
         }
 

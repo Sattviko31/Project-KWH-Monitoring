@@ -17,12 +17,14 @@ namespace KWHMonitoring.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IEmailService _emailService;
+        private readonly IDeviceSettingsService _deviceSettingsService;
         private static AppSettings _appSettings = new AppSettings();
 
-        public MonitoringController(ApplicationDbContext context, IEmailService emailService)
+        public MonitoringController(ApplicationDbContext context, IEmailService emailService, IDeviceSettingsService deviceSettingsService)
         {
             _context = context;
             _emailService = emailService;
+            _deviceSettingsService = deviceSettingsService;
         }
 
         // ============================================
@@ -49,16 +51,27 @@ namespace KWHMonitoring.Controllers
                     .Select(x => x.SettingValue)
                     .FirstOrDefaultAsync() ?? "OnOff";
 
+                var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
+
+                    var settings = deviceSettings.ContainsKey(data.DeviceKey) ? deviceSettings[data.DeviceKey] : null;
+                    var controlMode = settings?.ControlMode ?? globalControlMode;
+                    var maxCapacity = settings?.MaxCapacity ?? 0m;
+                    var normalThreshold = settings?.LoadNormalThreshold ?? 30;
+                    var mediumThreshold = settings?.LoadMediumThreshold ?? 70;
 
                     viewModel.Panels.Add(new PanelViewModel
                     {
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
-                        ControlMode = globalControlMode,
+                        ControlMode = controlMode,
+                        MaxCapacity = maxCapacity,
+                        LoadNormalThreshold = normalThreshold,
+                        LoadMediumThreshold = mediumThreshold,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,
@@ -126,16 +139,27 @@ namespace KWHMonitoring.Controllers
                     .Select(x => x.SettingValue)
                     .FirstOrDefaultAsync() ?? "OnOff";
 
+                var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
+
+                    var settings = deviceSettings.ContainsKey(data.DeviceKey) ? deviceSettings[data.DeviceKey] : null;
+                    var controlMode = settings?.ControlMode ?? globalControlMode;
+                    var maxCapacity = settings?.MaxCapacity ?? 0m;
+                    var normalThreshold = settings?.LoadNormalThreshold ?? 30;
+                    var mediumThreshold = settings?.LoadMediumThreshold ?? 70;
 
                     viewModel.Panels.Add(new PanelViewModel
                     {
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
-                        ControlMode = globalControlMode,
+                        ControlMode = controlMode,
+                        MaxCapacity = maxCapacity,
+                        LoadNormalThreshold = normalThreshold,
+                        LoadMediumThreshold = mediumThreshold,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,
@@ -182,16 +206,27 @@ namespace KWHMonitoring.Controllers
                     .Select(x => x.SettingValue)
                     .FirstOrDefaultAsync() ?? "OnOff";
 
+                var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+
                 foreach (var data in validData)
                 {
                     if (data == null) continue;
+
+                    var settings = deviceSettings.ContainsKey(data.DeviceKey) ? deviceSettings[data.DeviceKey] : null;
+                    var controlMode = settings?.ControlMode ?? globalControlMode;
+                    var maxCapacity = settings?.MaxCapacity ?? 0m;
+                    var normalThreshold = settings?.LoadNormalThreshold ?? 30;
+                    var mediumThreshold = settings?.LoadMediumThreshold ?? 70;
 
                     viewModel.Panels.Add(new PanelViewModel
                     {
                         DeviceKey = data.DeviceKey,
                         DeviceId = data.DeviceId,
                         GroupName = data.GroupName,
-                        ControlMode = globalControlMode,
+                        ControlMode = controlMode,
+                        MaxCapacity = maxCapacity,
+                        LoadNormalThreshold = normalThreshold,
+                        LoadMediumThreshold = mediumThreshold,
                         Waktu_Server = data.Waktu_Server,
                         Volt_R = data.Volt_R ?? 0m,
                         Volt_S = data.Volt_S ?? 0m,
@@ -255,8 +290,28 @@ namespace KWHMonitoring.Controllers
             await LogSecurityActionAsync(SecurityAction.SettingsViewed,
                 "Halaman Settings diakses", true);
 
+            var monitoringDevices = await _context.KWH_Monitoring
+                .GroupBy(x => x.DeviceKey)
+                .Select(g => g.OrderByDescending(x => x.Waktu_Server).FirstOrDefault())
+                .ToListAsync();
+
+            var devices = monitoringDevices
+                .Where(x => x != null)
+                .OrderBy(x => x.GroupName)
+                .Select(x => new DeviceSettingsListItem
+                {
+                    DeviceKey = x.DeviceKey,
+                    DeviceId = x.DeviceId,
+                    GroupName = x.GroupName
+                })
+                .ToList();
+
+            var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+
             ViewBag.CurrentSettings = settings;
             ViewBag.IsMasterAdmin = isMasterAdmin;
+            ViewBag.Devices = devices;
+            ViewBag.DeviceSettings = deviceSettings;
             return View();
         }
 
@@ -278,11 +333,18 @@ namespace KWHMonitoring.Controllers
                 if (latestData == null)
                     return NotFound();
 
+                var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var settings = deviceSettings.ContainsKey(latestData.DeviceKey) ? deviceSettings[latestData.DeviceKey] : null;
+
                 var viewModel = new PanelViewModel
                 {
                     DeviceKey = latestData.DeviceKey,
                     DeviceId = latestData.DeviceId,
                     GroupName = latestData.GroupName,
+                    ControlMode = settings?.ControlMode ?? "OnOff",
+                    MaxCapacity = settings?.MaxCapacity ?? 0m,
+                    LoadNormalThreshold = settings?.LoadNormalThreshold ?? 30,
+                    LoadMediumThreshold = settings?.LoadMediumThreshold ?? 70,
                     Waktu_Server = latestData.Waktu_Server,
                     Volt_R = latestData.Volt_R ?? 0m,
                     Volt_S = latestData.Volt_S ?? 0m,
@@ -486,10 +548,10 @@ namespace KWHMonitoring.Controllers
                 {
                     emaPeriod = GetIntSetting(settings, "emaPeriod", 20),
                     emaMode = GetStrSetting(settings, "emaMode", "manual"),
-                    emaUpperThreshold = GetIntSetting(settings, "emaUpperThreshold", 30),
-                    emaLowerThreshold = GetIntSetting(settings, "emaLowerThreshold", 50),
-                    emaFibUpper = GetDblSetting(settings, "emaFibUpper", 1.618),
-                    emaFibLower = GetDblSetting(settings, "emaFibLower", 0.618),
+                    emaUpperThreshold = GetIntSetting(settings, "emaUpperThreshold", 0),
+                    emaLowerThreshold = GetIntSetting(settings, "emaLowerThreshold", 0),
+                    emaFibUpper = GetDblSetting(settings, "emaFibUpper", 0),
+                    emaFibLower = GetDblSetting(settings, "emaFibLower", 0),
                     emaShowLine = GetBoolSetting(settings, "emaShowLine", true),
                     emaShowThresholds = GetBoolSetting(settings, "emaShowThresholds", true),
                     useInitial100ForEma = GetBoolSetting(settings, "useInitial100ForEma", false),

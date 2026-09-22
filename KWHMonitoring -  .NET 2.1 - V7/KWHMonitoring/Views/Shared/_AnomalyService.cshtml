@@ -292,10 +292,10 @@
                         // ============================================
                         anomalyServiceConfig.emaPeriod = data.emaPeriod || 20;
                         anomalyServiceConfig.mode = data.emaMode || 'manual';
-                        anomalyServiceConfig.upperThreshold = data.emaUpperThreshold || 30;
-                        anomalyServiceConfig.lowerThreshold = data.emaLowerThreshold || 50;
-                        anomalyServiceConfig.fibUpper = data.emaFibUpper || 1.618;
-                        anomalyServiceConfig.fibLower = data.emaFibLower || 0.618;
+                        anomalyServiceConfig.upperThreshold = data.emaUpperThreshold || 0;
+                        anomalyServiceConfig.lowerThreshold = data.emaLowerThreshold || 0;
+                        anomalyServiceConfig.fibUpper = data.emaFibUpper || 0;
+                        anomalyServiceConfig.fibLower = data.emaFibLower || 0;
                         useInitial100ForEma = data.useInitial100ForEma || false;
                         
                         // Anomaly & Notification settings TIDAK ada di get-ema-settings
@@ -470,15 +470,26 @@
         }
 
         function isDowntimeForDevice(deviceKey) {
-            var cat = deviceCategoryMap[deviceKey];
-            if (cat && categoryDowntimeCache[cat] !== undefined) {
-                return categoryDowntimeCache[cat];
+            var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || { downtimeEnabled: false };
+            if (!ds.downtimeEnabled) return false;
+
+            var startParts = (ds.downtimeStart || '22:00:00').toString().split(':');
+            var endParts = (ds.downtimeEnd || '06:00:00').toString().split(':');
+            var startHour = parseInt(startParts[0]) || 0;
+            var startMin = parseInt(startParts[1]) || 0;
+            var endHour = parseInt(endParts[0]) || 0;
+            var endMin = parseInt(endParts[1]) || 0;
+
+            var now = new Date();
+            var current = now.getHours() * 60 + now.getMinutes();
+            var start = startHour * 60 + startMin;
+            var end = endHour * 60 + endMin;
+
+            if (start < end) {
+                return current >= start && current < end;
+            } else {
+                return current >= start || current < end;
             }
-            // Fallback: check global downtime cache
-            if (categoryDowntimeCache['Global'] !== undefined) {
-                return categoryDowntimeCache['Global'];
-            }
-            return false;
         }
 
         function calculateEMA(data, period) {
@@ -590,13 +601,14 @@
 
         // Fungsi helper untuk melakukan pengecekan anomali setelah EMA/baseline didapat
         function processAnomalyCheck(deviceKey, powerData, ema, baselineValue, timestamps) {
-            let upperValue, lowerValue;
-            if (anomalyServiceConfig.mode === 'fibonacci') {
-                upperValue = anomalyServiceConfig.fibUpper;
-                lowerValue = anomalyServiceConfig.fibLower;
-            } else {
-                upperValue = anomalyServiceConfig.upperThreshold;
-                lowerValue = anomalyServiceConfig.lowerThreshold;
+            var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
+            var upperValue = ds.emaUpperThreshold || 0;
+            var lowerValue = ds.emaLowerThreshold || 0;
+
+            // Skip anomaly detection if no thresholds are configured for this device
+            if (upperValue <= 0 && lowerValue <= 0) {
+                console.log('📈 No EMA thresholds configured for ' + deviceKey + ', skipping anomaly check');
+                return;
             }
 
             // ============================================
@@ -607,7 +619,7 @@
             // Threshold dihitung dari EMA, bukan dari baseline statis!
             // ============================================
 
-            const thresholds = calculateThresholds(ema, anomalyServiceConfig.mode, upperValue, lowerValue);
+            const thresholds = calculateThresholds(ema, 'manual', upperValue, lowerValue);
 
             const lastIndex = powerData.length - 1;
             const currentPower = powerData[lastIndex];
@@ -948,9 +960,10 @@
             console.log('=== ANOMALY BACKGROUND SERVICE STARTED ===');
             console.log(`⏱️ Initial chart refresh interval: ${chartRefreshInterval}s`);
 
-            // Load settings AND anomaly state dulu sebelum mulai check
-            $.when(loadAnomalySettings(), loadAnomalyState()).done(function() {
-                console.log('Settings and anomaly state loaded, starting anomaly checks...');
+            // Load settings, anomaly state, AND per-device settings before starting checks
+            $.when(loadAnomalySettings(), loadAnomalyState(), (window._deviceSettingsPromise || $.Deferred().resolve())).done(function() {
+                console.log('Settings, anomaly state, and per-device settings loaded. Devices:', Object.keys(window._deviceSettings || {}).length);
+                console.log('Starting anomaly checks...');
                 setTimeout(runAnomalyCheck, 2000);
                 
                 // Gunakan interval YANG SAMA dengan chart refresh

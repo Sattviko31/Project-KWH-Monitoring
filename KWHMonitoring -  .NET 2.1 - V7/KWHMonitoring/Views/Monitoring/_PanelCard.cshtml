@@ -76,13 +76,12 @@
             <!-- ===== LOAD BAR ===== -->
             <div class="mb-3">
                 @{
-                    var maxCapacity = 30000m;
-                    var loadPercent = Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100);
-                    var loadColor = loadPercent > 70 ? "bg-danger" : loadPercent > 30 ? "bg-warning" : "bg-info";
+                    var loadPercent = Math.Min((Model.Daya_Watt / Model.MaxCapacity) * 100, 100);
+                    var loadColor = loadPercent > Model.LoadMediumThreshold ? "bg-danger" : loadPercent > Model.LoadNormalThreshold ? "bg-warning" : "bg-info";
                 }
                 <div class="d-flex justify-content-between align-items-baseline mb-1">
                     <span class="panel-label"><i class="fas fa-tachometer-alt"></i> Load</span>
-                    <span class="panel-value" data-label="load-value">@Model.Daya_Watt.ToString("N0") W / @maxCapacity.ToString("N0") W</span>
+                    <span class="panel-value" data-label="load-value">@Model.Daya_Watt.ToString("N0") W / @Model.MaxCapacity.ToString("N0") W</span>
                 </div>
                 <div class="progress panel-progress">
                     <div class="progress-bar @loadColor" role="progressbar" style="width: @loadPercent%" data-gauge="load">

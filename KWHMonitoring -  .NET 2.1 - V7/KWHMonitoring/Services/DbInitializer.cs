@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using KWHMonitoring.Models;
@@ -112,6 +113,67 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(password)) return false;
             if (password.Length < MinimumPasswordLength) return false;
             return true;
+        }
+
+        public static async Task SeedDeviceSettingsAsync(ApplicationDbContext context)
+        {
+            try
+            {
+                // Per-device defaults — MaxCapacity and EMA thresholds default to 0 (not configured)
+                const decimal defaultMaxCapacity = 0m;
+                const decimal defaultTariff = 1500m;
+                const int defaultNormalThreshold = 30;
+                const int defaultMediumThreshold = 70;
+                const string defaultControlMode = "OnOff";
+                const bool defaultDowntimeEnabled = false;
+                const int defaultDowntimeStart = 22;
+                const int defaultDowntimeEnd = 6;
+
+                var registeredKeys = await context.DeviceRegistry
+                    .AsNoTracking()
+                    .Select(x => x.DeviceKey)
+                    .ToListAsync();
+
+                var existingKeys = await context.DeviceSettings
+                    .AsNoTracking()
+                    .Select(x => x.DeviceKey)
+                    .ToListAsync();
+
+                var missingKeys = registeredKeys.Except(existingKeys).ToList();
+
+                foreach (var deviceKey in missingKeys)
+                {
+                    context.DeviceSettings.Add(new DeviceSettings
+                    {
+                        DeviceKey = deviceKey,
+                        MaxCapacity = defaultMaxCapacity,
+                        DeviceCategory = "Billboard",
+                        DowntimeEnabled = defaultDowntimeEnabled,
+                        DowntimeStart = TimeSpan.FromHours(defaultDowntimeStart),
+                        DowntimeEnd = TimeSpan.FromHours(defaultDowntimeEnd),
+                        TariffPerKWh = defaultTariff,
+                        LoadNormalThreshold = defaultNormalThreshold,
+                        LoadMediumThreshold = defaultMediumThreshold,
+                        EmaUpperThreshold = 0,
+                        EmaLowerThreshold = 0,
+                        EmaFibUpper = 0,
+                        EmaFibLower = 0,
+                        ControlMode = defaultControlMode,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+
+                if (missingKeys.Any())
+                {
+                    await context.SaveChangesAsync();
+                    System.Diagnostics.Debug.WriteLine($"DbInitializer: Seeded {missingKeys.Count} device settings.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"DbInitializer: Failed to seed device settings: {ex.Message}");
+            }
         }
     }
 }

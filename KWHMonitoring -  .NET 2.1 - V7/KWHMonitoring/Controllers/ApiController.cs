@@ -39,8 +39,9 @@ namespace KWHMonitoring.Controllers
         private readonly IHostingEnvironment _environment;
         private readonly IEmailService _emailService;
         private readonly IAnomalyAnalysisService _analysisService;
+        private readonly IDeviceSettingsService _deviceSettingsService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IDeviceSettingsService deviceSettingsService)
         {
             _context = context;
             _cache = cache;
@@ -51,6 +52,7 @@ namespace KWHMonitoring.Controllers
             _environment = environment;
             _emailService = emailService;
             _analysisService = analysisService;
+            _deviceSettingsService = deviceSettingsService;
         }
 
         private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
@@ -133,6 +135,9 @@ namespace KWHMonitoring.Controllers
                     .Where(x => x.SettingKey.StartsWith("DeviceCategory."))
                     .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
+                // Load per-device settings for status calculation
+                var deviceSettingsDict = await _deviceSettingsService.GetAllEffectiveAsync();
+
                 var validData = latestData.Where(x => x != null);
 
                 // Filter by search text (groupName or deviceKey)
@@ -192,8 +197,8 @@ namespace KWHMonitoring.Controllers
                     phaseRColor = data.PhaseRColor,
                     phaseSColor = data.PhaseSColor,
                     phaseTColor = data.PhaseTColor,
-                    // Gunakan Status dari model agar konsisten dengan load bar
-                    status = data.Status
+                    // Calculate status from per-device settings
+                    status = GetDeviceStatus(data, deviceSettingsDict)
                 }).ToList();
 
                 return Ok(panels);
@@ -555,7 +560,7 @@ namespace KWHMonitoring.Controllers
                 var peakMonth = Math.Round(monthlyData.Max(x => x.energy), 2);
                 var peakMonthName = monthlyData.First(x => x.energy == monthlyData.Max(y => y.energy)).monthName;
 
-                var tariffPerKWh = await GetTariffPerKWh();
+                var tariffPerKWh = await GetTariffPerKWh(deviceKey);
                 var estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2);
 
                 var isTodayDevice = startDate.Date == serverToday.Date;
@@ -625,7 +630,7 @@ namespace KWHMonitoring.Controllers
                     avgPerMonth = Math.Round(monthlyData.Average(x => x.energy), 2);
                     peakMonth = Math.Round(monthlyData.Max(x => x.energy), 2);
                     peakMonthName = monthlyData.First(x => x.energy == monthlyData.Max(y => y.energy)).monthName;
-                    estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2);
+                    estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2); // tariffPerKWh already per-device from above
                 }
 
                 return Ok(new
@@ -816,29 +821,18 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // GET TARIFF PER KWH
         // ============================================
-        private async Task<decimal> GetTariffPerKWh()
+        private async Task<decimal> GetTariffPerKWh(string deviceKey = null)
         {
             try
             {
-                var tariffRecord = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.Contains("Tariff") || x.SettingKey.Contains("tariff"))
-                    .ToListAsync();
-
-                var specificTariff = tariffRecord.FirstOrDefault(x =>
-                    x.SettingKey == "Tariff.PerKWh" ||
-                    x.SettingKey == "TariffPerKWh" ||
-                    string.Equals(x.SettingKey, "Tariff.PerKWh", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(x.SettingKey, "TariffPerKWh", StringComparison.OrdinalIgnoreCase));
-
-                if (specificTariff != null && decimal.TryParse(specificTariff.SettingValue, out var result))
+                if (!string.IsNullOrWhiteSpace(deviceKey))
                 {
-                    return result;
-                }
+                    var deviceSettings = await _context.DeviceSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
 
-                foreach (var record in tariffRecord)
-                {
-                    if (decimal.TryParse(record.SettingValue, out var value))
-                        return value;
+                    if (deviceSettings != null && deviceSettings.TariffPerKWh > 0)
+                        return deviceSettings.TariffPerKWh;
                 }
 
                 return 1500m;
@@ -853,16 +847,20 @@ namespace KWHMonitoring.Controllers
         // GET TARIFF
         // ============================================
         [HttpGet("get-tariff")]
-        public async Task<IActionResult> GetTariff()
+        public async Task<IActionResult> GetTariff([FromQuery] string deviceKey)
         {
             try
             {
-                var tariffRecord = await _context.AppSettingsRecords
-                    .FirstOrDefaultAsync(x => x.SettingKey == "Tariff.PerKWh" || x.SettingKey == "TariffPerKWh");
-
-                if (tariffRecord != null && decimal.TryParse(tariffRecord.SettingValue, out var tariff))
+                if (!string.IsNullOrWhiteSpace(deviceKey))
                 {
-                    return Ok(new { tariffPerKWh = tariff });
+                    var deviceSettings = await _context.DeviceSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
+
+                    if (deviceSettings != null && deviceSettings.TariffPerKWh > 0)
+                    {
+                        return Ok(new { tariffPerKWh = deviceSettings.TariffPerKWh });
+                    }
                 }
 
                 return Ok(new { tariffPerKWh = 1500m });
@@ -2599,10 +2597,10 @@ namespace KWHMonitoring.Controllers
                 {
                     emaPeriod = GetInt(settings, "emaPeriod", 20),
                     emaMode = GetString(settings, "emaMode", "manual"),
-                    emaUpperThreshold = GetInt(settings, "emaUpperThreshold", 30),
-                    emaLowerThreshold = GetInt(settings, "emaLowerThreshold", 50),
-                    emaFibUpper = GetDouble(settings, "emaFibUpper", 1.618),
-                    emaFibLower = GetDouble(settings, "emaFibLower", 0.618),
+                    emaUpperThreshold = GetInt(settings, "emaUpperThreshold", 0),
+                    emaLowerThreshold = GetInt(settings, "emaLowerThreshold", 0),
+                    emaFibUpper = GetDouble(settings, "emaFibUpper", 0),
+                    emaFibLower = GetDouble(settings, "emaFibLower", 0),
                     emaShowLine = GetBool(settings, "emaShowLine", true),
                     emaShowThresholds = GetBool(settings, "emaShowThresholds", true),
                     useInitial100ForEma = GetBool(settings, "useInitial100ForEma", false),
@@ -2914,12 +2912,25 @@ namespace KWHMonitoring.Controllers
         // DOWNTIME PERIOD CHECK
         // Cek apakah sekarang berada dalam periode jam mati (listrik sengaja dimatikan)
         // ============================================
-        private async Task<DowntimeCheckResult> CheckDowntimePeriodAsync(string category = null)
+        private async Task<DowntimeCheckResult> CheckDowntimePeriodAsync(string category = null, string deviceKey = null)
         {
             var result = new DowntimeCheckResult { IsDowntime = false, StartHour = 0, EndHour = 0 };
 
             try
             {
+                // Per-device downtime takes highest priority
+                if (!string.IsNullOrWhiteSpace(deviceKey))
+                {
+                    var deviceSettings = await _context.DeviceSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
+
+                    if (deviceSettings != null && deviceSettings.DowntimeEnabled)
+                    {
+                        return EvaluateDowntimeTimeSpan(deviceSettings.DowntimeStart, deviceSettings.DowntimeEnd);
+                    }
+                }
+
                 var validCategories = await GetValidCategoriesAsync();
 
                 // If category is specified, check per-category downtime first
@@ -2982,6 +2993,24 @@ namespace KWHMonitoring.Controllers
             return result;
         }
 
+        private DowntimeCheckResult EvaluateDowntimeTimeSpan(TimeSpan start, TimeSpan end)
+        {
+            var now = DateTime.Now;
+            var currentTime = now.TimeOfDay;
+            var result = new DowntimeCheckResult
+            {
+                StartHour = start.Hours,
+                EndHour = end.Hours
+            };
+
+            if (start < end)
+                result.IsDowntime = currentTime >= start && currentTime < end;
+            else
+                result.IsDowntime = currentTime >= start || currentTime < end;
+
+            return result;
+        }
+
         // ============================================
         // LOG ANOMALY (dengan downtime logic & server-side deduplication)
         // ============================================
@@ -3023,7 +3052,7 @@ namespace KWHMonitoring.Controllers
                     .FirstOrDefaultAsync(x => x.SettingKey == "DeviceCategory." + data.DeviceKey);
                 var deviceCategory = categorySetting?.SettingValue ?? "Billboard";
 
-                var downtime = await CheckDowntimePeriodAsync(deviceCategory);
+                var downtime = await CheckDowntimePeriodAsync(deviceCategory, data.DeviceKey);
 
                 // ============================================
                 // DOWNTIME LOGIC:
@@ -3975,11 +4004,11 @@ namespace KWHMonitoring.Controllers
         // Frontend memanggil ini untuk tahu apakah lower line harus dimatikan
         // ============================================
         [HttpGet("downtime-status")]
-        public async Task<IActionResult> GetDowntimeStatus([FromQuery] string category)
+        public async Task<IActionResult> GetDowntimeStatus([FromQuery] string category, [FromQuery] string deviceKey)
         {
             try
             {
-                var downtime = await CheckDowntimePeriodAsync(category ?? null);
+                var downtime = await CheckDowntimePeriodAsync(category ?? null, deviceKey);
 
                 return Ok(new
                 {
@@ -4145,13 +4174,24 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var setting = await _context.AppSettingsRecords
-                    .FirstOrDefaultAsync(x => x.SettingKey == "DeviceCategory." + deviceKey);
+                var deviceSettings = await _context.DeviceSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
+
+                var category = deviceSettings?.DeviceCategory;
+
+                if (string.IsNullOrWhiteSpace(category))
+                {
+                    var setting = await _context.AppSettingsRecords
+                        .FirstOrDefaultAsync(x => x.SettingKey == "DeviceCategory." + deviceKey);
+
+                    category = setting?.SettingValue ?? "Billboard";
+                }
 
                 return Ok(new
                 {
                     deviceKey = deviceKey,
-                    category = setting?.SettingValue ?? "Billboard"
+                    category = category
                 });
             }
             catch (Exception ex)
@@ -4192,6 +4232,25 @@ namespace KWHMonitoring.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                // Sync to per-device settings so both sources stay consistent
+                try
+                {
+                    var deviceSettings = await _context.DeviceSettings
+                        .FirstOrDefaultAsync(x => x.DeviceKey == data.deviceKey);
+
+                    if (deviceSettings != null)
+                    {
+                        deviceSettings.DeviceCategory = data.category;
+                        deviceSettings.UpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogWarning(syncEx, "Failed to sync device category to DeviceSettings for {DeviceKey}", data.deviceKey);
+                }
+
                 return Ok(new { success = true, message = "Device category saved", deviceKey = data.deviceKey, category = data.category });
             }
             catch (Exception ex)
@@ -4226,6 +4285,31 @@ namespace KWHMonitoring.Controllers
             return catSettings
                 .Select(x => x.SettingKey.Replace("Category.", ""))
                 .ToList();
+        }
+
+        // ============================================
+        // HELPER: Sync device category to legacy AppSettingsRecord
+        // ============================================
+        private async Task SyncDeviceCategoryToAppSettingsAsync(string deviceKey, string category)
+        {
+            var key = "DeviceCategory." + deviceKey;
+            var existing = await _context.AppSettingsRecords
+                .FirstOrDefaultAsync(x => x.SettingKey == key);
+
+            if (existing != null)
+            {
+                existing.SettingValue = category;
+                existing.UpdatedAt = DateTime.Now;
+            }
+            else
+            {
+                _context.AppSettingsRecords.Add(new AppSettingsRecord
+                {
+                    SettingKey = key,
+                    SettingValue = category,
+                    UpdatedAt = DateTime.Now
+                });
+            }
         }
 
         // ============================================
@@ -4378,10 +4462,26 @@ namespace KWHMonitoring.Controllers
                     .Where(x => x.SettingKey.StartsWith("DeviceCategory.") && x.SettingValue == name)
                     .ToListAsync();
 
+                var reassignedDeviceKeys = new List<string>();
                 foreach (var dc in deviceCategoryKeys)
                 {
                     dc.SettingValue = "Billboard";
                     dc.UpdatedAt = DateTime.Now;
+                    reassignedDeviceKeys.Add(dc.SettingKey.Replace("DeviceCategory.", ""));
+                }
+
+                // Sync reassignment to per-device settings
+                if (reassignedDeviceKeys.Any())
+                {
+                    var deviceSettingsToUpdate = await _context.DeviceSettings
+                        .Where(x => reassignedDeviceKeys.Contains(x.DeviceKey) && x.DeviceCategory == name)
+                        .ToListAsync();
+
+                    foreach (var ds in deviceSettingsToUpdate)
+                    {
+                        ds.DeviceCategory = "Billboard";
+                        ds.UpdatedAt = DateTime.UtcNow;
+                    }
                 }
 
                 // Delete downtime settings for this category
@@ -4412,9 +4512,21 @@ namespace KWHMonitoring.Controllers
             {
                 var validCategories = await GetValidCategoriesAsync();
 
+                // Legacy AppSettingsRecord categories
                 var settings = await _context.AppSettingsRecords
                     .Where(x => x.SettingKey.StartsWith("DeviceCategory."))
                     .ToDictionaryAsync(x => x.SettingKey.Replace("DeviceCategory.", ""), x => x.SettingValue);
+
+                // Per-device settings override legacy records
+                var deviceSettings = await _context.DeviceSettings
+                    .AsNoTracking()
+                    .Where(x => !string.IsNullOrEmpty(x.DeviceCategory))
+                    .ToListAsync();
+
+                foreach (var ds in deviceSettings)
+                {
+                    settings[ds.DeviceKey] = ds.DeviceCategory;
+                }
 
                 return Ok(new
                 {
@@ -4973,6 +5085,21 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // HELPER METHODS
         // ============================================
+        private string GetDeviceStatus(KWHData data, Dictionary<string, DeviceSettings> deviceSettingsDict)
+        {
+            DeviceSettings ds;
+            var hasSettings = deviceSettingsDict.TryGetValue(data.DeviceKey, out ds);
+            var maxCap = hasSettings && ds.MaxCapacity > 0 ? ds.MaxCapacity : 0m;
+            var normalThresh = hasSettings && ds.LoadNormalThreshold > 0 ? ds.LoadNormalThreshold : 30;
+            var mediumThresh = hasSettings && ds.LoadMediumThreshold > 0 ? ds.LoadMediumThreshold : 70;
+
+            if (maxCap <= 0) return "NORMAL";
+            var loadPercent = Math.Min(((data.Daya_Watt ?? 0m) / maxCap) * 100, 100m);
+            if (loadPercent > mediumThresh) return "HIGH";
+            if (loadPercent > normalThresh) return "MEDIUM";
+            return "NORMAL";
+        }
+
         private int GetInt(Dictionary<string, string> dict, string key, int defaultValue)
         {
             string value;
@@ -5500,6 +5627,133 @@ namespace KWHMonitoring.Controllers
                 return Ok(new { success = false, message = "Error: " + ex.Message });
             }
         }
+
+        // ============================================
+        // DEVICE SETTINGS API
+        // ============================================
+        [HttpGet("device-settings")]
+        public async Task<IActionResult> GetAllDeviceSettings()
+        {
+            try
+            {
+                var allSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                return Ok(new { success = true, settings = allSettings });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("device-settings/{deviceKey}")]
+        public async Task<IActionResult> GetDeviceSettings(string deviceKey)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(deviceKey))
+                    return BadRequest(new { success = false, message = "DeviceKey is required" });
+
+                var settings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+                return Ok(new { success = true, deviceKey, settings });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("device-settings/{deviceKey}")]
+        public async Task<IActionResult> SaveDeviceSettings(string deviceKey, [FromBody] DeviceSettingsRequest data)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(deviceKey))
+                    return BadRequest(new { success = false, message = "DeviceKey is required" });
+
+                if (data == null)
+                    return BadRequest(new { success = false, message = "Data is required" });
+
+                var settings = new DeviceSettings
+                {
+                    MaxCapacity = data.MaxCapacity,
+                    DeviceCategory = data.DeviceCategory,
+                    DowntimeEnabled = data.DowntimeEnabled,
+                    DowntimeStart = data.DowntimeStart,
+                    DowntimeEnd = data.DowntimeEnd,
+                    TariffPerKWh = data.TariffPerKWh,
+                    LoadNormalThreshold = data.LoadNormalThreshold,
+                    LoadMediumThreshold = data.LoadMediumThreshold,
+                    EmaUpperThreshold = data.EmaUpperThreshold,
+                    EmaLowerThreshold = data.EmaLowerThreshold,
+                    EmaFibUpper = data.EmaFibUpper,
+                    EmaFibLower = data.EmaFibLower,
+                    ControlMode = data.ControlMode
+                };
+
+                await _deviceSettingsService.SaveAsync(deviceKey, settings);
+
+                // Sync category to legacy AppSettingsRecord for existing consumers
+                if (!string.IsNullOrWhiteSpace(settings.DeviceCategory))
+                {
+                    await SyncDeviceCategoryToAppSettingsAsync(deviceKey, settings.DeviceCategory);
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = "Device settings saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("device-settings/bulk")]
+        public async Task<IActionResult> BulkSaveDeviceSettings([FromBody] BulkDeviceSettingsRequest data)
+        {
+            try
+            {
+                if (data?.Settings == null || !data.Settings.Any())
+                    return BadRequest(new { success = false, message = "Settings list is required" });
+
+                foreach (var item in data.Settings)
+                {
+                    if (string.IsNullOrWhiteSpace(item.DeviceKey)) continue;
+
+                    var settings = new DeviceSettings
+                    {
+                        MaxCapacity = item.MaxCapacity,
+                        DeviceCategory = item.DeviceCategory,
+                        DowntimeEnabled = item.DowntimeEnabled,
+                        DowntimeStart = item.DowntimeStart,
+                        DowntimeEnd = item.DowntimeEnd,
+                        TariffPerKWh = item.TariffPerKWh,
+                        LoadNormalThreshold = item.LoadNormalThreshold,
+                        LoadMediumThreshold = item.LoadMediumThreshold,
+                        EmaUpperThreshold = item.EmaUpperThreshold,
+                        EmaLowerThreshold = item.EmaLowerThreshold,
+                        EmaFibUpper = item.EmaFibUpper,
+                        EmaFibLower = item.EmaFibLower,
+                        ControlMode = item.ControlMode
+                    };
+
+                    await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
+
+                    // Sync category to legacy AppSettingsRecord for existing consumers
+                    if (!string.IsNullOrWhiteSpace(settings.DeviceCategory))
+                    {
+                        await SyncDeviceCategoryToAppSettingsAsync(item.DeviceKey, settings.DeviceCategory);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Device settings saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 
     // ============================================
@@ -5550,10 +5804,10 @@ namespace KWHMonitoring.Controllers
     {
         public int emaPeriod { get; set; } = 20;
         public string emaMode { get; set; } = "manual";
-        public int emaUpperThreshold { get; set; } = 30;
-        public int emaLowerThreshold { get; set; } = 50;
-        public double emaFibUpper { get; set; } = 1.618;
-        public double emaFibLower { get; set; } = 0.618;
+        public int emaUpperThreshold { get; set; } = 0;
+        public int emaLowerThreshold { get; set; } = 0;
+        public double emaFibUpper { get; set; } = 0;
+        public double emaFibLower { get; set; } = 0;
         public bool emaShowLine { get; set; } = true;
         public bool emaShowThresholds { get; set; } = true;
         public bool useInitial100ForEma { get; set; } = false;
@@ -5757,6 +6011,32 @@ namespace KWHMonitoring.Controllers
     {
         public int? Year { get; set; }
         public int? Month { get; set; }
+    }
+
+    // ============================================
+    // DEVICE SETTINGS
+    // ============================================
+    public class DeviceSettingsRequest
+    {
+        public string DeviceKey { get; set; }
+        public decimal MaxCapacity { get; set; }
+        public string DeviceCategory { get; set; }
+        public bool DowntimeEnabled { get; set; }
+        public TimeSpan DowntimeStart { get; set; }
+        public TimeSpan DowntimeEnd { get; set; }
+        public decimal TariffPerKWh { get; set; }
+        public int LoadNormalThreshold { get; set; }
+        public int LoadMediumThreshold { get; set; }
+        public int EmaUpperThreshold { get; set; }
+        public int EmaLowerThreshold { get; set; }
+        public double EmaFibUpper { get; set; }
+        public double EmaFibLower { get; set; }
+        public string ControlMode { get; set; }
+    }
+
+    public class BulkDeviceSettingsRequest
+    {
+        public List<DeviceSettingsRequest> Settings { get; set; }
     }
 }
 
