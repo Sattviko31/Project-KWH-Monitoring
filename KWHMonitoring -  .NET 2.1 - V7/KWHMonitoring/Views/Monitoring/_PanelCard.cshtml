@@ -76,17 +76,27 @@
             <!-- ===== LOAD BAR ===== -->
             <div class="mb-3">
                 @{
-                    var loadPercent = Math.Min((Model.Daya_Watt / Model.MaxCapacity) * 100, 100);
-                    var loadColor = loadPercent > Model.LoadMediumThreshold ? "bg-danger" : loadPercent > Model.LoadNormalThreshold ? "bg-warning" : "bg-info";
+                    var loadPercent = Model.MaxCapacity > 0 ? Math.Min((Model.Daya_Watt / Model.MaxCapacity) * 100, 100) : 0m;
+                    var loadColor = Model.MaxCapacity <= 0 ? "bg-secondary" : loadPercent > Model.LoadMediumThreshold ? "bg-danger" : loadPercent > Model.LoadNormalThreshold ? "bg-warning" : "bg-info";
+                    var loadLabel = Model.MaxCapacity > 0 ? $"{Model.Daya_Watt:N0} W / {Model.MaxCapacity:N0} W" : $"{Model.Daya_Watt:N0} W";
                 }
                 <div class="d-flex justify-content-between align-items-baseline mb-1">
                     <span class="panel-label"><i class="fas fa-tachometer-alt"></i> Load</span>
-                    <span class="panel-value" data-label="load-value">@Model.Daya_Watt.ToString("N0") W / @Model.MaxCapacity.ToString("N0") W</span>
+                    <span class="panel-value" data-label="load-value">@loadLabel</span>
                 </div>
                 <div class="progress panel-progress">
-                    <div class="progress-bar @loadColor" role="progressbar" style="width: @loadPercent%" data-gauge="load">
-                        @loadPercent.ToString("N0")%
-                    </div>
+                    @if (Model.MaxCapacity > 0)
+                    {
+                        <div class="progress-bar @loadColor" role="progressbar" style="width: @loadPercent%" data-gauge="load">
+                            @loadPercent.ToString("N0")%
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="progress-bar @loadColor" role="progressbar" style="width: 100%" data-gauge="load">
+                            N/A
+                        </div>
+                    }
                 </div>
             </div>
 

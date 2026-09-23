@@ -243,9 +243,10 @@
                                         <small class="text-muted">Status</small>
                                         <h5 class="mb-0 fw-bold" id="loadStatusDisplay">
                                             @{
-                                                var loadStatusPercent = Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100);
+                                                var loadStatusPercent = maxCapacity > 0 ? Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100) : 0m;
                                             }
-                                            @if (loadStatusPercent > 70) { <span class="text-danger">HIGH</span> }
+                                            @if (maxCapacity <= 0) { <span class="text-secondary">N/A</span> }
+                                            else if (loadStatusPercent > 70) { <span class="text-danger">HIGH</span> }
                                             else if (loadStatusPercent > 30) { <span class="text-warning">MEDIUM</span> }
                                             else { <span class="text-success">NORMAL</span> }
                                         </h5>
@@ -320,19 +321,38 @@
                                     </h6>
                                     <div class="text-center mb-3">
                                         <h3 class="mb-1 fw-bold" id="loadDisplay">@Model.Daya_Watt.ToString("N0") W</h3>
-                                        <small class="text-muted">of <span id="loadCapacityLabel">@maxCapacity.ToString("N0")</span> W capacity</small>
+                                        @if (maxCapacity > 0)
+                                        {
+                                            <small class="text-muted">of <span id="loadCapacityLabel">@maxCapacity.ToString("N0")</span> W capacity</small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">Capacity <span id="loadCapacityLabel" class="text-secondary">not configured</span></small>
+                                        }
                                     </div>
                                     @{
-                                        var loadPercent = Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100);
-                                        var loadColor = loadPercent > 70 ? "bg-danger" : loadPercent > 30 ? "bg-warning" : "bg-info";
+                                        var loadPercent = maxCapacity > 0 ? Math.Min((Model.Daya_Watt / maxCapacity) * 100, 100) : 0m;
+                                        var loadColor = maxCapacity <= 0 ? "bg-secondary" : loadPercent > 70 ? "bg-danger" : loadPercent > 30 ? "bg-warning" : "bg-info";
                                     }
                                     <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar @loadColor"
-                                             id="loadGauge"
-                                             role="progressbar"
-                                             style="width: @loadPercent%; font-size: 0.85rem; font-weight: bold;">
-                                            @loadPercent.ToString("N0")%
-                                        </div>
+                                        @if (maxCapacity > 0)
+                                        {
+                                            <div class="progress-bar @loadColor"
+                                                 id="loadGauge"
+                                                 role="progressbar"
+                                                 style="width: @loadPercent%; font-size: 0.85rem; font-weight: bold;">
+                                                @loadPercent.ToString("N0")%
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="progress-bar @loadColor"
+                                                 id="loadGauge"
+                                                 role="progressbar"
+                                                 style="width: 100%; font-size: 0.85rem; font-weight: bold;">
+                                                N/A
+                                            </div>
+                                        }
                                     </div>
                                 </div>
                             </div>
