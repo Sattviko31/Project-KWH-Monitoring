@@ -1610,6 +1610,11 @@
 
             window._deviceSettingsPromise = fetchDeviceSettings();
 
+            // Periodic refresh every 60 seconds to pick up admin settings changes
+            setInterval(function() {
+                fetchDeviceSettings();
+            }, 60000);
+
             window.getDeviceSettings = function(deviceKey) {
                 var s = (window._deviceSettings || {})[deviceKey];
                 if (!s) {

@@ -41,16 +41,6 @@
         </a>
     </li>
     <li class="nav-item" role="presentation">
-        <a class="nav-link erp-tab" id="ema-tab" data-toggle="tab" href="#ema" role="tab">
-            <i class="fas fa-chart-line"></i> <span>EMA Settings</span>
-        </a>
-    </li>
-    <li class="nav-item" role="presentation">
-        <a class="nav-link erp-tab" id="notification-tab" data-toggle="tab" href="#notification" role="tab">
-            <i class="fas fa-bell"></i> <span>Notifications</span>
-        </a>
-    </li>
-    <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="chatbot-tab" data-toggle="tab" href="#chatbot" role="tab">
             <i class="fas fa-robot"></i> <span>AI Chatbot</span>
         </a>
@@ -83,8 +73,11 @@
                         <p>Konfigurasi koneksi ke broker MQTT (Mosquitto)</p>
                     </div>
                     <div class="settings-section-action">
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnTestConnection">
-                            <i class="fas fa-plug"></i> Test Connection
+                        <button type="button" class="btn btn-outline-primary btn-sm me-1" id="btnTestConnection">
+                            <i class="fas fa-plug"></i> Test
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveMqttSettings">
+                            <i class="fas fa-save"></i> Save
                         </button>
                         <span class="ms-2" id="connectionStatus"></span>
                     </div>
@@ -198,8 +191,11 @@
                         <p>Interval refresh data untuk setiap halaman monitoring</p>
                     </div>
                     <div class="settings-section-action">
-                        <button type="button" class="btn btn-outline-success btn-sm" id="btnSyncIntervals">
-                            <i class="fas fa-sync-alt"></i> Sync All
+                        <button type="button" class="btn btn-outline-success btn-sm me-1" id="btnSyncIntervals">
+                            <i class="fas fa-sync-alt"></i> Sync
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveIntervalSettings">
+                            <i class="fas fa-save"></i> Save
                         </button>
                     </div>
                 </div>
@@ -271,41 +267,6 @@
 
             <!-- Per-device settings now manage load thresholds, capacity, tariff and EMA per device -->
 
-        </div>
-
-        <!-- Sticky Save Bar -->
-        <div class="settings-save-bar">
-            <div class="settings-save-bar-inner">
-                @* <div class="settings-save-bar-info">
-                    <i class="fas fa-info-circle text-muted"></i>
-                    <span>Perubahan System Settings akan tersimpan permanen di database</span>
-                </div> *@
-                <div class="settings-save-bar-actions">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetSystemSettings">
-                        <i class="fas fa-undo"></i> Reset Default
-                    </button>
-                    @* <button type="button" class="btn btn-outline-info btn-sm" id="btnExportSettings">
-                        <i class="fas fa-download"></i> Export
-                    </button> *@
-                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveSystemSettings">
-                        <i class="fas fa-save"></i> Save Settings
-                    </button>
-                </div>
-            </div>
-        </div>
-        </form>
-    </div>
-
-    <!-- ==================== DEVICE SETTINGS TAB ==================== -->
-    <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
-        @await Html.PartialAsync("_DeviceSettingsTab")
-    </div>
-
-    <!-- ==================== NOTIFICATION SETTINGS TAB ==================== -->
-    <div class="tab-pane fade" id="notification" role="tabpanel" aria-labelledby="notification-tab">
-        <form id="notificationSettingsForm">
-        <div class="settings-section-list">
-
             <!-- Email Settings -->
             <div class="settings-section">
                 <div class="settings-section-header">
@@ -317,10 +278,13 @@
                         <p>Konfigurasi SMTP untuk pengiriman email notifikasi</p>
                     </div>
                     <div class="settings-section-action">
-                        <div class="form-check form-switch">
+                        <div class="form-check form-switch me-2">
                             <input class="form-check-input" type="checkbox" id="enableEmail">
                             <label class="form-check-label small">Enable</label>
                         </div>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmailSettings">
+                            <i class="fas fa-save"></i> Save
+                        </button>
                     </div>
                 </div>
                 <div class="settings-section-body">
@@ -378,10 +342,13 @@
                         <p>Konfigurasi Wablas API untuk pengiriman pesan WhatsApp</p>
                     </div>
                     <div class="settings-section-action">
-                        <div class="form-check form-switch">
+                        <div class="form-check form-switch me-2">
                             <input class="form-check-input" type="checkbox" id="enableWhatsApp">
                             <label class="form-check-label small">Enable</label>
                         </div>
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveWhatsappSettings">
+                            <i class="fas fa-save"></i> Save
+                        </button>
                     </div>
                 </div>
                 <div class="settings-section-body">
@@ -434,6 +401,11 @@
                     <div class="settings-section-title">
                         <h5>Jadwal Laporan</h5>
                         <p>Atur jenis dan jadwal pengiriman laporan notifikasi</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveScheduleSettings">
+                            <i class="fas fa-save"></i> Save
+                        </button>
                     </div>
                 </div>
                 <div class="settings-section-body">
@@ -547,33 +519,6 @@
                 </div>
             </div>
 
-        </div>
-
-        <!-- Sticky Save Bar -->
-        <div class="settings-save-bar">
-            <div class="settings-save-bar-inner">
-                @* <div class="settings-save-bar-info">
-                    <i class="fas fa-info-circle text-muted"></i>
-                    <span>Pengaturan notifikasi akan tersimpan ke database</span>
-                </div> *@
-                <div class="settings-save-bar-actions">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetNotificationSettings">
-                        <i class="fas fa-undo"></i> Reset Default
-                    </button>
-                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveNotificationSettings">
-                        <i class="fas fa-save"></i> Save Settings
-                    </button>
-                </div>
-            </div>
-        </div>
-        </form>
-    </div>
-
-    <!-- ==================== EMA SETTINGS TAB ==================== -->
-    <div class="tab-pane fade" id="ema" role="tabpanel" aria-labelledby="ema-tab">
-        <form id="emaSettingsForm">
-        <div class="settings-section-list">
-
             <!-- EMA Settings -->
             <div class="settings-section">
                 <div class="settings-section-header">
@@ -583,6 +528,11 @@
                     <div class="settings-section-title">
                         <h5>EMA (Exponential Moving Average)</h5>
                         <p>Konfigurasi deteksi anomali pada chart Power</p>
+                    </div>
+                    <div class="settings-section-action">
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSectionSettings">
+                            <i class="fas fa-save"></i> Save
+                        </button>
                     </div>
                 </div>
                 <div class="settings-section-body">
@@ -643,19 +593,27 @@
             <div class="settings-save-bar-inner">
                 @* <div class="settings-save-bar-info">
                     <i class="fas fa-info-circle text-muted"></i>
-                    <span>Pengaturan EMA akan tersimpan ke database</span>
+                    <span>Perubahan System Settings akan tersimpan permanen di database</span>
                 </div> *@
                 <div class="settings-save-bar-actions">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetEmaSettings">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetSystemSettings">
                         <i class="fas fa-undo"></i> Reset Default
                     </button>
-                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSettings">
-                        <i class="fas fa-save"></i> Save EMA Settings
+                    @* <button type="button" class="btn btn-outline-info btn-sm" id="btnExportSettings">
+                        <i class="fas fa-download"></i> Export
+                    </button> *@
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSaveSystemSettings">
+                        <i class="fas fa-save"></i> Save Settings
                     </button>
                 </div>
             </div>
         </div>
         </form>
+    </div>
+
+    <!-- ==================== DEVICE SETTINGS TAB ==================== -->
+    <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
+        @await Html.PartialAsync("_DeviceSettingsTab")
     </div>
 
     <!-- ==================== AI CHATBOT SETTINGS TAB ==================== -->
@@ -961,9 +919,14 @@
                             contentType: 'application/json',
                             data: JSON.stringify(settings),
                             success: function(response) {
-                                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                                showNotification('All settings saved successfully!', 'success');
-                                setTimeout(function() { location.reload(); }, 1000);
+                                // Chain: save notification settings + EMA settings
+                                var notifReq = saveNotificationSettingsAjax();
+                                var emaReq = saveEmaSettingsAjax();
+                                $.when(notifReq, emaReq).always(function() {
+                                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
+                                    showNotification('All settings saved successfully!', 'success');
+                                    setTimeout(function() { location.reload(); }, 1000);
+                                });
                             },
                             error: function(xhr) {
                                 btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
@@ -994,8 +957,114 @@
                     $('#anomalyInterval').val('10');
                     $('#chartDataPoints').val('20');
                     $('#autoScanInterval').val('60');
+                    resetNotificationSettings();
+                    resetEmaSettings();
                     showNotification('Settings reset to default. Click Save to apply.', 'info');
                 }
+            });
+
+            // ============================================
+            // PER-SECTION SAVE BUTTONS
+            // ============================================
+
+            // Save MQTT settings only
+            $('#btnSaveMqttSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                var settings = {
+                    'MQTT.Broker': $('#mqttBroker').val(),
+                    'MQTT.Port': $('#mqttPort').val(),
+                    'MQTT.ClientId': $('#mqttClientId').val(),
+                    'MQTT.UseTls': $('#mqttUseTls').val(),
+                    'MQTT.Username': $('#mqttUsername').val(),
+                    'MQTT.Password': $('#mqttPassword').val(),
+                    'MQTT.TlsSkipCertValidation': $('#mqttSkipCertValidation').val(),
+                    'MQTT.TlsClientCertPassword': $('#mqttClientCertPassword').val()
+                };
+                $.ajax({
+                    url: '/api/Api/save-system-settings',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(settings),
+                    success: function() {
+                        showNotification('MQTT settings saved!', 'success');
+                    },
+                    error: function() {
+                        showNotification('Error saving MQTT settings', 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save');
+                    }
+                });
+            });
+
+            // Save Sampling Interval settings only
+            $('#btnSaveIntervalSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                var settings = {
+                    'Interval.Dashboard': $('#dashboardInterval').val(),
+                    'Interval.Charts': $('#chartsInterval').val(),
+                    'Interval.Details': $('#detailsInterval').val(),
+                    'Interval.Anomaly': $('#anomalyInterval').val(),
+                    'Chart.DataPoints': $('#chartDataPoints').val(),
+                    'Interval.AutoScan': $('#autoScanInterval').val()
+                };
+                $.ajax({
+                    url: '/api/Api/save-system-settings',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(settings),
+                    success: function() {
+                        showNotification('Interval settings saved!', 'success');
+                    },
+                    error: function() {
+                        showNotification('Error saving interval settings', 'danger');
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save');
+                    }
+                });
+            });
+
+            // Save Email Notification settings (saves all notification data to keep consistent)
+            $('#btnSaveEmailSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                saveNotificationSettingsAjax()
+                    .done(function() { showNotification('Email & notification settings saved!', 'success'); })
+                    .fail(function() { showNotification('Error saving email settings', 'danger'); })
+                    .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
+            });
+
+            // Save WhatsApp Notification settings only
+            $('#btnSaveWhatsappSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                saveWablasSettingsAjax()
+                    .done(function() { showNotification('WhatsApp settings saved!', 'success'); })
+                    .fail(function() { showNotification('Error saving WhatsApp settings', 'danger'); })
+                    .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
+            });
+
+            // Save Schedule settings (saves all notification data to keep consistent)
+            $('#btnSaveScheduleSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                saveNotificationSettingsAjax()
+                    .done(function() { showNotification('Schedule & notification settings saved!', 'success'); })
+                    .fail(function() { showNotification('Error saving schedule settings', 'danger'); })
+                    .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
+            });
+
+            // Save EMA settings only
+            $('#btnSaveEmaSectionSettings').click(function() {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                saveEmaSettingsAjax()
+                    .done(function() { showNotification('EMA settings saved!', 'success'); })
+                    .fail(function() { showNotification('Error saving EMA settings', 'danger'); })
+                    .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
             });
 
             // ============================================
@@ -1136,11 +1205,6 @@
             // ============================================
 
             loadNotificationSettings();
-            loadControlMode();
-
-            $('#btnSaveNotificationSettings').click(function() {
-                saveNotificationSettings();
-            });
 
             $('#btnTestEmail').click(function() {
                 testEmail();
@@ -1152,12 +1216,6 @@
 
             $('#btnCheckWablasDevice').click(function () {
                 checkWablasDevice();
-            });
-
-            $('#btnResetNotificationSettings').click(function() {
-                if (confirm('Reset notification settings ke default?')) {
-                    resetNotificationSettings();
-                }
             });
 
             $('#btnTestInstantAlert').click(function() {
@@ -1278,10 +1336,7 @@
             });
         }
 
-        function saveNotificationSettings() {
-            var btn = $('#btnSaveNotificationSettings');
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
-
+        function saveNotificationSettingsAjax() {
             var settings = {
                 smtpServer: $('#smtpServer').val(),
                 smtpPort: parseInt($('#smtpPort').val()),
@@ -1294,35 +1349,36 @@
                 sendHourlyReport: $('#sendHourlyReport').is(':checked'),
                 sendDailyReport: $('#sendDailyReport').is(':checked'),
                 sendMonthlyReport: $('#sendMonthlyReport').is(':checked'),
-                hourlyReportTime: 0, // Fixed: every hour at :00
+                hourlyReportTime: 0,
                 dailyReportTime: $('#dailyReportTime').val(),
                 monthlyReportDay: parseInt($('#monthlyReportDay').val()),
                 monthlyReportTime: $('#monthlyReportTime').val()
             };
 
-            // DEBUG: Log what is being sent
-            console.log('[SAVE-NOTIF] Sending:', JSON.stringify(settings, null, 2));
-
-            $.ajax({
+            var notifReq = $.ajax({
                 url: '/api/Api/save-notification-settings',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify(settings),
-                success: function(response) {
-                    console.log('[SAVE-NOTIF] API response:', response);
-                    saveWablasSettings();
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                    showNotification('Notification settings saved successfully!', 'success');
-                },
-                error: function(xhr, status, error) {
-                    console.error('[SAVE-NOTIF] API error:', error, xhr.responseText);
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                    showNotification('Error saving notification settings: ' + error, 'danger');
-                }
+                data: JSON.stringify(settings)
+            });
+
+            // Chain wablas save
+            return notifReq.then(function() {
+                return saveWablasSettingsAjax();
             });
         }
 
-        function saveWablasSettings() {
+        function saveNotificationSettings() {
+            saveNotificationSettingsAjax()
+                .done(function() {
+                    showNotification('Notification settings saved successfully!', 'success');
+                })
+                .fail(function(xhr, status, error) {
+                    showNotification('Error saving notification settings: ' + error, 'danger');
+                });
+        }
+
+        function saveWablasSettingsAjax() {
             var wablasSettings = {
                 serverUrl: $('#wablasServerUrl').val(),
                 token: $('#wablasToken').val(),
@@ -1331,18 +1387,18 @@
                 enableWhatsApp: $('#enableWhatsApp').is(':checked')
             };
 
-            $.ajax({
+            return $.ajax({
                 url: '/api/Api/wablas/settings',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify(wablasSettings),
-                success: function(response) {
-                    console.log('Wablas settings saved');
-                },
-                error: function(xhr) {
-                    console.log('Error saving Wablas settings:', xhr.responseJSON?.error);
-                }
+                data: JSON.stringify(wablasSettings)
             });
+        }
+
+        function saveWablasSettings() {
+            saveWablasSettingsAjax()
+                .done(function() { console.log('Wablas settings saved'); })
+                .fail(function(xhr) { console.log('Error saving Wablas settings:', xhr.responseJSON?.error); });
         }
 
         function testEmail() {
@@ -1467,56 +1523,6 @@
             $('body').append(notification);
             setTimeout(function() { notification.alert('close'); }, 3000);
         }
-
-        // ============================================
-        // DEVICE CONTROL MODE (GLOBAL PRESET)
-        // ============================================
-        function loadControlMode() {
-            $.ajax({
-                url: '/api/Api/device-control-mode',
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    if (data.success) {
-                        $('#globalControlMode').val(data.mode || 'OnOff');
-                    }
-                },
-                error: function() {
-                    showNotification('Gagal memuat mode kontrol', 'danger');
-                }
-            });
-        }
-
-        $('#btnSaveControlMode').click(function() {
-            var btn = $(this);
-            var mode = $('#globalControlMode').val();
-
-            showSettingsConfirm(
-                'Simpan Control Mode',
-                'Apakah Anda yakin ingin mengubah Global Control Mode menjadi ' + mode + '?',
-                function() {
-                    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
-                    $.ajax({
-                        url: '/api/Api/device-control-mode',
-                        method: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ deviceKey: '_global', mode: mode }),
-                        success: function(data) {
-                            btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
-                            if (data.success) {
-                                showNotification('Control mode saved successfully', 'success');
-                            } else {
-                                showNotification(data.error || 'Gagal menyimpan mode', 'danger');
-                            }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Control Mode');
-                            showNotification('Error saving control mode', 'danger');
-                        }
-                    });
-                }
-            );
-        });
 
         // ============================================
         // AI CHATBOT SETTINGS
@@ -1994,16 +2000,6 @@
 
         loadEmaSettings();
 
-        $('#btnSaveEmaSettings').click(function() {
-            saveEmaSettings();
-        });
-
-        $('#btnResetEmaSettings').click(function() {
-            if (confirm('Reset EMA settings ke default?')) {
-                resetEmaSettings();
-            }
-        });
-
         function loadEmaSettings() {
             // Helper: apply EMA values to form
             function applyEmaValues(data) {
@@ -2021,7 +2017,6 @@
                 dataType: 'json',
                 success: function(data) {
                     applyEmaValues(data);
-                    console.log('EMA settings loaded');
                 },
                 error: function() {
                     console.log('Using default EMA settings');
@@ -2035,23 +2030,16 @@
                         success: function(notifSettings) {
                             var loadedMax = (typeof notifSettings.anomalyMaxConfirmations === 'number') ? notifSettings.anomalyMaxConfirmations : 3;
                             $('#anomalyMaxConfirmations').val(loadedMax);
-                            console.log('Anomaly maxConfirmations loaded:', loadedMax);
                         },
                         error: function() {
                             console.log('Using default anomalyMaxConfirmations: 3');
-                        },
-                        complete: function() {
-                            console.log('EMA settings loaded');
                         }
                     });
                 }
             });
         }
 
-        function saveEmaSettings() {
-            var btn = $('#btnSaveEmaSettings');
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
-
+        function saveEmaSettingsAjax() {
             var emaSettingsData = {
                 emaPeriod: parseInt($('#emaPeriod').val()),
                 emaShowLine: $('#emaShowLine').is(':checked'),
@@ -2079,13 +2067,17 @@
                 })
             });
 
-            $.when(emaReq, anomalyMaxConfirmationsReq).done(function() {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save EMA Settings');
-                showNotification('EMA settings saved successfully!', 'success');
-            }).fail(function() {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save EMA Settings');
-                showNotification('Error saving EMA settings', 'danger');
-            });
+            return $.when(emaReq, anomalyMaxConfirmationsReq);
+        }
+
+        function saveEmaSettings() {
+            saveEmaSettingsAjax()
+                .done(function() {
+                    showNotification('EMA settings saved successfully!', 'success');
+                })
+                .fail(function() {
+                    showNotification('Error saving EMA settings', 'danger');
+                });
         }
 
         function resetEmaSettings() {

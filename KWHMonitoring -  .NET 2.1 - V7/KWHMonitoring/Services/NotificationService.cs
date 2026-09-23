@@ -19,31 +19,38 @@ namespace KWHMonitoring.Services
         private readonly ApplicationDbContext _context;
         private readonly AppSettingsCache _settingsCache;
         private readonly ILogger<NotificationService> _logger;
+        private readonly AesEncryptionService _encryption;
+        private readonly IDeviceSettingsService _deviceSettingsService;
         private NotificationSettings _settings;
+        private DateTime _settingsLoadedAt = DateTime.MinValue;
+        private static readonly TimeSpan _settingsTTL = TimeSpan.FromMinutes(5);
         private static readonly HttpClient _httpClient = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger)
+        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger, AesEncryptionService encryption, IDeviceSettingsService deviceSettingsService)
         {
             _context = context;
             _settingsCache = settingsCache;
             _logger = logger;
+            _encryption = encryption;
+            _deviceSettingsService = deviceSettingsService;
             // Lazy-load settings on first use, not in constructor
             _settings = null;
         }
 
         /// <summary>
         /// Ensure settings are loaded. Called lazily on first actual use.
+        /// Auto-refreshes if settings are older than TTL.
         /// </summary>
         private void EnsureSettingsLoaded()
         {
-            if (_settings != null) return;
+            if (_settings != null && DateTime.UtcNow - _settingsLoadedAt < _settingsTTL) return;
 
             lock (this)
             {
-                if (_settings != null) return;
+                if (_settings != null && DateTime.UtcNow - _settingsLoadedAt < _settingsTTL) return;
                 LoadSettings();
             }
         }
@@ -55,6 +62,14 @@ namespace KWHMonitoring.Services
                 var settingsRecord = _settingsCache.GetAll()
                     .Where(kvp => kvp.Key.StartsWith("Notification"))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                // Decrypt SMTP password if encrypted (ENC: prefix)
+                string senderPassword = GetVal(settingsRecord, "Notification.SenderPassword", null);
+                if (!string.IsNullOrEmpty(senderPassword) && senderPassword.StartsWith("ENC:"))
+                {
+                    var decrypted = _encryption.Decrypt(senderPassword.Substring(4));
+                    senderPassword = decrypted ?? "";
+                }
 
                 var phoneNumbers = new List<string>();
                 var phonesRaw = GetVal(settingsRecord, "Notification.WablasPhoneNumbers", "");
@@ -71,7 +86,7 @@ namespace KWHMonitoring.Services
                     SmtpServer = GetVal(settingsRecord, "Notification.SmtpServer", "smtp.gmail.com"),
                     SmtpPort = int.TryParse(GetVal(settingsRecord, "Notification.SmtpPort", "587"), out var port) ? port : 587,
                     SenderEmail = GetVal(settingsRecord, "Notification.SenderEmail", null),
-                    SenderPassword = GetVal(settingsRecord, "Notification.SenderPassword", null),
+                    SenderPassword = senderPassword,
                     EnableEmailNotification = bool.TryParse(GetVal(settingsRecord, "Notification.EnableEmail", "false"), out var emailOn) && emailOn,
 
                     WablasServerUrl = GetVal(settingsRecord, "Notification.WablasServerUrl", null),
@@ -89,6 +104,8 @@ namespace KWHMonitoring.Services
                     MonthlyReportDay = int.TryParse(GetVal(settingsRecord, "Notification.MonthlyReportDay", "1"), out var mday) ? mday : 1,
                     MonthlyReportTime = GetVal(settingsRecord, "Notification.MonthlyReportTime", "08:00")
                 };
+
+                _settingsLoadedAt = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
@@ -103,12 +120,23 @@ namespace KWHMonitoring.Services
             return dict.TryGetValue(key, out value) ? value : defaultValue;
         }
 
-        private async Task<(int maxCapacity, int mediumThreshold, int normalThreshold)> LoadThresholdsAsync()
+        private async Task<(int maxCapacity, int mediumThreshold, int normalThreshold)> LoadThresholdsAsync(string deviceKey = null)
         {
             int maxCap = 30000, mediumThresh = 70, normalThresh = 30;
 
             try
             {
+                // Per-device settings take priority
+                if (!string.IsNullOrWhiteSpace(deviceKey))
+                {
+                    var deviceSettings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+                    if (deviceSettings.MaxCapacity > 0) maxCap = (int)deviceSettings.MaxCapacity;
+                    if (deviceSettings.LoadMediumThreshold > 0) mediumThresh = deviceSettings.LoadMediumThreshold;
+                    if (deviceSettings.LoadNormalThreshold > 0) normalThresh = deviceSettings.LoadNormalThreshold;
+                    return (maxCap, mediumThresh, normalThresh);
+                }
+
+                // Fallback to global AppSettingsRecord
                 var keys = new[] { "Load.MaxCapacity", "Load.MediumThreshold", "Load.NormalThreshold" };
                 var records = await _context.AppSettingsRecords
                     .Where(x => keys.Contains(x.SettingKey))
@@ -140,10 +168,19 @@ namespace KWHMonitoring.Services
             return _settings;
         }
 
-        private async Task<decimal> GetTariffPerKWhAsync()
+        private async Task<decimal> GetTariffPerKWhAsync(string deviceKey = null)
         {
             try
             {
+                // Per-device tariff takes priority
+                if (!string.IsNullOrWhiteSpace(deviceKey))
+                {
+                    var deviceSettings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+                    if (deviceSettings.TariffPerKWh > 0)
+                        return deviceSettings.TariffPerKWh;
+                }
+
+                // Fallback to global AppSettingsRecord
                 var tariffRecord = await _context.AppSettingsRecords
                     .FirstOrDefaultAsync(x => x.SettingKey == "Tariff.PerKWh" || x.SettingKey == "TariffPerKWh");
 

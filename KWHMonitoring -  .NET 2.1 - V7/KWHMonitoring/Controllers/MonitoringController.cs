@@ -570,6 +570,7 @@ namespace KWHMonitoring.Controllers
         // RESCAN PANELS
         // ============================================
         [HttpPost]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> RescanPanels()
         {
             try

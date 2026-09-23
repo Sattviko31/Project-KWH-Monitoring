@@ -28,7 +28,7 @@ namespace KWHMonitoring
             services.Configure<CookiePolicyOptions>(options =>
             {
                 options.CheckConsentNeeded = context => true;
-                options.MinimumSameSitePolicy = SameSiteMode.None;
+                options.MinimumSameSitePolicy = SameSiteMode.Lax;
             });
 
             services.AddDbContext<ApplicationDbContext>(options =>

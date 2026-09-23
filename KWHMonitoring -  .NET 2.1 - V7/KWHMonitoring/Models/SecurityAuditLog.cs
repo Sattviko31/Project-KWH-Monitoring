@@ -33,7 +33,8 @@ namespace KWHMonitoring.Models
         AnomalyMonthlyReportGenerated,
         RelayOtpRequested,
         RelayOtpVerified,
-        RelayOtpFailed
+        RelayOtpFailed,
+        ChartDataReset
     }
 
     [Table("SecurityAuditLogs")]

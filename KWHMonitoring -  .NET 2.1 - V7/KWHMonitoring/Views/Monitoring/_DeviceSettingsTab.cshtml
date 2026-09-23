@@ -132,11 +132,11 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">EMA ↑ (%)</label>
+                                                <label class="device-label">Upper Line ↑ (%)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="EmaUpperThreshold" value="@settings.EmaUpperThreshold" min="0" max="1000">
                                             </div>
                                             <div class="device-form-row">
-                                                <label class="device-label">EMA ↓ (%)</label>
+                                                <label class="device-label">Lower Line ↓ (%)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="EmaLowerThreshold" value="@settings.EmaLowerThreshold" min="0" max="100">
                                             </div>
                                         </div>
@@ -172,9 +172,14 @@
                                 </div>
                                 <div class="card-footer bg-light py-2 d-flex justify-content-between align-items-center">
                                     <small class="text-muted status-text" style="font-size: 0.75rem;">Belum disimpan</small>
-                                    <button type="button" class="btn btn-primary btn-sm btn-save-device-settings" data-device-key="@device.DeviceKey">
-                                        <i class="fas fa-save"></i> Simpan
-                                    </button>
+                                    <div class="d-flex gap-1">
+                                        <button type="button" class="btn btn-outline-danger btn-sm btn-reset-chart-data" data-device-key="@device.DeviceKey" title="Hapus semua data chart untuk memperbarui SMA">
+                                            <i class="fas fa-trash-alt"></i> Reset Chart
+                                        </button>
+                                        <button type="button" class="btn btn-primary btn-sm btn-save-device-settings" data-device-key="@device.DeviceKey">
+                                            <i class="fas fa-save"></i> Simpan
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -193,7 +198,7 @@
                 maxCapacity: parseFloat($card.find('[data-field="MaxCapacity"]').val()) || 0,
                 deviceCategory: $card.find('[data-field="DeviceCategory"]').val() || 'Billboard',
                 downtimeEnabled: $card.find('[data-field="DowntimeEnabled"]').is(':checked'),
-                downtimeStart: $card.find('[data-field="DowntimeStart"]').val() || '22:00',
+                downtimeStart: $card.find('[data-field="DowntimeStart"]').val() || '00:00',
                 downtimeEnd: $card.find('[data-field="DowntimeEnd"]').val() || '06:00',
                 tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
                 loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
@@ -304,6 +309,45 @@
                     var msg = 'Error';
                     try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
                     alert('Gagal menyimpan: ' + msg);
+                }
+            });
+        });
+
+        // Reset Chart Data
+        $(document).on('click', '.btn-reset-chart-data', function() {
+            var $btn = $(this);
+            var deviceKey = $btn.data('device-key');
+            var $card = $btn.closest('.device-settings-card');
+            var $status = $card.find('.status-text');
+
+            if (!confirm('Reset semua data chart untuk device ' + deviceKey + '?\n\nData KWH akan dihapus dan SMA akan dihitung ulang dari data baru.\nAksi ini tidak dapat dibatalkan!')) {
+                return;
+            }
+
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Reset...');
+            $status.text('Menghapus data chart...');
+
+            $.ajax({
+                url: '/api/Api/reset-chart-data/' + encodeURIComponent(deviceKey),
+                method: 'DELETE',
+                success: function(response) {
+                    if (response.success) {
+                        var count = response.deletedCount || 0;
+                        $status.text('Chart direset (' + count + ' data)').removeClass('text-muted').addClass('text-success');
+                        setTimeout(function() {
+                            $status.text('Belum disimpan').removeClass('text-success').addClass('text-muted');
+                        }, 5000);
+                    } else {
+                        $status.text('Gagal: ' + response.message).removeClass('text-muted').addClass('text-danger');
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Error';
+                    try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
+                    $status.text('Gagal: ' + msg).removeClass('text-muted').addClass('text-danger');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Reset Chart');
                 }
             });
         });

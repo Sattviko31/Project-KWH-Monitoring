@@ -93,6 +93,13 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        private IActionResult SafeError(Exception ex, string context = null)
+        {
+            var msg = !string.IsNullOrEmpty(context) ? $"[{context}] " : "";
+            _logger.LogError(ex, msg + "Unhandled exception");
+            return StatusCode(500, new { error = "Terjadi kesalahan internal. Silakan hubungi administrator." });
+        }
+
         // Rate limiting: max 10 requests per 60 seconds per user for relay control
         private bool IsRelayControlRateLimited(string userIdentifier)
         {
@@ -205,7 +212,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -247,7 +254,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -281,7 +288,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -469,7 +476,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -651,7 +658,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -740,7 +747,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -807,7 +814,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -875,6 +882,7 @@ namespace KWHMonitoring.Controllers
         // SAVE TARIFF PER KWH
         // ============================================
         [HttpPost("save-tariff")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveTariff([FromBody] Dictionary<string, string> data)
         {
             try
@@ -942,7 +950,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+                return SafeError(ex);
             }
         }
 
@@ -994,7 +1002,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1092,7 +1100,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1199,7 +1207,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1292,10 +1300,8 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error fetching history archive data. Message: {Message}, Inner: {Inner}", 
-                    ex.Message, ex.InnerException?.Message ?? "none");
-                var innerMsg = ex.InnerException?.Message ?? "";
-                return StatusCode(500, new { error = ex.Message, detail = innerMsg, stackTrace = ex.StackTrace });
+                _logger.LogError(ex, "Error fetching history archive data");
+                return SafeError(ex, "HistoryArchive");
             }
         }
 
@@ -1498,7 +1504,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error exporting history archive data");
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1947,7 +1953,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1955,6 +1961,7 @@ namespace KWHMonitoring.Controllers
         // TEST DATABASE CONNECTION
         // ============================================
         [HttpPost("test-database-connection")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestDatabaseConnection([FromBody] DatabaseConnectionData data)
         {
             try
@@ -1971,7 +1978,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -1979,6 +1986,7 @@ namespace KWHMonitoring.Controllers
         // MQTT CONNECTION TEST
         // ============================================
         [HttpPost("test-mqtt-connection")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestMqttConnection([FromBody] MqttConnectionData data)
         {
             try
@@ -2010,7 +2018,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2018,6 +2026,7 @@ namespace KWHMonitoring.Controllers
         // MQTT CERTIFICATE UPLOAD
         // ============================================
         [HttpPost("upload-mqtt-certificate")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> UploadMqttCertificate(IFormFile file, [FromForm] string certificateType, [FromForm] string certificatePassword)
         {
             try
@@ -2168,7 +2177,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to upload MQTT certificate");
-                return StatusCode(500, new { success = false, error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2176,6 +2185,7 @@ namespace KWHMonitoring.Controllers
         // MQTT CERTIFICATE REMOVE
         // ============================================
         [HttpPost("remove-mqtt-certificate")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> RemoveMqttCertificate([FromBody] MqttCertificateRequest request)
         {
             try
@@ -2212,7 +2222,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to remove MQTT certificate");
-                return StatusCode(500, new { success = false, error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2261,7 +2271,7 @@ namespace KWHMonitoring.Controllers
                         return StatusCode(429, new { success = false, error = "Terlalu banyak percobaan kode salah. Silakan minta kode baru." });
                     }
 
-                    if (string.IsNullOrWhiteSpace(request.OtpCode) || request.OtpCode.Trim() != storedCode.Trim())
+                    if (string.IsNullOrWhiteSpace(request.OtpCode) || !PasswordHasher.ConstantTimeEquals(request.OtpCode.Trim(), storedCode.Trim()))
                     {
                         _cache.Set(failKey, failCount + 1, TimeSpan.FromMinutes(5));
                         await LogSecurityActionAsync(SecurityAction.RelayOtpFailed, request.DeviceId,
@@ -2318,7 +2328,7 @@ namespace KWHMonitoring.Controllers
             {
                 _logger.LogError(ex, "Failed to publish relay control command");
                 await LogSecurityActionAsync(SecurityAction.RelayOn, request.DeviceId, "Exception: " + ex.Message, false);
-                return StatusCode(500, new { success = false, error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2399,7 +2409,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to request relay OTP");
-                return StatusCode(500, new { success = false, error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2490,7 +2500,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get relay states");
-                return Ok(new { success = true, error = ex.Message, states = new Dictionary<string, object>() });
+                return Ok(new { success = true, error = "Terjadi kesalahan internal.", states = new Dictionary<string, object>() });
             }
         }
 
@@ -2511,7 +2521,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2551,7 +2561,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2559,6 +2569,7 @@ namespace KWHMonitoring.Controllers
         // GET SYSTEM SETTINGS
         // ============================================
         [HttpGet("get-system-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> GetSystemSettings()
         {
             try
@@ -2574,7 +2585,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2610,7 +2621,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2618,6 +2629,7 @@ namespace KWHMonitoring.Controllers
         // EMA SETTINGS - SAVE
         // ============================================
         [HttpPost("save-ema-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveEmaSettings([FromBody] EmaSettingsData data)
         {
             try
@@ -2663,7 +2675,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2698,7 +2710,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2818,7 +2830,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2876,7 +2888,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -2904,7 +2916,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3015,6 +3027,7 @@ namespace KWHMonitoring.Controllers
         // LOG ANOMALY (dengan downtime logic & server-side deduplication)
         // ============================================
         [HttpPost("log-anomaly")]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> LogAnomaly([FromBody] AnomalyLogRequest data)
         {
             try
@@ -3035,15 +3048,33 @@ namespace KWHMonitoring.Controllers
                     var parts = activeAlertSetting.SettingValue.Split('|');
                     if (parts.Length >= 2 && parts[0] == data.AnomalyType)
                     {
-                        // Anomali tipe yang sama masih aktif, skip notifikasi
-                        _logger.LogInformation("Anomaly alert for {DeviceKey} ({AnomalyType}) already active, skipping duplicate", data.DeviceKey, data.AnomalyType);
-                        return Ok(new
+                        // Auto-expire: if alert is older than 30 minutes, clear it and continue
+                        if (DateTime.TryParseExact(parts[1], "yyyy-MM-dd HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var alertTime))
                         {
-                            success = true,
-                            suppressed = true,
-                            reason = "Anomaly alert already active for this device and type - waiting for reset",
-                            logId = (long?)null
-                        });
+                            if (DateTime.Now - alertTime > TimeSpan.FromMinutes(30))
+                            {
+                                _logger.LogInformation("Anomaly alert for {DeviceKey} ({AnomalyType}) expired (older than 30 min), auto-clearing", data.DeviceKey, data.AnomalyType);
+                                _context.AppSettingsRecords.Remove(activeAlertSetting);
+                                // fall through to process the new anomaly
+                            }
+                            else
+                            {
+                                // Anomali tipe yang sama masih aktif, skip notifikasi
+                                _logger.LogInformation("Anomaly alert for {DeviceKey} ({AnomalyType}) already active, skipping duplicate", data.DeviceKey, data.AnomalyType);
+                                return Ok(new
+                                {
+                                    success = true,
+                                    suppressed = true,
+                                    reason = "Anomaly alert already active for this device and type - waiting for reset",
+                                    logId = (long?)null
+                                });
+                            }
+                        }
+                        else
+                        {
+                            // Invalid timestamp format — clear stale entry and continue
+                            _context.AppSettingsRecords.Remove(activeAlertSetting);
+                        }
                     }
                 }
 
@@ -3211,7 +3242,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3221,6 +3252,7 @@ namespace KWHMonitoring.Controllers
         // Setelah reset, anomali baru bisa dikirim lagi untuk device tersebut
         // ============================================
         [HttpPost("reset-anomaly-alert")]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> ResetAnomalyAlert([FromBody] ResetAnomalyAlertRequest data)
         {
             try
@@ -3244,7 +3276,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resetting anomaly alert for {DeviceKey}", data.DeviceKey);
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3317,7 +3349,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3352,7 +3384,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3389,7 +3421,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3423,7 +3455,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3454,7 +3486,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3481,7 +3513,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3545,7 +3577,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3585,7 +3617,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3626,7 +3658,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3720,7 +3752,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3764,7 +3796,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3819,7 +3851,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3860,7 +3892,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3870,6 +3902,7 @@ namespace KWHMonitoring.Controllers
         // logId in URL provides adequate access control
         // ============================================
         [HttpPost("anomaly-logs/{id}/chart-snapshot")]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> UpdateChartSnapshot(long id, [FromBody] ChartSnapshotRequest data)
         {
             try
@@ -3923,7 +3956,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3949,7 +3982,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -3957,6 +3990,7 @@ namespace KWHMonitoring.Controllers
         // DOWNTIME SETTINGS - SAVE
         // ============================================
         [HttpPost("save-downtime-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveDowntimeSettings([FromBody] DowntimeSettingsData data)
         {
             try
@@ -3995,7 +4029,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4025,7 +4059,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4057,7 +4091,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4065,6 +4099,7 @@ namespace KWHMonitoring.Controllers
         // PER-CATEGORY DOWNTIME SETTINGS - SAVE
         // ============================================
         [HttpPost("downtime-settings/{category}")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveCategoryDowntimeSettings(string category, [FromBody] CategoryDowntimeSettingsData data)
         {
             try
@@ -4108,7 +4143,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4162,7 +4197,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4196,7 +4231,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4204,6 +4239,7 @@ namespace KWHMonitoring.Controllers
         // DEVICE CATEGORY - SAVE (single device)
         // ============================================
         [HttpPost("device-category")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveDeviceCategory([FromBody] DeviceCategoryData data)
         {
             try
@@ -4255,7 +4291,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4313,6 +4349,55 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
+        // HELPER: Sync overlapping DeviceSettings fields to legacy AppSettingsRecord
+        // DeviceSettings is the source of truth; pushes relevant fields to global settings
+        // ============================================
+        private async Task SyncDeviceSettingsToAppSettingsAsync(string deviceKey, DeviceSettings settings)
+        {
+            try
+            {
+                // Category sync
+                if (!string.IsNullOrWhiteSpace(settings.DeviceCategory))
+                {
+                    await SyncDeviceCategoryToAppSettingsAsync(deviceKey, settings.DeviceCategory);
+                }
+
+                // ControlMode sync
+                if (!string.IsNullOrWhiteSpace(settings.ControlMode))
+                {
+                    await UpsertAppSettingAsync("Control.Mode", settings.ControlMode);
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to sync device settings to AppSettingsRecord for {DeviceKey}", deviceKey);
+            }
+        }
+
+        private async Task UpsertAppSettingAsync(string key, string value)
+        {
+            var existing = await _context.AppSettingsRecords
+                .FirstOrDefaultAsync(x => x.SettingKey == key);
+
+            if (existing != null)
+            {
+                existing.SettingValue = value;
+                existing.UpdatedAt = DateTime.Now;
+            }
+            else
+            {
+                _context.AppSettingsRecords.Add(new AppSettingsRecord
+                {
+                    SettingKey = key,
+                    SettingValue = value,
+                    UpdatedAt = DateTime.Now
+                });
+            }
+        }
+
+        // ============================================
         // CATEGORIES - GET ALL (with metadata)
         // ============================================
         [HttpGet("categories")]
@@ -4358,7 +4443,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4366,6 +4451,7 @@ namespace KWHMonitoring.Controllers
         // CATEGORY - ADD
         // ============================================
         [HttpPost("categories")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> AddCategory([FromBody] CategoryData data)
         {
             try
@@ -4404,7 +4490,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4412,6 +4498,7 @@ namespace KWHMonitoring.Controllers
         // CATEGORY - UPDATE
         // ============================================
         [HttpPut("categories/{name}")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> UpdateCategory(string name, [FromBody] CategoryData data)
         {
             try
@@ -4438,7 +4525,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4446,6 +4533,7 @@ namespace KWHMonitoring.Controllers
         // CATEGORY - DELETE
         // ============================================
         [HttpDelete("categories/{name}")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> DeleteCategory(string name)
         {
             try
@@ -4498,7 +4586,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4536,12 +4624,12 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
         // ============================================
-        // NOTIFICATION SETTINGS - GET
+        // NOTIFICATION SETTINGS - GET (Public — for anomaly service, no credentials)
         // ============================================
         [HttpGet("get-notification-settings")]
         public async Task<IActionResult> GetNotificationSettings()
@@ -4554,14 +4642,6 @@ namespace KWHMonitoring.Controllers
 
                 return Ok(new
                 {
-                    smtpServer = GetString(settings, "Notification.SmtpServer", "smtp.gmail.com"),
-                    smtpPort = GetInt(settings, "Notification.SmtpPort", 587),
-                    senderEmail = GetString(settings, "Notification.SenderEmail", ""),
-                    senderPassword = GetString(settings, "Notification.SenderPassword", ""),
-                    masterAdminEmail = GetString(settings, "Notification.MasterAdminEmail", ""),
-                    whatsappGatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "https://api.fonnte.com/send"),
-                    whatsappToken = GetString(settings, "Notification.WhatsAppToken", ""),
-                    whatsappPhone = GetString(settings, "Notification.WhatsAppPhone", ""),
                     enableEmail = GetBool(settings, "Notification.EnableEmail", false),
                     enableWhatsApp = GetBool(settings, "Notification.EnableWhatsApp", false),
                     sendInstantAlert = GetBool(settings, "Notification.SendInstantAlert", true),
@@ -4582,7 +4662,57 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[GET-NOTIF] Error: {0}", ex.Message);
-                return StatusCode(500, new { error = ex.Message });
+                return StatusCode(500, new { error = "Terjadi kesalahan internal." });
+            }
+        }
+
+        // ============================================
+        // NOTIFICATION SETTINGS - GET FULL (Admin only — includes credentials)
+        // ============================================
+        [HttpGet("get-notification-settings-full")]
+        [Authorize(Policy = "RequireAdmin")]
+        public async Task<IActionResult> GetNotificationSettingsFull()
+        {
+            try
+            {
+                var settings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Notification") || x.SettingKey.StartsWith("Anomaly."))
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                string senderPassword = GetString(settings, "Notification.SenderPassword", "");
+                if (!string.IsNullOrEmpty(senderPassword) && !senderPassword.StartsWith("ENC:"))
+                    senderPassword = _encryption.Decrypt(senderPassword) ?? senderPassword;
+
+                return Ok(new
+                {
+                    smtpServer = GetString(settings, "Notification.SmtpServer", "smtp.gmail.com"),
+                    smtpPort = GetInt(settings, "Notification.SmtpPort", 587),
+                    senderEmail = GetString(settings, "Notification.SenderEmail", ""),
+                    senderPassword = senderPassword,
+                    masterAdminEmail = GetString(settings, "Notification.MasterAdminEmail", ""),
+                    whatsappGatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "https://api.fonnte.com/send"),
+                    whatsappToken = GetString(settings, "Notification.WhatsAppToken", ""),
+                    whatsappPhone = GetString(settings, "Notification.WhatsAppPhone", ""),
+                    enableEmail = GetBool(settings, "Notification.EnableEmail", false),
+                    enableWhatsApp = GetBool(settings, "Notification.EnableWhatsApp", false),
+                    sendInstantAlert = GetBool(settings, "Notification.SendInstantAlert", true),
+                    sendHourlyReport = GetBool(settings, "Notification.SendHourlyReport", true),
+                    sendDailyReport = GetBool(settings, "Notification.SendDailyReport", false),
+                    sendMonthlyReport = GetBool(settings, "Notification.SendMonthlyReport", false),
+                    hourlyReportTime = 0,
+                    dailyReportTime = GetString(settings, "Notification.DailyReportTime", "08:00"),
+                    monthlyReportDay = GetInt(settings, "Notification.MonthlyReportDay", 1),
+                    monthlyReportTime = GetString(settings, "Notification.MonthlyReportTime", "08:00"),
+                    anomalyCheckInterval = GetInt(settings, "Anomaly.CheckInterval", 30),
+                    anomalyMaxConfirmations = GetInt(settings, "Anomaly.MaxConfirmations", 3),
+                    anomalyCooldownTime = GetInt(settings, "Anomaly.CooldownTime", 60),
+                    settingsReloadInterval = GetInt(settings, "Anomaly.SettingsReloadInterval", 60)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[GET-NOTIF-FULL] Error: {0}", ex.Message);
+                return StatusCode(500, new { error = "Terjadi kesalahan internal." });
             }
         }
 
@@ -4590,6 +4720,7 @@ namespace KWHMonitoring.Controllers
         // ANOMALY SETTINGS - SAVE
         // ============================================
         [HttpPost("save-anomaly-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveAnomalySettings([FromBody] AnomalySettingsData data)
         {
             try
@@ -4629,7 +4760,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[SAVE-ANOMALY] Error: {0}", ex.Message);
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4661,7 +4792,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[GET-ANOMALY-STATE] Error: {0}", ex.Message);
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4669,6 +4800,7 @@ namespace KWHMonitoring.Controllers
         // ANOMALY STATE - SAVE (persist confirmation counts & cooldown state)
         // ============================================
         [HttpPost("save-anomaly-state")]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> SaveAnomalyState([FromBody] AnomalyStateData data)
         {
             try
@@ -4715,7 +4847,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[SAVE-ANOMALY-STATE] Error: {0}", ex.Message);
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4737,7 +4869,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4767,7 +4899,89 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
+            }
+        }
+
+        // ============================================
+        // RESET CHART DATA BY DEVICE (Admin only)
+        // ============================================
+        [Authorize(Policy = "RequireAdmin")]
+        [HttpDelete("reset-chart-data/{deviceKey}")]
+        public async Task<IActionResult> ResetChartDataByDevice(string deviceKey)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(deviceKey))
+                    return BadRequest(new { success = false, message = "DeviceKey is required" });
+
+                var dataRows = await _context.KWH_Monitoring
+                    .Where(x => x.DeviceKey == deviceKey)
+                    .ToListAsync();
+
+                if (dataRows.Count == 0)
+                    return Ok(new { success = true, message = "No chart data found for " + deviceKey, deletedCount = 0 });
+
+                _context.KWH_Monitoring.RemoveRange(dataRows);
+
+                // Clear anomaly alert state for this device
+                var activeAlertKey = "AnomalyAlert.Active." + deviceKey;
+                var activeAlert = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == activeAlertKey);
+                if (activeAlert != null)
+                    _context.AppSettingsRecords.Remove(activeAlert);
+
+                // Remove this device from anomaly confirmation counts & cooldown state
+                var countsRecord = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == "AnomalyState.ConfirmationCounts");
+                if (countsRecord != null && !string.IsNullOrEmpty(countsRecord.SettingValue))
+                {
+                    try
+                    {
+                        var countsObj = JObject.Parse(countsRecord.SettingValue);
+                        if (countsObj.ContainsKey(deviceKey))
+                        {
+                            countsObj.Remove(deviceKey);
+                            countsRecord.SettingValue = countsObj.ToString(Formatting.None);
+                            countsRecord.UpdatedAt = DateTime.Now;
+                        }
+                    }
+                    catch { /* ignore parse errors */ }
+                }
+
+                var cooldownRecord = await _context.AppSettingsRecords
+                    .FirstOrDefaultAsync(x => x.SettingKey == "AnomalyState.CooldownState");
+                if (cooldownRecord != null && !string.IsNullOrEmpty(cooldownRecord.SettingValue))
+                {
+                    try
+                    {
+                        var cooldownObj = JObject.Parse(cooldownRecord.SettingValue);
+                        if (cooldownObj.ContainsKey(deviceKey))
+                        {
+                            cooldownObj.Remove(deviceKey);
+                            cooldownRecord.SettingValue = cooldownObj.ToString(Formatting.None);
+                            cooldownRecord.UpdatedAt = DateTime.Now;
+                        }
+                    }
+                    catch { /* ignore parse errors */ }
+                }
+
+                await _context.SaveChangesAsync();
+
+                await LogSecurityActionAsync(
+                    SecurityAction.ChartDataReset,
+                    deviceKey,
+                    $"Chart data reset for device {deviceKey}: {dataRows.Count} rows deleted by {User.Identity.Name ?? "system"}",
+                    true);
+
+                _logger.LogInformation("Chart data reset for device {DeviceKey}: {Count} rows deleted", deviceKey, dataRows.Count);
+
+                return Ok(new { success = true, message = $"Reset {dataRows.Count} data points for {deviceKey}", deletedCount = dataRows.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting chart data for device {DeviceKey}", deviceKey);
+                return SafeError(ex);
             }
         }
 
@@ -4780,16 +4994,23 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                _logger.LogInformation("[SAVE-NOTIF] Received settings - SendInstantAlert={0}, SendHourlyReport={1}, SendDailyReport={2}, SendMonthlyReport={3}, HourlyReport=every hour at :00, DailyTime={4}, MonthlyDay={5}, MonthlyTime={6}",
+                _logger.LogInformation("[SAVE-NOTIF] Received settings - SendInstantAlert={0}, SendHourlyReport={1}, SendDailyReport={2}, SendMonthlyReport={3}, DailyTime={4}, MonthlyDay={5}, MonthlyTime={6}",
                     data.sendInstantAlert, data.sendHourlyReport, data.sendDailyReport, data.sendMonthlyReport,
                     data.dailyReportTime, data.monthlyReportDay, data.monthlyReportTime);
+
+                // Encrypt SMTP password before storing
+                var encryptedPassword = data.senderPassword ?? "";
+                if (!string.IsNullOrEmpty(encryptedPassword) && !encryptedPassword.StartsWith("ENC:"))
+                {
+                    encryptedPassword = "ENC:" + _encryption.Encrypt(encryptedPassword);
+                }
 
                 var settingsToSave = new Dictionary<string, string>
                 {
                     { "Notification.SmtpServer", data.smtpServer ?? "smtp.gmail.com" },
                     { "Notification.SmtpPort", data.smtpPort.ToString() },
                     { "Notification.SenderEmail", data.senderEmail ?? "" },
-                    { "Notification.SenderPassword", data.senderPassword ?? "" },
+                    { "Notification.SenderPassword", encryptedPassword },
                     { "Notification.MasterAdminEmail", data.masterAdminEmail ?? "" },
                     { "Notification.WhatsAppGatewayUrl", data.whatsappGatewayUrl ?? "" },
                     { "Notification.WhatsAppToken", data.whatsappToken ?? "" },
@@ -4815,7 +5036,7 @@ namespace KWHMonitoring.Controllers
                     {
                         existing.SettingValue = kvp.Value;
                         existing.UpdatedAt = DateTime.Now;
-                        _logger.LogInformation("[SAVE-NOTIF] Updated key: {0} = {1}", kvp.Key, kvp.Value);
+                        _logger.LogInformation("[SAVE-NOTIF] Updated key: {0}", kvp.Key);
                     }
                     else
                     {
@@ -4825,7 +5046,7 @@ namespace KWHMonitoring.Controllers
                             SettingValue = kvp.Value,
                             UpdatedAt = DateTime.Now
                         });
-                        _logger.LogInformation("[SAVE-NOTIF] Added key: {0} = {1}", kvp.Key, kvp.Value);
+                        _logger.LogInformation("[SAVE-NOTIF] Added key: {0}", kvp.Key);
                     }
                 }
 
@@ -4836,7 +5057,7 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[SAVE-NOTIF] Error saving: {0}", ex.Message);
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4844,6 +5065,7 @@ namespace KWHMonitoring.Controllers
         // TEST EMAIL
         // ============================================
         [HttpPost("test-email-notification")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestEmailNotification()
         {
             try
@@ -4895,7 +5117,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4903,6 +5125,7 @@ namespace KWHMonitoring.Controllers
         // TEST WHATSAPP NOTIFICATION
         // ============================================
         [HttpPost("test-whatsapp-notification")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestWhatsAppNotification()
         {
             try
@@ -4944,7 +5167,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4952,6 +5175,7 @@ namespace KWHMonitoring.Controllers
         // RESCAN PANELS
         // ============================================
         [HttpPost("rescan-panels")]
+        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> RescanPanels()
         {
             try
@@ -4965,7 +5189,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -4974,6 +5198,7 @@ namespace KWHMonitoring.Controllers
         // Mengirim instant alert contoh berdasarkan anomali terbaru
         // ============================================
         [HttpPost("test-instant-alert")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestInstantAlert()
         {
             try
@@ -5012,7 +5237,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5021,6 +5246,7 @@ namespace KWHMonitoring.Controllers
         // Mengirim laporan jam ini (1 jam terakhir dari saat ini)
         // ============================================
         [HttpPost("test-hourly-report")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestHourlyReport()
         {
             try
@@ -5034,7 +5260,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5043,6 +5269,7 @@ namespace KWHMonitoring.Controllers
         // Mengirim laporan hari ini (dari jam 00:00 sampai sekarang)
         // ============================================
         [HttpPost("test-daily-report")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestDailyReport()
         {
             try
@@ -5056,7 +5283,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5065,6 +5292,7 @@ namespace KWHMonitoring.Controllers
         // Mengirim laporan bulan ini (dari tanggal 1 sampai sekarang)
         // ============================================
         [HttpPost("test-monthly-report")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestMonthlyReport()
         {
             try
@@ -5078,7 +5306,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5128,6 +5356,7 @@ namespace KWHMonitoring.Controllers
         // WABLAS - GET SETTINGS
         // ============================================
         [HttpGet("wablas/settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> GetWablasSettings()
         {
             try
@@ -5147,7 +5376,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5155,6 +5384,7 @@ namespace KWHMonitoring.Controllers
         // WABLAS - SAVE SETTINGS
         // ============================================
         [HttpPost("wablas/settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveWablasSettings([FromBody] WablasSettingsRequest request)
         {
             try
@@ -5198,7 +5428,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5206,6 +5436,7 @@ namespace KWHMonitoring.Controllers
         // WABLAS - TEST CONNECTION
         // ============================================
         [HttpPost("wablas/test")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestWablasConnection([FromBody] WablasTestRequest request)
         {
             try
@@ -5355,7 +5586,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+                return SafeError(ex, "WablasTest");
             }
         }
 
@@ -5421,7 +5652,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5429,6 +5660,7 @@ namespace KWHMonitoring.Controllers
         // AI CHATBOT SETTINGS
         // ============================================
         [HttpGet("chatbot-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> GetChatbotSettings()
         {
             try
@@ -5459,11 +5691,12 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load chatbot settings");
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
         [HttpPost("chatbot-settings")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveChatbotSettings([FromBody] ChatbotSettingsData data)
         {
             try
@@ -5518,11 +5751,12 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save chatbot settings");
-                return StatusCode(500, new { error = ex.Message });
+                return SafeError(ex);
             }
         }
 
         [HttpPost("test-chatbot-connection")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> TestChatbotConnection([FromBody] ChatbotSettingsData data)
         {
             try
@@ -5624,7 +5858,8 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return Ok(new { success = false, message = "Error: " + ex.Message });
+                _logger.LogError(ex, "Failed to save device settings");
+                return Ok(new { success = false, message = "Terjadi kesalahan internal." });
             }
         }
 
@@ -5641,7 +5876,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return SafeError(ex);
             }
         }
 
@@ -5658,11 +5893,12 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return SafeError(ex);
             }
         }
 
         [HttpPost("device-settings/{deviceKey}")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> SaveDeviceSettings(string deviceKey, [FromBody] DeviceSettingsRequest data)
         {
             try
@@ -5692,22 +5928,19 @@ namespace KWHMonitoring.Controllers
 
                 await _deviceSettingsService.SaveAsync(deviceKey, settings);
 
-                // Sync category to legacy AppSettingsRecord for existing consumers
-                if (!string.IsNullOrWhiteSpace(settings.DeviceCategory))
-                {
-                    await SyncDeviceCategoryToAppSettingsAsync(deviceKey, settings.DeviceCategory);
-                    await _context.SaveChangesAsync();
-                }
+                // Sync overlapping fields to legacy AppSettingsRecord (DeviceSettings = source of truth)
+                await SyncDeviceSettingsToAppSettingsAsync(deviceKey, settings);
 
                 return Ok(new { success = true, message = "Device settings saved successfully" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return SafeError(ex);
             }
         }
 
         [HttpPost("device-settings/bulk")]
+        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> BulkSaveDeviceSettings([FromBody] BulkDeviceSettingsRequest data)
         {
             try
@@ -5715,43 +5948,56 @@ namespace KWHMonitoring.Controllers
                 if (data?.Settings == null || !data.Settings.Any())
                     return BadRequest(new { success = false, message = "Settings list is required" });
 
-                foreach (var item in data.Settings)
+                var strategy = _context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
                 {
-                    if (string.IsNullOrWhiteSpace(item.DeviceKey)) continue;
-
-                    var settings = new DeviceSettings
+                    using (var transaction = await _context.Database.BeginTransactionAsync())
                     {
-                        MaxCapacity = item.MaxCapacity,
-                        DeviceCategory = item.DeviceCategory,
-                        DowntimeEnabled = item.DowntimeEnabled,
-                        DowntimeStart = item.DowntimeStart,
-                        DowntimeEnd = item.DowntimeEnd,
-                        TariffPerKWh = item.TariffPerKWh,
-                        LoadNormalThreshold = item.LoadNormalThreshold,
-                        LoadMediumThreshold = item.LoadMediumThreshold,
-                        EmaUpperThreshold = item.EmaUpperThreshold,
-                        EmaLowerThreshold = item.EmaLowerThreshold,
-                        EmaFibUpper = item.EmaFibUpper,
-                        EmaFibLower = item.EmaFibLower,
-                        ControlMode = item.ControlMode
-                    };
+                        try
+                        {
+                            foreach (var item in data.Settings)
+                            {
+                                if (string.IsNullOrWhiteSpace(item.DeviceKey)) continue;
 
-                    await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
+                                var settings = new DeviceSettings
+                                {
+                                    MaxCapacity = item.MaxCapacity,
+                                    DeviceCategory = item.DeviceCategory,
+                                    DowntimeEnabled = item.DowntimeEnabled,
+                                    DowntimeStart = item.DowntimeStart,
+                                    DowntimeEnd = item.DowntimeEnd,
+                                    TariffPerKWh = item.TariffPerKWh,
+                                    LoadNormalThreshold = item.LoadNormalThreshold,
+                                    LoadMediumThreshold = item.LoadMediumThreshold,
+                                    EmaUpperThreshold = item.EmaUpperThreshold,
+                                    EmaLowerThreshold = item.EmaLowerThreshold,
+                                    EmaFibUpper = item.EmaFibUpper,
+                                    EmaFibLower = item.EmaFibLower,
+                                    ControlMode = item.ControlMode
+                                };
 
-                    // Sync category to legacy AppSettingsRecord for existing consumers
-                    if (!string.IsNullOrWhiteSpace(settings.DeviceCategory))
-                    {
-                        await SyncDeviceCategoryToAppSettingsAsync(item.DeviceKey, settings.DeviceCategory);
+                                await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
+
+                                // Sync overlapping fields to legacy AppSettingsRecord
+                                await SyncDeviceSettingsToAppSettingsAsync(item.DeviceKey, settings);
+                            }
+
+                            await _context.SaveChangesAsync();
+                            transaction.Commit();
+                        }
+                        catch
+                        {
+                            transaction.Rollback();
+                            throw;
+                        }
                     }
-                }
-
-                await _context.SaveChangesAsync();
+                });
 
                 return Ok(new { success = true, message = "Device settings saved successfully" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return SafeError(ex);
             }
         }
     }

@@ -605,9 +605,15 @@
             var upperValue = ds.emaUpperThreshold || 0;
             var lowerValue = ds.emaLowerThreshold || 0;
 
-            // Skip anomaly detection if no thresholds are configured for this device
+            // Fallback to global EMA settings if per-device thresholds not configured
+            if (upperValue <= 0 && lowerValue <= 0 && window.anomalyServiceConfig) {
+                upperValue = window.anomalyServiceConfig.emaUpperThreshold || 0;
+                lowerValue = window.anomalyServiceConfig.emaLowerThreshold || 0;
+            }
+
+            // Skip anomaly detection only if both global and per-device thresholds are 0
             if (upperValue <= 0 && lowerValue <= 0) {
-                console.log('📈 No EMA thresholds configured for ' + deviceKey + ', skipping anomaly check');
+                console.log('📈 No EMA thresholds configured (per-device or global) for ' + deviceKey + ', skipping anomaly check');
                 return;
             }
 

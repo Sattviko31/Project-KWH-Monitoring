@@ -1,5 +1,6 @@
 using System;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 
 namespace KWHMonitoring.Services
@@ -56,18 +57,36 @@ namespace KWHMonitoring.Services
                     iterationCount: Iterations,
                     numBytesRequested: HashSize);
 
-                for (int i = 0; i < HashSize; i++)
+                // Constant-time comparison to prevent timing attacks
+                var diff = (uint)HashSize ^ (uint)(hashBytes.Length - SaltSize);
+                for (int i = 0; i < HashSize && i < hashBytes.Length - SaltSize; i++)
                 {
-                    if (hashBytes[SaltSize + i] != hash[i])
-                        return false;
+                    diff |= (uint)(hashBytes[SaltSize + i] ^ hash[i]);
                 }
 
-                return true;
+                return diff == 0;
             }
             catch
             {
                 return false;
             }
+        }
+
+        public static bool ConstantTimeEquals(string a, string b)
+        {
+            if (a == null || b == null)
+                return a == null && b == null;
+
+            var aBytes = Encoding.UTF8.GetBytes(a);
+            var bBytes = Encoding.UTF8.GetBytes(b);
+
+            var diff = (uint)aBytes.Length ^ (uint)bBytes.Length;
+            for (int i = 0; i < aBytes.Length && i < bBytes.Length; i++)
+            {
+                diff |= (uint)(aBytes[i] ^ bBytes[i]);
+            }
+
+            return diff == 0;
         }
     }
 }
