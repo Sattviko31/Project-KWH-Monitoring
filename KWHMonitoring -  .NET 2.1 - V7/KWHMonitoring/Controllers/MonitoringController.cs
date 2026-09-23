@@ -283,7 +283,9 @@ namespace KWHMonitoring.Controllers
             var settings = await _context.AppSettingsRecords
                 .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
 
-            var masterAdminEmail = settings.TryGetValue("Notification.MasterAdminEmail", out var mae) ? mae : string.Empty;
+            var masterAdminUser = await _context.ApplicationUsers
+                .FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
+            var masterAdminEmail = masterAdminUser?.Email ?? string.Empty;
             var isMasterAdmin = !string.IsNullOrEmpty(masterAdminEmail) &&
                 string.Equals(User.Identity.Name, masterAdminEmail, StringComparison.OrdinalIgnoreCase);
 

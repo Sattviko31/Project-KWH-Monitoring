@@ -34,7 +34,9 @@ namespace KWHMonitoring.Models
         RelayOtpRequested,
         RelayOtpVerified,
         RelayOtpFailed,
-        ChartDataReset
+        ChartDataReset,
+        MasterAdminTransferred,
+        MasterAdminTransferBlocked
     }
 
     [Table("SecurityAuditLogs")]

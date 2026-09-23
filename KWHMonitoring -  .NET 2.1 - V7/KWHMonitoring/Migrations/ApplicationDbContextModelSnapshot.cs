@@ -268,6 +268,8 @@ namespace KWHMonitoring.Migrations
 
                     b.Property<bool>("IsActive");
 
+                    b.Property<bool>("IsMasterAdmin");
+
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("datetime2");
 
@@ -289,6 +291,9 @@ namespace KWHMonitoring.Migrations
                         .HasMaxLength(50);
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsMasterAdmin")
+                        .HasName("IX_ApplicationUsers_IsMasterAdmin");
 
                     b.HasIndex("NormalizedEmail")
                         .IsUnique()

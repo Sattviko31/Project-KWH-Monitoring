@@ -45,6 +45,8 @@ namespace KWHMonitoring.Models
 
         public bool IsActive { get; set; } = true;
 
+        public bool IsMasterAdmin { get; set; }
+
         public int AccessFailedCount { get; set; }
 
         [Column(TypeName = "datetime2")]

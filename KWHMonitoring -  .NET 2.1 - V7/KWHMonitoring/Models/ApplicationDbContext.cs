@@ -404,6 +404,8 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.LastLoginAt).HasColumnType("datetime2");
                 entity.Property(x => x.LockoutEnd).HasColumnType("datetime2");
 
+                entity.HasIndex(x => x.IsMasterAdmin).HasName("IX_ApplicationUsers_IsMasterAdmin");
+
                 entity.HasIndex(x => x.NormalizedEmail).IsUnique().HasName("IX_ApplicationUsers_NormalizedEmail");
             });
 

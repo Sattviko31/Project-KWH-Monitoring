@@ -24,9 +24,9 @@ namespace KWHMonitoring.Controllers
 
         private async Task<string> GetMasterAdminEmailAsync()
         {
-            var record = await _context.AppSettingsRecords
-                .FirstOrDefaultAsync(x => x.SettingKey == "Notification.MasterAdminEmail");
-            return record?.SettingValue ?? string.Empty;
+            var masterAdmin = await _context.ApplicationUsers
+                .FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
+            return masterAdmin?.Email ?? string.Empty;
         }
 
         private async Task<bool> IsMasterAdminAsync()

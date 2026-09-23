@@ -436,12 +436,10 @@ namespace KWHMonitoring.Controllers
 
         private async Task<string> GetMasterAdminEmailAsync()
         {
-            var setting = await _context.AppSettingsRecords
-                .Where(x => x.SettingKey == "Notification.MasterAdminEmail")
-                .Select(x => x.SettingValue)
-                .FirstOrDefaultAsync();
+            var masterAdmin = await _context.ApplicationUsers
+                .FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
 
-            return setting ?? string.Empty;
+            return masterAdmin?.Email ?? string.Empty;
         }
 
         private async Task SendPasswordResetEmailAsync(ApplicationUser user)

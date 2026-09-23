@@ -3562,6 +3562,12 @@ canvas {
     color: #0b5ed7;
 }
 
+.settings-info-banner-warning {
+    background: rgba(255, 193, 7, 0.08);
+    border: 1px solid rgba(255, 193, 7, 0.25);
+    color: #997a00;
+}
+
 /* Settings Divider */
 .settings-divider {
     border: none;
@@ -5988,6 +5994,12 @@ canvas {
     background: rgba(56, 189, 248, 0.1);
     border-color: rgba(56, 189, 248, 0.3);
     color: #38bdf8;
+}
+
+[data-theme="dark"] .settings-info-banner-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: rgba(255, 193, 7, 0.35);
+    color: #ffc107;
 }
 
 /* ============================================

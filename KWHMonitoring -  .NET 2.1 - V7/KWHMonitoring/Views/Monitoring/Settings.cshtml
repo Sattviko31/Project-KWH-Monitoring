@@ -311,8 +311,8 @@
                         </div>
                         <div class="settings-field settings-field-full">
                             <label class="form-label">Master Admin Email</label>
-                            <input type="email" class="form-control" id="masterAdminEmail" placeholder="master.admin@gmail.com">
-                            <small class="text-muted">Email admin master untuk verifikasi pendaftaran user baru</small>
+                            <input type="email" class="form-control" id="masterAdminEmail" placeholder="master.admin@gmail.com" readonly>
+                            <small class="text-muted">Email admin master untuk verifikasi pendaftaran user baru. Hanya dapat diubah melalui User Management oleh master admin.</small>
                         </div>
                         <div class="settings-field settings-field-full">
                             <div class="settings-info-banner settings-info-banner-info">
@@ -817,7 +817,7 @@
             // Load user management content when tab is shown
             function loadUserManagementTab() {
                 var $container = $('#userManagementContainer');
-                if ($container.length && $container.find('.um-action-form').length === 0) {
+                if ($container.length) {
                     $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data user...</p></div>');
                     $.get('/UserManagement/Index', function(html) {
                         $container.html(html);
@@ -1293,7 +1293,7 @@
 
         function loadNotificationSettings() {
             $.ajax({
-                url: '/api/Api/get-notification-settings',
+                url: '/api/Api/get-notification-settings-full',
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
@@ -1342,7 +1342,6 @@
                 smtpPort: parseInt($('#smtpPort').val()),
                 senderEmail: $('#senderEmail').val(),
                 senderPassword: $('#senderPassword').val(),
-                masterAdminEmail: $('#masterAdminEmail').val(),
                 enableEmail: $('#enableEmail').is(':checked'),
                 enableWhatsApp: $('#enableWhatsApp').is(':checked'),
                 sendInstantAlert: $('#sendInstantAlert').is(':checked'),
@@ -1489,7 +1488,7 @@
             $('#smtpPort').val(587);
             $('#senderEmail').val('');
             $('#senderPassword').val('');
-            $('#masterAdminEmail').val('');
+            // masterAdminEmail is read-only and not part of notification save — do not reset
             $('#wablasServerUrl').val('');
             $('#wablasToken').val('');
             $('#wablasSecretKey').val('');

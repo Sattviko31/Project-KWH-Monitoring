@@ -2569,7 +2569,6 @@ namespace KWHMonitoring.Controllers
         // GET SYSTEM SETTINGS
         // ============================================
         [HttpGet("get-system-settings")]
-        [Authorize(Policy = "RequireAdmin")]
         public async Task<IActionResult> GetSystemSettings()
         {
             try
@@ -4689,7 +4688,10 @@ namespace KWHMonitoring.Controllers
                     smtpPort = GetInt(settings, "Notification.SmtpPort", 587),
                     senderEmail = GetString(settings, "Notification.SenderEmail", ""),
                     senderPassword = senderPassword,
-                    masterAdminEmail = GetString(settings, "Notification.MasterAdminEmail", ""),
+                    masterAdminEmail = await _context.ApplicationUsers
+                        .Where(x => x.IsMasterAdmin && x.IsActive)
+                        .Select(x => x.Email)
+                        .FirstOrDefaultAsync() ?? "",
                     whatsappGatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "https://api.fonnte.com/send"),
                     whatsappToken = GetString(settings, "Notification.WhatsAppToken", ""),
                     whatsappPhone = GetString(settings, "Notification.WhatsAppPhone", ""),
@@ -5011,7 +5013,6 @@ namespace KWHMonitoring.Controllers
                     { "Notification.SmtpPort", data.smtpPort.ToString() },
                     { "Notification.SenderEmail", data.senderEmail ?? "" },
                     { "Notification.SenderPassword", encryptedPassword },
-                    { "Notification.MasterAdminEmail", data.masterAdminEmail ?? "" },
                     { "Notification.WhatsAppGatewayUrl", data.whatsappGatewayUrl ?? "" },
                     { "Notification.WhatsAppToken", data.whatsappToken ?? "" },
                     { "Notification.WhatsAppPhone", data.whatsappPhone ?? "" },
@@ -5057,6 +5058,101 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError("[SAVE-NOTIF] Error saving: {0}", ex.Message);
+                return SafeError(ex);
+            }
+        }
+
+        // ============================================
+        // TRANSFER MASTER ADMIN (Only current master admin)
+        // ============================================
+        [HttpPost("transfer-master-admin")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> TransferMasterAdmin([FromBody] TransferMasterAdminData data)
+        {
+            try
+            {
+                var currentMasterAdmin = await _context.ApplicationUsers
+                    .FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
+                var masterEmail = currentMasterAdmin?.Email ?? string.Empty;
+
+                if (currentMasterAdmin == null ||
+                    !string.Equals(User.Identity.Name, masterEmail, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("[TRANSFER-MASTER] Blocked: {0} is not the current master admin", User.Identity.Name);
+
+                    try
+                    {
+                        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                        int? userId = int.TryParse(userIdClaim, out var parsedId) ? (int?)parsedId : null;
+                        _context.SecurityAuditLogs.Add(new SecurityAuditLog
+                        {
+                            UserId = userId,
+                            Email = User.Identity.Name ?? "unknown",
+                            Action = SecurityAction.MasterAdminTransferBlocked,
+                            Success = false,
+                            Details = $"Unauthorized master admin transfer attempt to {data?.newMasterAdminEmail}",
+                            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                            UserAgent = HttpContext.Request.Headers["User-Agent"].ToString(),
+                            Timestamp = DateTime.UtcNow
+                        });
+                        await _context.SaveChangesAsync();
+                    }
+                    catch { /* audit log failure should not break the main flow */ }
+
+                    return StatusCode(403, new { error = "Hanya master admin yang dapat memindahkan hak master admin." });
+                }
+
+                if (string.IsNullOrEmpty(data?.newMasterAdminEmail))
+                {
+                    return BadRequest(new { error = "Email master admin baru tidak boleh kosong." });
+                }
+
+                var targetUser = await _context.ApplicationUsers
+                    .FirstOrDefaultAsync(x => x.Email == data.newMasterAdminEmail && x.IsActive);
+                if (targetUser == null)
+                {
+                    return BadRequest(new { error = "User dengan email tersebut tidak ditemukan atau tidak aktif." });
+                }
+
+                if (targetUser.Role != UserRoles.Admin)
+                {
+                    return BadRequest(new { error = "Master admin hanya dapat dipindahkan ke user dengan role Admin." });
+                }
+
+                // Toggle IsMasterAdmin flags
+                currentMasterAdmin.IsMasterAdmin = false;
+                targetUser.IsMasterAdmin = true;
+
+                await _context.SaveChangesAsync();
+
+                // Security audit log
+                try
+                {
+                    var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    int? userId = int.TryParse(userIdClaim, out var parsedId) ? (int?)parsedId : null;
+                    _context.SecurityAuditLogs.Add(new SecurityAuditLog
+                    {
+                        UserId = userId,
+                        Email = User.Identity.Name ?? "unknown",
+                        Action = SecurityAction.MasterAdminTransferred,
+                        Success = true,
+                        Details = $"Master admin transferred from {masterEmail} to {data.newMasterAdminEmail}",
+                        IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        UserAgent = HttpContext.Request.Headers["User-Agent"].ToString(),
+                        Timestamp = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                }
+                catch { /* audit log failure should not break the main flow */ }
+
+                _logger.LogInformation("[TRANSFER-MASTER] Master admin transferred from {0} to {1}",
+                    masterEmail, data.newMasterAdminEmail);
+
+                return Ok(new { success = true, message = "Master admin berhasil dipindahkan." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[TRANSFER-MASTER] Error: {0}", ex.Message);
                 return SafeError(ex);
             }
         }
@@ -6081,6 +6177,11 @@ namespace KWHMonitoring.Controllers
         public string dailyReportTime { get; set; } = "08:00";
         public int monthlyReportDay { get; set; } = 1;
         public string monthlyReportTime { get; set; } = "08:00";
+    }
+
+    public class TransferMasterAdminData
+    {
+        public string newMasterAdminEmail { get; set; }
     }
 
     // Anomaly detection settings

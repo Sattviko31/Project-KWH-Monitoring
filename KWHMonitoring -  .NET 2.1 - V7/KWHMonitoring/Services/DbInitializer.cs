@@ -67,6 +67,7 @@ namespace KWHMonitoring.Services
                         Role = UserRoles.Admin,
                         EmailConfirmed = true,
                         IsActive = true,
+                        IsMasterAdmin = true,
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -82,6 +83,7 @@ namespace KWHMonitoring.Services
                     existingUser.Role = UserRoles.Admin;
                     existingUser.EmailConfirmed = true;
                     existingUser.IsActive = true;
+                    existingUser.IsMasterAdmin = true;
                     context.SaveChanges();
 
                     System.Diagnostics.Debug.WriteLine("DbInitializer: Existing master admin verified.");

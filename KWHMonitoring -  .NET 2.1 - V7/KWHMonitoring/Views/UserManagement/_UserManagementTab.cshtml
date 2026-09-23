@@ -11,6 +11,28 @@
         </div>
     </div>
     <div class="settings-section-body">
+        <!-- Transfer Master Admin -->
+        <div class="settings-field settings-field-full mb-3">
+            <div class="settings-info-banner settings-info-banner-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Pindahkan Master Admin</strong> — Pilih user Admin aktif untuk memindahkan hak master admin. Setelah dipindahkan, Anda akan kehilangan akses master admin.
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 mt-2">
+                <select id="transferMasterAdminSelect" class="form-select form-select-sm" style="max-width: 300px;">
+                    <option value="">— Pilih Admin —</option>
+                    @foreach (var user in Model.Where(u => u.Role == "Admin" && u.IsActive))
+                    {
+                        <option value="@user.Email">@user.Email</option>
+                    }
+                </select>
+                <button type="button" id="btnTransferMasterAdmin" class="btn btn-sm btn-warning">
+                    <i class="fas fa-exchange-alt"></i> Pindahkan Master Admin
+                </button>
+            </div>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-striped table-hover" id="userManagementTable">
                 <thead>
@@ -28,58 +50,74 @@
                     @if (!Model.Any())
                     {
                         <tr>
-                            <td colspan="7" class="text-center text-muted">Tidak ada akun lain.</td>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fas fa-users fa-2x mb-2 d-block text-muted"></i>
+                                Tidak ada akun lain.
+                            </td>
                         </tr>
                     }
                     else
                     {
                         foreach (var user in Model)
                         {
-                            <tr data-user-id="@user.Id">
+                            <tr data-user-id="@user.Id" data-user-email="@user.Email">
                                 <td>@user.Email</td>
                                 <td>@user.DisplayName</td>
                                 <td>
-                                    <span class="badge bg-info">@user.Role</span>
+                                    @if (user.Role == "Admin")
+                                    {
+                                        <span class="badge bg-danger"><i class="fas fa-shield-alt me-1"></i>Admin</span>
+                                    }
+                                    else if (user.Role == "Operator")
+                                    {
+                                        <span class="badge bg-primary"><i class="fas fa-cog me-1"></i>Operator</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary"><i class="fas fa-eye me-1"></i>Viewer</span>
+                                    }
                                 </td>
                                 <td>
                                     @if (user.IsActive)
                                     {
-                                        <span class="badge bg-success">Aktif</span>
+                                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Aktif</span>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-secondary">Nonaktif</span>
+                                        <span class="badge bg-secondary"><i class="fas fa-ban me-1"></i>Nonaktif</span>
                                     }
                                 </td>
-                                <td>@user.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                                <td>@(user.LastLoginAt.HasValue ? user.LastLoginAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
+                                <td><small>@user.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small></td>
+                                <td><small>@(user.LastLoginAt.HasValue ? user.LastLoginAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</small></td>
                                 <td>
-                                    <form class="um-action-form d-inline" action="/UserManagement/UpdateRole" method="post">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@user.Id" />
-                                        <select name="role" class="form-select form-select-sm d-inline w-auto" style="width:auto; display:inline-block;" onchange="this.form.submit()">
-                                            <option value="Viewer" @(user.Role == "Viewer" ? "selected" : "")>Viewer</option>
-                                            <option value="Operator" @(user.Role == "Operator" ? "selected" : "")>Operator</option>
-                                            <option value="Admin" @(user.Role == "Admin" ? "selected" : "")>Admin</option>
-                                        </select>
-                                    </form>
+                                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                                        <form class="um-role-form d-inline" action="/UserManagement/UpdateRole" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@user.Id" />
+                                            <select name="role" class="form-select form-select-sm um-role-select" style="width: auto; min-width: 100px;">
+                                                <option value="Viewer" @(user.Role == "Viewer" ? "selected" : "")>Viewer</option>
+                                                <option value="Operator" @(user.Role == "Operator" ? "selected" : "")>Operator</option>
+                                                <option value="Admin" @(user.Role == "Admin" ? "selected" : "")>Admin</option>
+                                            </select>
+                                        </form>
 
-                                    <form class="um-action-form d-inline" action="@(user.IsActive ? "/UserManagement/ToggleActive" : "/UserManagement/ToggleActive")" method="post">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@user.Id" />
-                                        <input type="hidden" name="isActive" value="@(user.IsActive ? "false" : "true")" />
-                                        <button type="submit" class="btn btn-sm @(user.IsActive ? "btn-warning" : "btn-success")">
-                                            <i class="fas @(user.IsActive ? "fa-ban" : "fa-check-circle")"></i> @(user.IsActive ? "Nonaktifkan" : "Aktifkan")
-                                        </button>
-                                    </form>
+                                        <form class="um-toggle-form d-inline" action="/UserManagement/ToggleActive" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@user.Id" />
+                                            <input type="hidden" name="isActive" value="@(user.IsActive ? "false" : "true")" />
+                                            <button type="button" class="btn btn-sm @(user.IsActive ? "btn-outline-warning" : "btn-outline-success") um-toggle-btn" data-user-email="@user.Email" data-action="@(user.IsActive ? "nonaktifkan" : "aktifkan")">
+                                                <i class="fas @(user.IsActive ? "fa-ban" : "fa-check-circle")"></i> <span>@(user.IsActive ? "Nonaktifkan" : "Aktifkan")</span>
+                                            </button>
+                                        </form>
 
-                                    <form class="um-action-form d-inline" action="/UserManagement/Delete" method="post">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="id" value="@user.Id" />
-                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Yakin ingin menghapus akun ini?');">
-                                            <i class="fas fa-trash-alt"></i> Hapus
-                                        </button>
-                                    </form>
+                                        <form class="um-delete-form d-inline" action="/UserManagement/Delete" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@user.Id" />
+                                            <button type="button" class="btn btn-sm btn-outline-danger um-delete-btn" data-user-email="@user.Email">
+                                                <i class="fas fa-trash-alt"></i> Hapus
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -90,35 +128,244 @@
     </div>
 </div>
 
-<script>
-    (function () {
-        var forms = document.querySelectorAll('#userManagementTable .um-action-form');
-        forms.forEach(function (form) {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                var formData = new FormData(form);
-                var action = form.getAttribute('action');
-                var token = form.querySelector('input[name="__RequestVerificationToken"]').value;
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="umDeleteModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white py-2">
+                <h6 class="modal-title"><i class="fas fa-exclamation-triangle me-1"></i> Konfirmasi Hapus</h6>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+            </div>
+            <div class="modal-body py-3">
+                <p class="mb-1">Yakin ingin menghapus akun <strong id="umDeleteEmail"></strong>?</p>
+                <small class="text-muted">Tindakan ini tidak dapat dibatalkan.</small>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-sm btn-danger" id="umDeleteConfirmBtn">
+                    <i class="fas fa-trash-alt"></i> Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-                fetch(action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'RequestVerificationToken': token
-                    }
-                })
-                .then(function (response) { return response.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        loadUserManagementTab();
-                    } else {
-                        alert(data.message || 'Terjadi kesalahan.');
-                    }
-                })
-                .catch(function () {
-                    alert('Gagal memproses permintaan.');
-                });
+<!-- Toggle Active Confirmation Modal -->
+<div class="modal fade" id="umToggleModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark py-2">
+                <h6 class="modal-title"><i class="fas fa-user-cog me-1"></i> Konfirmasi</h6>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span>&times;</span></button>
+            </div>
+            <div class="modal-body py-3">
+                <p class="mb-0" id="umToggleMessage"></p>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-sm btn-warning" id="umToggleConfirmBtn">
+                    <i class="fas fa-check"></i> Lanjutkan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function umNotify(message, type) {
+        if (typeof showNotification === 'function') {
+            showNotification(message, type);
+        } else {
+            alert(message);
+        }
+    }
+
+    function reloadUserManagement() {
+        var $container = $('#userManagementContainer');
+        if ($container.length) {
+            $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data user...</p></div>');
+            $.get('/UserManagement/Index', function (html) {
+                $container.html(html);
+            }).fail(function () {
+                $container.html('<div class="alert alert-danger">Gagal memuat data user.</div>');
+            });
+        }
+    }
+
+    // ---- Role Change (select onchange) ----
+    $(document).on('change', '.um-role-select', function () {
+        var $select = $(this);
+        var $form = $select.closest('.um-role-form');
+        var newRole = $select.val();
+        var prevRole = $select.find('option:selected').prev().val() || $select.find('option:not(:selected)').first().val();
+        var userName = $select.closest('tr').find('td:first').text().trim();
+
+        $select.prop('disabled', true);
+
+        $.ajax({
+            url: $form.attr('action'),
+            method: 'POST',
+            data: $form.serialize(),
+            dataType: 'json'
+        })
+        .done(function (data) {
+            if (data.success) {
+                umNotify('Role ' + userName + ' diubah ke ' + newRole, 'success');
+                reloadUserManagement();
+            } else {
+                umNotify(data.message || 'Gagal mengubah role.', 'danger');
+                $select.val(prevRole);
+                $select.prop('disabled', false);
+            }
+        })
+        .fail(function () {
+            umNotify('Gagal menghubungi server.', 'danger');
+            $select.val(prevRole);
+            $select.prop('disabled', false);
+        });
+    });
+
+    // ---- Toggle Active (button → modal → confirm → ajax) ----
+    var $pendingToggleForm = null;
+    var $pendingToggleBtn = null;
+    var pendingToggleOrigHtml = '';
+
+    $(document).on('click', '.um-toggle-btn', function () {
+        var $btn = $(this);
+        var $form = $btn.closest('.um-toggle-form');
+        var email = $btn.data('user-email');
+        var action = $btn.data('action');
+
+        $pendingToggleForm = $form;
+        $pendingToggleBtn = $btn;
+        pendingToggleOrigHtml = $btn.html();
+
+        $('#umToggleMessage').text('Yakin ingin ' + action + ' akun ' + email + '?');
+        $('#umToggleModal').modal('show');
+    });
+
+    $('#umToggleConfirmBtn').on('click', function () {
+        $('#umToggleModal').modal('hide');
+
+        if (!$pendingToggleForm) return;
+
+        $pendingToggleBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+        $.ajax({
+            url: $pendingToggleForm.attr('action'),
+            method: 'POST',
+            data: $pendingToggleForm.serialize(),
+            dataType: 'json'
+        })
+        .done(function (data) {
+            if (data.success) {
+                umNotify(data.message, 'success');
+                reloadUserManagement();
+            } else {
+                umNotify(data.message || 'Gagal mengubah status.', 'danger');
+                $pendingToggleBtn.prop('disabled', false).html(pendingToggleOrigHtml);
+            }
+        })
+        .fail(function () {
+            umNotify('Gagal menghubungi server.', 'danger');
+            $pendingToggleBtn.prop('disabled', false).html(pendingToggleOrigHtml);
+        });
+
+        $pendingToggleForm = null;
+        $pendingToggleBtn = null;
+    });
+
+    // ---- Delete (button → modal → confirm → ajax) ----
+    var $pendingDeleteForm = null;
+    var $pendingDeleteBtn = null;
+    var pendingDeleteOrigHtml = '';
+    var pendingDeleteEmail = '';
+
+    $(document).on('click', '.um-delete-btn', function () {
+        var $btn = $(this);
+        var $form = $btn.closest('.um-delete-form');
+        var email = $btn.data('user-email');
+
+        $pendingDeleteForm = $form;
+        $pendingDeleteBtn = $btn;
+        pendingDeleteOrigHtml = $btn.html();
+        pendingDeleteEmail = email;
+
+        $('#umDeleteEmail').text(email);
+        $('#umDeleteModal').modal('show');
+    });
+
+    $('#umDeleteConfirmBtn').on('click', function () {
+        $('#umDeleteModal').modal('hide');
+
+        if (!$pendingDeleteForm) return;
+
+        $pendingDeleteBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+        $.ajax({
+            url: $pendingDeleteForm.attr('action'),
+            method: 'POST',
+            data: $pendingDeleteForm.serialize(),
+            dataType: 'json'
+        })
+        .done(function (data) {
+            if (data.success) {
+                umNotify('User ' + pendingDeleteEmail + ' berhasil dihapus.', 'success');
+                reloadUserManagement();
+            } else {
+                umNotify(data.message || 'Gagal menghapus user.', 'danger');
+                $pendingDeleteBtn.prop('disabled', false).html(pendingDeleteOrigHtml);
+            }
+        })
+        .fail(function () {
+            umNotify('Gagal menghubungi server.', 'danger');
+            $pendingDeleteBtn.prop('disabled', false).html(pendingDeleteOrigHtml);
+        });
+
+        $pendingDeleteForm = null;
+        $pendingDeleteBtn = null;
+        pendingDeleteEmail = '';
+    });
+
+    // ---- Transfer Master Admin ----
+    var $transferBtn = $('#btnTransferMasterAdmin');
+    if ($transferBtn.length) {
+        $transferBtn.on('click', function () {
+            var newEmail = $('#transferMasterAdminSelect').val();
+            if (!newEmail) {
+                umNotify('Pilih user Admin terlebih dahulu.', 'info');
+                return;
+            }
+
+            if (!confirm('PERINGATAN: Anda akan memindahkan hak master admin ke ' + newEmail + '.\n\nSetelah dipindahkan, Anda akan kehilangan akses master admin dan tidak dapat mengembalikannya tanpa bantuan master admin baru.\n\nLanjutkan?')) {
+                return;
+            }
+
+            var origHtml = $transferBtn.html();
+            $transferBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Memproses...');
+
+            $.ajax({
+                url: '/api/Api/transfer-master-admin',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ newMasterAdminEmail: newEmail }),
+                dataType: 'json'
+            })
+            .done(function (data) {
+                if (data.success) {
+                    umNotify('Master admin berhasil dipindahkan ke ' + newEmail + '.', 'success');
+                    setTimeout(function () { location.reload(); }, 1500);
+                } else {
+                    umNotify(data.error || data.message || 'Gagal memindahkan master admin.', 'danger');
+                    $transferBtn.prop('disabled', false).html(origHtml);
+                }
+            })
+            .fail(function () {
+                umNotify('Gagal menghubungi server.', 'danger');
+                $transferBtn.prop('disabled', false).html(origHtml);
             });
         });
-    })();
+    }
+})();
 </script>
