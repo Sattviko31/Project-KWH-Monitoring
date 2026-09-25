@@ -90,6 +90,38 @@
     </div>
 </div>
 
+<!-- Financial Impact KPIs -->
+<div class="stats-row mb-3" id="financialImpactRow">
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#fd7e14,#ff9f43);color:#fff;">
+            <div class="stat-label">Dampak Biaya Anomali</div>
+            <div class="stat-value" id="dashAnomalyCost">Rp 0</div>
+            <i class="fas fa-bolt stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#c0392b);color:#fff;">
+            <div class="stat-label">Estimasi Revenue Loss</div>
+            <div class="stat-value" id="dashRevenueLoss">Rp 0</div>
+            <i class="fas fa-money-bill-wave stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#6f42c1,#8e44ad);color:#fff;">
+            <div class="stat-label">Revenue Loss Berlangsung</div>
+            <div class="stat-value" id="dashOngoingRevenueLoss">Rp 0</div>
+            <i class="fas fa-clock stat-icon"></i>
+        </div>
+    </div>
+    <div>
+        <div class="stat-card" style="background: linear-gradient(135deg,#0d6efd,#2980b9);color:#fff;">
+            <div class="stat-label">Device Terdampak Finansial</div>
+            <div class="stat-value" id="dashFinancialDevices">-</div>
+            <i class="fas fa-stopwatch stat-icon"></i>
+        </div>
+    </div>
+</div>
+
 <!-- DataGrid -->
 <div class="card shadow-sm mb-3">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
@@ -174,6 +206,24 @@
                         <div class="h5 mb-0 fw-bold text-info" id="repAffected">0</div>
                     </div>
                 </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Dampak Biaya</div>
+                        <div class="h5 mb-0 fw-bold text-danger" id="repAnomalyCost">Rp 0</div>
+                    </div>
+                </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Revenue Loss</div>
+                        <div class="h5 mb-0 fw-bold text-danger" id="repRevenueLoss">Rp 0</div>
+                    </div>
+                </div>
+                <div class="report-stat-card">
+                    <div class="border rounded p-2 text-center">
+                        <div class="text-muted small">Loss Berlangsung</div>
+                        <div class="h5 mb-0 fw-bold text-warning" id="repOngoingRevenueLoss">Rp 0</div>
+                    </div>
+                </div>
             </div>
             <div class="card bg-light mb-3">
                 <div class="card-body py-2">
@@ -185,6 +235,29 @@
                 <div class="card-header bg-white py-2"><strong><i class="fas fa-lightbulb text-muted me-1"></i>Rekomendasi</strong></div>
                 <div class="card-body py-2">
                     <div id="repRecommendations" class="small">-</div>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header bg-white py-2"><strong><i class="fas fa-search-dollar text-muted me-1"></i>Dampak Finansial & Root Cause</strong></div>
+                <div class="card-body py-2">
+                    <div class="row small">
+                        <div class="col-md-4 mb-2">
+                            <div class="text-muted">Dampak Biaya Overload</div>
+                            <div class="h6 text-danger fw-bold" id="repDetailAnomalyCost">Rp 0</div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <div class="text-muted">Estimasi Revenue Loss</div>
+                            <div class="h6 text-danger fw-bold" id="repDetailRevenueLoss">Rp 0</div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <div class="text-muted">Revenue Loss Berlangsung</div>
+                            <div class="h6 text-warning fw-bold" id="repDetailOngoingRevenueLoss">Rp 0</div>
+                        </div>
+                    </div>
+                    <div class="mt-2" id="repTopRootCauses">
+                        <div class="text-muted small">Top Root Cause:</div>
+                        <div class="small" id="repTopRootCausesList">-</div>
+                    </div>
                 </div>
             </div>
             <div class="text-muted small text-end">
@@ -250,11 +323,15 @@
                                 <table class="table table-sm table-borderless mb-0">
                                     <tbody>
                                         <tr><td class="text-muted">Device</td><td id="detailDevice">-</td></tr>
+                                        <tr><td class="text-muted">Lokasi</td><td id="detailLocation">-</td></tr>
+                                        <tr><td class="text-muted">Kategori Media</td><td id="detailDeviceCategory">-</td></tr>
                                         <tr><td class="text-muted">Tipe</td><td id="detailType">-</td></tr>
                                         <tr><td class="text-muted">Severity</td><td id="detailSeverity">-</td></tr>
                                         <tr><td class="text-muted">Daya</td><td id="detailPower">-</td></tr>
                                         <tr><td class="text-muted">Threshold</td><td id="detailThreshold">-</td></tr>
                                         <tr><td class="text-muted">Deviasi</td><td id="detailDeviation">-</td></tr>
+                                        <tr><td class="text-muted">Durasi</td><td id="detailDuration">-</td></tr>
+                                        <tr><td class="text-muted">Response Time</td><td id="detailResponseTime">-</td></tr>
                                         <tr><td class="text-muted">Waktu</td><td id="detailTime">-</td></tr>
                                         <tr><td class="text-muted">Status</td><td id="detailStatus">-</td></tr>
                                     </tbody>
@@ -275,6 +352,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="detail-info-col">
+                        <div class="card h-100 border-danger">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-coins text-muted"></i> Dampak Finansial</h6>
+                                <div id="detailFinancialImpactContainer">
+                                    <p class="mb-1 font-weight-bold small">Dampak Biaya (Overload):</p>
+                                    <p class="h5 text-danger" id="detailAnomalyCostImpact">Rp 0</p>
+                                    <p class="mb-1 font-weight-bold small mt-2">Estimasi Revenue Loss (Drop):</p>
+                                    <p class="h5 text-danger" id="detailRevenueLoss">Rp 0</p>
+                                    <p class="small text-muted mt-2" id="detailFinancialNote">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
@@ -286,45 +377,58 @@
                             </div>
                         </div>
                     </div>
-                    @if (userRole == "Operator" || userRole == "Admin")
-                    {
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-tools text-muted"></i> Tindakan Operator</h6>
-                                    <div class="detail-action-btns mb-2">
-                                        <div class="detail-action-btn">
-                                            <button class="btn btn-warning btn-sm w-100" id="btnDetailAcknowledge" disabled>
-                                                <i class="fas fa-check"></i> Acknowledge
-                                            </button>
-                                        </div>
-                                        <div class="detail-action-btn">
-                                            <button class="btn btn-success btn-sm w-100" id="btnDetailResolve" disabled>
-                                                <i class="fas fa-check-double"></i> Resolve
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="detail-action-fields">
-                                        <div class="detail-action-field">
-                                            <label class="form-label small mb-1">Jenis Tindakan</label>
-                                            <input type="text" id="operatorActionInput" class="form-control form-control-sm" placeholder="Contoh: Periksa relay, restart device, dll">
-                                        </div>
-                                        <div class="detail-action-field">
-                                            <label class="form-label small mb-1">Catatan Tindakan</label>
-                                            <textarea id="operatorNotesInput" class="form-control form-control-sm" rows="2" placeholder="Catatan tindakan perbaikan..."></textarea>
-                                        </div>
-                                    </div>
-                                    <button class="btn btn-primary btn-sm mt-2" id="btnSaveNotes">
-                                        <i class="fas fa-save"></i> Simpan Catatan
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resolve Anomaly Modal -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-double"></i> Resolve Anomali #<span id="resolveIdDisplay"></span></h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle"></i> Device: <strong id="resolveDeviceName">-</strong> | Tipe: <strong id="resolveAnomalyType">-</strong>
+                </div>
+                <input type="hidden" id="resolveAnomalyId">
+                <div class="form-group mb-3">
+                    <label for="resolveActionSelect" class="form-label small fw-bold">Jenis Tindakan Maintenance <span class="text-danger">*</span></label>
+                    <select id="resolveActionSelect" class="form-select form-select-sm">
+                        <option value="">-- Pilih tindakan --</option>
+                        <option value="Periksa koneksi listrik">Periksa koneksi listrik</option>
+                        <option value="Restart device">Restart device</option>
+                        <option value="Ganti fuse / MCB">Ganti fuse / MCB</option>
+                        <option value="Periksa relay / kontrol">Periksa relay / kontrol</option>
+                        <option value="Periksa supply voltage">Periksa supply voltage</option>
+                        <option value="Reset circuit breaker">Reset circuit breaker</option>
+                        <option value="Periksa kabel grounding">Periksa kabel grounding</option>
+                        <option value="Periksa sensor power meter">Periksa sensor power meter</option>
+                        <option value="Bersihkan panel / ventilasi">Bersihkan panel / ventilasi</option>
+                        <option value="Periksa UPS / backup power">Periksa UPS / backup power</option>
+                        <option value="Periksa firmware / software">Periksa firmware / software</option>
+                        <option value="Ganti komponen rusak">Ganti komponen rusak</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                    <div class="invalid-feedback small">Pilih jenis tindakan terlebih dahulu.</div>
+                </div>
+                <div class="form-group mb-2">
+                    <label for="resolveNotesInput" class="form-label small">Catatan Tindakan (opsional)</label>
+                    <textarea id="resolveNotesInput" class="form-control form-control-sm" rows="3" placeholder="Tambahkan keterangan opsional..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-success btn-sm" id="btnConfirmResolve">
+                    <i class="fas fa-check-double"></i> Resolve
+                </button>
             </div>
         </div>
     </div>
@@ -529,27 +633,6 @@
             flex: 1 1 100%;
         }
     }
-
-    /* Detail modal action buttons & fields */
-    .detail-action-btns {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .detail-action-btn {
-        flex: 1 1 auto;
-        min-width: 140px;
-    }
-    .detail-action-fields {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .detail-action-field {
-        flex: 1 1 0%;
-        min-width: 200px;
-    }
-
     /* Severity badges */
     .severity-badge {
         font-size: 0.7rem;
@@ -662,9 +745,7 @@
                 loadTrends(parseInt($(this).data('days')));
             });
 
-            $('#btnDetailAcknowledge').click(function() { acknowledgeAnomaly(currentDetailId); });
-            $('#btnDetailResolve').click(function() { resolveAnomaly(currentDetailId); });
-            $('#btnSaveNotes').click(function() { saveNotes(currentDetailId); });
+            $('#btnConfirmResolve').click(function() { submitResolveFromModal(); });
 
             $('#btnLoadReport').click(function() { loadMonthlyReport(); });
             $('#btnGenerateReport').click(function() { generateMonthlyReport(); });
@@ -754,6 +835,10 @@
                         $('#dashCritical').text(d.critical || 0);
                         $('#dashHigh').text(d.high || 0);
                         $('#dashTopDevice').text(d.topDevice || '-').attr('title', d.topDevice || '-');
+                        $('#dashAnomalyCost').text('Rp ' + formatNumber(d.totalAnomalyCostImpact || 0));
+                        $('#dashRevenueLoss').text('Rp ' + formatNumber(d.totalRevenueLoss || 0));
+                        $('#dashOngoingRevenueLoss').text('Rp ' + formatNumber(d.ongoingRevenueLoss || 0));
+                        $('#dashFinancialDevices').text(d.financialDeviceCount || 0);
                     }
                 },
                 error: function() { }
@@ -906,6 +991,8 @@
                                             deviceKey: item.deviceKey || item.DeviceKey || '',
                                             deviceId: item.deviceId || item.DeviceId || '',
                                             groupName: item.groupName || item.GroupName || item.deviceKey || '',
+                                            location: item.location || item.Location || '-',
+                                            deviceCategory: item.deviceCategory || item.DeviceCategory || 'Unknown',
                                             anomalyType: item.anomalyType || item.AnomalyType || '',
                                             powerValue: item.powerValue || item.PowerValue || 0,
                                             thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
@@ -919,6 +1006,11 @@
                                             acknowledged: item.acknowledged || item.Acknowledged || false,
                                             acknowledgedTime: item.acknowledgedTime || item.AcknowledgedTime,
                                             isResolved: item.isResolved || item.IsResolved || false,
+                                            resolvedTime: item.resolvedTime || item.ResolvedTime,
+                                            durationMinutes: item.durationMinutes || item.DurationMinutes,
+                                            responseTimeMinutes: item.responseTimeMinutes || item.ResponseTimeMinutes,
+                                            revenueLoss: item.revenueLoss || item.RevenueLoss || 0,
+                                            anomalyCostImpact: item.anomalyCostImpact || item.AnomalyCostImpact || 0,
                                             operatorAction: item.operatorAction || item.OperatorAction || '',
                                             operatorNotes: item.operatorNotes || item.OperatorNotes || '',
                                             notes: item.notes || item.Notes || ''
@@ -1000,6 +1092,29 @@
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
                 columns: [
+                    {
+                        caption: 'Action', width: 180, alignment: 'center',
+                        allowFiltering: false, allowSorting: false, allowGrouping: false, allowHeaderFiltering: false,
+                        cellTemplate: function(container, options) {
+                            var data = options.data;
+                            var buttons = $('<div class="d-flex justify-content-center gap-1">');
+                            $('<button>').addClass('btn btn-sm btn-info').attr('title', 'View detail').html('<i class="fas fa-eye"></i>')
+                                .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(buttons);
+                            if (currentUserRole === 'Operator' || currentUserRole === 'Admin') {
+                                var canAcknowledge = !data.acknowledged && !data.isResolved;
+                                var canResolve = !data.isResolved;
+                                $('<button>').addClass('btn btn-sm btn-warning' + (canAcknowledge ? '' : ' disabled')).attr('title', canAcknowledge ? 'Acknowledge' : 'Already acknowledged / resolved').prop('disabled', !canAcknowledge).html('<i class="fas fa-check"></i>')
+                                    .on('click', function(e) { if (!canAcknowledge) return; e.stopPropagation(); acknowledgeAnomaly(data.id); }).appendTo(buttons);
+                                $('<button>').addClass('btn btn-sm btn-success' + (canResolve ? '' : ' disabled')).attr('title', canResolve ? 'Resolve' : 'Already resolved').prop('disabled', !canResolve).html('<i class="fas fa-check-double"></i>')
+                                    .on('click', function(e) { if (!canResolve) return; e.stopPropagation(); openResolveModal(data.id, data.groupName || data.deviceKey, data.anomalyType); }).appendTo(buttons);
+                            }
+                            if (currentUserRole === 'Admin') {
+                                $('<button>').addClass('btn btn-sm btn-outline-danger').attr('title', 'Delete log').html('<i class="fas fa-trash"></i>')
+                                    .on('click', function(e) { e.stopPropagation(); confirmDelete(data.id, data.groupName || data.deviceKey, data.anomalyType); }).appendTo(buttons);
+                            }
+                            buttons.appendTo(container);
+                        }
+                    },
                     { dataField: 'id', caption: '#', width: 50, alignment: 'center', allowGrouping: false, allowFiltering: false, allowHeaderFiltering: false },
                     {
                         dataField: 'detectedTime', caption: 'Time', dataType: 'datetime', sortOrder: 'desc', alignment: 'center',
@@ -1025,6 +1140,8 @@
                         }
                     },
                     { dataField: 'groupName', caption: 'Device', alignment: 'center', headerFilter: { allowSelectAll: true } },
+                    { dataField: 'deviceCategory', caption: 'Kategori Media', alignment: 'center', headerFilter: { allowSelectAll: true } },
+                    { dataField: 'location', caption: 'Lokasi', alignment: 'center', visible: false },
                     {
                         dataField: 'anomalyType', caption: 'Type', alignment: 'center',
                         headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE DROP', value: 'DEVICE_DROP' }] },
@@ -1068,6 +1185,50 @@
                         cellTemplate: function(container, options) { $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container); }
                     },
                     {
+                        dataField: 'durationMinutes', caption: 'Durasi', dataType: 'number', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            if (v == null || v === undefined) { $('<span>').addClass('text-muted small fst-italic').text('ongoing').appendTo(container); return; }
+                            var h = Math.floor(v / 60);
+                            var m = Math.floor(v % 60);
+                            var text = h > 0 ? h + 'j ' + m + 'm' : m + 'm';
+                            $('<span>').text(text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'responseTimeMinutes', caption: 'Response', dataType: 'number', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value;
+                            if (v == null || v === undefined) { $('<span>').text('-').appendTo(container); return; }
+                            var h = Math.floor(v / 60);
+                            var m = Math.floor(v % 60);
+                            var cls = v <= 60 ? 'text-success' : v <= 240 ? 'text-warning' : 'text-danger';
+                            var text = h > 0 ? h + 'j ' + m + 'm' : m + 'm';
+                            $('<span>').addClass(cls).text(text).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'anomalyCostImpact', caption: 'Dampak Biaya', dataType: 'number', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value || 0;
+                            var data = options.row.data;
+                            if (data.anomalyType !== 'OVERLOAD' || v <= 0) { $('<span>').text('-').appendTo(container); return; }
+                            $('<span>').addClass('text-danger fw-bold').text('Rp ' + formatNumber(v)).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'revenueLoss', caption: 'Revenue Loss', dataType: 'number', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var v = options.value || 0;
+                            var data = options.row.data;
+                            var isResolved = data.isResolved;
+                            if (data.anomalyType !== 'DROP' && data.anomalyType !== 'DEVICE_DROP') { $('<span>').text('-').appendTo(container); return; }
+                            var cls = 'text-danger fw-bold';
+                            if (!isResolved) cls += ' fst-italic';
+                            $('<span>').addClass(cls).text('Rp ' + formatNumber(v) + (!isResolved ? ' *' : '')).appendTo(container);
+                        }
+                    },
+                    {
                         dataField: 'isResolved', caption: 'Status', dataType: 'boolean', alignment: 'center',
                         headerFilter: { dataSource: [{ text: 'New', value: false }, { text: 'Resolved', value: true }] },
                         cellTemplate: function(container, options) {
@@ -1077,21 +1238,6 @@
                             else $('<span>').addClass('badge bg-secondary').html('<i class="fas fa-circle"></i> New').appendTo(container);
                         }
                     },
-                    {
-                        caption: 'Action', width: 100, alignment: 'center',
-                        allowFiltering: false, allowSorting: false, allowGrouping: false, allowHeaderFiltering: false,
-                        cellTemplate: function(container, options) {
-                            var data = options.data;
-                            var buttons = $('<div class="d-flex justify-content-center gap-1">');
-                            $('<button>').addClass('btn btn-sm btn-info').attr('title', 'View detail').html('<i class="fas fa-eye"></i>')
-                                .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(buttons);
-                            if (currentUserRole === 'Admin') {
-                                $('<button>').addClass('btn btn-sm btn-outline-danger').attr('title', 'Delete log').html('<i class="fas fa-trash"></i>')
-                                    .on('click', function(e) { e.stopPropagation(); confirmDelete(data.id, data.groupName || data.deviceKey, data.anomalyType); }).appendTo(buttons);
-                            }
-                            buttons.appendTo(container);
-                        }
-                    }
                 ]
             }).dxDataGrid('instance');
         }
@@ -1148,12 +1294,32 @@
             data = data || {};
             $('#detailId').text(data.id || '-');
             $('#detailDevice').text((data.groupName || data.deviceKey || '-') + (data.deviceId ? ' (' + data.deviceId + ')' : ''));
+            $('#detailLocation').text(data.location || '-');
+            $('#detailDeviceCategory').text(data.deviceCategory || 'Unknown');
             $('#detailType').html(renderTypeBadge(data.anomalyType));
             $('#detailSeverity').html('<span class="severity-badge ' + severityClass(data.severity) + '">' + (data.severity || 'medium') + '</span>');
             $('#detailPower').text(formatNumber(data.powerValue) + ' W');
             $('#detailThreshold').text(formatNumber(data.thresholdValue) + ' W');
             $('#detailDeviation').text(fmt(data.deviation, 1) + '%');
             $('#detailTime').text(formatDateTime(data.detectedTime) || '-');
+
+            var dur = data.durationMinutes;
+            if (dur == null || dur === undefined)
+                $('#detailDuration').html('<span class="text-muted fst-italic">ongoing</span>');
+            else {
+                var h = Math.floor(dur / 60);
+                var m = Math.floor(dur % 60);
+                $('#detailDuration').text(h > 0 ? h + 'j ' + m + 'm' : m + 'm');
+            }
+
+            var resp = data.responseTimeMinutes;
+            if (resp == null || resp === undefined)
+                $('#detailResponseTime').text('-');
+            else {
+                var rh = Math.floor(resp / 60);
+                var rm = Math.floor(resp % 60);
+                $('#detailResponseTime').text(rh > 0 ? rh + 'j ' + rm + 'm' : rm + 'm');
+            }
 
             var statusHtml;
             if (data.isResolved) statusHtml = '<span class="badge bg-success">Resolved</span>';
@@ -1165,11 +1331,27 @@
             $('#detailRecommendedAction').text(data.recommendedAction || '-');
             $('#detailOperatorNotes').text(data.operatorNotes || '-');
 
-            if (currentUserRole === 'Operator' || currentUserRole === 'Admin') {
-                $('#btnDetailAcknowledge').prop('disabled', data.acknowledged).toggleClass('disabled', data.acknowledged);
-                $('#btnDetailResolve').prop('disabled', data.isResolved).toggleClass('disabled', data.isResolved);
-                $('#operatorNotesInput').val(data.operatorNotes || '');
-                $('#operatorActionInput').val(data.operatorAction || '');
+            // Financial impact
+            var isDrop = data.anomalyType === 'DROP' || data.anomalyType === 'DEVICE_DROP';
+            var isOverload = data.anomalyType === 'OVERLOAD';
+            var cost = data.anomalyCostImpact || 0;
+            var revenue = data.revenueLoss || 0;
+
+            if (isOverload && cost > 0) {
+                $('#detailAnomalyCostImpact').text('Rp ' + formatNumber(cost)).addClass('text-danger');
+                $('#detailRevenueLoss').text('-').removeClass('text-danger');
+                $('#detailFinancialNote').text('Dampak biaya energi berlebih akibat overload, dihitung dari selisih daya × 0,25 jam × tarif.');
+            } else if (isDrop) {
+                $('#detailAnomalyCostImpact').text('-').removeClass('text-danger');
+                $('#detailRevenueLoss').text('Rp ' + formatNumber(revenue) + (data.isResolved ? '' : ' *')).addClass('text-danger');
+                var note = 'Estimasi revenue loss selama device down.';
+                if (!data.isResolved) note += ' Perhitungan masih berlangsung hingga anomaly di-resolve.';
+                if (revenue === 0) note = 'Revenue per jam belum dikonfigurasi untuk device ini.';
+                $('#detailFinancialNote').text(note);
+            } else {
+                $('#detailAnomalyCostImpact').text('-').removeClass('text-danger');
+                $('#detailRevenueLoss').text('-').removeClass('text-danger');
+                $('#detailFinancialNote').text('Tidak ada dampak finansial yang dapat diestimasi untuk tipe anomaly ini.');
             }
 
             // Chart rendering deferred to 'shown.bs.modal' event — see openDetailModal()
@@ -1393,6 +1575,58 @@
         // ============================================
         // OPERATOR ACTIONS
         // ============================================
+        function openResolveModal(id, deviceName, anomalyType) {
+            $('#resolveAnomalyId').val(id);
+            $('#resolveIdDisplay').text(id);
+            $('#resolveDeviceName').text(deviceName || '-');
+            $('#resolveAnomalyType').text(anomalyType || '-');
+            $('#resolveActionSelect').val('').removeClass('is-invalid');
+            $('#resolveNotesInput').val('');
+            $('#resolveModal').modal('show');
+        }
+
+        function submitResolveFromModal() {
+            var id = $('#resolveAnomalyId').val();
+            var action = $('#resolveActionSelect').val();
+            var notes = $('#resolveNotesInput').val();
+
+            if (!action) {
+                $('#resolveActionSelect').addClass('is-invalid').focus();
+                return;
+            }
+            $('#resolveActionSelect').removeClass('is-invalid');
+
+            $('#btnConfirmResolve').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
+            $.ajax({
+                url: '/api/Api/anomaly-logs/' + id + '/resolve',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ action: action, notes: notes }),
+                dataType: 'json',
+                success: function(response) {
+                    $('#btnConfirmResolve').prop('disabled', false).html('<i class="fas fa-check-double"></i> Resolve');
+                    if (response.success) {
+                        showNotification('Anomali ditandai resolved', 'success');
+                        $('#resolveModal').modal('hide');
+                        if (dataGrid) dataGrid.refresh();
+                        loadDashboard();
+                    } else {
+                        showNotification(response.error || 'Gagal resolve', 'danger');
+                    }
+                },
+                error: function(xhr) {
+                    $('#btnConfirmResolve').prop('disabled', false).html('<i class="fas fa-check-double"></i> Resolve');
+                    showNotification('Gagal resolve: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger');
+                }
+            });
+        }
+
+        $('#resolveModal').on('shown.bs.modal', function() { $('#resolveActionSelect').focus(); });
+        $('#resolveModal').on('hidden.bs.modal', function() {
+            $('#btnConfirmResolve').prop('disabled', false).html('<i class="fas fa-check-double"></i> Resolve');
+            $('#resolveActionSelect').removeClass('is-invalid');
+        });
+
         function acknowledgeAnomaly(id) {
             if (!id) return;
             $.ajax({
@@ -1404,7 +1638,6 @@
                 success: function(response) {
                     if (response.success) {
                         showNotification('Anomali di-acknowledge', 'success');
-                        $('#btnDetailAcknowledge').prop('disabled', true).addClass('disabled');
                         if (dataGrid) dataGrid.refresh();
                         loadDashboard();
                     } else {
@@ -1412,52 +1645,6 @@
                     }
                 },
                 error: function(xhr) { showNotification('Gagal acknowledge: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
-            });
-        }
-
-        function resolveAnomaly(id) {
-            if (!id) return;
-            var action = $('#operatorActionInput').val();
-            var notes = $('#operatorNotesInput').val();
-            $.ajax({
-                url: '/api/Api/anomaly-logs/' + id + '/resolve',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ action: action, notes: notes }),
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Anomali ditandai resolved', 'success');
-                        $('#btnDetailResolve').prop('disabled', true).addClass('disabled');
-                        if (dataGrid) dataGrid.refresh();
-                        loadDashboard();
-                    } else {
-                        showNotification(response.error || 'Gagal resolve', 'danger');
-                    }
-                },
-                error: function(xhr) { showNotification('Gagal resolve: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
-            });
-        }
-
-        function saveNotes(id) {
-            if (!id) return;
-            var action = $('#operatorActionInput').val();
-            var notes = $('#operatorNotesInput').val();
-            $.ajax({
-                url: '/api/Api/anomaly-logs/' + id + '/notes',
-                method: 'PUT',
-                contentType: 'application/json',
-                data: JSON.stringify({ action: action, notes: notes }),
-                dataType: 'json',
-                success: function(response) {
-                    if (response.success) {
-                        showNotification('Catatan disimpan', 'success');
-                        if (dataGrid) dataGrid.refresh();
-                    } else {
-                        showNotification(response.error || 'Gagal menyimpan catatan', 'danger');
-                    }
-                },
-                error: function(xhr) { showNotification('Gagal menyimpan catatan: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error'), 'danger'); }
             });
         }
 
@@ -1512,10 +1699,26 @@
             $('#repOverload').text(data.overloadCount || 0);
             $('#repDrop').text(data.dropCount || 0);
             $('#repAffected').text(data.affectedDevices || 0);
+            $('#repAnomalyCost').text('Rp ' + formatNumber(data.totalAnomalyCostImpact || 0));
+            $('#repRevenueLoss').text('Rp ' + formatNumber(data.totalRevenueLoss || 0));
+            $('#repOngoingRevenueLoss').text('Rp ' + formatNumber(data.ongoingRevenueLoss || 0));
+            $('#repDetailAnomalyCost').text('Rp ' + formatNumber(data.totalAnomalyCostImpact || 0));
+            $('#repDetailRevenueLoss').text('Rp ' + formatNumber(data.totalRevenueLoss || 0));
+            $('#repDetailOngoingRevenueLoss').text('Rp ' + formatNumber(data.ongoingRevenueLoss || 0));
             $('#repSummary').text(data.summaryText || '-');
             $('#repRecommendations').html((data.recommendations || '-').replace(/\n/g, '<br>'));
             $('#repGeneratedBy').text(data.generatedBy || '-');
             $('#repGeneratedAt').text(data.generatedAt ? formatDateTime(data.generatedAt) : '-');
+
+            var rootCauses = data.topRootCauses || [];
+            if (rootCauses.length > 0) {
+                var html = rootCauses.map(function(r, i) {
+                    return '<div class="d-flex justify-content-between"><span>' + (i + 1) + '. ' + (r.rootCause || r.RootCause || '-') + '</span><span class="badge bg-secondary">' + (r.count || r.Count || 0) + '</span></div>';
+                }).join('');
+                $('#repTopRootCausesList').html(html);
+            } else {
+                $('#repTopRootCausesList').text('Tidak ada root cause yang tercatat');
+            }
         }
 
         // ============================================

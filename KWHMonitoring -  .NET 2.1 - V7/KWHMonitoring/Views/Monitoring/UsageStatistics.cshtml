@@ -23,8 +23,8 @@
                     <input type="text" id="usageDeviceSearch" class="form-control form-control-sm ps-4" placeholder="Cari panel..." />
                 </div>
                 <select id="usageCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
-                    <option value="all">🏷️ Semua Kategori</option>
-                    <option value="Billboard">🔵 Billboard</option>
+                    <option value="all">Semua Kategori</option>
+                    <option value="Billboard">Billboard</option>
                 </select>
                 <button id="btnClearUsageFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
                     <i class="fas fa-times"></i>
@@ -162,13 +162,182 @@
         </div>
     </div>
 
+    <!-- Financial Analysis -->
+    <div class="mb-3 mt-3 mt-md-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="text-muted mb-0"><i class="fas fa-chart-line"></i> Financial Analysis</h6>
+        <a asp-controller="Monitoring" asp-action="UsageStatisticsDocs" class="btn btn-sm btn-outline-info" target="_blank">
+            <i class="fas fa-book"></i> Dokumentasi Perhitungan
+        </a>
+    </div>
+
+    <!-- Financial Charts Row -->
+    <div class="chart-row mb-3">
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header py-2" style="background-color:#5b5ea6!important;color:#fff">
+                    <h6 class="mb-0"><i class="fas fa-bolt"></i> WBP / LWBP Split</h6>
+                </div>
+                <div class="card-body fin-chart-body">
+                    <canvas id="wbpLwbpChart" style="display:none"></canvas>
+                    <div id="wbpLwbpNotConfigured" class="text-center text-muted py-3" style="font-size:0.8rem"><i class="fas fa-cog"></i> Belum dikonfigurasi</div>
+                </div>
+                <div class="fin-chart-footer" id="wbpLwbpFooter" style="display:none"></div>
+            </div>
+        </div>
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white py-2" id="budgetCardHeader">
+                    <h6 class="mb-0"><i class="fas fa-wallet"></i> Budget vs Actual</h6>
+                </div>
+                <div class="card-body fin-chart-body">
+                    <canvas id="budgetChart" style="display:none"></canvas>
+                    <div id="budgetNotConfigured" class="text-center text-muted py-3" style="font-size:0.8rem"><i class="fas fa-cog"></i> Belum dikonfigurasi</div>
+                </div>
+                <div class="fin-chart-footer" id="budgetFooter" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Projection Chart -->
+    <div class="chart-row mb-3">
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-orange text-white py-2 d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0"><i class="fas fa-chart-line"></i> Proyeksi Konsumsi</h6>
+                    <div class="proj-tab-group">
+                        <button type="button" class="proj-tab active" data-proj-tab="monthly" onclick="switchProjectionTab('monthly')">Bulanan</button>
+                        <button type="button" class="proj-tab" data-proj-tab="yearly" onclick="switchProjectionTab('yearly')">Tahunan</button>
+                    </div>
+                </div>
+                <div class="card-body fin-chart-body">
+                    <canvas id="projectionChart"></canvas>
+                </div>
+                <div class="fin-chart-footer" id="projectionFooter"></div>
+            </div>
+        </div>
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-teal text-white py-2 d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0"><i class="fas fa-chart-area"></i> Proyeksi Biaya</h6>
+                    <div class="proj-tab-group">
+                        <button type="button" class="proj-tab active" data-costproj-tab="monthly" onclick="switchCostProjectionTab('monthly')">Bulanan</button>
+                        <button type="button" class="proj-tab" data-costproj-tab="yearly" onclick="switchCostProjectionTab('yearly')">Tahunan</button>
+                    </div>
+                </div>
+                <div class="card-body fin-chart-body">
+                    <canvas id="costProjectionChart"></canvas>
+                </div>
+                <div class="fin-chart-footer" id="costProjectionFooter"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Summary & Anomaly Cost — 2 columns -->
+    <div class="fin-summary-grid mb-3">
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-th-large"></i> Financial Summary</h6>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <div class="fin-metric-grid">
+                        <div class="fin-metric" id="finWaste">
+                            <div class="fin-metric-label"><i class="fas fa-exclamation-triangle text-danger"></i> Waste</div>
+                            <div class="fin-metric-value" id="finWasteValue">—</div>
+                            <div class="fin-metric-sub" id="finWasteSub"></div>
+                        </div>
+                        <div class="fin-metric" id="finMom">
+                            <div class="fin-metric-label"><i class="fas fa-exchange-alt text-info"></i> MoM</div>
+                            <div class="fin-metric-value" id="finMomValue">—</div>
+                            <div class="fin-metric-sub" id="finMomSub"></div>
+                        </div>
+                        <div class="fin-metric" id="finYoy">
+                            <div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> YoY</div>
+                            <div class="fin-metric-value" id="finYoyValue">—</div>
+                            <div class="fin-metric-sub" id="finYoySub"></div>
+                        </div>
+                        <div class="fin-metric" id="finBill">
+                            <div class="fin-metric-label"><i class="fas fa-file-invoice-dollar text-warning"></i> Proyeksi</div>
+                            <div class="fin-metric-value" id="finBillValue">—</div>
+                            <div class="fin-metric-sub" id="finBillSub"></div>
+                        </div>
+                        <div class="fin-metric" id="finLf">
+                            <div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Load Factor</div>
+                            <div class="fin-metric-value" id="finLfValue">—</div>
+                            <div class="fin-metric-sub" id="finLfSub"></div>
+                        </div>
+                        <div class="fin-metric" id="finUe">
+                            <div class="fin-metric-label"><i class="fas fa-calculator text-success"></i> Unit Econ</div>
+                            <div class="fin-metric-value" id="finUeValue">—</div>
+                            <div class="fin-metric-sub" id="finUeSub"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-exclamation-circle"></i> Dampak Biaya Anomali</h6>
+                </div>
+                <div class="card-body py-2" id="anomalyCostBody">
+                    <div class="text-center text-muted py-2" style="font-size:0.8rem">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Grid -->
+    <div class="report-grid mb-3">
+        <!-- Report: Daily -->
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Harian</h6>
+                </div>
+                <div class="card-body py-2 px-3" id="dailyReportBody">
+                    <div class="text-center text-muted py-2" style="font-size:0.8rem"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report: Monthly -->
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-warning text-dark py-2">
+                    <h6 class="mb-0"><i class="fas fa-calendar-week"></i> Laporan Bulanan</h6>
+                </div>
+                <div class="card-body py-2 px-3" id="monthlyReportBody">
+                    <div class="text-center text-muted py-2" style="font-size:0.8rem"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report: Yearly -->
+        <div>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-indigo text-white py-2">
+                    <h6 class="mb-0"><i class="fas fa-calendar"></i> Laporan Tahunan</h6>
+                </div>
+                <div class="card-body py-2 px-3" id="yearlyReportBody">
+                    <div class="text-center text-muted py-2" style="font-size:0.8rem"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 @section Scripts {
     <script src="~/js/chart.umd.min.js"></script>
     <script>
         let charts = {};
         let selectedDate = new Date();
         let refreshTimer = null;
+        let lastFinancialRefreshTime = 0;
+        var FINANCIAL_REFRESH_INTERVAL = 60000; // Aggregate financial data at most every 60s
         let usageFilterDebounce = null;
+        let lastEnergyData = null;   // For daily report
+        let lastFinancialData = null; // For daily report
 
         // ============================================
         // DEVICE FILTER LOGIC
@@ -237,6 +406,7 @@
                     $list.find('.panel-chip').removeClass('active');
                     $(this).addClass('active');
                     updateDeviceFilterLabel();
+                    lastFinancialRefreshTime = 0;
                     loadData();
                 });
             $list.append($allChip);
@@ -260,6 +430,7 @@
                         $list.find('.panel-chip').removeClass('active');
                         $(this).addClass('active');
                         updateDeviceFilterLabel();
+                        lastFinancialRefreshTime = 0;
                         loadData();
                     });
 
@@ -316,6 +487,7 @@
                     var panelCategory = panel ? (panel.deviceCategory || usageDeviceCategoryMap[panel.deviceKey] || 'Billboard') : 'Billboard';
                     if (panelCategory !== category) {
                         activeUsageChipDeviceKey = null;
+                        lastFinancialRefreshTime = 0;
                         updateDeviceFilterLabel();
                         loadData();
                     }
@@ -331,6 +503,7 @@
                 $('#usageChipList').find('[data-device-key="__all__"]').addClass('active');
                 $('#usageChipList').find('.panel-chip').show();
                 updateDeviceFilterLabel();
+                lastFinancialRefreshTime = 0;
                 loadData();
             });
         }
@@ -437,6 +610,7 @@
             startAutoRefresh();
 
             $('#btnRefresh').click(function() {
+                lastFinancialRefreshTime = 0;
                 loadData();
             });
 
@@ -444,6 +618,7 @@
                 selectedDate.setDate(selectedDate.getDate() - 1);
                 updateDateInput();
                 updateDayName();
+                lastFinancialRefreshTime = 0;
                 loadData();
             });
 
@@ -451,6 +626,7 @@
                 selectedDate.setDate(selectedDate.getDate() + 1);
                 updateDateInput();
                 updateDayName();
+                lastFinancialRefreshTime = 0;
                 loadData();
             });
 
@@ -458,6 +634,7 @@
                 selectedDate = new Date();
                 updateDateInput();
                 updateDayName();
+                lastFinancialRefreshTime = 0;
                 loadData();
             });
 
@@ -467,6 +644,7 @@
                     var parts = dateVal.split('-');
                     selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
                     updateDayName();
+                    lastFinancialRefreshTime = 0;
                     loadData();
                 }
             });
@@ -520,8 +698,46 @@
                 dataType: 'json',
                 timeout: 15000,
                 success: function(data) {
-                    // Normalize per-device response to match aggregate format
+                    // Save per-device financial data before normalization
+                    var deviceFinancialData = null;
                     if (activeUsageChipDeviceKey && data.today) {
+                        var devTariff = data.tariffPerKWh || 1500;
+                        if (data.wbpLwbp && data.wbpLwbp.configured && data.wbpLwbp.tariffWBP > 0 && data.wbpLwbp.tariffLWBP > 0) {
+                            var _wbpKwh = data.wbpLwbp.wbpKWh || 0;
+                            var _lwbpKwh = data.wbpLwbp.lwbpKWh || 0;
+                            var _wbpT = data.wbpLwbp.tariffWBP || 0;
+                            var _lwbpT = data.wbpLwbp.tariffLWBP || 0;
+                            var _totalDev = _wbpKwh + _lwbpKwh;
+                            if (_totalDev > 0) {
+                                devTariff = Math.round((_wbpKwh * _wbpT + _lwbpKwh * _lwbpT) / _totalDev);
+                            } else {
+                                devTariff = Math.round((_wbpT + _lwbpT) / 2);
+                            }
+                        }
+                        var devEstCost = (data.budget && data.budget.actualCost) || 0;
+                        if (devEstCost === 0 && data.month) {
+                            devEstCost = Math.round((data.month.total || 0) * devTariff);
+                        }
+                        deviceFinancialData = {
+                            wbpLwbp: data.wbpLwbp || {},
+                            waste: data.waste || {},
+                            budget: data.budget || {},
+                            periodComparison: data.periodComparison || {},
+                            billProjection: data.billProjection || {},
+                            anomalyCostImpact: data.anomalyCostImpact || {},
+                            loadFactorInfo: data.loadFactorInfo || {},
+                            unitEconomics: data.unitEconomics || {},
+                            tariffTypeInfo: {
+                                wbpDeviceCount: (data.wbpLwbp && data.wbpLwbp.configured) ? 1 : 0,
+                                flatDeviceCount: (data.wbpLwbp && !data.wbpLwbp.configured) ? 1 : 0,
+                                flatKWh: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.month && data.month.total) || 0) : 0,
+                                flatCost: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.budget && data.budget.actualCost) || 0) : 0,
+                                totalDeviceCount: 1
+                            },
+                            avgTariffPerKWh: devTariff,
+                            totalEstimatedCost: devEstCost
+                        };
+                        // Normalize per-device response to match aggregate format
                         data = {
                             totalToday: data.today.total,
                             avgPerHour: data.today.avgPerHour,
@@ -549,6 +765,15 @@
                     updateUI(data);
                     $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
                     $('#statusText').text('Online');
+
+                    // Update financial analysis — derived from per-device data
+                    if (deviceFinancialData) {
+                        // Single device selected: use its financial data directly
+                        updateFinancialUI(deviceFinancialData);
+                    } else {
+                        // All devices: aggregate financial data from each device dynamically
+                        fetchAndAggregateDeviceFinancialData(startDate, endDate);
+                    }
                 },
                 error: function(xhr) {
                     console.error('Error:', xhr.responseText);
@@ -558,6 +783,8 @@
         }
 
         function updateUI(data) {
+            lastEnergyData = data;
+
             // Calculate real-time averages (exclude empty/zero data)
             var hourlyData = (data.hourlyData || []).sort((a, b) => a.sortKey - b.sortKey);
             var dailyData = (data.dailyData || []).sort((a, b) => a.sortKey - b.sortKey);
@@ -574,11 +801,6 @@
             $('#usageMonthAvg').text(formatDecimal(rtAvgPerDay));
             $('#usageYear').text(formatDecimal(data.totalThisYear) + ' kWh');
             $('#usageYearAvg').text(formatDecimal(rtAvgPerMonth));
-
-            var tariff = data.tariffPerKWh || 1500;
-            $('#tariffDisplay').text('Rp ' + formatInteger(tariff));
-            // Hapus 2 angka di belakang koma untuk estimasi biaya
-            $('#usageCost').text('Rp ' + formatInteger(data.estimatedCost));
 
             // Update peak info
             $('#peakHourValue').text(formatDecimal(data.peakHour) + ' kWh');
@@ -668,6 +890,7 @@
                             borderWidth: 2,
                             borderDash: [6, 3],
                             pointRadius: 0,
+                            pointHitRadius: 0,
                             fill: false,
                             spanGaps: false,
                             order: 0
@@ -720,6 +943,7 @@
                             borderWidth: 2,
                             borderDash: [6, 3],
                             pointRadius: 0,
+                            pointHitRadius: 0,
                             fill: false,
                             spanGaps: false,
                             order: 0
@@ -772,6 +996,7 @@
                             borderWidth: 2,
                             borderDash: [6, 3],
                             pointRadius: 0,
+                            pointHitRadius: 0,
                             fill: false,
                             spanGaps: false,
                             order: 0
@@ -787,6 +1012,1807 @@
                 });
             }
 
+        }
+
+        // ============================================
+        // FINANCIAL ANALYSIS UI
+        // ============================================
+
+        // --- Client-side aggregation from per-device financial data ---
+        function showFinancialLoading() {
+            // Saat refresh, pertahankan data yang sudah tampil agar tidak berkedip.
+            // Hanya tampilkan placeholder loading pada load pertama.
+            if (lastFinancialData) {
+                return;
+            }
+
+            $('#finWasteValue, #finMomValue, #finYoyValue, #finBillValue, #finLfValue, #finUeValue')
+                .attr('class', 'fin-metric-value text-muted').text('⏳');
+            $('#finWasteSub, #finMomSub, #finYoySub, #finBillSub, #finLfSub, #finUeSub').text('Memuat...');
+            $('#wbpLwbpNotConfigured').html('<i class="fas fa-spinner fa-spin"></i> Memuat data perangkat...').show();
+            $('#budgetNotConfigured').html('<i class="fas fa-spinner fa-spin"></i> Memuat data perangkat...').show();
+            $('#wbpLwbpChart, #budgetChart').hide();
+            $('#wbpLwbpFooter, #budgetFooter').hide();
+            $('#anomalyCostBody').html('<div class="text-center text-muted py-2" style="font-size:0.8rem"><i class="fas fa-spinner fa-spin"></i> Memuat data perangkat...</div>');
+        }
+
+        function fetchAndAggregateDeviceFinancialData(startDate, endDate) {
+            showFinancialLoading();
+
+            var panels = usagePanelList || [];
+            if (panels.length === 0) {
+                // No devices loaded yet — retry after a short delay
+                setTimeout(function() {
+                    if (usagePanelList.length > 0) {
+                        fetchAndAggregateDeviceFinancialData(startDate, endDate);
+                    } else {
+                        updateFinancialUI({ wbpLwbp: { configured: false }, waste: { configured: false }, budget: { configured: false }, periodComparison: {}, billProjection: {}, anomalyCostImpact: { totalAnomalies: 0, topAnomalies: [] }, loadFactorInfo: { configured: false }, unitEconomics: { configured: false } });
+                    }
+                }, 1500);
+                return;
+            }
+
+            var requestBody = JSON.stringify({ startDate: startDate.toISOString(), endDate: endDate.toISOString() });
+            var completed = 0;
+            var deviceResults = [];
+            var totalPanels = panels.length;
+
+            panels.forEach(function(panel) {
+                $.ajax({
+                    url: '/api/Api/usage-statistics/' + encodeURIComponent(panel.deviceKey),
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: requestBody,
+                    dataType: 'json',
+                    timeout: 15000,
+                    success: function(data) {
+                        if (data && data.success !== false) {
+                            deviceResults.push(data);
+                        }
+                    },
+                    error: function() {
+                        // Skip failed devices
+                    },
+                    complete: function() {
+                        completed++;
+                        if (completed === totalPanels) {
+                            // All requests finished — aggregate and update
+                            if (deviceResults.length === 0) {
+                                updateFinancialUI({ wbpLwbp: { configured: false }, waste: { configured: false }, budget: { configured: false }, periodComparison: {}, billProjection: {}, anomalyCostImpact: { totalAnomalies: 0, topAnomalies: [] }, loadFactorInfo: { configured: false }, unitEconomics: { configured: false } });
+                                return;
+                            }
+                            var aggregated = aggregateFinancialData(deviceResults);
+                            updateFinancialUI(aggregated);
+                        }
+                    }
+                });
+            });
+        }
+
+        function aggregateFinancialData(deviceResults) {
+            var wbpKwh = 0, lwbpKwh = 0, wbpCost = 0, lwbpCost = 0, totalCostWBP = 0;
+            var anyWbpConfigured = false;
+            var wbpStart, wbpEnd, tariffWBP, tariffLWBP;
+
+            var wasteKwh = 0, wasteCost = 0;
+            var anyWasteConfigured = false;
+            var downtimeStart, downtimeEnd;
+
+            var budgetKWh = 0, actualKWh = 0, budgetCost = 0, actualCost = 0;
+            var anyBudgetConfigured = false;
+
+            var lastMonthKWh = 0, momChange = 0;
+            var lastYearSameMonthKWh = 0, yoyChange = 0;
+
+            var projectedMonthKWh = 0, projectedCost = 0;
+            var daysElapsed = 0, daysRemaining = 0;
+
+            var totalAnomalies = 0, estimatedExcessKWh = 0, estimatedCostImpact = 0;
+            var allAnomalies = [];
+
+            var lfTotalKWh = 0, lfTotalMaxCapKVA = 0;
+            var anyLFConfigured = false;
+
+            var totalSurfaceArea = 0;
+            var anyUEConfigured = false;
+
+            // Tariff type tracking
+            var wbpDeviceCount = 0, flatDeviceCount = 0;
+            var flatKWh = 0, flatCost = 0;
+
+            // Per-device tariff & estimated cost tracking
+            var tariffSum = 0, tariffCount = 0;
+            var totalEstimatedCost = 0;
+
+            deviceResults.forEach(function(d) {
+                if (!d) return;
+                var deviceMonthKWh = (d.month && d.month.total) || 0;
+
+                // Calculate effective tariff per device (weighted by consumption for WBP/LWBP)
+                var devTariff = d.tariffPerKWh || 1500;
+                if (d.wbpLwbp && d.wbpLwbp.configured && d.wbpLwbp.tariffWBP > 0 && d.wbpLwbp.tariffLWBP > 0) {
+                    var wbpKwh = d.wbpLwbp.wbpKWh || 0;
+                    var lwbpKwh = d.wbpLwbp.lwbpKWh || 0;
+                    var wbpT = d.wbpLwbp.tariffWBP || 0;
+                    var lwbpT = d.wbpLwbp.tariffLWBP || 0;
+                    var totalDev = wbpKwh + lwbpKwh;
+                    if (totalDev > 0) {
+                        devTariff = Math.round((wbpKwh * wbpT + lwbpKwh * lwbpT) / totalDev);
+                    } else {
+                        devTariff = Math.round((wbpT + lwbpT) / 2);
+                    }
+                }
+                tariffSum += devTariff;
+                tariffCount++;
+
+                // Sum per-device estimated cost (uses each device's own tariff/WBP)
+                var devEstimatedCost = (d.budget && d.budget.actualCost) || 0;
+                if (devEstimatedCost === 0 && deviceMonthKWh > 0) {
+                    devEstimatedCost = Math.round(deviceMonthKWh * devTariff);
+                }
+                totalEstimatedCost += devEstimatedCost;
+
+                // WBP/LWBP
+                var w = d.wbpLwbp || {};
+                if (w.configured) {
+                    anyWbpConfigured = true;
+                    wbpDeviceCount++;
+                    wbpKwh += (w.wbpKWh || 0);
+                    lwbpKwh += (w.lwbpKWh || 0);
+                    wbpCost += (w.wbpCost || 0);
+                    lwbpCost += (w.lwbpCost || 0);
+                    totalCostWBP += (w.totalCostWBP || 0);
+                    tariffWBP = w.tariffWBP;
+                    tariffLWBP = w.tariffLWBP;
+                    wbpStart = w.wbpStart;
+                    wbpEnd = w.wbpEnd;
+                } else {
+                    // Flat tariff device
+                    flatDeviceCount++;
+                    flatKWh += deviceMonthKWh;
+                    flatCost += (d.budget && d.budget.actualCost) || Math.round(deviceMonthKWh * (d.tariffPerKWh || 1500));
+                }
+
+                // Waste
+                var ws = d.waste || {};
+                if (ws.configured) {
+                    anyWasteConfigured = true;
+                    wasteKwh += (ws.wasteKWh || 0);
+                    wasteCost += (ws.wasteCost || 0);
+                    downtimeStart = ws.downtimeStart;
+                    downtimeEnd = ws.downtimeEnd;
+                }
+
+                // Budget
+                var b = d.budget || {};
+                if (b.configured) {
+                    anyBudgetConfigured = true;
+                    budgetKWh += (b.budgetKWh || 0);
+                }
+                // actualCost is always available regardless of budget configured
+                actualKWh += (b.actualKWh || deviceMonthKWh);
+                budgetCost += (b.budgetCost || 0);
+                actualCost += (b.actualCost || Math.round(deviceMonthKWh * (d.tariffPerKWh || 1500)));
+
+                // Period Comparison — sum absolute values
+                var pc = d.periodComparison || {};
+                lastMonthKWh += (pc.lastMonthKWh || 0);
+                momChange += (pc.momChange || 0);
+                lastYearSameMonthKWh += (pc.lastYearSameMonthKWh || 0);
+                yoyChange += (pc.yoyChange || 0);
+
+                // Bill Projection — sum per-device projections (each uses its own tariff)
+                var bp = d.billProjection || {};
+                projectedMonthKWh += (bp.projectedMonthKWh || 0);
+                projectedCost += (bp.projectedCost || 0);
+                daysElapsed = bp.daysElapsed || 0;
+                daysRemaining = bp.daysRemaining || 0;
+
+                // Anomaly Cost Impact — merge all devices
+                var ac = d.anomalyCostImpact || {};
+                totalAnomalies += (ac.totalAnomalies || 0);
+                estimatedExcessKWh += (ac.estimatedExcessKWh || 0);
+                estimatedCostImpact += (ac.estimatedCostImpact || 0);
+                var items = ac.topAnomalies || ac.anomalies || [];
+                allAnomalies = allAnomalies.concat(items);
+
+                // Load Factor — accumulate for recalculation from totals
+                var lf = d.loadFactorInfo || {};
+                if (lf.configured && (lf.maxCapacity || 0) > 0) {
+                    anyLFConfigured = true;
+                    lfTotalKWh += deviceMonthKWh;
+                    lfTotalMaxCapKVA += (lf.maxCapacity || 0) / 1000;
+                }
+
+                // Unit Economics — accumulate for recalculation
+                var ue = d.unitEconomics || {};
+                if (ue.configured && (ue.surfaceArea || 0) > 0) {
+                    anyUEConfigured = true;
+                    totalSurfaceArea += ue.surfaceArea;
+                }
+            });
+
+            // Recalculate derived values from totals
+            var totalConsumption = wbpKwh + lwbpKwh;
+            if (totalConsumption === 0) totalConsumption = actualKWh;
+            var wbpRatio = totalConsumption > 0 ? Math.round((wbpKwh / totalConsumption) * 100 * 10) / 10 : 0;
+            var wastePercent = totalConsumption > 0 ? Math.round((wasteKwh / totalConsumption) * 100 * 10) / 10 : 0;
+            var budgetVariance = anyBudgetConfigured ? Math.round((actualKWh - budgetKWh) * 100) / 100 : 0;
+            var budgetVariancePct = (anyBudgetConfigured && budgetKWh > 0) ? Math.round((actualKWh - budgetKWh) / budgetKWh * 100 * 10) / 10 : 0;
+            var momChangePercent = lastMonthKWh > 0 ? Math.round(momChange / lastMonthKWh * 100 * 10) / 10 : (actualKWh > 0 ? 100 : 0);
+            var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.round(yoyChange / lastYearSameMonthKWh * 100 * 10) / 10 : (actualKWh > 0 ? 100 : 0);
+            var loadFactor = (anyLFConfigured && lfTotalMaxCapKVA > 0 && daysElapsed > 0)
+                ? Math.min(Math.round(lfTotalKWh / (lfTotalMaxCapKVA * daysElapsed * 24) * 100 * 10) / 10, 100)
+                : 0;
+            var lfStatus = loadFactor > 80 ? 'High Risk' : loadFactor < 30 ? 'Under-utilized' : 'Optimal';
+            var costPerM2 = (anyUEConfigured && totalSurfaceArea > 0) ? Math.round(actualCost / totalSurfaceArea) : 0;
+            var costPerHour = daysElapsed > 0 ? Math.round(actualCost / (daysElapsed * 24)) : 0;
+
+            // Sort anomalies by estimatedCost descending, take top 5
+            allAnomalies.sort(function(a, b) { return (b.estimatedCost || 0) - (a.estimatedCost || 0); });
+            var top5Anomalies = allAnomalies.slice(0, 5);
+
+            return {
+                wbpLwbp: {
+                    configured: anyWbpConfigured,
+                    wbpKWh: Math.round(wbpKwh * 100) / 100,
+                    lwbpKWh: Math.round(lwbpKwh * 100) / 100,
+                    wbpCost: Math.round(wbpCost),
+                    lwbpCost: Math.round(lwbpCost),
+                    totalCostWBP: Math.round(totalCostWBP),
+                    wbpRatio: wbpRatio,
+                    tariffWBP: tariffWBP,
+                    tariffLWBP: tariffLWBP,
+                    wbpStart: wbpStart,
+                    wbpEnd: wbpEnd
+                },
+                waste: {
+                    configured: anyWasteConfigured,
+                    wasteKWh: Math.round(wasteKwh * 100) / 100,
+                    wasteCost: Math.round(wasteCost),
+                    wastePercent: wastePercent,
+                    downtimeStart: downtimeStart,
+                    downtimeEnd: downtimeEnd
+                },
+                budget: {
+                    configured: anyBudgetConfigured,
+                    budgetKWh: Math.round(budgetKWh * 100) / 100,
+                    actualKWh: Math.round(actualKWh * 100) / 100,
+                    variance: budgetVariance,
+                    variancePercent: budgetVariancePct,
+                    budgetCost: Math.round(budgetCost),
+                    actualCost: Math.round(actualCost)
+                },
+                periodComparison: {
+                    lastMonthKWh: Math.round(lastMonthKWh * 100) / 100,
+                    momChange: Math.round(momChange * 100) / 100,
+                    momChangePercent: momChangePercent,
+                    lastYearSameMonthKWh: Math.round(lastYearSameMonthKWh * 100) / 100,
+                    yoyChange: Math.round(yoyChange * 100) / 100,
+                    yoyChangePercent: yoyChangePercent
+                },
+                billProjection: {
+                    projectedMonthKWh: Math.round(projectedMonthKWh * 100) / 100,
+                    projectedCost: Math.round(projectedCost),
+                    daysElapsed: daysElapsed,
+                    daysRemaining: daysRemaining
+                },
+                anomalyCostImpact: {
+                    totalAnomalies: totalAnomalies,
+                    estimatedExcessKWh: Math.round(estimatedExcessKWh * 100) / 100,
+                    estimatedCostImpact: Math.round(estimatedCostImpact),
+                    topAnomalies: top5Anomalies
+                },
+                loadFactorInfo: {
+                    configured: anyLFConfigured,
+                    loadFactor: loadFactor,
+                    maxCapacity: Math.round(lfTotalMaxCapKVA * 1000),
+                    status: lfStatus
+                },
+                unitEconomics: {
+                    configured: anyUEConfigured,
+                    costPerM2: costPerM2,
+                    costPerHour: costPerHour,
+                    surfaceArea: Math.round(totalSurfaceArea * 100) / 100
+                },
+                tariffTypeInfo: {
+                    wbpDeviceCount: wbpDeviceCount,
+                    flatDeviceCount: flatDeviceCount,
+                    flatKWh: Math.round(flatKWh * 100) / 100,
+                    flatCost: Math.round(flatCost),
+                    totalDeviceCount: wbpDeviceCount + flatDeviceCount
+                },
+                avgTariffPerKWh: tariffCount > 0 ? Math.round(tariffSum / tariffCount) : 1500,
+                totalEstimatedCost: Math.round(totalEstimatedCost)
+            };
+        }
+
+        // Chart.js center-text plugin for doughnut charts (register once)
+        if (!window._centerTextPluginRegistered) {
+            window._centerTextPluginRegistered = true;
+            var centerTextPlugin = {
+                id: 'centerText',
+                afterDraw: function(chart) {
+                    var ct = chart.config.options && chart.config.options.plugins && chart.config.options.plugins.centerText;
+                    if (!ct) return;
+                    var ctx = chart.ctx;
+                    var cx = (chart.chartArea.left + chart.chartArea.right) / 2;
+                    var cy = (chart.chartArea.top + chart.chartArea.bottom) / 2;
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (ct.line1) {
+                        ctx.font = 'bold 14px sans-serif';
+                        ctx.fillStyle = ct.color1 || '#333';
+                        ctx.fillText(ct.line1, cx, cy - 10);
+                    }
+                    if (ct.line2) {
+                        ctx.font = '10px sans-serif';
+                        ctx.fillStyle = ct.color2 || '#888';
+                        ctx.fillText(ct.line2, cx, cy + 8);
+                    }
+                    if (ct.line3) {
+                        ctx.font = '9px sans-serif';
+                        ctx.fillStyle = ct.color3 || '#aaa';
+                        ctx.fillText(ct.line3, cx, cy + 22);
+                    }
+                    ctx.restore();
+                }
+            };
+            Chart.register(centerTextPlugin);
+        }
+
+        function updateFinancialUI(data) {
+            lastFinancialData = data;
+
+            // Update Estimasi Biaya card from per-device aggregated cost (not flat tariff)
+            if (data.totalEstimatedCost > 0) {
+                $('#usageCost').text('Rp ' + formatInteger(data.totalEstimatedCost));
+            } else if (data.budget && data.budget.actualCost > 0) {
+                $('#usageCost').text('Rp ' + formatInteger(data.budget.actualCost));
+            }
+
+            // Update Tarif display from average of all device tariffs
+            if (data.avgTariffPerKWh) {
+                $('#tariffDisplay').text('Rp ' + formatInteger(data.avgTariffPerKWh));
+            }
+
+            updateWbpLwbpChart(data);
+            updateBudgetChart(data.budget || {});
+            updateProjectionCharts();
+            updateFinancialMetrics(data);
+            updateAnomalyCostUI(data.anomalyCostImpact || {});
+            renderAllReports();
+        }
+
+        // --- WBP/LWBP Doughnut Chart ---
+        function updateWbpLwbpChart(data) {
+            var wbpLwbp = data.wbpLwbp || {};
+            var $canvas = $('#wbpLwbpChart');
+            var $notCfg = $('#wbpLwbpNotConfigured');
+            var $footer = $('#wbpLwbpFooter');
+
+            // Show flat-tariff-only message if no WBP devices configured
+            var ti = data.tariffTypeInfo || {};
+            if (!wbpLwbp.configured && (!ti.flatDeviceCount || ti.flatDeviceCount === 0)) {
+                $canvas.hide();
+                $notCfg.html('<i class="fas fa-cog"></i> Belum dikonfigurasi — set tarif WBP/LWBP di Settings').show();
+                $footer.hide();
+                if (charts.wbpLwbp) { charts.wbpLwbp.destroy(); charts.wbpLwbp = null; }
+                return;
+            }
+            if (!wbpLwbp.configured && ti.flatDeviceCount > 0) {
+                // Only flat-tariff devices — show summary instead of WBP/LWBP chart
+                $canvas.hide();
+                $notCfg.html('<i class="fas fa-tag"></i> Semua device menggunakan tarif flat<br>' +
+                    '<span class="text-muted" style="font-size:0.75rem">' + ti.flatDeviceCount + ' device flat · ' + formatDecimal(ti.flatKWh || 0) + ' kWh · Rp ' + formatInteger(ti.flatCost || 0) + '</span>').show();
+                $footer.hide();
+                if (charts.wbpLwbp) { charts.wbpLwbp.destroy(); charts.wbpLwbp = null; }
+                return;
+            }
+
+            var wbpKwh = wbpLwbp.wbpKwh || 0;
+            var lwbpKwh = wbpLwbp.lwbpKwh || 0;
+            var total = wbpKwh + lwbpKwh;
+
+            if (total === 0) {
+                $canvas.hide();
+                $notCfg.html('<i class="fas fa-chart-pie"></i> Tidak ada data konsumsi untuk periode ini').show();
+                $footer.hide();
+                if (charts.wbpLwbp) { charts.wbpLwbp.destroy(); charts.wbpLwbp = null; }
+                return;
+            }
+
+            $canvas.show();
+            $notCfg.hide();
+            if (charts.wbpLwbp) charts.wbpLwbp.destroy();
+
+            var wbpPct = total > 0 ? Math.round((wbpKwh / total) * 100) : 0;
+            var lwbpPct = 100 - wbpPct;
+            var wbpCost = wbpLwbp.wbpCost || 0;
+            var lwbpCost = wbpLwbp.lwbpCost || 0;
+            var totalCost = wbpLwbp.totalCostWBP || (wbpCost + lwbpCost);
+            var wbpTariff = wbpLwbp.tariffWBP || 0;
+            var lwbpTariff = wbpLwbp.tariffLWBP || 0;
+            var ti = data.tariffTypeInfo || {};
+            var hasFlat = ti.flatDeviceCount > 0;
+
+            var chartLabels = ['WBP', 'LWBP'];
+            var chartData = [wbpKwh, lwbpKwh];
+            var chartBgColors = ['rgba(91,94,166,0.85)', 'rgba(25,135,84,0.85)'];
+            if (hasFlat && ti.flatKWh > 0) {
+                chartLabels.push('Flat');
+                chartData.push(ti.flatKWh || 0);
+                chartBgColors.push('rgba(108,117,125,0.85)');
+            }
+
+            charts.wbpLwbp = new Chart($canvas[0], {
+                type: 'doughnut',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        data: chartData,
+                        backgroundColor: chartBgColors,
+                        borderColor: chartBgColors,
+                        borderWidth: 2,
+                        hoverOffset: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, padding: 8, boxWidth: 12 } },
+                        centerText: {
+                            line1: formatDecimal(total) + ' kWh',
+                            line2: 'WBP ' + wbpPct + '% / LWBP ' + lwbpPct + '%',
+                            line3: 'Rp ' + formatInteger(totalCost),
+                            color1: '#333', color2: '#888', color3: '#aaa'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    var cost = ctx.dataIndex === 0 ? wbpCost : (ctx.dataIndex === 1 ? lwbpCost : (ti.flatCost || 0));
+                                    return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh (Rp ' + formatInteger(cost) + ')';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            var footerHtml = '<div><span style="color:rgba(91,94,166,0.9)">WBP:</span> ' + formatDecimal(wbpKwh) + ' kWh = Rp ' + formatInteger(wbpCost) + '</div>' +
+                '<div><span style="color:rgba(25,135,84,0.9)">LWBP:</span> ' + formatDecimal(lwbpKwh) + ' kWh = Rp ' + formatInteger(lwbpCost) + '</div>';
+            if (hasFlat && ti.flatKWh > 0) {
+                footerHtml += '<div><span style="color:rgba(108,117,125,0.9)">Flat:</span> ' + formatDecimal(ti.flatKWh) + ' kWh = Rp ' + formatInteger(ti.flatCost || 0) + '</div>';
+            }
+            footerHtml += '<div class="mt-1" style="border-top:1px solid rgba(128,128,128,0.2);padding-top:2px">Tarif: WBP Rp ' + formatInteger(wbpTariff) + '/kWh · LWBP Rp ' + formatInteger(lwbpTariff) + '/kWh';
+            if (wbpLwbp.wbpStart !== undefined) footerHtml += ' · Jam ' + wbpLwbp.wbpStart + ':00-' + wbpLwbp.wbpEnd + ':00';
+            if (ti.totalDeviceCount > 0) footerHtml += ' · ' + (ti.wbpDeviceCount || 0) + ' WBP/LWBP, ' + (ti.flatDeviceCount || 0) + ' Flat';
+            footerHtml += '</div>';
+            $footer.show().html(footerHtml);
+        }
+
+        // --- Budget vs Actual Doughnut Chart ---
+        function updateBudgetChart(budget) {
+            var $canvas = $('#budgetChart');
+            var $notCfg = $('#budgetNotConfigured');
+            var $footer = $('#budgetFooter');
+            var $header = $('#budgetCardHeader');
+
+            if (!budget.configured) {
+                $canvas.hide();
+                $notCfg.html('<i class="fas fa-cog"></i> Belum dikonfigurasi — set Budget Rp/bln di Settings').show();
+                $footer.hide();
+                $header.attr('class', 'card-header bg-success text-white py-2');
+                if (charts.budget) { charts.budget.destroy(); charts.budget = null; }
+                return;
+            }
+
+            $notCfg.hide();
+            if (charts.budget) charts.budget.destroy();
+
+            var budgetKwh = budget.budgetKWh || 0;
+            var actualKwh = budget.actualKWh || 0;
+            var variance = budget.variance || (actualKwh - budgetKwh);
+            var remaining = Math.max(budgetKwh - actualKwh, 0);
+            var pct = budgetKwh > 0 ? Math.round((actualKwh / budgetKwh) * 100) : 0;
+            var isOver = pct > 100;
+
+            // Dynamic header color
+            if (isOver) {
+                $header.attr('class', 'card-header bg-danger text-white py-2');
+            } else if (pct > 80) {
+                $header.attr('class', 'card-header text-white py-2').css('background-color', '#e0a800');
+            } else {
+                $header.attr('class', 'card-header bg-success text-white py-2');
+            }
+
+            if (budgetKwh === 0 && actualKwh === 0) {
+                $canvas.hide();
+                $notCfg.html('<i class="fas fa-chart-pie"></i> Tidak ada data').show();
+                $footer.hide();
+                return;
+            }
+
+            $canvas.show();
+            var usedColor = isOver ? 'rgba(220,53,69,0.85)' : (pct > 80 ? 'rgba(255,193,7,0.85)' : 'rgba(25,135,84,0.85)');
+            var usedBorder = isOver ? 'rgba(220,53,69,1)' : (pct > 80 ? 'rgba(255,193,7,1)' : 'rgba(25,135,84,1)');
+
+            charts.budget = new Chart($canvas[0], {
+                type: 'doughnut',
+                data: {
+                    labels: ['Terpakai', 'Sisa'],
+                    datasets: [{
+                        data: [actualKwh, remaining],
+                        backgroundColor: [usedColor, 'rgba(200,200,200,0.3)'],
+                        borderColor: [usedColor, 'rgba(200,200,200,0.3)'],
+                        borderWidth: 2,
+                        hoverOffset: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, padding: 8, boxWidth: 12 } },
+                        centerText: {
+                            line1: pct + '%',
+                            line2: isOver ? 'Over Budget' : 'terpakai',
+                            line3: isOver ? 'Over ' + (pct - 100) + '%' : 'Sisa ' + (100 - pct) + '%',
+                            color1: isOver ? '#dc3545' : (pct > 80 ? '#856404' : '#198754'),
+                            color2: '#888',
+                            color3: isOver ? '#dc3545' : '#aaa'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            var budgetCost = budget.budgetCost || 0;
+            var actualCost = budget.actualCost || 0;
+            var footHtml = '<div><strong>Budget:</strong> Rp ' + formatInteger(budgetCost) + ' (' + formatDecimal(budgetKwh) + ' kWh)</div>' +
+                '<div><strong>Actual:</strong> Rp ' + formatInteger(actualCost) + ' (' + formatDecimal(actualKwh) + ' kWh)</div>';
+            if (variance !== 0) {
+                var vCls = variance > 0 ? 'text-danger' : 'text-success';
+                footHtml += '<div><strong>Variance:</strong> <span class="' + vCls + '">' + (variance > 0 ? '+' : '') + formatDecimal(variance) + ' kWh</span></div>';
+            }
+            $footer.show().html(footHtml);
+        }
+
+        // ============================================
+        // PROJECTION CHARTS — Consumption & Cost
+        // ============================================
+        var activeProjectionTab = 'monthly';
+        var activeCostProjectionTab = 'monthly';
+        var projectionChartInstance = null;
+        var costProjectionChartInstance = null;
+
+        function switchProjectionTab(tab) {
+            activeProjectionTab = tab;
+            $('[data-proj-tab]').removeClass('active');
+            $('[data-proj-tab="' + tab + '"]').addClass('active');
+            updateConsumptionProjectionChart();
+        }
+
+        function switchCostProjectionTab(tab) {
+            activeCostProjectionTab = tab;
+            $('[data-costproj-tab]').removeClass('active');
+            $('[data-costproj-tab="' + tab + '"]').addClass('active');
+            updateCostProjectionChart();
+        }
+
+        function updateProjectionCharts() {
+            updateConsumptionProjectionChart();
+            updateCostProjectionChart();
+        }
+
+        function updateConsumptionProjectionChart() {
+            var ed = lastEnergyData;
+            var fd = lastFinancialData;
+            if (!ed && !fd) return;
+
+            var $canvas = $('#projectionChart');
+            var $footer = $('#projectionFooter');
+
+            if (activeProjectionTab === 'monthly') {
+                renderMonthlyConsumptionProjection(ed, fd, $canvas, $footer);
+            } else {
+                renderYearlyConsumptionProjection(ed, fd, $canvas, $footer);
+            }
+        }
+
+        function renderMonthlyConsumptionProjection(ed, fd, $canvas, $footer) {
+            var now = new Date();
+            var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            var dayOfMonth = now.getDate();
+
+            var dailyData = (ed && ed.dailyData) || [];
+            var budget = (fd && fd.budget) || {};
+            var bp = (fd && fd.billProjection) || {};
+
+            // Build actual daily values array (index 0 = day 1)
+            var actualDaily = new Array(daysInMonth).fill(0);
+            dailyData.forEach(function(d) {
+                var idx = (d.sortKey || 0) - 1;
+                if (idx >= 0 && idx < daysInMonth) actualDaily[idx] = d.energy || 0;
+            });
+
+            // Calculate average from filled days (days with consumption > 0 up to today)
+            var filledDays = 0, filledSum = 0;
+            for (var i = 0; i < Math.min(dayOfMonth, daysInMonth); i++) {
+                if (actualDaily[i] > 0) { filledDays++; filledSum += actualDaily[i]; }
+            }
+
+            // Weighted average: recent 7 days get 60% weight, older days get 40%
+            var recentWindow = 7;
+            var recentSum = 0, recentCount = 0;
+            var olderSum = 0, olderCount = 0;
+            var cutoff = Math.max(0, dayOfMonth - recentWindow);
+            for (var i = cutoff; i < Math.min(dayOfMonth, daysInMonth); i++) {
+                if (actualDaily[i] > 0) { recentSum += actualDaily[i]; recentCount++; }
+            }
+            for (var i = 0; i < cutoff; i++) {
+                if (actualDaily[i] > 0) { olderSum += actualDaily[i]; olderCount++; }
+            }
+            var recentAvg = recentCount > 0 ? recentSum / recentCount : 0;
+            var olderAvg = olderCount > 0 ? olderSum / olderCount : 0;
+            var projectedDailyKWh;
+            if (recentAvg > 0 && olderAvg > 0) {
+                projectedDailyKWh = recentAvg * 0.6 + olderAvg * 0.4;
+            } else if (recentAvg > 0) {
+                projectedDailyKWh = recentAvg;
+            } else if (olderAvg > 0) {
+                projectedDailyKWh = olderAvg;
+            } else {
+                projectedDailyKWh = filledDays > 0 ? filledSum / filledDays : 0;
+            }
+
+            // Build projected daily values for remaining days
+            var projectedDaily = new Array(daysInMonth).fill(0);
+            for (var i = 0; i < daysInMonth; i++) {
+                if (i < dayOfMonth) {
+                    projectedDaily[i] = actualDaily[i]; // actual
+                } else {
+                    projectedDaily[i] = projectedDailyKWh; // projected
+                }
+            }
+
+            // Cumulative arrays
+            var actualCumulative = [];
+            var projectedCumulative = [];
+            var budgetPaceLine = [];
+            var cumActual = 0, cumProjected = 0;
+            var budgetKwh = budget.budgetKWh || 0;
+            var dailyBudgetPace = budgetKwh > 0 ? budgetKwh / daysInMonth : 0;
+
+            for (var i = 0; i < daysInMonth; i++) {
+                if (i < dayOfMonth) {
+                    cumActual += actualDaily[i];
+                    actualCumulative.push(cumActual);
+                    projectedCumulative.push(cumActual);
+                } else {
+                    actualCumulative.push(null);
+                    cumProjected += projectedDaily[i];
+                    projectedCumulative.push(cumActual + cumProjected);
+                }
+                budgetPaceLine.push(dailyBudgetPace * (i + 1));
+            }
+
+            // Labels
+            var labels = [];
+            for (var i = 1; i <= daysInMonth; i++) labels.push(i);
+
+            // Total projections
+            var totalActualMonth = 0;
+            for (var i = 0; i < dayOfMonth; i++) totalActualMonth += actualDaily[i];
+            var totalProjectedMonth = totalActualMonth + projectedDailyKWh * (daysInMonth - dayOfMonth);
+
+            var datasets = [
+                {
+                    label: 'Aktual (kWh)',
+                    data: actualDaily.slice(0, dayOfMonth).concat(new Array(daysInMonth - dayOfMonth).fill(null)),
+                    type: 'bar',
+                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1,
+                    borderRadius: 2,
+                    order: 3
+                },
+                {
+                    label: 'Proyeksi (kWh)',
+                    data: new Array(dayOfMonth).fill(null).concat(projectedDaily.slice(dayOfMonth)),
+                    type: 'bar',
+                    backgroundColor: 'rgba(251, 146, 60, 0.4)',
+                    borderColor: 'rgba(251, 146, 60, 0.8)',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    borderRadius: 2,
+                    order: 3
+                },
+                {
+                    label: 'Kumulatif Aktual',
+                    data: actualCumulative,
+                    type: 'line',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                },
+                {
+                    label: 'Kumulatif Proyeksi',
+                    data: projectedCumulative,
+                    type: 'line',
+                    borderColor: 'rgba(251, 146, 60, 0.9)',
+                    borderWidth: 2,
+                    borderDash: [5, 3],
+                    pointRadius: 0,
+                    pointHitRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                }
+            ];
+
+            if (budgetKwh > 0) {
+                datasets.push({
+                    label: 'Pace Budget',
+                    data: budgetPaceLine,
+                    type: 'line',
+                    borderColor: 'rgba(34, 197, 94, 0.8)',
+                    borderWidth: 2,
+                    borderDash: [8, 4],
+                    pointRadius: 0,
+                    pointHitRadius: 0,
+                    fill: false,
+                    order: 0
+                });
+            }
+
+            if (projectionChartInstance) projectionChartInstance.destroy();
+            projectionChartInstance = new Chart($canvas[0].getContext('2d'), {
+                type: 'bar',
+                data: { labels: labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    var val = ctx.parsed.y;
+                                    if (val === null || val === undefined) return null;
+                                    return ctx.dataset.label + ': ' + formatDecimal(val) + ' kWh';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return formatDecimal(v); } } }
+                    }
+                }
+            });
+
+            // Footer
+            var footerHtml = '';
+            footerHtml += '<div><strong>Aktual:</strong> ' + formatDecimal(totalActualMonth) + ' kWh · <strong>Proyeksi EOM:</strong> ' + formatDecimal(totalProjectedMonth) + ' kWh</div>';
+            footerHtml += '<div>Rata² aktual: ' + formatDecimal(filledDays > 0 ? filledSum / filledDays : 0) + ' kWh/hari · Proyeksi sisa: ' + formatDecimal(projectedDailyKWh) + ' kWh/hari · Sisa ' + (daysInMonth - dayOfMonth) + ' hari</div>';
+            if (budgetKwh > 0) {
+                var bPct = Math.round(totalProjectedMonth / budgetKwh * 100);
+                var bCls = bPct > 100 ? 'text-danger' : (bPct > 80 ? 'text-warning' : 'text-success');
+                footerHtml += '<div class="' + bCls + '">Proyeksi vs Budget: ' + bPct + '% (' + formatDecimal(budgetKwh) + ' kWh) · Variance ' + formatDecimal(totalProjectedMonth - budgetKwh) + ' kWh</div>';
+            }
+            $footer.html(footerHtml).show();
+        }
+
+        function renderYearlyConsumptionProjection(ed, fd, $canvas, $footer) {
+            var now = new Date();
+            var currentMonth = now.getMonth() + 1; // 1-12
+
+            var monthlyData = (ed && ed.monthlyData) || [];
+            var budget = (fd && fd.budget) || {};
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+
+            var monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+
+            // Build actual monthly values
+            var actualMonthly = new Array(12).fill(0);
+            monthlyData.forEach(function(m) {
+                var idx = (m.sortKey || 0) - 1;
+                if (idx >= 0 && idx < 12) actualMonthly[idx] = m.energy || 0;
+            });
+
+            // Calculate average from filled months
+            var filledMonths = 0, filledSum = 0;
+            for (var i = 0; i < currentMonth; i++) {
+                if (actualMonthly[i] > 0) { filledMonths++; filledSum += actualMonthly[i]; }
+            }
+
+            // Weighted: recent 3 months 60%, older 40%
+            var recentWindow = 3;
+            var recentSum = 0, recentCount = 0;
+            var olderSum = 0, olderCount = 0;
+            var cutoff = Math.max(0, currentMonth - recentWindow);
+            for (var i = cutoff; i < currentMonth; i++) {
+                if (actualMonthly[i] > 0) { recentSum += actualMonthly[i]; recentCount++; }
+            }
+            for (var i = 0; i < cutoff; i++) {
+                if (actualMonthly[i] > 0) { olderSum += actualMonthly[i]; olderCount++; }
+            }
+            var recentAvg = recentCount > 0 ? recentSum / recentCount : 0;
+            var olderAvg = olderCount > 0 ? olderSum / olderCount : 0;
+            var projectedMonthlyKWh;
+            if (recentAvg > 0 && olderAvg > 0) {
+                projectedMonthlyKWh = recentAvg * 0.6 + olderAvg * 0.4;
+            } else if (recentAvg > 0) {
+                projectedMonthlyKWh = recentAvg;
+            } else if (olderAvg > 0) {
+                projectedMonthlyKWh = olderAvg;
+            } else {
+                projectedMonthlyKWh = filledMonths > 0 ? filledSum / filledMonths : 0;
+            }
+
+            // Cumulative
+            var actualCumulative = [];
+            var projectedCumulative = [];
+            var budgetPaceLine = [];
+            var cumActual = 0, cumProjected = 0;
+            var budgetKwh = budget.budgetKWh || 0;
+            var yearlyBudget = budgetKwh > 0 ? budgetKwh * 12 : 0;
+            var monthlyBudgetPace = yearlyBudget > 0 ? yearlyBudget / 12 : 0;
+
+            for (var i = 0; i < 12; i++) {
+                if (i < currentMonth) {
+                    cumActual += actualMonthly[i];
+                    actualCumulative.push(cumActual);
+                    projectedCumulative.push(cumActual);
+                } else {
+                    actualCumulative.push(null);
+                    cumProjected += projectedMonthlyKWh;
+                    projectedCumulative.push(cumActual + cumProjected);
+                }
+                budgetPaceLine.push(monthlyBudgetPace * (i + 1));
+            }
+
+            var totalActualYear = cumActual;
+            var totalProjectedYear = totalActualYear + projectedMonthlyKWh * (12 - currentMonth);
+
+            var datasets = [
+                {
+                    label: 'Aktual (kWh)',
+                    data: actualMonthly.slice(0, currentMonth).concat(new Array(12 - currentMonth).fill(null)),
+                    type: 'bar',
+                    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    order: 3
+                },
+                {
+                    label: 'Proyeksi (kWh)',
+                    data: new Array(currentMonth).fill(null).concat(new Array(12 - currentMonth).fill(projectedMonthlyKWh)),
+                    type: 'bar',
+                    backgroundColor: 'rgba(251, 146, 60, 0.35)',
+                    borderColor: 'rgba(251, 146, 60, 0.7)',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    borderRadius: 3,
+                    order: 3
+                },
+                {
+                    label: 'Kumulatif Aktual',
+                    data: actualCumulative,
+                    type: 'line',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                },
+                {
+                    label: 'Kumulatif Proyeksi',
+                    data: projectedCumulative,
+                    type: 'line',
+                    borderColor: 'rgba(251, 146, 60, 0.9)',
+                    borderWidth: 2,
+                    borderDash: [5, 3],
+                    pointRadius: 0,
+                    pointHitRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                }
+            ];
+
+            if (yearlyBudget > 0) {
+                datasets.push({
+                    label: 'Pace Budget',
+                    data: budgetPaceLine,
+                    type: 'line',
+                    borderColor: 'rgba(34, 197, 94, 0.8)',
+                    borderWidth: 2,
+                    borderDash: [8, 4],
+                    pointRadius: 0,
+                    pointHitRadius: 0,
+                    fill: false,
+                    order: 0
+                });
+            }
+
+            if (projectionChartInstance) projectionChartInstance.destroy();
+            projectionChartInstance = new Chart($canvas[0].getContext('2d'), {
+                type: 'bar',
+                data: { labels: monthLabels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    var val = ctx.parsed.y;
+                                    if (val === null || val === undefined) return null;
+                                    return ctx.dataset.label + ': ' + formatDecimal(val) + ' kWh';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return formatDecimal(v); } } }
+                    }
+                }
+            });
+
+            // Footer
+            var footerHtml = '';
+            footerHtml += '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> ' + formatDecimal(totalActualYear) + ' kWh · <strong>Proyeksi EOY:</strong> ' + formatDecimal(totalProjectedYear) + ' kWh</div>';
+            footerHtml += '<div>Rata² bulanan aktual: ' + formatDecimal(filledMonths > 0 ? filledSum / filledMonths : 0) + ' kWh · Proyeksi bulan sisa: ' + formatDecimal(projectedMonthlyKWh) + ' kWh/bln · Sisa ' + (12 - currentMonth) + ' bulan</div>';
+            if (yearlyBudget > 0) {
+                var yPct = Math.round(totalProjectedYear / yearlyBudget * 100);
+                var yCls = yPct > 100 ? 'text-danger' : (yPct > 80 ? 'text-warning' : 'text-success');
+                footerHtml += '<div class="' + yCls + '">Proyeksi vs Budget: ' + yPct + '% (' + formatDecimal(yearlyBudget) + ' kWh/tahun)</div>';
+            }
+            $footer.html(footerHtml).show();
+        }
+
+        function updateCostProjectionChart() {
+            var ed = lastEnergyData;
+            var fd = lastFinancialData;
+            if (!ed && !fd) return;
+
+            var $canvas = $('#costProjectionChart');
+            var $footer = $('#costProjectionFooter');
+
+            if (activeCostProjectionTab === 'monthly') {
+                renderMonthlyCostProjection(ed, fd, $canvas, $footer);
+            } else {
+                renderYearlyCostProjection(ed, fd, $canvas, $footer);
+            }
+        }
+
+        function renderMonthlyCostProjection(ed, fd, $canvas, $footer) {
+            var now = new Date();
+            var dayOfMonth = now.getDate();
+            var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+            var dailyData = (ed && ed.dailyData) || [];
+            var budget = (fd && fd.budget) || {};
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+
+            var monthKwh = (ed && ed.totalThisMonth) || 0;
+            var monthActualCost = budget.actualCost || 0;
+            if (monthActualCost === 0 && monthKwh > 0) monthActualCost = Math.round(monthKwh * tariff);
+            var costPerKWh = monthKwh > 0 ? monthActualCost / monthKwh : tariff;
+
+            var dailyCost = new Array(daysInMonth).fill(0);
+            dailyData.forEach(function(d) {
+                var idx = (d.sortKey || 0) - 1;
+                if (idx >= 0 && idx < daysInMonth) dailyCost[idx] = Math.round((d.energy || 0) * costPerKWh);
+            });
+
+            var cumulativeCost = [], projectedCostCum = [];
+            var cumCost = 0, cumProjCost = 0;
+            for (var i = 0; i < daysInMonth; i++) {
+                if (i < dayOfMonth) {
+                    cumCost += dailyCost[i];
+                    cumulativeCost.push(cumCost);
+                    projectedCostCum.push(cumCost);
+                } else {
+                    cumulativeCost.push(null);
+                    var avgDailyCost = dayOfMonth > 0 ? cumCost / dayOfMonth : 0;
+                    cumProjCost += avgDailyCost;
+                    projectedCostCum.push(cumCost + cumProjCost);
+                }
+            }
+            var totalProjectedMonthCost = cumCost + (dayOfMonth > 0 ? cumCost / dayOfMonth : 0) * (daysInMonth - dayOfMonth);
+
+            var budgetKwh = budget.budgetKWh || 0;
+            var budgetCostPerDay = budgetKwh > 0 ? (budgetKwh * costPerKWh) / daysInMonth : 0;
+            var monthlyBudgetCostLine = [];
+            for (var i = 0; i < daysInMonth; i++) monthlyBudgetCostLine.push(budgetCostPerDay * (i + 1));
+
+            var dayLabels = [];
+            for (var i = 1; i <= daysInMonth; i++) dayLabels.push(i);
+
+            var datasets = [
+                { label: 'Biaya Aktual (Rp)', data: cumulativeCost, borderColor: 'rgba(13,148,136,1)', backgroundColor: 'rgba(13,148,136,0.1)', borderWidth: 2, pointRadius: 0, pointHitRadius: 0, fill: true, tension: 0.3, order: 1 },
+                { label: 'Biaya Proyeksi (Rp)', data: projectedCostCum, borderColor: 'rgba(251,146,60,0.9)', borderWidth: 2, borderDash: [5,3], pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 }
+            ];
+            if (budgetCostPerDay > 0) datasets.push({ label: 'Pace Budget (Rp)', data: monthlyBudgetCostLine, borderColor: 'rgba(34,197,94,0.7)', borderWidth: 2, borderDash: [8,4], pointRadius: 0, pointHitRadius: 0, fill: false, order: 0 });
+
+            if (costProjectionChartInstance) costProjectionChartInstance.destroy();
+            costProjectionChartInstance = new Chart($canvas[0].getContext('2d'), {
+                type: 'line', data: { labels: dayLabels, datasets: datasets },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+                    plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
+                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                    scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
+                }
+            });
+
+            var fh = '<div><strong>Biaya aktual:</strong> Rp ' + formatInteger(cumCost) + ' · <strong>Proyeksi EOM:</strong> Rp ' + formatInteger(Math.round(totalProjectedMonthCost)) + '</div>';
+            fh += '<div>Tarif efektif: Rp ' + formatInteger(Math.round(costPerKWh)) + '/kWh · Rata² harian: Rp ' + formatInteger(dayOfMonth > 0 ? Math.round(cumCost / dayOfMonth) : 0) + '</div>';
+            if (budgetKwh > 0) {
+                var budgetCostMonth = Math.round(budgetKwh * costPerKWh);
+                var bpPct = Math.round(totalProjectedMonthCost / budgetCostMonth * 100);
+                fh += '<div class="' + (bpPct > 100 ? 'text-danger' : (bpPct > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + bpPct + '% (Rp ' + formatInteger(budgetCostMonth) + ')</div>';
+            }
+            $footer.html(fh).show();
+        }
+
+        function renderYearlyCostProjection(ed, fd, $canvas, $footer) {
+            var currentMonth = new Date().getMonth() + 1;
+            var monthlyData = (ed && ed.monthlyData) || [];
+            var budget = (fd && fd.budget) || {};
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+
+            var monthKwh = (ed && ed.totalThisMonth) || 0;
+            var monthActualCost = budget.actualCost || 0;
+            if (monthActualCost === 0 && monthKwh > 0) monthActualCost = Math.round(monthKwh * tariff);
+            var costPerKWh = monthKwh > 0 ? monthActualCost / monthKwh : tariff;
+
+            var monthlyCost = new Array(12).fill(0);
+            monthlyData.forEach(function(m) {
+                var idx = (m.sortKey || 0) - 1;
+                if (idx >= 0 && idx < 12) monthlyCost[idx] = Math.round((m.energy || 0) * costPerKWh);
+            });
+
+            var yearlyCostCum = [], yearlyProjCostCum = [];
+            var yCumCost = 0, yProjCost = 0;
+            for (var i = 0; i < 12; i++) {
+                if (i < currentMonth) {
+                    yCumCost += monthlyCost[i];
+                    yearlyCostCum.push(yCumCost);
+                    yearlyProjCostCum.push(yCumCost);
+                } else {
+                    yearlyCostCum.push(null);
+                    var avgM = currentMonth > 0 ? yCumCost / currentMonth : 0;
+                    yProjCost += avgM;
+                    yearlyProjCostCum.push(yCumCost + yProjCost);
+                }
+            }
+            var totalProjectedYearCost = yCumCost + (currentMonth > 0 ? yCumCost / currentMonth : 0) * (12 - currentMonth);
+
+            var budgetKwh = budget.budgetKWh || 0;
+            var yearlyBudgetCost = budgetKwh > 0 ? budgetKwh * 12 * costPerKWh : 0;
+            var monthlyBudgetCost = yearlyBudgetCost / 12;
+            var yearlyBudgetCostLine = [];
+            for (var i = 0; i < 12; i++) yearlyBudgetCostLine.push(monthlyBudgetCost * (i + 1));
+
+            var monthLabels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+
+            var datasets = [
+                { label: 'Biaya Aktual (Rp)', data: monthlyCost.slice(0, currentMonth).concat(new Array(12 - currentMonth).fill(null)), type: 'bar', backgroundColor: 'rgba(13,148,136,0.7)', borderColor: 'rgba(13,148,136,1)', borderWidth: 1, borderRadius: 3, order: 3 },
+                { label: 'Biaya Proyeksi (Rp)', data: new Array(currentMonth).fill(null).concat(new Array(12 - currentMonth).fill(currentMonth > 0 ? Math.round(yCumCost / currentMonth) : 0)), type: 'bar', backgroundColor: 'rgba(251,146,60,0.35)', borderColor: 'rgba(251,146,60,0.7)', borderWidth: 1, borderDash: [3,3], borderRadius: 3, order: 3 },
+                { label: 'Kumulatif Aktual', data: yearlyCostCum, type: 'line', borderColor: 'rgba(13,148,136,1)', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.3, order: 1 },
+                { label: 'Kumulatif Proyeksi', data: yearlyProjCostCum, type: 'line', borderColor: 'rgba(251,146,60,0.9)', borderWidth: 2, borderDash: [5,3], pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 }
+            ];
+            if (yearlyBudgetCost > 0) datasets.push({ label: 'Pace Budget', data: yearlyBudgetCostLine, type: 'line', borderColor: 'rgba(34,197,94,0.8)', borderWidth: 2, borderDash: [8,4], pointRadius: 0, pointHitRadius: 0, fill: false, order: 0 });
+
+            if (costProjectionChartInstance) costProjectionChartInstance.destroy();
+            costProjectionChartInstance = new Chart($canvas[0].getContext('2d'), {
+                type: 'bar', data: { labels: monthLabels, datasets: datasets },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+                    plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
+                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                    scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
+                }
+            });
+
+            var fh = '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> Rp ' + formatInteger(yCumCost) + ' · <strong>Proyeksi EOY:</strong> Rp ' + formatInteger(Math.round(totalProjectedYearCost)) + '</div>';
+            fh += '<div>Rata² bulanan: Rp ' + formatInteger(currentMonth > 0 ? Math.round(yCumCost / currentMonth) : 0) + '</div>';
+            if (yearlyBudgetCost > 0) {
+                var yp = Math.round(totalProjectedYearCost / yearlyBudgetCost * 100);
+                fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + yp + '% (Rp ' + formatInteger(Math.round(yearlyBudgetCost)) + '/tahun)</div>';
+            }
+            $footer.html(fh).show();
+        }
+
+        // --- Compact Financial Metrics ---
+        function updateFinancialMetrics(data) {
+            var w = data.waste || {};
+            var pc = data.periodComparison || {};
+            var bp = data.billProjection || {};
+            var lf = data.loadFactorInfo || {};
+            var ue = data.unitEconomics || {};
+
+            // Waste — highlight if >5% threshold
+            if (w.configured) {
+                var wp = w.wastePercent || 0;
+                var isHigh = wp > 5;
+                var wCls = isHigh ? 'text-danger' : 'text-success';
+                var cellCls = isHigh ? 'fin-critical' : 'fin-ok';
+                $('#finWaste').attr('class', 'fin-metric ' + cellCls);
+                $('#finWasteValue').attr('class', 'fin-metric-value ' + wCls).text(wp.toFixed(1) + '%' + (isHigh ? ' (!)' : ''));
+                var subParts = [formatDecimal(w.wasteKwh || 0) + ' kWh', 'Rp ' + formatInteger(w.wasteCost || 0)];
+                if (w.downtimeStart !== undefined) subParts.push(w.downtimeStart + '-' + w.downtimeEnd);
+                if (isHigh) subParts.push('batas 5%');
+                $('#finWasteSub').text(subParts.join(' · '));
+            } else {
+                $('#finWaste').attr('class', 'fin-metric');
+                $('#finWasteValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finWasteSub').text('Belum dikonfigurasi');
+            }
+
+            // MoM — highlight significant changes
+            if (pc.momChangePercent || pc.momChangePercent === 0) {
+                var mv = pc.momChangePercent || 0;
+                var mUp = mv > 0;
+                var mCls = mUp ? 'text-danger' : 'text-success';
+                var mArr = mUp ? '▲' : '▼';
+                var mCellCls = Math.abs(mv) > 20 ? 'fin-critical' : (Math.abs(mv) > 10 ? 'fin-warning' : (mUp ? '' : 'fin-ok'));
+                $('#finMom').attr('class', 'fin-metric ' + mCellCls);
+                $('#finMomValue').attr('class', 'fin-metric-value ' + mCls).text(mArr + ' ' + Math.abs(mv).toFixed(1) + '%');
+                var momSub = (mUp ? 'Naik' : 'Turun') + ' ' + formatDecimal(Math.abs(pc.momChange || 0)) + ' kWh';
+                if (pc.lastMonthKWh) momSub += ' (bln lalu: ' + formatDecimal(pc.lastMonthKWh) + ')';
+                $('#finMomSub').text(momSub);
+            } else if (pc.momChange || pc.momChange === 0) {
+                var mv2 = pc.momChange || 0;
+                var mUp2 = mv2 > 0;
+                var mCls2 = mUp2 ? 'text-danger' : 'text-success';
+                var mArr2 = mUp2 ? '▲' : '▼';
+                $('#finMom').attr('class', 'fin-metric');
+                $('#finMomValue').attr('class', 'fin-metric-value ' + mCls2).text(mArr2 + ' ' + Math.abs(mv2).toFixed(1) + '%');
+                $('#finMomSub').text((mUp2 ? 'Naik' : 'Turun') + ' vs bulan lalu');
+            } else {
+                $('#finMom').attr('class', 'fin-metric');
+                $('#finMomValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finMomSub').text('');
+            }
+
+            // YoY — highlight significant changes
+            if (pc.yoyChangePercent || pc.yoyChangePercent === 0) {
+                var yv = pc.yoyChangePercent || 0;
+                var yUp = yv > 0;
+                var yCls = yUp ? 'text-danger' : 'text-success';
+                var yArr = yUp ? '▲' : '▼';
+                var yCellCls = Math.abs(yv) > 50 ? 'fin-critical' : (Math.abs(yv) > 20 ? 'fin-warning' : (yUp ? '' : 'fin-ok'));
+                $('#finYoy').attr('class', 'fin-metric ' + yCellCls);
+                $('#finYoyValue').attr('class', 'fin-metric-value ' + yCls).text(yArr + ' ' + Math.abs(yv).toFixed(1) + '%');
+                var yoySub = (yUp ? 'Naik' : 'Turun') + ' ' + formatDecimal(Math.abs(pc.yoyChange || 0)) + ' kWh';
+                if (pc.lastYearSameMonthKWh) yoySub += ' (thn lalu: ' + formatDecimal(pc.lastYearSameMonthKWh) + ')';
+                $('#finYoySub').text(yoySub);
+            } else if (pc.yoyChange || pc.yoyChange === 0) {
+                var yv2 = pc.yoyChange || 0;
+                var yUp2 = yv2 > 0;
+                var yCls2 = yUp2 ? 'text-danger' : 'text-success';
+                var yArr2 = yUp2 ? '▲' : '▼';
+                $('#finYoy').attr('class', 'fin-metric');
+                $('#finYoyValue').attr('class', 'fin-metric-value ' + yCls2).text(yArr2 + ' ' + Math.abs(yv2).toFixed(1) + '%');
+                $('#finYoySub').text((yUp2 ? 'Naik' : 'Turun') + ' vs tahun lalu');
+            } else {
+                $('#finYoy').attr('class', 'fin-metric');
+                $('#finYoyValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finYoySub').text('');
+            }
+
+            // Bill Projection
+            if (bp.projectedMonthKWh || bp.projectedMonthKWh === 0) {
+                var isNearEom = (bp.daysRemaining || 0) <= 5;
+                $('#finBill').attr('class', 'fin-metric' + (isNearEom ? ' fin-warning' : ''));
+                $('#finBillValue').attr('class', 'fin-metric-value text-warning').text(formatDecimal(bp.projectedMonthKWh || 0) + ' kWh');
+                var billSub = 'Rp ' + formatInteger(bp.projectedCost || 0);
+                if (bp.daysElapsed && bp.daysRemaining) {
+                    var avgDaily = (bp.projectedMonthKWh || 0) / (bp.daysElapsed + bp.daysRemaining);
+                    billSub += ' · ' + formatDecimal(avgDaily) + ' kWh/hari';
+                }
+                billSub += ' · sisa ' + (bp.daysRemaining || 0) + ' hari';
+                $('#finBillSub').text(billSub);
+            } else {
+                $('#finBill').attr('class', 'fin-metric');
+                $('#finBillValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finBillSub').text('');
+            }
+
+            // Load Factor — API returns 0-100 percentage
+            // Thresholds: <30 Under-utilized, 30-80 Optimal, >80 High Risk
+            if (lf.loadFactor || lf.loadFactor === 0) {
+                var lfVal = lf.loadFactor || 0;
+                var lfPct = lfVal.toFixed(1);
+                var lfCls, lfLabel, lfCellCls;
+                if (lfVal > 80) {
+                    lfCls = 'text-danger'; lfLabel = 'Risiko Tinggi'; lfCellCls = 'fin-critical';
+                } else if (lfVal < 30) {
+                    lfCls = 'text-warning'; lfLabel = 'Under-utilized'; lfCellCls = 'fin-warning';
+                } else {
+                    lfCls = 'text-success'; lfLabel = 'Optimal'; lfCellCls = 'fin-ok';
+                }
+                $('#finLf').attr('class', 'fin-metric ' + lfCellCls);
+                $('#finLfValue').attr('class', 'fin-metric-value ' + lfCls).text(lfPct + '%');
+                var lfSub = lfLabel;
+                if (lf.maxCapacity) lfSub += ' · Max ' + formatDecimal(lf.maxCapacity / 1000) + ' kVA';
+                if (lf.status) lfSub += ' · ' + lf.status;
+                $('#finLfSub').text(lfSub);
+            } else if (lf.configured === false) {
+                $('#finLf').attr('class', 'fin-metric');
+                $('#finLfValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finLfSub').text('Belum dikonfigurasi');
+            } else {
+                $('#finLf').attr('class', 'fin-metric');
+                $('#finLfValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finLfSub').text('');
+            }
+
+            // Unit Economics — show both values with clear separation
+            if ((ue.costPerM2 || ue.costPerM2 === 0) || (ue.costPerHour || ue.costPerHour === 0)) {
+                var mainVal = '';
+                if (ue.costPerM2) mainVal = 'Rp ' + formatInteger(ue.costPerM2) + '/m²';
+                else if (ue.costPerHour) mainVal = 'Rp ' + formatInteger(ue.costPerHour) + '/jam';
+                $('#finUeValue').attr('class', 'fin-metric-value').text(mainVal);
+                var ueSub = [];
+                if (ue.costPerM2 && ue.costPerHour) ueSub.push('Rp ' + formatInteger(ue.costPerHour) + '/jam');
+                if (ue.surfaceArea) ueSub.push('Area: ' + formatDecimal(ue.surfaceArea) + ' m²');
+                $('#finUeSub').text(ueSub.join(' · '));
+                $('#finUe').attr('class', 'fin-metric');
+            } else {
+                $('#finUe').attr('class', 'fin-metric');
+                $('#finUeValue').attr('class', 'fin-metric-value text-muted').text('—');
+                $('#finUeSub').text('');
+            }
+        }
+
+        // --- Anomaly Cost Impact ---
+        function updateAnomalyCostUI(ac) {
+            var $body = $('#anomalyCostBody');
+            var totalCost = ac.estimatedCostImpact || ac.totalCost || 0;
+            var totalAnomalies = ac.totalAnomalies || 0;
+            var items = ac.anomalies || ac.topAnomalies || [];
+
+            if (items.length === 0) {
+                $body.html(
+                    '<div class="text-center" style="font-size:0.8rem">' +
+                        '<span class="text-muted">Dampak Biaya Anomali:</span> <strong class="text-primary">Rp ' + formatInteger(totalCost) + '</strong>' +
+                        (totalAnomalies > 0 ? ' <span class="badge bg-secondary">' + totalAnomalies + ' anomali</span>' : '') +
+                        '<div class="text-muted mt-1" style="font-size:0.7rem">Tidak ada anomali aktif</div>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            var html = '<div class="mb-2" style="font-size:0.8rem"><span class="text-muted">Total Dampak:</span> <strong class="text-danger">Rp ' + formatInteger(totalCost) + '</strong>';
+            if (totalAnomalies > 0) html += ' <span class="badge bg-danger">' + totalAnomalies + ' anomali</span>';
+            html += '</div>';
+            html += '<div style="font-size:0.75rem">';
+
+            items.forEach(function(a, i) {
+                if (i >= 5) return;
+                var icon = (a.anomalyType || a.type) === 'OVERLOAD' ? 'fa-arrow-up text-danger' : 'fa-arrow-down text-warning';
+                var cost = a.estimatedCost || a.costImpact || 0;
+                var name = a.deviceName || a.deviceKey || '—';
+                var severity = a.severity || '';
+                var sevBadge = severity === 'high' ? ' <span class="badge bg-danger">HIGH</span>' : (severity === 'medium' ? ' <span class="badge bg-warning text-dark">MED</span>' : '');
+                html += '<div class="anomaly-cost-item d-flex justify-content-between align-items-center py-1' + (i < items.length - 1 && i < 4 ? ' border-bottom' : '') + '">' +
+                    '<span class="anomaly-cost-name"><i class="fas ' + icon + '"></i> ' + name + sevBadge + '</span>' +
+                    '<span class="text-danger fw-bold text-nowrap ms-2">Rp ' + formatInteger(cost) + '</span>' +
+                '</div>';
+            });
+
+            html += '</div>';
+            $body.html(html);
+        }
+
+        // ============================================
+        // REPORTS — Daily / Monthly / Yearly
+        // ============================================
+        function renderAllReports() {
+            generateDailyReport();
+            generateMonthlyReport();
+            generateYearlyReport();
+        }
+
+        function generateDailyReport() {
+            var $body = $('#dailyReportBody');
+            if (!$body.length) return;
+            var ed = lastEnergyData;
+            var fd = lastFinancialData;
+            if (!ed && !fd) {
+                $body.html('<div class="text-center text-muted py-2" style="font-size:0.8rem">Menunggu data...</div>');
+                return;
+            }
+
+            var hourlyData = (ed && ed.hourlyData) || [];
+            var totalToday = (ed && ed.totalToday) || 0;
+            var dailyData = (ed && ed.dailyData) || [];
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+
+            var wbpLwbp = (fd && fd.wbpLwbp) || {};
+            var waste = (fd && fd.waste) || {};
+            var budget = (fd && fd.budget) || {};
+            var bp = (fd && fd.billProjection) || {};
+            var lf = (fd && fd.loadFactorInfo) || {};
+            var ac = (fd && fd.anomalyCostImpact) || {};
+            var ti = (fd && fd.tariffTypeInfo) || {};
+            var pc = (fd && fd.periodComparison) || {};
+
+            // Compute insights
+            var filledHours = hourlyData.filter(function(h) { return h.energy > 0; });
+            var avgPerFilledHour = filledHours.length > 0 ? filledHours.reduce(function(s, h) { return s + h.energy; }, 0) / filledHours.length : 0;
+            var peakHour = hourlyData.length > 0 ? hourlyData.reduce(function(max, h) { return h.energy > max.energy ? h : max; }, { energy: 0, timeLabel: '-' }) : { energy: 0, timeLabel: '-' };
+
+            // Daily average from month data
+            var filledDays = dailyData.filter(function(d) { return d.energy > 0; });
+            var avgDailyKWh = filledDays.length > 0 ? filledDays.reduce(function(s, d) { return s + d.energy; }, 0) / filledDays.length : 0;
+            var todayVsAvg = avgDailyKWh > 0 ? Math.round((totalToday / avgDailyKWh - 1) * 100 * 10) / 10 : 0;
+
+            // Budget pace: daily budget = budgetKWh / daysInMonth
+            var daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            var dayOfMonth = new Date().getDate();
+            var budgetPaceKWh = budget.configured && budget.budgetKWh > 0 ? budget.budgetKWh / daysInMonth : 0;
+            var paceStatus = budgetPaceKWh > 0 ? (totalToday > budgetPaceKWh ? 'over' : 'under') : 'none';
+
+            // Today's cost
+            var todayCost = 0;
+            if (wbpLwbp.configured && (wbpLwbp.wbpKWh + wbpLwbp.lwbpKWh) > 0) {
+                var monthTotal = wbpLwbp.wbpKWh + wbpLwbp.lwbpKWh;
+                if (ti.flatKWh) monthTotal += ti.flatKWh;
+                var todayRatio = monthTotal > 0 ? totalToday / monthTotal : 0;
+                todayCost = Math.round(((wbpLwbp.totalCostWBP || 0) + (ti.flatCost || 0)) * todayRatio);
+            } else {
+                todayCost = Math.round(totalToday * tariff);
+            }
+
+            // Build report HTML
+            var html = '';
+            html += '<div class="fin-metric-grid" style="margin-bottom:8px">';
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-bolt text-primary"></i> Konsumsi</div>';
+            html += '<div class="fin-metric-value' + (todayVsAvg > 20 ? ' text-danger' : (todayVsAvg > 10 ? ' text-warning' : (todayVsAvg < -10 ? ' text-success' : ''))) + '">' + formatDecimal(totalToday) + ' kWh</div>';
+            html += '<div class="fin-metric-sub">' + (avgDailyKWh > 0 ? (todayVsAvg >= 0 ? '▲ ' : '▼ ') + Math.abs(todayVsAvg).toFixed(1) + '% vs rata-rata' : 'Rata-rata: ' + formatDecimal(avgPerFilledHour) + ' kWh/jam') + '</div></div>';
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-coins text-warning"></i> Estimasi Biaya</div>';
+            html += '<div class="fin-metric-value">' + 'Rp ' + formatInteger(todayCost) + '</div>';
+            html += '<div class="fin-metric-sub">Tarif: ' + (wbpLwbp.configured ? 'WBP/LWBP' : 'Flat') + ' · ' + formatInteger(tariff) + '/kWh</div></div>';
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-arrow-up text-info"></i> Jam Puncak</div>';
+            html += '<div class="fin-metric-value">' + peakHour.timeLabel + '</div>';
+            html += '<div class="fin-metric-sub">' + formatDecimal(peakHour.energy) + ' kWh · Rp ' + formatInteger(Math.round(peakHour.energy * tariff)) + '</div></div>';
+            html += '</div>';
+
+            html += '<div class="daily-report-insights">';
+            html += '<div class="text-muted mb-1" style="font-size:0.7rem"><i class="fas fa-lightbulb"></i> INSIGHT</div>';
+            var insights = [];
+
+            if (todayVsAvg > 20) {
+                insights.push('<span class="text-danger"> Konsumsi hari ini ' + todayVsAvg.toFixed(1) + '% di atas rata-rata harian (' + formatDecimal(avgDailyKWh) + ' kWh/hari)</span>');
+            } else if (todayVsAvg < -20) {
+                insights.push('<span class="text-success">Konsumsi hari ini ' + Math.abs(todayVsAvg).toFixed(1) + '% di bawah rata-rata — efisien</span>');
+            } else if (avgDailyKWh > 0) {
+                insights.push('Konsumsi hari ini mendekati rata-rata (selisih ' + Math.abs(todayVsAvg).toFixed(1) + '%)');
+            }
+
+            if (wbpLwbp.configured) {
+                var wbpRatio = wbpLwbp.wbpRatio || 0;
+                if (wbpRatio > 40) {
+                    insights.push('<span class="text-warning"> Rasio WBP ' + wbpRatio.toFixed(1) + '% — pertimbangkan shift operasional ke jam LWBP</span>');
+                } else {
+                    insights.push('Rasio WBP ' + wbpRatio.toFixed(1) + '% — proporsi WBP terkontrol');
+                }
+            }
+
+            if (paceStatus === 'over') {
+                var overPct = budgetPaceKWh > 0 ? Math.round((totalToday / budgetPaceKWh - 1) * 100) : 0;
+                insights.push('<span class="text-danger"> Pace hari ini ' + overPct + '% di atas pace budget (' + formatDecimal(budgetPaceKWh) + ' kWh/hari)</span>');
+            } else if (paceStatus === 'under') {
+                insights.push('<span class="text-success"> Pace hari ini sesuai budget (' + formatDecimal(budgetPaceKWh) + ' kWh/hari)</span>');
+            }
+
+            if (waste.configured && waste.wastePercent > 0) {
+                if (waste.wastePercent > 5) {
+                    insights.push('<span class="text-danger"> Waste ' + waste.wastePercent.toFixed(1) + '% — konsumsi saat downtime ' + (waste.downtimeStart || '') + '-' + (waste.downtimeEnd || '') + ' perlu ditinjau</span>');
+                } else {
+                    insights.push('Waste ' + waste.wastePercent.toFixed(1) + '% — dalam batas wajar');
+                }
+            }
+
+            if (lf.configured) {
+                if (lf.loadFactor > 80) {
+                    insights.push('<span class="text-danger"> Load Factor ' + lf.loadFactor.toFixed(1) + '% — Risiko Tinggi</span>');
+                } else if (lf.loadFactor < 30) {
+                    insights.push('<span class="text-warning"> Load Factor ' + lf.loadFactor.toFixed(1) + '% — Under-utilized</span>');
+                }
+            }
+
+            if (ac.totalAnomalies > 0) {
+                insights.push('<span class="text-danger"> ' + ac.totalAnomalies + ' anomali bulan ini · dampak Rp ' + formatInteger(ac.estimatedCostImpact || 0) + '</span>');
+            }
+
+            if (ti.totalDeviceCount > 1) {
+                insights.push(' ' + (ti.wbpDeviceCount || 0) + ' device WBP/LWBP, ' + (ti.flatDeviceCount || 0) + ' device Flat tariff');
+            }
+
+            if (pc.momChangePercent && Math.abs(pc.momChangePercent) > 5) {
+                var momDir = pc.momChangePercent > 0 ? 'naik' : 'turun';
+                insights.push('Bulan ini ' + momDir + ' ' + Math.abs(pc.momChangePercent).toFixed(1) + '% vs bulan lalu');
+            }
+
+            if (bp.projectedMonthKWh > 0 && budget.configured) {
+                if (bp.projectedMonthKWh > budget.budgetKWh) {
+                    insights.push('<span class="text-warning"> Proyeksi akhir bulan ' + formatDecimal(bp.projectedMonthKWh) + ' kWh — melebihi budget ' + formatDecimal(budget.budgetKWh) + ' kWh</span>');
+                } else {
+                    insights.push('<span class="text-success"> Proyeksi akhir bulan ' + formatDecimal(bp.projectedMonthKWh) + ' kWh — dalam budget</span>');
+                }
+            } else if (bp.projectedMonthKWh > 0) {
+                insights.push(' Proyeksi akhir bulan: ' + formatDecimal(bp.projectedMonthKWh) + ' kWh (Rp ' + formatInteger(bp.projectedCost || 0) + ')');
+            }
+
+            if (insights.length === 0) {
+                insights.push('<span class="text-muted">Data belum cukup untuk analisa</span>');
+            }
+
+            insights.forEach(function(insight) {
+                html += '<div style="padding:2px 0; line-height:1.4">' + insight + '</div>';
+            });
+            html += '</div>';
+            $body.html(html);
+        }
+
+        function generateMonthlyReport() {
+            var $body = $('#monthlyReportBody');
+            if (!$body.length) return;
+            var fd = lastFinancialData;
+            var ed = lastEnergyData;
+            if (!fd && !ed) {
+                $body.html('<div class="text-center text-muted py-2" style="font-size:0.8rem">Menunggu data...</div>');
+                return;
+            }
+
+            var monthKwh = (ed && ed.totalThisMonth) || 0;
+            var monthAvgPerDay = (ed && ed.avgPerDay) || 0;
+            var monthPeakDay = (ed && ed.peakDay) || 0;
+            var monthPeakDayDate = (ed && ed.peakDayDate) || '-';
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var dailyData = (ed && ed.dailyData) || [];
+
+            var wbpLwbp = (fd && fd.wbpLwbp) || {};
+            var waste = (fd && fd.waste) || {};
+            var budget = (fd && fd.budget) || {};
+            var bp = (fd && fd.billProjection) || {};
+            var lf = (fd && fd.loadFactorInfo) || {};
+            var ac = (fd && fd.anomalyCostImpact) || {};
+            var ti = (fd && fd.tariffTypeInfo) || {};
+            var pc = (fd && fd.periodComparison) || {};
+            var ue = (fd && fd.unitEconomics) || {};
+
+            var dayOfMonth = new Date().getDate();
+            var daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            var actualCost = budget.actualCost || Math.round(monthKwh * tariff);
+            var budgetKwh = budget.budgetKWh || 0;
+
+            // Find peak day in daily data
+            var peakDayInfo = dailyData.length > 0 ? dailyData.reduce(function(max, d) { return d.energy > max.energy ? d : max; }, { energy: 0, timeLabel: '-' }) : { energy: 0, timeLabel: '-' };
+
+            var html = '';
+            html += '<div class="fin-metric-grid" style="margin-bottom:8px">';
+
+            // Konsumsi Bulan Ini
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-calendar-week text-primary"></i> Konsumsi Bulan</div>';
+            html += '<div class="fin-metric-value">' + formatDecimal(monthKwh) + ' kWh</div>';
+            html += '<div class="fin-metric-sub">Rata² ' + formatDecimal(monthAvgPerDay) + ' kWh/hari · Hari ke-' + dayOfMonth + '</div></div>';
+
+            // Biaya Bulan Ini
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-coins text-warning"></i> Biaya Aktual</div>';
+            html += '<div class="fin-metric-value">Rp ' + formatInteger(actualCost) + '</div>';
+            html += '<div class="fin-metric-sub">' + (wbpLwbp.configured ? 'WBP/LWBP' : 'Flat') + ' · Rp ' + formatInteger(tariff) + '/kWh</div></div>';
+
+            // Hari Puncak
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-arrow-up text-info"></i> Hari Puncak</div>';
+            html += '<div class="fin-metric-value">' + (peakDayInfo.timeLabel || monthPeakDayDate) + '</div>';
+            html += '<div class="fin-metric-sub">' + formatDecimal(peakDayInfo.energy || monthPeakDay) + ' kWh</div></div>';
+
+            // Proyeksi Akhir Bulan
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-chart-line text-warning"></i> Proyeksi</div>';
+            var projKwh = bp.projectedMonthKWh || 0;
+            var projCost = bp.projectedCost || 0;
+            html += '<div class="fin-metric-value">' + formatDecimal(projKwh) + ' kWh</div>';
+            html += '<div class="fin-metric-sub">Rp ' + formatInteger(projCost) + ' · Sisa ' + (bp.daysRemaining || 0) + ' hari</div></div>';
+
+            // Budget
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-wallet text-success"></i> Budget</div>';
+            if (budget.configured) {
+                var budgetPct = budgetKwh > 0 ? Math.round(monthKwh / budgetKwh * 100) : 0;
+                var bCls = budgetPct > 100 ? 'text-danger' : (budgetPct > 80 ? 'text-warning' : 'text-success');
+                html += '<div class="fin-metric-value ' + bCls + '">' + budgetPct + '%</div>';
+                html += '<div class="fin-metric-sub">Budget ' + formatDecimal(budgetKwh) + ' kWh · Variance ' + formatDecimal(budget.variance || 0) + '</div></div>';
+            } else {
+                html += '<div class="fin-metric-value text-muted">—</div>';
+                html += '<div class="fin-metric-sub">Belum dikonfigurasi</div></div>';
+            }
+
+            // Load Factor
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Load Factor</div>';
+            if (lf.configured) {
+                var lfCls = lf.loadFactor > 80 ? 'text-danger' : (lf.loadFactor < 30 ? 'text-warning' : 'text-success');
+                html += '<div class="fin-metric-value ' + lfCls + '">' + (lf.loadFactor || 0).toFixed(1) + '%</div>';
+                html += '<div class="fin-metric-sub">' + (lf.status || 'N/A') + '</div></div>';
+            } else {
+                html += '<div class="fin-metric-value text-muted">—</div>';
+                html += '<div class="fin-metric-sub">Belum dikonfigurasi</div></div>';
+            }
+
+            html += '</div>';
+
+            // Monthly insights
+            html += '<div class="daily-report-insights">';
+            html += '<div class="text-muted mb-1" style="font-size:0.7rem"><i class="fas fa-lightbulb"></i> INSIGHT BULANAN</div>';
+            var insights = [];
+
+            // MoM
+            if (pc.momChangePercent !== undefined && pc.lastMonthKWh > 0) {
+                var momArr = pc.momChangePercent > 0 ? '▲' : '▼';
+                var momCls = pc.momChangePercent > 10 ? 'text-danger' : (pc.momChangePercent < -10 ? 'text-success' : '');
+                insights.push('<span class="' + momCls + '">' + momArr + ' MoM ' + Math.abs(pc.momChangePercent).toFixed(1) + '% vs bulan lalu (' + formatDecimal(pc.lastMonthKWh) + ' kWh)</span>');
+            }
+
+            // YoY
+            if (pc.yoyChangePercent !== undefined && pc.lastYearSameMonthKWh > 0) {
+                var yoyArr = pc.yoyChangePercent > 0 ? '▲' : '▼';
+                var yoyCls = pc.yoyChangePercent > 20 ? 'text-danger' : (pc.yoyChangePercent < -20 ? 'text-success' : '');
+                insights.push('<span class="' + yoyCls + '">' + yoyArr + ' YoY ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% vs tahun lalu bulan yang sama (' + formatDecimal(pc.lastYearSameMonthKWh) + ' kWh)</span>');
+            }
+
+            // WBP/LWBP
+            if (wbpLwbp.configured) {
+                var wbpTotal = wbpLwbp.wbpKwh + wbpLwbp.lwbpKwh;
+                if (wbpTotal > 0) {
+                    var wbpRatio = (wbpLwbp.wbpKwh / wbpTotal * 100).toFixed(1);
+                    insights.push(' WBP ' + wbpRatio + '% (' + formatDecimal(wbpLwbp.wbpKwh) + ' kWh) · LWBP ' + (100 - parseFloat(wbpRatio)).toFixed(1) + '% (' + formatDecimal(wbpLwbp.lwbpKwh) + ' kWh) · Total Rp ' + formatInteger(wbpLwbp.totalCostWBP || 0));
+                }
+            }
+
+            // Waste
+            if (waste.configured && waste.wastePercent > 0) {
+                if (waste.wastePercent > 5) {
+                    insights.push('<span class="text-danger"> Waste ' + waste.wastePercent.toFixed(1) + '% = ' + formatDecimal(waste.wasteKwh) + ' kWh (Rp ' + formatInteger(waste.wasteCost) + ') — downtime ' + (waste.downtimeStart || '') + '-' + (waste.downtimeEnd || '') + '</span>');
+                } else {
+                    insights.push(' Waste ' + waste.wastePercent.toFixed(1) + '% = ' + formatDecimal(waste.wasteKwh) + ' kWh (Rp ' + formatInteger(waste.wasteCost) + ')');
+                }
+            }
+
+            // Projection vs budget
+            if (projKwh > 0 && budget.configured && budgetKwh > 0) {
+                if (projKwh > budgetKwh) {
+                    insights.push('<span class="text-danger"> Proyeksi ' + formatDecimal(projKwh) + ' kWh melebihi budget ' + formatDecimal(budgetKwh) + ' kWh — perlu penghematan ' + formatDecimal(projKwh - budgetKwh) + ' kWh</span>');
+                } else {
+                    insights.push('<span class="text-success"> Proyeksi ' + formatDecimal(projKwh) + ' kWh — dalam budget, sisa ' + formatDecimal(budgetKwh - projKwh) + ' kWh</span>');
+                }
+            }
+
+            // Unit Economics
+            if (ue.configured && ue.costPerM2 > 0) {
+                insights.push(' Biaya per m²: Rp ' + formatInteger(ue.costPerM2) + ' · Biaya per jam: Rp ' + formatInteger(ue.costPerHour || 0));
+            }
+
+            // Anomaly
+            if (ac.totalAnomalies > 0) {
+                insights.push('<span class="text-danger"> ' + ac.totalAnomalies + ' anomali bulan ini · dampak Rp ' + formatInteger(ac.estimatedCostImpact || 0) + '</span>');
+            }
+
+            // Device tariff mix
+            if (ti.totalDeviceCount > 1) {
+                insights.push(' ' + (ti.wbpDeviceCount || 0) + ' device WBP/LWBP, ' + (ti.flatDeviceCount || 0) + ' device Flat');
+            }
+
+            if (insights.length === 0) {
+                insights.push('<span class="text-muted">Data belum cukup untuk analisa bulanan</span>');
+            }
+
+            insights.forEach(function(insight) {
+                html += '<div style="padding:2px 0; line-height:1.4">' + insight + '</div>';
+            });
+            html += '</div>';
+            $body.html(html);
+        }
+
+        function generateYearlyReport() {
+            var $body = $('#yearlyReportBody');
+            if (!$body.length) return;
+            var ed = lastEnergyData;
+            var fd = lastFinancialData;
+            if (!ed && !fd) {
+                $body.html('<div class="text-center text-muted py-2" style="font-size:0.8rem">Menunggu data...</div>');
+                return;
+            }
+
+            var yearKwh = (ed && ed.totalThisYear) || 0;
+            var yearAvgPerMonth = (ed && ed.avgPerMonth) || 0;
+            var yearPeakMonth = (ed && ed.peakMonth) || 0;
+            var yearPeakMonthName = (ed && ed.peakMonthName) || '-';
+            var monthlyData = (ed && ed.monthlyData) || [];
+            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var monthKwh = (ed && ed.totalThisMonth) || 0;
+
+            var wbpLwbp = (fd && fd.wbpLwbp) || {};
+            var waste = (fd && fd.waste) || {};
+            var budget = (fd && fd.budget) || {};
+            var pc = (fd && fd.periodComparison) || {};
+            var ti = (fd && fd.tariffTypeInfo) || {};
+
+            var currentMonth = new Date().getMonth() + 1;
+
+            // Year cost: use actualCost from financial data (includes WBP/LWBP) when available
+            var yearCost = 0;
+            if (budget && budget.actualCost > 0 && monthKwh > 0 && yearKwh > 0) {
+                yearCost = Math.round(budget.actualCost / monthKwh * yearKwh);
+            } else {
+                yearCost = Math.round(yearKwh * tariff);
+            }
+
+            // Find peak month from monthly data
+            var peakMonthInfo = monthlyData.length > 0 ? monthlyData.reduce(function(max, m) { return m.energy > max.energy ? m : max; }, { energy: 0, timeLabel: '-' }) : { energy: 0, timeLabel: '-' };
+
+            // Yearly budget estimate: monthly budget × 12
+            var yearlyBudget = budget.configured && budget.budgetKWh > 0 ? budget.budgetKWh * 12 : 0;
+
+            // Best & worst months
+            var bestMonth = monthlyData.length > 0 ? monthlyData.reduce(function(min, m) { return m.energy > 0 && m.energy < min.energy ? m : min; }, { energy: Infinity, timeLabel: '-' }) : null;
+            var worstMonth = peakMonthInfo;
+
+            var html = '';
+            html += '<div class="fin-metric-grid" style="margin-bottom:8px">';
+
+            // Total Tahun Ini
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-calendar text-primary"></i> Total Tahun</div>';
+            html += '<div class="fin-metric-value">' + formatDecimal(yearKwh) + ' kWh</div>';
+            html += '<div class="fin-metric-sub">Rata² ' + formatDecimal(yearAvgPerMonth) + ' kWh/bulan · Bulan ke-' + currentMonth + '</div></div>';
+
+            // Biaya Tahunan
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-coins text-warning"></i> Biaya Tahunan</div>';
+            html += '<div class="fin-metric-value">Rp ' + formatInteger(yearCost) + '</div>';
+            html += '<div class="fin-metric-sub">Rata² Rp ' + formatInteger(Math.round(yearCost / Math.max(currentMonth, 1))) + '/bulan</div></div>';
+
+            // Bulan Puncak
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-arrow-up text-danger"></i> Bulan Puncak</div>';
+            html += '<div class="fin-metric-value">' + (peakMonthInfo.timeLabel || yearPeakMonthName) + '</div>';
+            html += '<div class="fin-metric-sub">' + formatDecimal(peakMonthInfo.energy || yearPeakMonth) + ' kWh</div></div>';
+
+            // Bulan Terendah
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-arrow-down text-success"></i> Bulan Terendah</div>';
+            if (bestMonth && bestMonth.energy > 0 && bestMonth.energy < Infinity) {
+                html += '<div class="fin-metric-value">' + bestMonth.timeLabel + '</div>';
+                html += '<div class="fin-metric-sub">' + formatDecimal(bestMonth.energy) + ' kWh</div></div>';
+            } else {
+                html += '<div class="fin-metric-value text-muted">—</div>';
+                html += '<div class="fin-metric-sub">Data belum cukup</div></div>';
+            }
+
+            // YoY
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> YoY</div>';
+            if (pc.yoyChangePercent !== undefined && pc.lastYearSameMonthKWh > 0) {
+                var yoyArr = pc.yoyChangePercent > 0 ? '▲' : '▼';
+                var yoyCls = pc.yoyChangePercent > 20 ? 'text-danger' : (pc.yoyChangePercent < -20 ? 'text-success' : '');
+                html += '<div class="fin-metric-value ' + yoyCls + '">' + yoyArr + ' ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '%</div>';
+                html += '<div class="fin-metric-sub">vs bulan sama tahun lalu</div></div>';
+            } else {
+                html += '<div class="fin-metric-value text-muted">—</div>';
+                html += '<div class="fin-metric-sub">Data tahun lalu belum tersedia</div></div>';
+            }
+
+            // Budget Tahunan
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-wallet text-success"></i> Budget Tahunan</div>';
+            if (yearlyBudget > 0) {
+                var yBudgetPct = Math.round(yearKwh / yearlyBudget * 100);
+                var ybCls = yBudgetPct > 100 ? 'text-danger' : (yBudgetPct > 80 ? 'text-warning' : 'text-success');
+                html += '<div class="fin-metric-value ' + ybCls + '">' + yBudgetPct + '%</div>';
+                html += '<div class="fin-metric-sub">Est. ' + formatDecimal(yearlyBudget) + ' kWh/tahun</div></div>';
+            } else {
+                html += '<div class="fin-metric-value text-muted">—</div>';
+                html += '<div class="fin-metric-sub">Belum dikonfigurasi</div></div>';
+            }
+
+            html += '</div>';
+
+            // Yearly insights
+            html += '<div class="daily-report-insights">';
+            html += '<div class="text-muted mb-1" style="font-size:0.7rem"><i class="fas fa-lightbulb"></i> INSIGHT TAHUNAN</div>';
+            var insights = [];
+
+            // Average daily cost
+            var daysThisYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 1)) / 86400000) + 1;
+            var avgDailyCost = daysThisYear > 0 ? Math.round(yearCost / daysThisYear) : 0;
+            insights.push(' Rata-rata biaya harian: Rp ' + formatInteger(avgDailyCost) + ' · Bulanan: Rp ' + formatInteger(Math.round(yearCost / Math.max(currentMonth, 1))));
+
+            // YoY trend
+            if (pc.yoyChangePercent !== undefined && pc.lastYearSameMonthKWh > 0) {
+                if (pc.yoyChangePercent > 20) {
+                    insights.push('<span class="text-danger"> Tren naik signifikan — konsumsi bulan ini ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% lebih tinggi dari tahun lalu</span>');
+                } else if (pc.yoyChangePercent < -20) {
+                    insights.push('<span class="text-success"> Tren turun — konsumsi bulan ini ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% lebih rendah dari tahun lalu</span>');
+                } else {
+                    insights.push('Konsumsi bulan ini relatif stabil vs tahun lalu (selisih ' + Math.abs(pc.yoyChangePercent || 0).toFixed(1) + '%)');
+                }
+            }
+
+            // Peak vs avg ratio
+            if (peakMonthInfo.energy > 0 && yearAvgPerMonth > 0) {
+                var peakVsAvg = Math.round(peakMonthInfo.energy / yearAvgPerMonth * 100 - 100);
+                if (peakVsAvg > 50) {
+                    insights.push('<span class="text-warning"> Bulan puncak ' + peakVsAvg + '% di atas rata-rata — pertimbangkan penjadwalan ulang beban</span>');
+                }
+            }
+
+            // WBP contribution
+            if (wbpLwbp.configured && (wbpLwbp.wbpKwh + wbpLwbp.lwbpKwh) > 0) {
+                var wbpTotal = wbpLwbp.wbpKwh + wbpLwbp.lwbpKwh;
+                var wbpPct = (wbpLwbp.wbpKwh / wbpTotal * 100).toFixed(1);
+                var lwbpPct = (100 - parseFloat(wbpPct)).toFixed(1);
+                insights.push(' Proporsi tahunan WBP ' + wbpPct + '% · LWBP ' + lwbpPct + '% — biaya WBP Rp ' + formatInteger(wbpLwbp.wbpCost || 0) + ' vs LWBP Rp ' + formatInteger(wbpLwbp.lwbpCost || 0));
+            }
+
+            // Waste annualized
+            if (waste.configured && waste.wastePercent > 0) {
+                var annualWasteKWh = waste.wasteKwh * 12;
+                var annualWasteCost = waste.wasteCost * 12;
+                insights.push('<span class="' + (waste.wastePercent > 5 ? 'text-danger' : '') + '"> Waste ' + waste.wastePercent.toFixed(1) + '% · Estimasi tahunan: ' + formatDecimal(annualWasteKWh) + ' kWh (Rp ' + formatInteger(annualWasteCost) + ')</span>');
+            }
+
+            // Budget pace
+            if (yearlyBudget > 0) {
+                var yBudgetPct2 = Math.round(yearKwh / yearlyBudget * 100);
+                var expectedPctByNow = Math.round(currentMonth / 12 * 100);
+                if (yBudgetPct2 > expectedPctByNow + 10) {
+                    insights.push('<span class="text-danger"> Penggunaan ' + yBudgetPct2 + '% dari budget tahunan, padahal baru ' + expectedPctByNow + '% waktu — over pace</span>');
+                } else {
+                    insights.push('<span class="text-success"> Penggunaan ' + yBudgetPct2 + '% dari budget tahunan · Pace ' + expectedPctByNow + '% — sesuai target</span>');
+                }
+            }
+
+            // Device mix
+            if (ti.totalDeviceCount > 1) {
+                insights.push(' ' + (ti.wbpDeviceCount || 0) + ' device WBP/LWBP, ' + (ti.flatDeviceCount || 0) + ' device Flat');
+            }
+
+            // Projection to year end
+            if (yearKwh > 0 && currentMonth > 1) {
+                var projectedYearKwh = Math.round(yearKwh / currentMonth * 12);
+                var projectedYearCost = Math.round(projectedYearKwh * tariff);
+                insights.push(' Proyeksi akhir tahun: ' + formatDecimal(projectedYearKwh) + ' kWh (Rp ' + formatInteger(projectedYearCost) + ')');
+            }
+
+            if (insights.length === 0) {
+                insights.push('<span class="text-muted">Data belum cukup untuk analisa tahunan</span>');
+            }
+
+            insights.forEach(function(insight) {
+                html += '<div style="padding:2px 0; line-height:1.4">' + insight + '</div>';
+            });
+            html += '</div>';
+            $body.html(html);
         }
 
         function formatNumber(num) {

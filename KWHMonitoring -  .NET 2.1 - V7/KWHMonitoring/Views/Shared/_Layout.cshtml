@@ -1508,6 +1508,13 @@
                         xhr.setRequestHeader('RequestVerificationToken', csrfToken);
                     }
                 });
+                // Global 401 handler: redirect to login if session expired
+                $(document).ajaxError(function(e, xhr, options) {
+                    if (xhr.status === 401 && !options._authRedirecting) {
+                        console.warn('🔒 Session expired — redirecting to login');
+                        window.location.href = '/Account/Login?ReturnUrl=' + encodeURIComponent(window.location.pathname + window.location.search);
+                    }
+                });
             }
             window.getCsrfToken = function() { return csrfToken; };
         })();

@@ -276,6 +276,12 @@ namespace KWHMonitoring.Controllers
             return View();
         }
 
+        // DOCUMENTATION: Usage Statistics Calculations
+        public IActionResult UsageStatisticsDocs()
+        {
+            return View();
+        }
+
         // SETTINGS PAGE
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Settings()

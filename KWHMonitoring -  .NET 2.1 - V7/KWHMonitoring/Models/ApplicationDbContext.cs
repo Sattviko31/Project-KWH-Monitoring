@@ -235,6 +235,13 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.EmaFibUpper).HasColumnType("float");
                 entity.Property(x => x.EmaFibLower).HasColumnType("float");
                 entity.Property(x => x.ControlMode).HasColumnType("varchar(50)").HasMaxLength(50);
+                entity.Property(x => x.TariffWBP).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.TariffLWBP).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.WbpStartHour);
+                entity.Property(x => x.WbpEndHour);
+                entity.Property(x => x.BudgetKWh).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.SurfaceArea).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.RevenuePerHour).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
 

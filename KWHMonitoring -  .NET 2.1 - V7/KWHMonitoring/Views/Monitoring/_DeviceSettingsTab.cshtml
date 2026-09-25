@@ -1,4 +1,9 @@
 @using System.Globalization
+@functions {
+    string FormatNoTrailingZeros(decimal value) {
+        return value.ToString("0.#########################", CultureInfo.InvariantCulture);
+    }
+}
 @{
     var devices = ViewBag.Devices as List<KWHMonitoring.Models.DeviceSettingsListItem> ?? new List<KWHMonitoring.Models.DeviceSettingsListItem>();
     var deviceSettings = ViewBag.DeviceSettings as Dictionary<string, KWHMonitoring.Models.DeviceSettings> ?? new Dictionary<string, KWHMonitoring.Models.DeviceSettings>();
@@ -113,11 +118,58 @@
                                         <div class="device-form-group">
                                             <div class="device-form-row">
                                                 <label class="device-label">Max Cap (W)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="MaxCapacity" value="@settings.MaxCapacity.ToString(CultureInfo.InvariantCulture)" min="0" step="100">
+                                                <input type="number" class="form-control form-control-sm" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)" min="0" step="100">
                                             </div>
                                             <div class="device-form-row">
                                                 <label class="device-label">Tarif (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@settings.TariffPerKWh.ToString(CultureInfo.InvariantCulture)" min="0" step="50">
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@FormatNoTrailingZeros(settings.TariffPerKWh)" min="0" step="50">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Tarif WBP (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffWBP" value="@FormatNoTrailingZeros(settings.TariffWBP)" min="0" step="50" placeholder="0 = flat">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Tarif LWBP (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffLWBP" value="@FormatNoTrailingZeros(settings.TariffLWBP)" min="0" step="50" placeholder="0 = flat">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">WBP Start</label>
+                                                <select class="form-select form-select-sm" data-field="WbpStartHour">
+                                                    @for (var h = 0; h < 24; h++)
+                                                    {
+                                                        <option value="@h" selected="@(settings.WbpStartHour == h ? "selected" : null)">@(h.ToString("D2")):00</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">WBP End</label>
+                                                <select class="form-select form-select-sm" data-field="WbpEndHour">
+                                                    @for (var h = 0; h < 24; h++)
+                                                    {
+                                                        <option value="@h" selected="@(settings.WbpEndHour == h ? "selected" : null)">@(h.ToString("D2")):00</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Budget Rp/bln</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="BudgetRupiah" value="@FormatNoTrailingZeros(settings.BudgetKWh * settings.TariffPerKWh)" min="0" step="1000" placeholder="0 = nonaktif">
+                                                <input type="hidden" data-field="BudgetKWh" value="@FormatNoTrailingZeros(settings.BudgetKWh)">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Luas (m²)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="SurfaceArea" value="@FormatNoTrailingZeros(settings.SurfaceArea)" min="0" step="0.1" placeholder="0 = N/A">
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
+                                                <label class="device-label">Rev/Jam (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000" placeholder="0 = N/A">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
@@ -201,6 +253,13 @@
                 downtimeStart: $card.find('[data-field="DowntimeStart"]').val() || '00:00',
                 downtimeEnd: $card.find('[data-field="DowntimeEnd"]').val() || '06:00',
                 tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
+                tariffWBP: parseFloat($card.find('[data-field="TariffWBP"]').val()) || 0,
+                tariffLWBP: parseFloat($card.find('[data-field="TariffLWBP"]').val()) || 0,
+                wbpStartHour: parseInt($card.find('[data-field="WbpStartHour"]').val()) || 18,
+                wbpEndHour: parseInt($card.find('[data-field="WbpEndHour"]').val()) || 22,
+                budgetKWh: (parseFloat($card.find('[data-field="BudgetRupiah"]').val()) || 0) / (parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500),
+                surfaceArea: parseFloat($card.find('[data-field="SurfaceArea"]').val()) || 0,
+                revenuePerHour: parseFloat($card.find('[data-field="RevenuePerHour"]').val()) || 0,
                 loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
                 loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
                 emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,
@@ -229,6 +288,12 @@
                 downtimeStart: timeSpanFromString(settings.downtimeStart),
                 downtimeEnd: timeSpanFromString(settings.downtimeEnd),
                 tariffPerKWh: settings.tariffPerKWh,
+                tariffWBP: settings.tariffWBP,
+                tariffLWBP: settings.tariffLWBP,
+                wbpStartHour: settings.wbpStartHour,
+                wbpEndHour: settings.wbpEndHour,
+                budgetKWh: settings.budgetKWh,
+                surfaceArea: settings.surfaceArea,
                 loadNormalThreshold: settings.loadNormalThreshold,
                 loadMediumThreshold: settings.loadMediumThreshold,
                 emaUpperThreshold: settings.emaUpperThreshold,
@@ -280,6 +345,13 @@
                     downtimeStart: timeSpanFromString($card.find('[data-field="DowntimeStart"]').val() || '22:00'),
                     downtimeEnd: timeSpanFromString($card.find('[data-field="DowntimeEnd"]').val() || '06:00'),
                     tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
+                    tariffWBP: parseFloat($card.find('[data-field="TariffWBP"]').val()) || 0,
+                    tariffLWBP: parseFloat($card.find('[data-field="TariffLWBP"]').val()) || 0,
+                    wbpStartHour: parseInt($card.find('[data-field="WbpStartHour"]').val()) || 18,
+                    wbpEndHour: parseInt($card.find('[data-field="WbpEndHour"]').val()) || 22,
+                    budgetKWh: (parseFloat($card.find('[data-field="BudgetRupiah"]').val()) || 0) / (parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500),
+                    surfaceArea: parseFloat($card.find('[data-field="SurfaceArea"]').val()) || 0,
+                    revenuePerHour: parseFloat($card.find('[data-field="RevenuePerHour"]').val()) || 0,
                     loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
                     loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
                     emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,

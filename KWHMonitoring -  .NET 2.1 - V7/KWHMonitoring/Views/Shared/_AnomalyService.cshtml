@@ -230,8 +230,13 @@
                     success: function() {
                         console.log('💾 Anomaly state saved to DB');
                     },
-                    error: function(xhr, status, error) {
-                        console.error('❌ Error saving anomaly state:', error);
+                    error: function(xhr) {
+                        if (xhr.status === 401) {
+                            console.warn('🔒 Session expired — stopping anomaly timer');
+                            if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
+                        } else {
+                            console.error('❌ Error saving anomaly state:', xhr.statusText);
+                        }
                     }
                 });
             }, 2000);
@@ -251,8 +256,13 @@
                 success: function() {
                     console.log('💾 Anomaly state saved to DB (immediate)');
                 },
-                error: function(xhr, status, error) {
-                    console.error('❌ Error saving anomaly state:', error);
+                error: function(xhr) {
+                    if (xhr.status === 401) {
+                        console.warn('🔒 Session expired — stopping anomaly timer');
+                        if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
+                    } else {
+                        console.error('❌ Error saving anomaly state:', xhr.statusText);
+                    }
                 }
             });
         }

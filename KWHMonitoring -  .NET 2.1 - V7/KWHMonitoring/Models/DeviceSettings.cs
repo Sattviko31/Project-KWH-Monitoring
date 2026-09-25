@@ -57,6 +57,30 @@ namespace KWHMonitoring.Models
         [MaxLength(50)]
         public string ControlMode { get; set; } = "OnOff";
 
+        // Financial fields — WBP/LWBP tariff split
+        [Column("TariffWBP", TypeName = "decimal(18,2)")]
+        public decimal TariffWBP { get; set; } = 0m;
+
+        [Column("TariffLWBP", TypeName = "decimal(18,2)")]
+        public decimal TariffLWBP { get; set; } = 0m;
+
+        [Column("WbpStartHour")]
+        public int WbpStartHour { get; set; } = 18;
+
+        [Column("WbpEndHour")]
+        public int WbpEndHour { get; set; } = 22;
+
+        // Budget & unit economics
+        [Column("BudgetKWh", TypeName = "decimal(18,2)")]
+        public decimal BudgetKWh { get; set; } = 0m;
+
+        [Column("SurfaceArea", TypeName = "decimal(18,2)")]
+        public decimal SurfaceArea { get; set; } = 0m;
+
+        // Revenue model for advertising media — used to estimate revenue loss during DROP anomalies
+        [Column("RevenuePerHour", TypeName = "decimal(18,2)")]
+        public decimal RevenuePerHour { get; set; } = 0m;
+
         [Column("CreatedAt", TypeName = "datetime2")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

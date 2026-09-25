@@ -63,40 +63,37 @@
 Dibagi menjadi **5 Phase** berdasarkan prioritas dan ketergantungan:
 
 ```
-Phase 1: KEAMANAN KRITIS (est. 1-2 jam)
+Phase 1: KEAMANAN KRITIS
   ├── Task 1.1  Tambah [Authorize] endpoint kredensial
   ├── Task 1.2  Tambah [Authorize] test-database-connection
   ├── Task 1.3  Tambah [Authorize] write endpoints
   └── Task 1.4  Tambah [Authorize] QwenChatController
 
-Phase 2: KEAMANAN SEDANG (est. 1-2 jam)
+Phase 2: KEAMANAN SEDANG
   ├── Task 2.1  Encrypt SMTP password di DB
   ├── Task 2.2  Hapus password dari log output
   ├── Task 2.3  Generic error message (bukan ex.Message)
   └── Task 2.4  Fix Cookie SameSite policy
 
-Phase 3: SINKRONISASI SETTINGS PER DEVICE (est. 2-3 jam)
+Phase 3: SINKRONISASI SETTINGS PER DEVICE
   ├── Task 3.1  NotificationService baca threshold dari DeviceSettings
   ├── Task 3.2  NotificationService baca tarif dari DeviceSettings
   ├── Task 3.3  Sync field overlapping AppSettingsRecord ↔ DeviceSettings
   ├── Task 3.4  Refresh window._deviceSettings secara periodik
   └── Task 3.5  NotificationService auto-reload settings
 
-Phase 4: LOGIKA ANOMALY & MONITORING (est. 2-3 jam)
+Phase 4: LOGIKA ANOMALY & MONITORING
   ├── Task 4.1  Auto-expire AnomalyAlert.Active dedup flag
   ├── Task 4.2  Fix downtime check consistency client vs server
   ├── Task 4.3  Bulk save dengan transaction scope
   ├── Task 4.4  Handle EMA threshold 0 — fallback ke global settings
   └── Task 4.5  Dead code cleanup — Fibonacci fields / mode
 
-Phase 5: PENGUATAN TAMBAHAN (est. 1-2 jam)
+Phase 5: PENGUATAN TAMBAHAN
   ├── Task 5.1  AesEncryptionService random IV
   ├── Task 5.2  Tambah ValidateAntiForgeryToken pada write endpoints
   ├── Task 5.3  OTP comparison constant-time
   └── Task 5.4  Password hasher constant-time compare
-```
-
-**Total estimasi: 7-12 jam kerja**
 
 ---
 

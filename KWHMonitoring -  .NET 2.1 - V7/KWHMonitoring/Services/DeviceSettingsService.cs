@@ -35,7 +35,7 @@ namespace KWHMonitoring.Services
                 deviceSettings = new DeviceSettings { DeviceKey = deviceKey };
             }
 
-            // MaxCapacity, EMA thresholds: 0 means not configured — do NOT override
+            // MaxCapacity, EMA thresholds, BudgetKWh, SurfaceArea: 0 means not configured — do NOT override
             if (string.IsNullOrWhiteSpace(deviceSettings.DeviceCategory))
                 deviceSettings.DeviceCategory = "Billboard";
 
@@ -51,6 +51,13 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(deviceSettings.ControlMode))
                 deviceSettings.ControlMode = "OnOff";
 
+            // WBP/LWBP: if both 0, not configured — keep 0 to signal "use flat tariff"
+            // WbpStartHour/WbpEndHour default to 18/22 from model, only override if clearly invalid
+            if (deviceSettings.WbpStartHour < 0 || deviceSettings.WbpStartHour > 23)
+                deviceSettings.WbpStartHour = 18;
+            if (deviceSettings.WbpEndHour < 0 || deviceSettings.WbpEndHour > 23)
+                deviceSettings.WbpEndHour = 22;
+
             return deviceSettings;
         }
 
@@ -64,7 +71,7 @@ namespace KWHMonitoring.Services
 
             foreach (var setting in allDeviceSettings)
             {
-                // MaxCapacity, EMA thresholds: 0 means not configured — do NOT override
+                // MaxCapacity, EMA thresholds, BudgetKWh, SurfaceArea: 0 means not configured — do NOT override
                 if (string.IsNullOrWhiteSpace(setting.DeviceCategory))
                     setting.DeviceCategory = "Billboard";
 
@@ -79,6 +86,12 @@ namespace KWHMonitoring.Services
 
                 if (string.IsNullOrWhiteSpace(setting.ControlMode))
                     setting.ControlMode = "OnOff";
+
+                // WBP/LWBP: if both 0, not configured — keep 0
+                if (setting.WbpStartHour < 0 || setting.WbpStartHour > 23)
+                    setting.WbpStartHour = 18;
+                if (setting.WbpEndHour < 0 || setting.WbpEndHour > 23)
+                    setting.WbpEndHour = 22;
 
                 result[setting.DeviceKey] = setting;
             }
@@ -113,6 +126,13 @@ namespace KWHMonitoring.Services
                 EmaFibUpper = effective.EmaFibUpper,
                 EmaFibLower = effective.EmaFibLower,
                 ControlMode = effective.ControlMode,
+                TariffWBP = effective.TariffWBP,
+                TariffLWBP = effective.TariffLWBP,
+                WbpStartHour = effective.WbpStartHour,
+                WbpEndHour = effective.WbpEndHour,
+                BudgetKWh = effective.BudgetKWh,
+                SurfaceArea = effective.SurfaceArea,
+                RevenuePerHour = effective.RevenuePerHour,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -146,6 +166,13 @@ namespace KWHMonitoring.Services
                 existing.EmaFibUpper = settings.EmaFibUpper;
                 existing.EmaFibLower = settings.EmaFibLower;
                 existing.ControlMode = settings.ControlMode;
+                existing.TariffWBP = settings.TariffWBP;
+                existing.TariffLWBP = settings.TariffLWBP;
+                existing.WbpStartHour = settings.WbpStartHour;
+                existing.WbpEndHour = settings.WbpEndHour;
+                existing.BudgetKWh = settings.BudgetKWh;
+                existing.SurfaceArea = settings.SurfaceArea;
+                existing.RevenuePerHour = settings.RevenuePerHour;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else

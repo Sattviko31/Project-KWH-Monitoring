@@ -454,6 +454,75 @@ namespace KWHMonitoring.Controllers
                 var tariffPerKWh = await GetTariffPerKWh();
                 var estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2);
 
+                // --- Financial calculations (aggregate) ---
+                // Get a representative device settings for financial calculations (use first device or default)
+                var allDevSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var representativeSettings = allDevSettings.Values.FirstOrDefault() ?? new DeviceSettings();
+
+                var hourlyKwhByHour = new decimal[24];
+                for (int i = 0; i < hourlyData.Count && i < 24; i++)
+                    hourlyKwhByHour[i] = hourlyData[i].energy;
+
+                var wbpResult = CalculateWbpLwbp(hourlyKwhByHour, representativeSettings);
+                var wasteResult = CalculateWaste(hourlyKwhByHour, representativeSettings);
+
+                // Budget vs Actual
+                decimal budgetKWh = representativeSettings.BudgetKWh;
+                decimal budgetVariance = budgetKWh > 0 ? Math.Round(monthKWh - budgetKWh, 2) : 0;
+                decimal budgetVariancePct = budgetKWh > 0 ? Math.Round((monthKWh - budgetKWh) / budgetKWh * 100, 1) : 0;
+                decimal budgetCost = budgetKWh > 0 ? Math.Round(budgetKWh * tariffPerKWh, 0) : 0;
+                decimal actualCost = Math.Round(monthKWh * tariffPerKWh, 0);
+
+                // Period comparison (MoM, YoY)
+                var lastMonth = startDate.AddMonths(-1);
+                var lastMonthKWh = await _context.MonthlyEnergy
+                    .Where(x => x.Year == lastMonth.Year && x.Month == lastMonth.Month)
+                    .SumAsync(x => x.EnergyKWh);
+                lastMonthKWh = Math.Round(lastMonthKWh, 2);
+                var momChange = Math.Round(monthKWh - lastMonthKWh, 2);
+                var momChangePercent = lastMonthKWh > 0 ? Math.Round((monthKWh - lastMonthKWh) / lastMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+
+                var lastYearSameMonthKWh = await _context.MonthlyEnergy
+                    .Where(x => x.Year == (startDate.Year - 1) && x.Month == startDate.Month)
+                    .SumAsync(x => x.EnergyKWh);
+                lastYearSameMonthKWh = Math.Round(lastYearSameMonthKWh, 2);
+                var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
+                var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+
+                // Bill projection
+                var dayOfMonth = serverNow.Day;
+                var daysInMonthProj = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
+                var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInMonthProj, 2) : monthKWh;
+                var projectedCost = Math.Round(projectedMonthKWh * tariffPerKWh, 0);
+                var daysRemaining = daysInMonthProj - dayOfMonth;
+
+                // Anomaly cost impact
+                var monthStartForAnomaly = new DateTime(startDate.Year, startDate.Month, 1);
+                var overloadAnomalies = await _context.AnomalyLogs
+                    .Where(x => x.DetectedTime >= monthStartForAnomaly && x.DetectedTime < startDate.AddMonths(1))
+                    .Where(x => x.AnomalyType == "OVERLOAD")
+                    .OrderByDescending(x => x.Deviation)
+                    .Take(20).ToListAsync();
+                decimal anomalyExcessKWh = 0;
+                foreach (var a in overloadAnomalies) { anomalyExcessKWh += Math.Max(a.PowerValue - a.ThresholdValue, 0) * 0.25m / 1000m; }
+                anomalyExcessKWh = Math.Round(anomalyExcessKWh, 2);
+                var anomalyCostImpact = Math.Round(anomalyExcessKWh * tariffPerKWh, 0);
+                var top5Anomalies = overloadAnomalies.Take(5).Select(a => new { a.DeviceKey, a.AnomalyType, a.PowerValue, a.ThresholdValue, a.Deviation, a.Severity, a.DetectedTime, estimatedCost = Math.Round(Math.Max(a.PowerValue - a.ThresholdValue, 0) * 0.25m / 1000m * tariffPerKWh, 0) }).ToList();
+
+                // Load factor
+                decimal loadFactor = 0; string loadFactorStatus = "N/A";
+                var maxCap = representativeSettings.MaxCapacity;
+                if (maxCap > 0 && dayOfMonth > 0) {
+                    var opHours = dayOfMonth * 24;
+                    loadFactor = Math.Min(Math.Round(monthKWh / (maxCap / 1000m * opHours) * 100, 1), 100m);
+                    loadFactorStatus = loadFactor < 30 ? "Under-utilized" : loadFactor <= 80 ? "Optimal" : "High Risk";
+                }
+
+                // Unit economics
+                var surfaceArea = representativeSettings.SurfaceArea;
+                var costPerM2 = surfaceArea > 0 ? Math.Round(actualCost / surfaceArea, 0) : 0;
+                var costPerHour = dayOfMonth > 0 ? Math.Round(actualCost / (dayOfMonth * 24), 0) : 0;
+
                 return Ok(new
                 {
                     totalToday = todayKWh,
@@ -471,7 +540,60 @@ namespace KWHMonitoring.Controllers
                     serverDate = serverToday.ToString("yyyy-MM-dd"),
                     serverHour = serverNow.Hour,
                     serverDay = serverNow.Day,
-                    serverMonth = serverNow.Month
+                    serverMonth = serverNow.Month,
+
+                    // Financial: WBP/LWBP
+                    wbpLwbp = new
+                    {
+                        configured = wbpResult.configured,
+                        wbpKWh = wbpResult.wbpKWh, lwbpKWh = wbpResult.lwbpKWh,
+                        wbpCost = wbpResult.wbpCost, lwbpCost = wbpResult.lwbpCost,
+                        totalCostWBP = wbpResult.totalCostWBP, wbpRatio = wbpResult.wbpRatio,
+                        tariffWBP = wbpResult.tariffWBP, tariffLWBP = wbpResult.tariffLWBP,
+                        wbpStart = representativeSettings.WbpStartHour, wbpEnd = representativeSettings.WbpEndHour
+                    },
+                    // Financial: Waste detection
+                    waste = new
+                    {
+                        configured = wasteResult.configured,
+                        wasteKWh = wasteResult.wasteKWh, wasteCost = wasteResult.wasteCost,
+                        wastePercent = wasteResult.wastePercent,
+                        downtimeStart = wasteResult.dtStart, downtimeEnd = wasteResult.dtEnd
+                    },
+                    // Financial: Budget vs Actual
+                    budget = new
+                    {
+                        configured = budgetKWh > 0,
+                        budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct,
+                        budgetCost, actualCost
+                    },
+                    // Financial: Period comparison
+                    periodComparison = new
+                    {
+                        lastMonthKWh, momChange, momChangePercent,
+                        lastYearSameMonthKWh, yoyChange, yoyChangePercent
+                    },
+                    // Financial: Bill projection
+                    billProjection = new
+                    {
+                        projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining
+                    },
+                    // Financial: Anomaly cost impact
+                    anomalyCostImpact = new
+                    {
+                        totalAnomalies = overloadAnomalies.Count, estimatedExcessKWh = anomalyExcessKWh,
+                        estimatedCostImpact = anomalyCostImpact, topAnomalies = top5Anomalies
+                    },
+                    // Financial: Load factor
+                    loadFactorInfo = new
+                    {
+                        configured = maxCap > 0, loadFactor, maxCapacity = maxCap, status = loadFactorStatus
+                    },
+                    // Financial: Unit economics
+                    unitEconomics = new
+                    {
+                        configured = surfaceArea > 0, costPerM2, costPerHour, surfaceArea
+                    }
                 });
             }
             catch (Exception ex)
@@ -640,6 +762,73 @@ namespace KWHMonitoring.Controllers
                     estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2); // tariffPerKWh already per-device from above
                 }
 
+                // --- Financial calculations (per-device) ---
+                var devSettings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+
+                var hourlyKwhByHour = new decimal[24];
+                for (int i = 0; i < hourlyData.Count && i < 24; i++)
+                    hourlyKwhByHour[i] = hourlyData[i].energy;
+
+                var wbpResult = CalculateWbpLwbp(hourlyKwhByHour, devSettings);
+                var wasteResult = CalculateWaste(hourlyKwhByHour, devSettings);
+
+                // Budget vs Actual
+                decimal budgetKWh = devSettings.BudgetKWh;
+                decimal budgetVariance = budgetKWh > 0 ? Math.Round(monthKWh - budgetKWh, 2) : 0;
+                decimal budgetVariancePct = budgetKWh > 0 ? Math.Round((monthKWh - budgetKWh) / budgetKWh * 100, 1) : 0;
+                decimal budgetCost = budgetKWh > 0 ? Math.Round(budgetKWh * tariffPerKWh, 0) : 0;
+                decimal actualCost = Math.Round(monthKWh * tariffPerKWh, 0);
+
+                // Period comparison (MoM, YoY)
+                var lastMonth = startDate.AddMonths(-1);
+                var lastMonthKWh = await _context.MonthlyEnergy
+                    .Where(x => x.DeviceKey == deviceKey && x.Year == lastMonth.Year && x.Month == lastMonth.Month)
+                    .SumAsync(x => x.EnergyKWh);
+                lastMonthKWh = Math.Round(lastMonthKWh, 2);
+                var momChange = Math.Round(monthKWh - lastMonthKWh, 2);
+                var momChangePercent = lastMonthKWh > 0 ? Math.Round((monthKWh - lastMonthKWh) / lastMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+
+                var lastYearSameMonthKWh = await _context.MonthlyEnergy
+                    .Where(x => x.DeviceKey == deviceKey && x.Year == (startDate.Year - 1) && x.Month == startDate.Month)
+                    .SumAsync(x => x.EnergyKWh);
+                lastYearSameMonthKWh = Math.Round(lastYearSameMonthKWh, 2);
+                var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
+                var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+
+                // Bill projection
+                var dayOfMonth = serverNow.Day;
+                var daysInMonthProj = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
+                var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInMonthProj, 2) : monthKWh;
+                var projectedCost = Math.Round(projectedMonthKWh * tariffPerKWh, 0);
+                var daysRemaining = daysInMonthProj - dayOfMonth;
+
+                // Anomaly cost impact
+                var monthStartForAnomaly = new DateTime(startDate.Year, startDate.Month, 1);
+                var overloadAnomalies = await _context.AnomalyLogs
+                    .Where(x => x.DeviceKey == deviceKey && x.DetectedTime >= monthStartForAnomaly && x.DetectedTime < startDate.AddMonths(1))
+                    .Where(x => x.AnomalyType == "OVERLOAD")
+                    .OrderByDescending(x => x.Deviation)
+                    .Take(20).ToListAsync();
+                decimal anomalyExcessKWh = 0;
+                foreach (var a in overloadAnomalies) { anomalyExcessKWh += Math.Max(a.PowerValue - a.ThresholdValue, 0) * 0.25m / 1000m; }
+                anomalyExcessKWh = Math.Round(anomalyExcessKWh, 2);
+                var anomalyCostImpact = Math.Round(anomalyExcessKWh * tariffPerKWh, 0);
+                var top5Anomalies = overloadAnomalies.Take(5).Select(a => new { a.DeviceKey, a.AnomalyType, a.PowerValue, a.ThresholdValue, a.Deviation, a.Severity, a.DetectedTime, estimatedCost = Math.Round(Math.Max(a.PowerValue - a.ThresholdValue, 0) * 0.25m / 1000m * tariffPerKWh, 0) }).ToList();
+
+                // Load factor
+                decimal loadFactor = 0; string loadFactorStatus = "N/A";
+                var maxCap = devSettings.MaxCapacity;
+                if (maxCap > 0 && dayOfMonth > 0) {
+                    var opHours = dayOfMonth * 24;
+                    loadFactor = Math.Min(Math.Round(monthKWh / (maxCap / 1000m * opHours) * 100, 1), 100m);
+                    loadFactorStatus = loadFactor < 30 ? "Under-utilized" : loadFactor <= 80 ? "Optimal" : "High Risk";
+                }
+
+                // Unit economics
+                var surfaceArea = devSettings.SurfaceArea;
+                var costPerM2 = surfaceArea > 0 ? Math.Round(actualCost / surfaceArea, 0) : 0;
+                var costPerHour = dayOfMonth > 0 ? Math.Round(actualCost / (dayOfMonth * 24), 0) : 0;
+
                 return Ok(new
                 {
                     success = true, deviceKey = deviceKey,
@@ -653,7 +842,60 @@ namespace KWHMonitoring.Controllers
                     secondsToNextHour = secondsToNextHour,
                     isToday = isTodayDevice,
                     serverDate = serverToday.ToString("yyyy-MM-dd"),
-                    serverHour = serverNow.Hour
+                    serverHour = serverNow.Hour,
+
+                    // Financial: WBP/LWBP
+                    wbpLwbp = new
+                    {
+                        configured = wbpResult.configured,
+                        wbpKWh = wbpResult.wbpKWh, lwbpKWh = wbpResult.lwbpKWh,
+                        wbpCost = wbpResult.wbpCost, lwbpCost = wbpResult.lwbpCost,
+                        totalCostWBP = wbpResult.totalCostWBP, wbpRatio = wbpResult.wbpRatio,
+                        tariffWBP = wbpResult.tariffWBP, tariffLWBP = wbpResult.tariffLWBP,
+                        wbpStart = devSettings.WbpStartHour, wbpEnd = devSettings.WbpEndHour
+                    },
+                    // Financial: Waste detection
+                    waste = new
+                    {
+                        configured = wasteResult.configured,
+                        wasteKWh = wasteResult.wasteKWh, wasteCost = wasteResult.wasteCost,
+                        wastePercent = wasteResult.wastePercent,
+                        downtimeStart = wasteResult.dtStart, downtimeEnd = wasteResult.dtEnd
+                    },
+                    // Financial: Budget vs Actual
+                    budget = new
+                    {
+                        configured = budgetKWh > 0,
+                        budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct,
+                        budgetCost, actualCost
+                    },
+                    // Financial: Period comparison
+                    periodComparison = new
+                    {
+                        lastMonthKWh, momChange, momChangePercent,
+                        lastYearSameMonthKWh, yoyChange, yoyChangePercent
+                    },
+                    // Financial: Bill projection
+                    billProjection = new
+                    {
+                        projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining
+                    },
+                    // Financial: Anomaly cost impact
+                    anomalyCostImpact = new
+                    {
+                        totalAnomalies = overloadAnomalies.Count, estimatedExcessKWh = anomalyExcessKWh,
+                        estimatedCostImpact = anomalyCostImpact, topAnomalies = top5Anomalies
+                    },
+                    // Financial: Load factor
+                    loadFactorInfo = new
+                    {
+                        configured = maxCap > 0, loadFactor, maxCapacity = maxCap, status = loadFactorStatus
+                    },
+                    // Financial: Unit economics
+                    unitEconomics = new
+                    {
+                        configured = surfaceArea > 0, costPerM2, costPerHour, surfaceArea
+                    }
                 });
             }
             catch (Exception ex)
@@ -823,6 +1065,61 @@ namespace KWHMonitoring.Controllers
             if (month < 1 || month > 12) return "";
             var months = new[] { "", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des" };
             return months[month];
+        }
+
+        // ============================================
+        // FINANCIAL CALCULATION HELPERS
+        // ============================================
+        private (decimal wbpKWh, decimal lwbpKWh, decimal wbpCost, decimal lwbpCost, decimal totalCostWBP, decimal wbpRatio, bool configured, decimal tariffWBP, decimal tariffLWBP) CalculateWbpLwbp(decimal[] hourlyKwhByHour, DeviceSettings ds)
+        {
+            var tariffWBP = ds.TariffWBP > 0 ? ds.TariffWBP : 0m;
+            var tariffLWBP = ds.TariffLWBP > 0 ? ds.TariffLWBP : 0m;
+            var flatTariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : 1500m;
+            var useWbpSplit = tariffWBP > 0 && tariffLWBP > 0;
+            var wbpStart = ds.WbpStartHour;
+            var wbpEnd = ds.WbpEndHour;
+
+            decimal wbpKWh = 0, lwbpKWh = 0;
+            for (int h = 0; h < hourlyKwhByHour.Length && h < 24; h++)
+            {
+                bool isWbp;
+                if (wbpStart < wbpEnd) isWbp = h >= wbpStart && h < wbpEnd;
+                else isWbp = h >= wbpStart || h < wbpEnd;
+
+                if (isWbp) wbpKWh += hourlyKwhByHour[h];
+                else lwbpKWh += hourlyKwhByHour[h];
+            }
+
+            wbpKWh = Math.Round(wbpKWh, 2);
+            lwbpKWh = Math.Round(lwbpKWh, 2);
+            var total = Math.Round(wbpKWh + lwbpKWh, 2);
+            var ratio = total > 0 ? Math.Round(wbpKWh / total * 100, 1) : 0;
+
+            if (!useWbpSplit) return (wbpKWh, lwbpKWh, Math.Round(wbpKWh * flatTariff, 0), Math.Round(lwbpKWh * flatTariff, 0), Math.Round(total * flatTariff, 0), ratio, false, flatTariff, flatTariff);
+            return (wbpKWh, lwbpKWh, Math.Round(wbpKWh * tariffWBP, 0), Math.Round(lwbpKWh * tariffLWBP, 0), Math.Round(wbpKWh * tariffWBP + lwbpKWh * tariffLWBP, 0), ratio, true, tariffWBP, tariffLWBP);
+        }
+
+        private (decimal wasteKWh, decimal wasteCost, decimal wastePercent, bool configured, string dtStart, string dtEnd) CalculateWaste(decimal[] hourlyKwhByHour, DeviceSettings ds)
+        {
+            if (!ds.DowntimeEnabled) return (0, 0, 0, false, "", "");
+            var startH = ds.DowntimeStart.Hours;
+            var endH = ds.DowntimeEnd.Hours;
+            var tariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : 1500m;
+
+            decimal wasteKWh = 0, totalKWh = 0;
+            for (int h = 0; h < hourlyKwhByHour.Length && h < 24; h++)
+            {
+                bool isDt;
+                if (startH < endH) isDt = h >= startH && h < endH;
+                else isDt = h >= startH || h < endH;
+
+                totalKWh += hourlyKwhByHour[h];
+                if (isDt && hourlyKwhByHour[h] > 0) wasteKWh += hourlyKwhByHour[h];
+            }
+
+            wasteKWh = Math.Round(wasteKWh, 2);
+            var pct = totalKWh > 0 ? Math.Round(wasteKWh / totalKWh * 100, 1) : 0;
+            return (wasteKWh, Math.Round(wasteKWh * tariff, 0), pct, true, string.Format("{0:D2}:00", startH), string.Format("{0:D2}:00", endH));
         }
 
         // ============================================
@@ -2749,10 +3046,22 @@ namespace KWHMonitoring.Controllers
                     query = query.OrderByDescending(x => x.DetectedTime);
                 }
 
-                // Load device group names from DeviceRegistry
+                // Load device group names, locations and financial settings
                 var deviceGroupNames = await _context.DeviceRegistry
                     .Where(x => x.GroupName != null && x.GroupName != "")
                     .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
+
+                var deviceLocations = await _context.DeviceRegistry
+                    .Where(x => x.Location != null && x.Location != "")
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.Location);
+
+                var deviceSettings = await _context.DeviceSettings
+                    .ToDictionaryAsync(x => x.DeviceKey, x => new
+                    {
+                        x.DeviceCategory,
+                        x.TariffPerKWh,
+                        x.RevenuePerHour
+                    });
 
                 var totalCount = await query.CountAsync();
                 var logs = await query
@@ -2786,15 +3095,55 @@ namespace KWHMonitoring.Controllers
                     })
                     .ToListAsync();
 
-                // Resolve groupName from DeviceRegistry
+                // Resolve groupName and compute financial impact per anomaly
                 var result = logs.Select(x =>
                 {
+                    var settings = deviceSettings.ContainsKey(x.deviceKey) ? deviceSettings[x.deviceKey] : null;
+                    var category = settings?.DeviceCategory ?? "Unknown";
+                    var tariffPerKWh = settings?.TariffPerKWh ?? 1500m;
+                    var revenuePerHour = settings?.RevenuePerHour ?? 0m;
+                    var isDrop = x.anomalyType == "DROP" || x.anomalyType == "DEVICE_DROP";
+                    var isOverload = x.anomalyType == "OVERLOAD";
+
+                    // Duration in minutes
+                    double? durationMinutes = null;
+                    if (x.isResolved && x.resolvedTime.HasValue)
+                        durationMinutes = (x.resolvedTime.Value - x.detectedTime).TotalMinutes;
+
+                    // Response time in minutes (acknowledge first, else resolve)
+                    double? responseTimeMinutes = null;
+                    if (x.acknowledged && x.acknowledgedTime.HasValue)
+                        responseTimeMinutes = (x.acknowledgedTime.Value - x.detectedTime).TotalMinutes;
+                    else if (x.isResolved && x.resolvedTime.HasValue)
+                        responseTimeMinutes = (x.resolvedTime.Value - x.detectedTime).TotalMinutes;
+
+                    // Revenue loss for DROP anomalies
+                    decimal revenueLoss = 0m;
+                    if (isDrop && revenuePerHour > 0)
+                    {
+                        var endTime = x.isResolved && x.resolvedTime.HasValue ? x.resolvedTime.Value : DateTime.Now;
+                        var hours = (decimal)(endTime - x.detectedTime).TotalHours;
+                        revenueLoss = Math.Round(hours * revenuePerHour, 0);
+                    }
+
+                    // Energy cost impact for OVERLOAD anomalies
+                    decimal anomalyCostImpact = 0m;
+                    if (isOverload)
+                    {
+                        var excessKWh = Math.Max(x.powerValue - x.thresholdValue, 0m) * 0.25m / 1000m;
+                        anomalyCostImpact = Math.Round(excessKWh * tariffPerKWh, 0);
+                    }
+
+                    var location = deviceLocations.ContainsKey(x.deviceKey) ? deviceLocations[x.deviceKey] : "-";
+
                     var dict = new Dictionary<string, object>
                     {
                         { "id", x.id },
                         { "deviceKey", x.deviceKey },
                         { "deviceId", x.deviceId },
                         { "groupName", deviceGroupNames.ContainsKey(x.deviceKey) ? deviceGroupNames[x.deviceKey] : x.deviceKey },
+                        { "location", location },
+                        { "deviceCategory", category },
                         { "anomalyType", x.anomalyType },
                         { "powerValue", x.powerValue },
                         { "thresholdValue", x.thresholdValue },
@@ -2811,6 +3160,10 @@ namespace KWHMonitoring.Controllers
                         { "isResolved", x.isResolved },
                         { "resolvedBy", x.resolvedBy },
                         { "resolvedTime", x.resolvedTime },
+                        { "durationMinutes", durationMinutes },
+                        { "responseTimeMinutes", responseTimeMinutes },
+                        { "revenueLoss", revenueLoss },
+                        { "anomalyCostImpact", anomalyCostImpact },
                         { "operatorAction", x.operatorAction },
                         { "operatorNotes", x.operatorNotes },
                         { "notes", x.notes }
@@ -3299,7 +3652,45 @@ namespace KWHMonitoring.Controllers
                     .Where(x => x.GroupName != null && x.GroupName != "")
                     .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
 
+                var deviceLocations = await _context.DeviceRegistry
+                    .Where(x => x.Location != null && x.Location != "")
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.Location);
+
+                var deviceSettings = await _context.DeviceSettings
+                    .FirstOrDefaultAsync(x => x.DeviceKey == log.DeviceKey);
+
                 var groupName = deviceGroupNames.ContainsKey(log.DeviceKey) ? deviceGroupNames[log.DeviceKey] : log.DeviceKey;
+                var location = deviceLocations.ContainsKey(log.DeviceKey) ? deviceLocations[log.DeviceKey] : "-";
+                var category = deviceSettings?.DeviceCategory ?? "Unknown";
+                var tariffPerKWh = deviceSettings?.TariffPerKWh ?? 1500m;
+                var revenuePerHour = deviceSettings?.RevenuePerHour ?? 0m;
+                var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                var isOverload = log.AnomalyType == "OVERLOAD";
+
+                double? durationMinutes = null;
+                if (log.IsResolved && log.ResolvedTime.HasValue)
+                    durationMinutes = (log.ResolvedTime.Value - log.DetectedTime).TotalMinutes;
+
+                double? responseTimeMinutes = null;
+                if ((log.Acknowledged ?? false) && log.AcknowledgedTime.HasValue)
+                    responseTimeMinutes = (log.AcknowledgedTime.Value - log.DetectedTime).TotalMinutes;
+                else if (log.IsResolved && log.ResolvedTime.HasValue)
+                    responseTimeMinutes = (log.ResolvedTime.Value - log.DetectedTime).TotalMinutes;
+
+                decimal revenueLoss = 0m;
+                if (isDrop && revenuePerHour > 0)
+                {
+                    var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
+                    var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
+                    revenueLoss = Math.Round(hours * revenuePerHour, 0);
+                }
+
+                decimal anomalyCostImpact = 0m;
+                if (isOverload)
+                {
+                    var excessKWh = Math.Max(log.PowerValue - log.ThresholdValue, 0m) * 0.25m / 1000m;
+                    anomalyCostImpact = Math.Round(excessKWh * tariffPerKWh, 0);
+                }
 
                 var snapshot = await _context.AnomalyChartSnapshots
                     .AsNoTracking()
@@ -3314,6 +3705,8 @@ namespace KWHMonitoring.Controllers
                         deviceKey = log.DeviceKey,
                         deviceId = log.DeviceId,
                         groupName = groupName,
+                        location = location,
+                        deviceCategory = category,
                         anomalyType = log.AnomalyType,
                         powerValue = log.PowerValue,
                         thresholdValue = log.ThresholdValue,
@@ -3331,6 +3724,10 @@ namespace KWHMonitoring.Controllers
                         isResolved = log.IsResolved,
                         resolvedBy = log.ResolvedBy,
                         resolvedTime = log.ResolvedTime,
+                        durationMinutes = durationMinutes,
+                        responseTimeMinutes = responseTimeMinutes,
+                        revenueLoss = revenueLoss,
+                        anomalyCostImpact = anomalyCostImpact,
                         operatorAction = log.OperatorAction,
                         operatorNotes = log.OperatorNotes,
                         chartSnapshot = snapshot == null ? null : new
@@ -3558,6 +3955,60 @@ namespace KWHMonitoring.Controllers
                     })
                     .ToListAsync();
 
+                // Aggregate financial impact from existing anomaly logs
+                var deviceSettingsDict = await _context.DeviceSettings
+                    .ToDictionaryAsync(x => x.DeviceKey, x => new
+                    {
+                        x.DeviceCategory,
+                        x.TariffPerKWh,
+                        x.RevenuePerHour
+                    });
+
+                decimal totalAnomalyCostImpact = 0m;
+                decimal totalRevenueLoss = 0m;
+                decimal ongoingRevenueLoss = 0m;
+                var financialDeviceKeys = new HashSet<string>();
+
+                var allLogs = await totalQuery
+                    .Select(x => new
+                    {
+                        x.DeviceKey,
+                        x.AnomalyType,
+                        x.PowerValue,
+                        x.ThresholdValue,
+                        x.DetectedTime,
+                        x.IsResolved,
+                        x.ResolvedTime
+                    })
+                    .ToListAsync();
+
+                foreach (var log in allLogs)
+                {
+                    var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
+                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var revenuePerHour = settings?.RevenuePerHour ?? 0m;
+                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isOverload = log.AnomalyType == "OVERLOAD";
+
+                    if (isOverload)
+                    {
+                        var excessKWh = Math.Max(log.PowerValue - log.ThresholdValue, 0m) * 0.25m / 1000m;
+                        var cost = Math.Round(excessKWh * tariff, 0);
+                        totalAnomalyCostImpact += cost;
+                        if (cost > 0) financialDeviceKeys.Add(log.DeviceKey);
+                    }
+
+                    if (isDrop && revenuePerHour > 0)
+                    {
+                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
+                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
+                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        totalRevenueLoss += loss;
+                        if (!log.IsResolved)
+                            ongoingRevenueLoss += loss;
+                    }
+                }
+
                 return Ok(new
                 {
                     success = true,
@@ -3570,6 +4021,10 @@ namespace KWHMonitoring.Controllers
                         high = highCount,
                         topDevice = topDevice?.DeviceKey,
                         topDeviceCount = topDevice?.Count ?? 0,
+                        totalAnomalyCostImpact,
+                        totalRevenueLoss,
+                        ongoingRevenueLoss,
+                        financialDeviceCount = financialDeviceKeys.Count,
                         recentAnomalies
                     }
                 });
@@ -3693,6 +4148,54 @@ namespace KWHMonitoring.Controllers
                     .OrderByDescending(x => x.Count)
                     .FirstOrDefault();
 
+                // Financial impact for the month
+                var deviceSettingsDict = await _context.DeviceSettings
+                    .ToDictionaryAsync(x => x.DeviceKey, x => new
+                    {
+                        x.DeviceCategory,
+                        x.TariffPerKWh,
+                        x.RevenuePerHour
+                    });
+
+                decimal totalAnomalyCostImpact = 0m;
+                decimal totalRevenueLoss = 0m;
+                decimal ongoingRevenueLoss = 0m;
+                var financialDeviceKeys = new HashSet<string>();
+                var rootCauseGroups = logs.Where(x => !string.IsNullOrWhiteSpace(x.RootCause))
+                    .GroupBy(x => x.RootCause)
+                    .Select(g => new { RootCause = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .Take(3)
+                    .ToList();
+
+                foreach (var log in logs)
+                {
+                    var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
+                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var revenuePerHour = settings?.RevenuePerHour ?? 0m;
+                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isOverload = log.AnomalyType == "OVERLOAD";
+
+                    if (isOverload)
+                    {
+                        var excessKWh = Math.Max(log.PowerValue - log.ThresholdValue, 0m) * 0.25m / 1000m;
+                        var cost = Math.Round(excessKWh * tariff, 0);
+                        totalAnomalyCostImpact += cost;
+                        if (cost > 0) financialDeviceKeys.Add(log.DeviceKey);
+                    }
+
+                    if (isDrop && revenuePerHour > 0)
+                    {
+                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
+                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
+                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        totalRevenueLoss += loss;
+                        if (!log.IsResolved)
+                            ongoingRevenueLoss += loss;
+                        if (loss > 0) financialDeviceKeys.Add(log.DeviceKey);
+                    }
+                }
+
                 var recommendations = new List<string>();
                 if (overload > drop)
                     recommendations.Add("Overload mendominasi. Pertimbangkan untuk meninjau kapasitas panel dan mengurangi beban puncak.");
@@ -3702,6 +4205,10 @@ namespace KWHMonitoring.Controllers
                     recommendations.Add($"{affectedDevices} device terdampak. Lakukan audit perangkat secara menyeluruh.");
                 if (logs.Any(x => x.Severity == "critical"))
                     recommendations.Add("Terdapat anomali kritis. Segera lakukan tindak lanjut.");
+                if (totalAnomalyCostImpact > 0)
+                    recommendations.Add($"Dampak biaya overload bulan ini Rp {totalAnomalyCostImpact:N0}. Pertimbangkan efisiensi beban.");
+                if (totalRevenueLoss > 0)
+                    recommendations.Add($"Estimasi revenue loss bulan ini Rp {totalRevenueLoss:N0}. Prioritaskan availability device.");
 
                 var report = new AnomalyMonthlyReport
                 {
@@ -3744,6 +4251,10 @@ namespace KWHMonitoring.Controllers
                         report.TopAffectedDevice,
                         report.SummaryText,
                         report.Recommendations,
+                        totalAnomalyCostImpact,
+                        totalRevenueLoss,
+                        ongoingRevenueLoss,
+                        topRootCauses = rootCauseGroups,
                         report.GeneratedBy,
                         report.GeneratedAt
                     }
@@ -3772,6 +4283,56 @@ namespace KWHMonitoring.Controllers
                 if (report == null)
                     return Ok(new { success = true, data = (object)null, message = "No report found" });
 
+                // Recompute financials on-the-fly from raw logs
+                var startDate = new DateTime(year, month, 1);
+                var endDate = startDate.AddMonths(1);
+                var logs = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .Where(x => x.DetectedTime >= startDate && x.DetectedTime < endDate)
+                    .ToListAsync();
+
+                var deviceSettingsDict = await _context.DeviceSettings
+                    .ToDictionaryAsync(x => x.DeviceKey, x => new
+                    {
+                        x.TariffPerKWh,
+                        x.RevenuePerHour
+                    });
+
+                decimal totalAnomalyCostImpact = 0m;
+                decimal totalRevenueLoss = 0m;
+                decimal ongoingRevenueLoss = 0m;
+                foreach (var log in logs)
+                {
+                    var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
+                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var revenuePerHour = settings?.RevenuePerHour ?? 0m;
+                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isOverload = log.AnomalyType == "OVERLOAD";
+
+                    if (isOverload)
+                    {
+                        var excessKWh = Math.Max(log.PowerValue - log.ThresholdValue, 0m) * 0.25m / 1000m;
+                        totalAnomalyCostImpact += Math.Round(excessKWh * tariff, 0);
+                    }
+
+                    if (isDrop && revenuePerHour > 0)
+                    {
+                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
+                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
+                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        totalRevenueLoss += loss;
+                        if (!log.IsResolved)
+                            ongoingRevenueLoss += loss;
+                    }
+                }
+
+                var rootCauseGroups = logs.Where(x => !string.IsNullOrWhiteSpace(x.RootCause))
+                    .GroupBy(x => x.RootCause)
+                    .Select(g => new { RootCause = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .Take(3)
+                    .ToList();
+
                 return Ok(new
                 {
                     success = true,
@@ -3788,6 +4349,10 @@ namespace KWHMonitoring.Controllers
                         report.TopAffectedDevice,
                         report.SummaryText,
                         report.Recommendations,
+                        totalAnomalyCostImpact,
+                        totalRevenueLoss,
+                        ongoingRevenueLoss,
+                        topRootCauses = rootCauseGroups,
                         report.GeneratedBy,
                         report.GeneratedAt
                     }
@@ -6019,7 +6584,14 @@ namespace KWHMonitoring.Controllers
                     EmaLowerThreshold = data.EmaLowerThreshold,
                     EmaFibUpper = data.EmaFibUpper,
                     EmaFibLower = data.EmaFibLower,
-                    ControlMode = data.ControlMode
+                    ControlMode = data.ControlMode,
+                    TariffWBP = data.TariffWBP,
+                    TariffLWBP = data.TariffLWBP,
+                    WbpStartHour = data.WbpStartHour,
+                    WbpEndHour = data.WbpEndHour,
+                    BudgetKWh = data.BudgetKWh,
+                    SurfaceArea = data.SurfaceArea,
+                    RevenuePerHour = data.RevenuePerHour
                 };
 
                 await _deviceSettingsService.SaveAsync(deviceKey, settings);
@@ -6069,7 +6641,14 @@ namespace KWHMonitoring.Controllers
                                     EmaLowerThreshold = item.EmaLowerThreshold,
                                     EmaFibUpper = item.EmaFibUpper,
                                     EmaFibLower = item.EmaFibLower,
-                                    ControlMode = item.ControlMode
+                                    ControlMode = item.ControlMode,
+                                    TariffWBP = item.TariffWBP,
+                                    TariffLWBP = item.TariffLWBP,
+                                    WbpStartHour = item.WbpStartHour,
+                                    WbpEndHour = item.WbpEndHour,
+                                    BudgetKWh = item.BudgetKWh,
+                                    SurfaceArea = item.SurfaceArea,
+                                    RevenuePerHour = item.RevenuePerHour
                                 };
 
                                 await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
@@ -6379,6 +6958,13 @@ namespace KWHMonitoring.Controllers
         public double EmaFibUpper { get; set; }
         public double EmaFibLower { get; set; }
         public string ControlMode { get; set; }
+        public decimal TariffWBP { get; set; }
+        public decimal TariffLWBP { get; set; }
+        public int WbpStartHour { get; set; } = 18;
+        public int WbpEndHour { get; set; } = 22;
+        public decimal BudgetKWh { get; set; }
+        public decimal SurfaceArea { get; set; }
+        public decimal RevenuePerHour { get; set; }
     }
 
     public class BulkDeviceSettingsRequest
