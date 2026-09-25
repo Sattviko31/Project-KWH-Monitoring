@@ -11,9 +11,12 @@ namespace KWHMonitoring.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long Id { get; set; }
 
-        [Column(TypeName = "nvarchar(100)")]
-        [MaxLength(100)]
+        [Column(TypeName = "varchar(20)")]
+        [MaxLength(20)]
         public string DeviceKey { get; set; } = string.Empty;
+        
+
+        public int? RC { get; set; }
 
         public int? RCI { get; set; }
 
@@ -24,6 +27,9 @@ namespace KWHMonitoring.Models
         [Column(TypeName = "nvarchar(100)")]
         [MaxLength(100)]
         public string GroupName { get; set; } = string.Empty;
+
+        [Column(TypeName = "datetime2")]
+        public DateTime TerminalTime { get; set; }
 
         [Column(TypeName = "datetime2")]
         public DateTime ReceivedTime { get; set; }

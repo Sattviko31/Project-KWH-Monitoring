@@ -4,14 +4,16 @@ using KWHMonitoring.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KWHMonitoring.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925033136_addRCColumns")]
+    partial class addRCColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -986,9 +988,6 @@ namespace KWHMonitoring.Migrations
                     b.Property<int?>("RCI");
 
                     b.Property<DateTime>("ReceivedTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("TerminalTime")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
