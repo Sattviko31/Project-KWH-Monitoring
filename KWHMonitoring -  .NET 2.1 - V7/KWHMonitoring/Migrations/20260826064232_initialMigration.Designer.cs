@@ -4,74 +4,22 @@ using KWHMonitoring.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KWHMonitoring.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826064232_initialMigration")]
+    partial class initialMigration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "2.1.14-servicing-32113")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128)
                 .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-            modelBuilder.Entity("KWHMonitoring.Models.AnomalyChartSnapshot", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<string>("AfterDataJson")
-                        .HasColumnName("AfterDataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("AnomalyLogId");
-
-                    b.Property<string>("BeforeDataJson")
-                        .HasColumnName("BeforeDataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnName("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DetectedTime")
-                        .HasColumnName("DetectedTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal?>("EMAValue")
-                        .HasColumnName("EMAValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("LowerThreshold")
-                        .HasColumnName("LowerThreshold")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("SnapshotStatus")
-                        .HasColumnName("SnapshotStatus")
-                        .HasColumnType("nvarchar(20)")
-                        .HasMaxLength(20);
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnName("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("UpperThreshold")
-                        .HasColumnName("UpperThreshold")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AnomalyLogId")
-                        .IsUnique()
-                        .HasName("IX_AnomalyChartSnapshots_AnomalyLogId");
-
-                    b.ToTable("AnomalyChartSnapshots");
-                });
 
             modelBuilder.Entity("KWHMonitoring.Models.AnomalyLog", b =>
                 {
@@ -81,11 +29,6 @@ namespace KWHMonitoring.Migrations
 
                     b.Property<bool?>("Acknowledged")
                         .HasColumnName("Acknowledged");
-
-                    b.Property<string>("AcknowledgedBy")
-                        .HasColumnName("AcknowledgedBy")
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
 
                     b.Property<DateTime?>("AcknowledgedTime")
                         .HasColumnName("AcknowledgedTime")
@@ -120,51 +63,14 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("EMAValue")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<bool>("IsResolved")
-                        .HasColumnName("IsResolved");
-
                     b.Property<string>("Notes")
                         .HasColumnName("Notes")
                         .HasColumnType("nvarchar(500)")
                         .HasMaxLength(500);
 
-                    b.Property<string>("OperatorAction")
-                        .HasColumnName("OperatorAction")
-                        .HasColumnType("nvarchar(100)")
-                        .HasMaxLength(100);
-
-                    b.Property<string>("OperatorNotes")
-                        .HasColumnName("OperatorNotes")
-                        .HasColumnType("nvarchar(1000)")
-                        .HasMaxLength(1000);
-
                     b.Property<decimal>("PowerValue")
                         .HasColumnName("PowerValue")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("RecommendedAction")
-                        .HasColumnName("RecommendedAction")
-                        .HasColumnType("nvarchar(1000)")
-                        .HasMaxLength(1000);
-
-                    b.Property<string>("ResolvedBy")
-                        .HasColumnName("ResolvedBy")
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<DateTime?>("ResolvedTime")
-                        .HasColumnName("ResolvedTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RootCause")
-                        .HasColumnName("RootCause")
-                        .HasColumnType("nvarchar(500)")
-                        .HasMaxLength(500);
-
-                    b.Property<string>("Severity")
-                        .HasColumnName("Severity")
-                        .HasColumnType("nvarchar(20)")
-                        .HasMaxLength(20);
 
                     b.Property<string>("ThresholdMode")
                         .HasColumnName("ThresholdMode")
@@ -183,123 +89,7 @@ namespace KWHMonitoring.Migrations
                     b.HasIndex("DeviceKey")
                         .HasName("IX_AnomalyLogs_DeviceKey");
 
-                    b.HasIndex("IsResolved")
-                        .HasName("IX_AnomalyLogs_IsResolved");
-
-                    b.HasIndex("Severity")
-                        .HasName("IX_AnomalyLogs_Severity");
-
                     b.ToTable("AnomalyLogs");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.AnomalyMonthlyReport", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<int>("AffectedDevices");
-
-                    b.Property<decimal>("AverageDeviation")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<int>("DropCount");
-
-                    b.Property<DateTime>("GeneratedAt")
-                        .HasColumnName("GeneratedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("GeneratedBy")
-                        .HasColumnName("GeneratedBy")
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<int>("Month");
-
-                    b.Property<int>("OverloadCount");
-
-                    b.Property<string>("Recommendations")
-                        .HasColumnName("Recommendations")
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<string>("SummaryText")
-                        .HasColumnName("SummaryText")
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<string>("TopAffectedDevice")
-                        .HasColumnName("TopAffectedDevice")
-                        .HasColumnType("nvarchar(50)")
-                        .HasMaxLength(50);
-
-                    b.Property<int>("TotalAnomalies");
-
-                    b.Property<int>("Year");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Year", "Month")
-                        .HasName("IX_AnomalyMonthlyReports_Year_Month");
-
-                    b.ToTable("AnomalyMonthlyReports");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.ApplicationUser", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<int>("AccessFailedCount");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<bool>("EmailConfirmed");
-
-                    b.Property<bool>("IsActive");
-
-                    b.Property<bool>("IsMasterAdmin");
-
-                    b.Property<DateTime?>("LastLoginAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LockoutEnd")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("NormalizedEmail")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(50)")
-                        .HasMaxLength(50);
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsMasterAdmin")
-                        .HasName("IX_ApplicationUsers_IsMasterAdmin");
-
-                    b.HasIndex("NormalizedEmail")
-                        .IsUnique()
-                        .HasName("IX_ApplicationUsers_NormalizedEmail");
-
-                    b.ToTable("ApplicationUsers");
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.AppLog", b =>
@@ -544,132 +334,6 @@ namespace KWHMonitoring.Migrations
                         .HasName("IX_DeviceRegistry_DeviceKey");
 
                     b.ToTable("DeviceRegistry");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.DeviceSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<string>("ControlMode")
-                        .HasColumnName("ControlMode")
-                        .HasColumnType("varchar(50)")
-                        .HasMaxLength(50);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnName("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeviceCategory")
-                        .HasColumnName("DeviceCategory")
-                        .HasColumnType("nvarchar(100)")
-                        .HasMaxLength(100);
-
-                    b.Property<string>("DeviceKey")
-                        .IsRequired()
-                        .HasColumnName("DeviceKey")
-                        .HasColumnType("varchar(20)")
-                        .HasMaxLength(20);
-
-                    b.Property<bool>("DowntimeEnabled")
-                        .HasColumnName("DowntimeEnabled");
-
-                    b.Property<TimeSpan>("DowntimeEnd")
-                        .HasColumnName("DowntimeEnd")
-                        .HasColumnType("time");
-
-                    b.Property<TimeSpan>("DowntimeStart")
-                        .HasColumnName("DowntimeStart")
-                        .HasColumnType("time");
-
-                    b.Property<double>("EmaFibLower")
-                        .HasColumnName("EmaFibLower")
-                        .HasColumnType("float");
-
-                    b.Property<double>("EmaFibUpper")
-                        .HasColumnName("EmaFibUpper")
-                        .HasColumnType("float");
-
-                    b.Property<int>("EmaLowerThreshold")
-                        .HasColumnName("EmaLowerThreshold");
-
-                    b.Property<int>("EmaUpperThreshold")
-                        .HasColumnName("EmaUpperThreshold");
-
-                    b.Property<int>("LoadMediumThreshold")
-                        .HasColumnName("LoadMediumThreshold");
-
-                    b.Property<int>("LoadNormalThreshold")
-                        .HasColumnName("LoadNormalThreshold");
-
-                    b.Property<decimal>("MaxCapacity")
-                        .HasColumnName("MaxCapacity")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TariffPerKWh")
-                        .HasColumnName("TariffPerKWh")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnName("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeviceKey")
-                        .IsUnique()
-                        .HasName("IX_DeviceSettings_DeviceKey");
-
-                    b.ToTable("DeviceSettings");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.EmailVerificationToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsUsed");
-
-                    b.Property<int>("Purpose");
-
-                    b.Property<string>("RequestedRole")
-                        .HasColumnType("nvarchar(50)")
-                        .HasMaxLength(50);
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(128)")
-                        .HasMaxLength(128);
-
-                    b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UserId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExpiresAt")
-                        .HasName("IX_EmailVerificationTokens_ExpiresAt");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TokenHash", "Purpose")
-                        .HasName("IX_EmailVerificationTokens_Token_Purpose");
-
-                    b.ToTable("EmailVerificationTokens");
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.FailedMessage", b =>
@@ -963,86 +627,6 @@ namespace KWHMonitoring.Migrations
                     b.ToTable("MonthlyEnergy");
                 });
 
-            modelBuilder.Entity("KWHMonitoring.Models.RelayControl", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<string>("DeviceId")
-                        .HasColumnType("nvarchar(50)")
-                        .HasMaxLength(50);
-
-                    b.Property<string>("DeviceKey")
-                        .HasColumnType("varchar(20)")
-                        .HasMaxLength(20);
-
-                    b.Property<string>("GroupName")
-                        .HasColumnType("nvarchar(100)")
-                        .HasMaxLength(100);
-
-                    b.Property<int?>("RC");
-
-                    b.Property<int?>("RCI");
-
-                    b.Property<DateTime>("ReceivedTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("TerminalTime")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("RelayControl");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.SecurityAuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
-
-                    b.Property<int>("Action");
-
-                    b.Property<string>("Details")
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("nvarchar(256)")
-                        .HasMaxLength(256);
-
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("nvarchar(50)")
-                        .HasMaxLength(50);
-
-                    b.Property<bool>("Success");
-
-                    b.Property<string>("TargetDevice")
-                        .HasColumnType("nvarchar(100)")
-                        .HasMaxLength(100);
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserAgent")
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int?>("UserId");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Action")
-                        .HasName("IX_SecurityAuditLogs_Action");
-
-                    b.HasIndex("Timestamp")
-                        .HasName("IX_SecurityAuditLogs_Timestamp");
-
-                    b.HasIndex("UserId")
-                        .HasName("IX_SecurityAuditLogs_UserId");
-
-                    b.ToTable("SecurityAuditLogs");
-                });
-
             modelBuilder.Entity("KWHMonitoring.Models.YearlyEnergy", b =>
                 {
                     b.Property<long>("Id")
@@ -1065,22 +649,6 @@ namespace KWHMonitoring.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("YearlyEnergy");
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.AnomalyChartSnapshot", b =>
-                {
-                    b.HasOne("KWHMonitoring.Models.AnomalyLog", "AnomalyLog")
-                        .WithOne("ChartSnapshot")
-                        .HasForeignKey("KWHMonitoring.Models.AnomalyChartSnapshot", "AnomalyLogId")
-                        .OnDelete(DeleteBehavior.Cascade);
-                });
-
-            modelBuilder.Entity("KWHMonitoring.Models.EmailVerificationToken", b =>
-                {
-                    b.HasOne("KWHMonitoring.Models.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.KWHData", b =>

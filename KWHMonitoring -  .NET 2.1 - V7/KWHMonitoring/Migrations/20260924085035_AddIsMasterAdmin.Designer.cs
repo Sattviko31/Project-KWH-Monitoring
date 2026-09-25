@@ -4,14 +4,16 @@ using KWHMonitoring.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KWHMonitoring.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924085035_AddIsMasterAdmin")]
+    partial class AddIsMasterAdmin
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -974,21 +976,16 @@ namespace KWHMonitoring.Migrations
                         .HasMaxLength(50);
 
                     b.Property<string>("DeviceKey")
-                        .HasColumnType("varchar(20)")
-                        .HasMaxLength(20);
+                        .HasColumnType("nvarchar(100)")
+                        .HasMaxLength(100);
 
                     b.Property<string>("GroupName")
                         .HasColumnType("nvarchar(100)")
                         .HasMaxLength(100);
 
-                    b.Property<int?>("RC");
-
                     b.Property<int?>("RCI");
 
                     b.Property<DateTime>("ReceivedTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("TerminalTime")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
