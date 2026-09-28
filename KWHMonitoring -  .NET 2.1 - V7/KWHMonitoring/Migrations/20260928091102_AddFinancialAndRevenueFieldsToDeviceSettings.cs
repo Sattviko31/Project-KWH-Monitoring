@@ -1,14 +1,27 @@
-using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace KWHMonitoring.Migrations
 {
-    public partial class AddFinancialFieldsToDeviceSettings : Migration
+    public partial class AddFinancialAndRevenueFieldsToDeviceSettings : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<decimal>(
-                name: "TariffWBP",
+                name: "BudgetKWh",
+                table: "DeviceSettings",
+                type: "decimal(18,2)",
+                nullable: false,
+                defaultValue: 0m);
+
+            migrationBuilder.AddColumn<decimal>(
+                name: "RevenuePerHour",
+                table: "DeviceSettings",
+                type: "decimal(18,2)",
+                nullable: false,
+                defaultValue: 0m);
+
+            migrationBuilder.AddColumn<decimal>(
+                name: "SurfaceArea",
                 table: "DeviceSettings",
                 type: "decimal(18,2)",
                 nullable: false,
@@ -21,11 +34,12 @@ namespace KWHMonitoring.Migrations
                 nullable: false,
                 defaultValue: 0m);
 
-            migrationBuilder.AddColumn<int>(
-                name: "WbpStartHour",
+            migrationBuilder.AddColumn<decimal>(
+                name: "TariffWBP",
                 table: "DeviceSettings",
+                type: "decimal(18,2)",
                 nullable: false,
-                defaultValue: 18);
+                defaultValue: 0m);
 
             migrationBuilder.AddColumn<int>(
                 name: "WbpEndHour",
@@ -33,25 +47,25 @@ namespace KWHMonitoring.Migrations
                 nullable: false,
                 defaultValue: 22);
 
-            migrationBuilder.AddColumn<decimal>(
-                name: "BudgetKWh",
+            migrationBuilder.AddColumn<int>(
+                name: "WbpStartHour",
                 table: "DeviceSettings",
-                type: "decimal(18,2)",
                 nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "SurfaceArea",
-                table: "DeviceSettings",
-                type: "decimal(18,2)",
-                nullable: false,
-                defaultValue: 0m);
+                defaultValue: 18);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "TariffWBP",
+                name: "BudgetKWh",
+                table: "DeviceSettings");
+
+            migrationBuilder.DropColumn(
+                name: "RevenuePerHour",
+                table: "DeviceSettings");
+
+            migrationBuilder.DropColumn(
+                name: "SurfaceArea",
                 table: "DeviceSettings");
 
             migrationBuilder.DropColumn(
@@ -59,7 +73,7 @@ namespace KWHMonitoring.Migrations
                 table: "DeviceSettings");
 
             migrationBuilder.DropColumn(
-                name: "WbpStartHour",
+                name: "TariffWBP",
                 table: "DeviceSettings");
 
             migrationBuilder.DropColumn(
@@ -67,11 +81,7 @@ namespace KWHMonitoring.Migrations
                 table: "DeviceSettings");
 
             migrationBuilder.DropColumn(
-                name: "BudgetKWh",
-                table: "DeviceSettings");
-
-            migrationBuilder.DropColumn(
-                name: "SurfaceArea",
+                name: "WbpStartHour",
                 table: "DeviceSettings");
         }
     }
