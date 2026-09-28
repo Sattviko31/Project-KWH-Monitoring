@@ -1,4 +1,4 @@
-﻿@{
+@{
     ViewData["Title"] = "History";
 }
 
@@ -355,19 +355,19 @@
                         var d = options.data;
                         var borderCls = d.status === 'HIGH LOAD' ? 'danger' : d.status === 'MEDIUM LOAD' ? 'warning' : 'success';
                         var html = '<div class="row g-2 p-2">'
-                            + '<div class="col-md-3 col-6"><div class="card border-' + borderCls + ' h-100"><div class="card-body p-2">'
+                            + '<div class="col-md-3 col-6"><div class="card border-' + borderCls + ' h-100" data-card-help="Status Beban|Status beban baris histori ini.|Kategori: HIGH LOAD >70% · MEDIUM LOAD 30–70% · NORMAL ≤30% kapasitas|Warna border kartu mengikuti status beban."><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-info-circle"></i> Status</small><br>'
                             + '<span class="badge bg-' + borderCls + '">' + d.status + '</span>'
                             + '</div></div></div>'
-                            + '<div class="col-md-3 col-6"><div class="card border-info h-100"><div class="card-body p-2">'
+                            + '<div class="col-md-3 col-6"><div class="card border-info h-100" data-card-help="Tegangan (R/S/T)|Tegangan per fasa pada baris histori ini.|Normal: sekitar 220 V (1φ) atau 380 V antar fasa (3φ)|Selisih antar fasa yang besar menandakan gangguan."><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-bolt"></i> Voltage</small><br>'
                             + '<small>R: ' + fmt(d.phaseR,1) + 'V' + (d.phaseS != null ? ' | S: ' + fmt(d.phaseS,1) + 'V' : '') + (d.phaseT != null ? ' | T: ' + fmt(d.phaseT,1) + 'V' : '') + '</small>'
                             + '</div></div></div>'
-                            + '<div class="col-md-3 col-6"><div class="card border-warning h-100"><div class="card-body p-2">'
+                            + '<div class="col-md-3 col-6"><div class="card border-warning h-100" data-card-help="Arus (R/S/T)|Arus mengalir per fasa pada baris histori ini.|Rumus hubungan daya: P = √3 × V × I × Cos Phi|Arus besar dengan beban sama → periksa perangkat."><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-wave-square"></i> Current</small><br>'
                             + '<small>R: ' + fmt(d.ampereR,3) + 'A' + (d.ampereS != null ? ' | S: ' + fmt(d.ampereS,3) + 'A' : '') + (d.ampereT != null ? ' | T: ' + fmt(d.ampereT,3) + 'A' : '') + '</small>'
                             + '</div></div></div>'
-                            + '<div class="col-md-3 col-6"><div class="card border-primary h-100"><div class="card-body p-2">'
+                            + '<div class="col-md-3 col-6"><div class="card border-primary h-100" data-card-help="Daya, Cos Phi &amp; Frekuensi|Daya aktif (W), faktor daya, dan frekuensi jaringan pada baris histori.|Rumus: P = √3 × V × I × Cos Phi · frekuensi normal 50 Hz|Daya inilah yang diakumulasi menjadi energi (Wh)."><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-plug"></i> Power</small><br>'
                             + '<small>' + fmt(d.w,0) + ' W | Cos&phi;: ' + fmt(d.cosPhi,3) + ' | ' + fmt(d.f,2) + ' Hz</small>'
                             + '</div></div></div>'

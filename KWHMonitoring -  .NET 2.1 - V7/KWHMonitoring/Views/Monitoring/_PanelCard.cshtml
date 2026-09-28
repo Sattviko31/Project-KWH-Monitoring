@@ -1,10 +1,14 @@
 ﻿@model KWHMonitoring.Models.PanelViewModel
 
 <div class="card shadow-sm h-100 border-0 panel-card-clickable"
+     data-card-help=" "
      id="panelCard_@(Model.DeviceKey.Replace("-", "_"))"
      data-device-key="@Model.DeviceKey"
      data-details-url="@Url.Action("Details", "Monitoring", new { deviceKey = Model.DeviceKey })"
      data-is-three-phase="@Model.IsThreePhase.ToString().ToLower()"
+     data-card-help-lokasi-kode="@Model.KodeLokasi"
+     data-card-help-lokasi-alamat="@Model.Alamat"
+     data-card-help-lokasi-kota="@Model.KotaProvinsi"
      style="cursor: pointer; transition: all 0.2s ease; overflow: hidden;"
      onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)';"
      onmouseleave="this.style.transform='translateY(0)'; this.style.boxShadow='';">
@@ -42,14 +46,14 @@
         <!-- ===== POWER & AKTIF - HIGHLIGHT (Always Visible) ===== -->
         <div class="d-flex gap-2 mb-3">
             <div class="flex-fill">
-                <div class="power-highlight-card text-center p-2 p-md-3">
+                <div class="power-highlight-card text-center p-2 p-md-3" data-card-help="Daya (Watt)|Daya aktif terinstan dari perangkat — konsumsi listrik pada saat ini.|Rumus 3 fasa: P = √3 × V × I × Cos Phi&#10;Beban (%) = Daya ÷ Kapasitas Maks × 100|Nilai ini yang menentukan kecepatan bertambahnya energi (Wh).">
                     <div class="power-icon"><i class="fas fa-fire"></i> Daya</div>
                     <div class="power-value text-truncate" data-value="power">@Model.Daya_Watt.ToString("N0")</div>
                     <div class="power-unit">Watt</div>
                 </div>
             </div>
             <div class="flex-fill">
-                <div class="aktif-highlight-card text-center p-2 p-md-3">
+                <div class="aktif-highlight-card text-center p-2 p-md-3" data-card-help="Energi Aktif (Wh)|Akumulasi energi aktif perangkat (kumulatif) — energi yang dihitung ke tagihan.|Rumus: kWh = Wh ÷ 1.000&#10;Biaya = kWh × Tarif (Rp/kWh)|Energi reaktif tidak dihitung dalam biaya listrik.">
                     <div class="aktif-icon"><i class="fas fa-bolt"></i> Energi Aktif</div>
                     <div class="aktif-value text-truncate" data-value="energi-aktif">@Model.Energi_Aktif_Wh.ToString("N0")</div>
                     <div class="aktif-unit">Wh</div>

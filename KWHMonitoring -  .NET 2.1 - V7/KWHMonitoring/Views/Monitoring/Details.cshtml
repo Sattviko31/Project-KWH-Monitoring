@@ -1,4 +1,4 @@
-﻿@model KWHMonitoring.Models.PanelViewModel
+@model KWHMonitoring.Models.PanelViewModel
 @{
     ViewData["Title"] = $"Details - {Model.GroupName}";
     var deviceKey = Model.DeviceKey;
@@ -132,7 +132,7 @@
                     <div class="detail-stats-row mb-3">
                         <!-- Voltage Section -->
                         <div>
-                            <div class="card h-100 border-start border-primary border-4">
+                            <div class="card h-100 border-start border-primary border-4" data-card-help="Tegangan (Voltage)|Tegangan per fasa R/S/T dari perangkat meter.|Normal: sekitar 220 V (1φ) atau 380 V antar fasa (3φ)|Tegangan terlalu tinggi/rendah → periksa jaringan listrik.">
                                 <div class="card-body p-3">
                                     @if (isThreePhase)
                                     {
@@ -178,7 +178,7 @@
 
                         <!-- Current Section -->
                         <div>
-                            <div class="card h-100 border-start border-info border-4">
+                            <div class="card h-100 border-start border-info border-4" data-card-help="Arus (Current)|Arus mengalir per fasa R/S/T — semakin besar arus, semakin besar beban.|Rumus hubungan daya: P = √3 × V × I × Cos Phi (3φ)|Arus terus naik tanpa tambahan beban → indikasi gangguan/kebocoran.">
                                 <div class="card-body p-3">
                                     @if (isThreePhase)
                                     {
@@ -224,18 +224,18 @@
 
                         <!-- Power & Energy Section -->
                         <div>
-                            <div class="card h-100 border-start border-danger border-4">
+                            <div class="card h-100 border-start border-danger border-4" data-card-help="Daya &amp; Energi|Daya aktif sesaat (W), akumulasi energi aktif (Wh), dan status beban device.|Rumus: P = √3 × V × I × Cos Phi · kWh = Wh ÷1.000&#10;Status beban: >70% HIGH · 30–70% MEDIUM · ≤30% NORMAL|Biaya = kWh × Tarif (Rp/kWh).">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-fire text-danger"></i> Power & Energy
                                     </h6>
                                     <div class="d-flex gap-3 mb-3">
                                         <div class="flex-fill text-center p-2 bg-primary bg-opacity-10 rounded-3">
-                                            <small class="text-primary fw-semibold d-block mb-1">Power</small>
+                                            <small class="text-primary fw-semibold d-block mb-1">Daya</small>
                                             <strong class="text-primary fs-5" id="powerDisplay">@Model.Daya_Watt.ToString("N0") W</strong>
                                         </div>
                                         <div class="flex-fill text-center p-2 bg-warning bg-opacity-10 rounded-3">
-                                            <small class="text-warning fw-semibold d-block mb-1">Aktif</small>
+                                            <small class="text-warning fw-semibold d-block mb-1">Energi Aktif</small>
                                             <strong class="text-warning fs-5" id="aktifDisplay">@Model.Energi_Aktif_Wh.ToString("N0") Wh</strong>
                                         </div>
                                     </div>
@@ -260,7 +260,7 @@
                     <div class="detail-stats-row">
                         <!-- Cos Phi & Frequency -->
                         <div>
-                            <div class="card h-100 border-start border-warning border-4">
+                            <div class="card h-100 border-start border-warning border-4" data-card-help="Power Factor &amp; Frekuensi|Cos Phi (efisiensi daya, 0–1) dan frekuensi jaringan (normal 50 Hz).|Status PF: ≥0,8 Excellent · ≥0,6 Good · <0,6 Poor|PF rendah → daya reaktif terbuang; frekuensi menyimpang → masalah pasokan.">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-percentage text-info"></i> Power Factor & Freq
@@ -289,7 +289,7 @@
 
                         <!-- Power Factor Gauge -->
                         <div>
-                            <div class="card h-100 border-start border-success border-4">
+                            <div class="card h-100 border-start border-success border-4" data-card-help="Power Factor Gauge|Visualisasi faktor daya device dalam persen.|Rumus: PF (%) = Cos Phi × 100|≥80% Excellent ·60–79% Good · <60% Poor (perlu kapasitor/koreksi).">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-tachometer-alt text-success"></i> Power Factor
@@ -314,7 +314,7 @@
 
                         <!-- Load Gauge -->
                         <div>
-                            <div class="card h-100 border-start border-primary border-4">
+                            <div class="card h-100 border-start border-primary border-4" data-card-help="Load (Beban)|Persentase beban terhadap kapasitas maksimal device.|Rumus: Load (%) = Daya ÷ Kapasitas Maks × 100 (dibatasi maks 100%)|>70% merah · 30–70% kuning · <30% biru. Kapasitas diatur di Settings.">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-chart-line text-primary"></i> Load
@@ -397,7 +397,7 @@
             <!-- Summary Cards -->
             <div class="stats-row mb-3 mb-md-4">
                 <div>
-                    <div class="stat-card bg-primary h-100">
+                    <div class="stat-card bg-primary h-100" data-card-help="Konsumsi Hari Ini (Device)|Energi terpakai device ini pada tanggal terpilih.|Rumus: kWh hari = Σ energi harian device|Rata-rata/jam = kWh hari ÷ jam berjalan">
                         <div class="stat-label">Hari Ini</div>
                         <div class="stat-value" id="usageToday">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
@@ -405,7 +405,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-success h-100">
+                    <div class="stat-card bg-success h-100" data-card-help="Konsumsi Bulan Ini (Device)|Akumulasi energi device sepanjang bulan berjalan.|Rumus: kWh bulan = Σ konsumsi harian device bulan ini|Rata-rata/hari = kWh bulan ÷ tanggal berjalan">
                         <div class="stat-label">Bulan Ini</div>
                         <div class="stat-value" id="usageMonth">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
@@ -413,7 +413,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-info h-100">
+                    <div class="stat-card bg-info h-100" data-card-help="Konsumsi Tahun Ini (Device)|Akumulasi energi device sepanjang tahun berjalan.|Rumus: kWh tahun = Σ konsumsi bulanan device|Rata-rata/bulan = kWh tahun ÷ bulan berjalan">
                         <div class="stat-label">Tahun Ini</div>
                         <div class="stat-value" id="usageYear">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
@@ -421,7 +421,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-warning h-100">
+                    <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya (Device)|Perkiraan biaya listrik dari konsumsi device ini.|Rumus: Estimasi Biaya = kWh × Tarif (Rp/kWh)|Tarif bisa diatur khusus per device di Settings; default Rp1.500/kWh.">
                         <div class="stat-label">Estimasi Biaya</div>
                         <div class="stat-value" id="usageCost">Rp 0</div>
                         <small style="opacity:0.75">Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
@@ -433,7 +433,7 @@
             <!-- Charts -->
             <div class="chart-row mb-3 mb-md-4">
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Jam (Device)|Konsumsi energi device tiap jam pada tanggal terpilih.|Rumus: kWh jam = energi device yang terakumulasi pada jam tersebut|Jam batang tertinggi = jam device paling boros.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-clock"></i> Per Jam</h6>
                         </div>
@@ -443,7 +443,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Hari (Device)|Konsumsi energi device per hari — membandingkan antar hari.|Rumus: kWh hari = Σ energi harian device|Hari batang tertinggi = hari device paling boros.">
                         <div class="card-header bg-success text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Per Hari</h6>
                         </div>
@@ -453,7 +453,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Bulan (Device)|Tren konsumsi energi device per bulan.|Rumus: kWh bulan = Σ konsumsi harian device dalam bulan|Membandingkan pola antar bulan (musiman).">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Per Bulan</h6>
                         </div>
@@ -467,7 +467,7 @@
             <!-- Peak Info -->
             <div class="peak-row">
                 <div>
-                    <div class="card bg-light">
+                    <div class="card bg-light" data-card-help="Peak Hour (Device)|Jam konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = jam dengan kWh maksimum untuk device ini|Manajemen beban: alihkan beban dari jam tersebut bila memungkinkan.">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-bolt text-warning"></i> Peak Hour</h6>
                             <h5 class="text-primary mb-1" id="peakHourValue">0 kWh</h5>
@@ -476,7 +476,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card bg-light">
+                    <div class="card bg-light" data-card-help="Peak Day (Device)|Tanggal konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = hari dengan kWh maksimum untuk device ini|Cek faktor penyebab pada tanggal tersebut (event/jadwal khusus).">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-calendar-day text-success"></i> Peak Day</h6>
                             <h5 class="text-success mb-1" id="peakDayValue">0 kWh</h5>
@@ -485,7 +485,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card bg-light">
+                    <div class="card bg-light" data-card-help="Peak Month (Device)|Bulan konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = bulan dengan kWh maksimum untuk device ini|Berguna melihat musim padat/menjelang libur.">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-calendar-alt text-info"></i> Peak Month</h6>
                             <h5 class="text-info mb-1" id="peakMonthValue">0 kWh</h5>
@@ -503,7 +503,7 @@
             <!-- Financial Charts Row -->
             <div class="chart-row mb-3">
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="WBP / LWBP Split (Device)|Pemakaian device pada jam Beban Puncak vs Luar Beban Puncak.|Rumus: Rasio WBP = kWh WBP ÷ total kWh × 100&#10;Biaya = kWh WBP × tarif WBP + kWh LWBP × tarif LWBP|Jam WBP default 18.00–22.00 (diatur per device).">
                         <div class="card-header py-2" style="background-color:#5b5ea6!important;color:#fff">
                             <h6 class="mb-0"><i class="fas fa-bolt"></i> WBP / LWBP Split</h6>
                         </div>
@@ -515,7 +515,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Budget vs Actual (Device)|Anggaran vs konsumsi riil device bulan ini.|Rumus: Variance = Actual kWh − Budget kWh&#10;Variance % = (Actual − Budget) ÷ Budget × 100|>100% = over budget. Budget diatur per device di Settings.">
                         <div class="card-header bg-success text-white py-2" id="deviceBudgetCardHeader">
                             <h6 class="mb-0"><i class="fas fa-wallet"></i> Budget vs Actual</h6>
                         </div>
@@ -531,7 +531,7 @@
             <!-- Projection Chart -->
             <div class="chart-row mb-3">
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Konsumsi (Device)|Estimasi total konsumsi device sampai akhir periode.|Rumus: Proyeksi = rata-rata konsumsi per hari device × jumlah hari periode|Tab Bulanan/Tahunan memilih skala perhitungan.">
                         <div class="card-header bg-orange text-white py-2 d-flex align-items-center justify-content-between">
                             <h6 class="mb-0"><i class="fas fa-chart-line"></i> Proyeksi Konsumsi</h6>
                             <div class="proj-tab-group">
@@ -546,7 +546,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Biaya (Device)|Estimasi tagihan device sampai akhir periode.|Rumus: Proyeksi Biaya = Proyeksi kWh device × Tarif (Rp/kWh)|Tab Bulanan/Tahunan memilih skala perhitungan.">
                         <div class="card-header bg-teal text-white py-2 d-flex align-items-center justify-content-between">
                             <h6 class="mb-0"><i class="fas fa-chart-area"></i> Proyeksi Biaya</h6>
                             <div class="proj-tab-group">
@@ -565,7 +565,7 @@
             <!-- Financial Summary & Anomaly Cost — 2 columns -->
             <div class="fin-summary-grid mb-3">
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Financial Summary (Device)|Metrik finansial khusus device: Waste, MoM, YoY, Proyeksi, Load Factor, Unit Economics.|Rumus: Waste% = Waste kWh ÷ total kWh × 100 · LF = kWh ÷ (kapasitas × jam) × 100 (maks 100%)&#10;MoM% = Δ bulan lalu ÷ bulan lalu × 100 · YoY% = Δ tahun lalu ÷ tahun lalu × 100|Unit Econ = biaya ÷ luas (m²) dan biaya ÷ jam berjalan.">
                         <div class="card-header bg-dark text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-th-large"></i> Financial Summary</h6>
                         </div>
@@ -606,7 +606,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Dampak Biaya Anomali (Device)|Estimasi biaya tambahan dari anomali overload device ini.|Rumus: Excess kWh ≈ daya berlebih (W) ÷1000 ×0,25 jam per kejadian&#10;Biaya = Excess kWh × Tarif (Rp/kWh)|Berdasarkan log anomali device pada periode terpilih.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-exclamation-circle"></i> Dampak Biaya Anomali</h6>
                         </div>
@@ -621,7 +621,7 @@
             <div class="report-grid mb-3">
                 <!-- Daily Report -->
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Harian (Device)|Ringkasan konsumsi &amp; biaya device per hari.|Rumus: kWh hari = Σ energi harian device · Biaya = kWh × tarif|Diperbarui otomatis dari data monitoring device.">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Harian</h6>
                         </div>
@@ -633,7 +633,7 @@
 
                 <!-- Monthly Report -->
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Bulanan (Device)|Ringkasan konsumsi, biaya, dan perbandingan bulanan device.|Rumus: kWh bulan = Σ konsumsi harian · MoM% = Δ vs bulan lalu ÷ bulan lalu × 100|Termasuk indikasi over-budget device.">
                         <div class="card-header bg-warning text-dark py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-week"></i> Laporan Bulanan</h6>
                         </div>
@@ -645,7 +645,7 @@
 
                 <!-- Yearly Report -->
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Tahunan (Device)|Ringkasan konsumsi &amp; biaya tahunan device serta tren YoY.|Rumus: kWh tahun = Σ konsumsi bulanan · YoY% = Δ vs tahun lalu ÷ tahun lalu × 100|Melihat efektivitas penghematan antar tahun.">
                         <div class="card-header bg-indigo text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar"></i> Laporan Tahunan</h6>
                         </div>
@@ -661,7 +661,7 @@
         <div class="tab-pane fade" id="tabCharts" role="tabpanel">
             <div class="chart-row">
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Tegangan|Kurva tegangan (V) device dari waktu ke waktu pada tanggal terpilih.|Normal: sekitar 220 V (1φ) / 380 V antar fasa (3φ)|Lonjakan/penurunan tajam menandakan masalah pasokan.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-bolt"></i> Voltage (V)</h6>
                         </div>
@@ -671,7 +671,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Arus|Kurva arus (A) device dari waktu ke waktu.|Rumus hubungan daya: P = √3 × V × I × Cos Phi|Kenaikan arus tanpa tambahan beban → indikasi gangguan.">
                         <div class="card-header bg-success text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-wave-square"></i> Current (A)</h6>
                         </div>
@@ -681,7 +681,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Daya|Kurva daya aktif (W) device dari waktu ke waktu — inti dari deteksi anomali.|Rumus: P = √3 × V × I × Cos Phi|Lonjakan di atas garis threshold memicu alert OVERLOAD.">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-fire"></i> Power (W)</h6>
                         </div>
@@ -695,7 +695,7 @@
 
         <!-- TAB 4: ANOMALY LOGS -->
         <div class="tab-pane fade" id="tabAnomalyLogs" role="tabpanel">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm" data-card-help="Anomaly Logs (Device)|Tabel kejadian anomali khusus device ini: waktu, tipe, daya, severity, status.|Rumus: Deviation % = (daya − threshold) ÷ threshold × 100|Klik baris untuk detail; Operator/Admin dapat acknowledge/resolve.">
                 <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2">
                     <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Anomaly Logs</h6>
                 </div>
@@ -1065,7 +1065,7 @@
                     '<div id="downtime' + cat + 'TimelineBar" style="position: absolute; top: 0; height: 100%; background: #1a1d23; transition: all 0.3s;"></div></div>' +
                     '<div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">' +
                     '<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div></div>' +
-                    '<div class="card border" id="downtime' + cat + 'StatusCard"><div class="card-body text-center py-1">' +
+                    '<div class="card border" id="downtime' + cat + 'StatusCard" data-card-help="Status Downtime|Status jendela downtime (luar jam operasional) untuk kategori ini.|Downtime aktif = device terdeteksi menyala di luar jam kerja (waste)|Jam downtime diatur pada Settings → Downtime."><div class="card-body text-center py-1">' +
                     '<div id="downtime' + cat + 'Status" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>' +
                     '</div></div></div>';
                 $content.append(paneHtml);

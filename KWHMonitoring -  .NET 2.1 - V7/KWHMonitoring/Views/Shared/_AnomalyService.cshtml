@@ -216,6 +216,9 @@
         }
 
         function saveAnomalyState() {
+            // Tamu (belum login): state disimpan hanya di memori halaman.
+            // Endpoint save-anomaly-state membutuhkan role Operator/Admin.
+            if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             // Debounce: wait 2 seconds before saving to avoid excessive DB writes
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
             anomalyStateSaveTimer = setTimeout(function() {
@@ -243,6 +246,9 @@
         }
 
         function saveAnomalyStateImmediate() {
+            // Tamu (belum login): state disimpan hanya di memori halaman.
+            // Endpoint save-anomaly-state membutuhkan role Operator/Admin.
+            if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             // Immediate save for critical state changes (cooldown enter/exit)
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
             $.ajax({
@@ -270,6 +276,8 @@
         // Reset server-side anomaly alert state saat power kembali normal
         // Ini memungkinkan alert baru dikirim lagi untuk device yang sama
         function resetServerAnomalyAlert(deviceKey) {
+            // Tamu (belum login): lewati — endpoint reset-anomaly-alert membutuhkan role Operator/Admin.
+            if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             $.ajax({
                 url: '/api/Api/reset-anomaly-alert',
                 method: 'POST',
@@ -885,6 +893,20 @@
                 };
 
                 console.log('📊 Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey);
+
+                // Tamu (belum login): jangan POST ke log-anomaly (butuh role Operator/Admin)
+                // agar tidak memicu respons 401 -> redirect ke halaman Login.
+                // State anomali & notifikasi UI tetap diproses secara lokal di memori.
+                if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
+                    anomalyCooldownState[deviceKey] = {
+                        type: anomalyType,
+                        loggedAt: Date.now(),
+                        waitingForNormal: true
+                    };
+                    notifyCooldownChanged(deviceKey, true, anomalyType);
+                    anomalyConfirmation.counts[confirmationKey] = 0;
+                    return;
+                }
 
                 $.ajax({
                     url: '/api/Api/log-anomaly',

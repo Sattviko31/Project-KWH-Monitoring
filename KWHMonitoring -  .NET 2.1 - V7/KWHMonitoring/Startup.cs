@@ -1,5 +1,6 @@
 using System.Linq;
 using System;
+using System.Data.SqlClient;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -38,6 +39,14 @@ namespace KWHMonitoring
                         maxRetryDelay: System.TimeSpan.FromSeconds(10),
                         errorNumbersToAdd: null)));
 
+            // CATATAN PENTING (kasus "aplikasi stuck"):
+            // EnableRetryOnFailure menambah 3 percobaan ulang per operasi. Bila database aplikasi
+            // tidak terjangkau, total waktu tunggu = (Connect Timeout x 4 percobaan) + delay retry.
+            // Karena Connect Timeout default SqlClient 15 detik, satu operasi bisa tertahan +/- 1 menit.
+            // Supaya tetap terkendali: ConnectionStrings:DefaultConnection memakai
+            // "Connect Timeout=5;ConnectRetryCount=0;" (ConnectRetryCount=0 juga direkomendasikan
+            // Microsoft agar retry internal SqlClient tidak menumpuk dengan retry EF).
+
             services.AddMemoryCache();
 
             services.AddResponseCompression(options =>
@@ -53,6 +62,10 @@ namespace KWHMonitoring
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IDeviceSettingsService, DeviceSettingsService>();
+
+            // Data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi)
+            // untuk info lokasi pada tooltip header kartu panel monitoring.
+            services.AddScoped<ITitikLokasiService, TitikLokasiService>();
 
             services.AddAuthentication("Cookies")
                 .AddCookie("Cookies", options =>
@@ -96,7 +109,26 @@ namespace KWHMonitoring
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
-            // Auto-create database and apply migrations on first run
+            // Auto-create database and apply migrations on first run.
+            //
+            // Probe koneksi cepat lebih dulu: bila database aplikasi tidak terjangkau,
+            // GetPendingMigrations()/Migrate()/EnsureCreated() masing-masing akan menunggu
+            // (retry EF x Connect Timeout) sehingga aplikasi terasa "stuck" dan bahkan gagal
+            // start. Dengan probe ini, database yang mati terdeteksi +/- 3 detik: inisialisasi
+            // database dilewati dan aplikasi tetap dijalankan supaya halaman menampilkan pesan
+            // error database (lihat DatabaseExceptionFilter), bukan proses yang menggantung.
+            var databaseReady = CanReachDatabase(
+                Configuration.GetConnectionString("DefaultConnection"),
+                loggerFactory.CreateLogger("DatabaseMigration"));
+
+            if (!databaseReady)
+            {
+                loggerFactory.CreateLogger("DatabaseMigration").LogCritical(
+                    "Database aplikasi tidak dapat dihubungi saat startup " +
+                    "(ConnectionStrings:DefaultConnection). Migrasi & pengisian data awal dilewati; " +
+                    "restart aplikasi setelah database tersedia.");
+            }
+            else
             using (var scope = app.ApplicationServices.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -125,8 +157,11 @@ namespace KWHMonitoring
                     }
                     catch (System.Exception ex2)
                     {
-                        logger.LogCritical(ex2, "Failed to initialize database. Application cannot start.");
-                        throw;
+                        // Dulu: throw; -> aplikasi tidak pernah listen sehingga browser seperti
+                        // menggantung tanpa penjelasan. Sekarang cukup dicatat dan seeding dilewati.
+                        databaseReady = false;
+                        logger.LogCritical(ex2,
+                            "Inisialisasi database gagal. Migrasi & pengisian data awal dilewati.");
                     }
                 }
             }
@@ -135,9 +170,12 @@ namespace KWHMonitoring
             {
                 try
                 {
-                    var seedContext = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    var seedConfig = seedScope.ServiceProvider.GetRequiredService<IConfiguration>();
-                    DbInitializer.SeedAdminUser(seedContext, seedConfig);
+                    if (databaseReady)
+                    {
+                        var seedContext = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                        var seedConfig = seedScope.ServiceProvider.GetRequiredService<IConfiguration>();
+                        DbInitializer.SeedAdminUser(seedContext, seedConfig);
+                    }
                 }
                 catch (System.Exception ex)
                 {
@@ -150,8 +188,11 @@ namespace KWHMonitoring
             {
                 try
                 {
-                    var deviceSettingsContext = deviceSettingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    DbInitializer.SeedDeviceSettingsAsync(deviceSettingsContext).GetAwaiter().GetResult();
+                    if (databaseReady)
+                    {
+                        var deviceSettingsContext = deviceSettingsScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                        DbInitializer.SeedDeviceSettingsAsync(deviceSettingsContext).GetAwaiter().GetResult();
+                    }
                 }
                 catch (System.Exception ex)
                 {
@@ -163,8 +204,11 @@ namespace KWHMonitoring
             // Warm up AppSettings cache (sync-over-async is safe here: no SynchronizationContext at startup)
             try
             {
-                var settingsCache = app.ApplicationServices.GetRequiredService<AppSettingsCache>();
-                settingsCache.WarmUpAsync().GetAwaiter().GetResult();
+                if (databaseReady)
+                {
+                    var settingsCache = app.ApplicationServices.GetRequiredService<AppSettingsCache>();
+                    settingsCache.WarmUpAsync().GetAwaiter().GetResult();
+                }
             }
             catch (System.Exception ex)
             {
@@ -206,6 +250,45 @@ namespace KWHMonitoring
                     name: "default",
                     template: "{controller=Monitoring}/{action=Index}/{id?}");
             });
+        }
+
+        /// <summary>
+        /// Probe koneksi cepat ke database aplikasi: satu kali Open() dengan Connect Timeout kecil
+        /// (3 detik) dan tanpa retry. Dipakai supaya startup tidak tertahan lama (retry EF x
+        /// Connect Timeout) ketika database mati/tidak terjangkau.
+        /// Mengembalikan false bila connection string kosong atau koneksi gagal.
+        /// </summary>
+        private static bool CanReachDatabase(string connectionString, ILogger logger)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                logger.LogWarning(
+                    "Connection string database aplikasi (ConnectionStrings:DefaultConnection) kosong. " +
+                    "Inisialisasi database dilewati.");
+                return false;
+            }
+
+            try
+            {
+                var builder = new SqlConnectionStringBuilder(connectionString)
+                {
+                    ConnectTimeout = 3,
+                    ConnectRetryCount = 0
+                };
+
+                using (var connection = new SqlConnection(builder.ConnectionString))
+                {
+                    connection.Open();
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Probe koneksi database aplikasi gagal. Migrasi/pengisian data awal dilewati.");
+                return false;
+            }
         }
     }
 }

@@ -128,6 +128,7 @@ namespace KWHMonitoring.Controllers
         // GET ALL PANELS
         // ============================================
         [HttpGet("panels")]
+        [AllowAnonymous] // Feed dashboard publik (read-only)
         public async Task<IActionResult> GetPanels([FromQuery] string search, [FromQuery] string status, [FromQuery] string phase)
         {
             try
@@ -262,6 +263,7 @@ namespace KWHMonitoring.Controllers
         // GET STATISTICS
         // ============================================
         [HttpGet("statistics")]
+        [AllowAnonymous] // Ringkasan statistik dashboard (read-only)
         public async Task<IActionResult> GetStatistics()
         {
             try
@@ -2714,6 +2716,7 @@ namespace KWHMonitoring.Controllers
         // GET RELAY STATES (RCI) FROM DEVICE
         // ============================================
         [HttpGet("relay-states")]
+        [AllowAnonymous] // Status relay untuk ditampilkan di dashboard (read-only)
         public async Task<IActionResult> GetRelayStates()
         {
             try
@@ -4769,6 +4772,7 @@ namespace KWHMonitoring.Controllers
         // DEVICE CATEGORY - GET (single device)
         // ============================================
         [HttpGet("device-category/{deviceKey}")]
+        [AllowAnonymous] // Kategori device untuk tampilan dashboard (read-only)
         public async Task<IActionResult> GetDeviceCategory(string deviceKey)
         {
             try
@@ -4965,6 +4969,7 @@ namespace KWHMonitoring.Controllers
         // CATEGORIES - GET ALL (with metadata)
         // ============================================
         [HttpGet("categories")]
+        [AllowAnonymous] // Daftar kategori untuk filter dashboard (read-only)
         public async Task<IActionResult> GetAllCategories()
         {
             try
@@ -5158,6 +5163,7 @@ namespace KWHMonitoring.Controllers
         // DEVICE CATEGORIES - GET ALL
         // ============================================
         [HttpGet("device-categories")]
+        [AllowAnonymous] // Daftar kategori device untuk tampilan (read-only)
         public async Task<IActionResult> GetAllDeviceCategories()
         {
             try
@@ -5196,6 +5202,7 @@ namespace KWHMonitoring.Controllers
         // NOTIFICATION SETTINGS - GET (Public — for anomaly service, no credentials)
         // ============================================
         [HttpGet("get-notification-settings")]
+        [AllowAnonymous] // Publik by design: hanya toggle/jadwal, tanpa kredensial
         public async Task<IActionResult> GetNotificationSettings()
         {
             try
@@ -6528,6 +6535,7 @@ namespace KWHMonitoring.Controllers
         // DEVICE SETTINGS API
         // ============================================
         [HttpGet("device-settings")]
+        [AllowAnonymous] // Effective settings untuk tampilan dashboard (read-only)
         public async Task<IActionResult> GetAllDeviceSettings()
         {
             try

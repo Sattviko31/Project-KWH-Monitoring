@@ -1,0 +1,120 @@
+/* ============================================================
+   Card Help — overlay keterangan samar saat cursor di atas kartu
+   Bersifat dekoratif: pointer-events:none sehingga TIDAK mengganggu
+   klik/interaksi apapun pada kartu. Tidak mengubah layout (fixed).
+   ============================================================ */
+.ch-help {
+    position: fixed;
+    z-index: 1060;                 /* di bawah modal Bootstrap (1050-1080 zone) */
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .18s ease, visibility .18s ease;
+    pointer-events: none;          /* KUNCI: tidak menangkap event apapun */
+    border-radius: 10px;
+    padding: 10px 13px;
+    box-sizing: border-box;
+    color: rgba(255, 255, 255, 0.93);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.87));
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.ch-help.ch-show {
+    visibility: visible;
+    opacity: 1;
+}
+
+.ch-help .ch-title {
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #a5f3fc;
+    margin-bottom: 4px;
+}
+
+.ch-help .ch-desc {
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 5px;
+    white-space: pre-line;
+}
+
+.ch-help .ch-formula {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: #a5f3fc;
+    background: rgba(255, 255, 255, 0.08);
+    border-left: 2px solid #38bdf8;
+    padding: 4px 7px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    white-space: pre-line;
+}
+
+.ch-help .ch-extra {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.7rem;
+    white-space: pre-line;
+}
+
+/* ============================================================
+   Info lokasi (KodeLokasi / Address / City) dari database ERP
+   WWMERP2019.dbo.TitikLokasi — hanya muncul pada tooltip kartu
+   panel monitoring (_PanelCard) saat kursor berada di header.
+   ============================================================ */
+.ch-help .ch-lokasi {
+    margin: 4px 0 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px dashed rgba(56, 189, 248, 0.45);
+}
+
+.ch-help .ch-lokasi-kode {
+    display: inline-block;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.4px;
+    color: #0b1220;
+    background: linear-gradient(180deg, #a5f3fc, #38bdf8);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-bottom: 3px;
+}
+
+.ch-help .ch-lokasi-kode i {
+    margin-right: 5px;
+    opacity: 0.85;
+}
+
+.ch-help .ch-lokasi-row {
+    display: flex;
+    gap: 6px;
+    line-height: 1.4;
+}
+
+.ch-help .ch-lokasi-label {
+    flex: 0 0 44px;
+    color: #7dd3fc;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding-top: 1px;
+}
+
+.ch-help .ch-lokasi-value {
+    flex: 1 1 auto;
+    color: rgba(255, 255, 255, 0.92);
+    word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ch-help { transition: none; }
+}

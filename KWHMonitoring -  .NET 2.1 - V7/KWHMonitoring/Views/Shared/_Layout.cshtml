@@ -34,7 +34,12 @@
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/card-help.css" asp-append-version="true" />
     <script>(function(){var t;try{t=localStorage.getItem('kwh_theme')}catch(e){}if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.backgroundColor='#0b0f1a'}document.documentElement.classList.add('no-transition');function s(){document.documentElement.setAttribute('data-theme-ready','')}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',s)}else{s()}setTimeout(s,800)})();</script>
+    <!-- Status login user (server-rendered oleh Razor). Dipakai agar pengunjung
+         tanpa login TIDAK di-redirect paksa ke halaman Login oleh global
+         ajaxError handler saat ada request API yang membutuhkan autentikasi. -->
+    <script>var IS_USER_AUTHENTICATED = @(User.Identity.IsAuthenticated ? "true" : "false");</script>
     <noscript><style>html{visibility:visible!important}</style></noscript>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
 </head>
@@ -1509,8 +1514,15 @@
                     }
                 });
                 // Global 401 handler: redirect to login if session expired
+                // Untuk pengunjung TANPA login (IS_USER_AUTHENTICATED === false):
+                // JANGAN redirect paksa — cukup catat ke console, agar halaman
+                // yang memang publik tetap terbuka tanpa "ditarik" ke halaman Login.
                 $(document).ajaxError(function(e, xhr, options) {
                     if (xhr.status === 401 && !options._authRedirecting) {
+                        if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
+                            console.warn('🔒 Fitur ini memerlukan login (akses ditolak).');
+                            return;
+                        }
                         console.warn('🔒 Session expired — redirecting to login');
                         window.location.href = '/Account/Login?ReturnUrl=' + encodeURIComponent(window.location.pathname + window.location.search);
                     }
@@ -1522,6 +1534,7 @@
     <script src="~/lib/devextreme/js/dx.all.js"></script>
     <script src="~/lib/bootstrap/js/bootstrap.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/card-help.js" asp-append-version="true"></script>
 
     <!-- Custom Tab Handler � completely replaces BS3's tab data-api -->
     <script>

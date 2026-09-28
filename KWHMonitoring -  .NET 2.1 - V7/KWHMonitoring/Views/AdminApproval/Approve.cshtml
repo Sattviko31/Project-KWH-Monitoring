@@ -5,7 +5,7 @@
 }
 
 <div class="auth-page">
-    <div class="auth-card">
+    <div class="auth-card" data-card-help="Persetujuan Admin|Halaman khusus master admin untuk menyetujui pendaftaran user baru.|Memilih role (Viewer/Operator) bagi user yang disetujui.|Dilindungi tautan token dari email + anti-forgery; akun Admin tidak bisa disetujui di sini.">
         <div class="card-body">
             @if (ViewBag.Approved == true)
             {

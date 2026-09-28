@@ -37,7 +37,6 @@
     <!-- Date Navigation -->
     <div class="row mb-2 mb-md-3">
         <div class="col-12">
-            <div class="card shadow-sm">
                 <div class="card-body py-2">
                     <div class="date-nav-row">
                         <div class="date-nav-group">
@@ -64,7 +63,7 @@
     <!-- Summary Cards -->
     <div class="stats-row mb-3 mb-md-4">
         <div>
-            <div class="stat-card bg-primary h-100">
+            <div class="stat-card bg-primary h-100" data-card-help="Konsumsi Hari Ini|Total energi terpakai pada tanggal terpilih.|Rumus: kWh hari = Σ konsumsi harian seluruh device|Rata-rata/jam = kWh hari ÷ jumlah jam berjalan">
                 <div class="stat-label">Hari Ini</div>
                 <div class="stat-value" id="usageToday">0 kWh</div>
                 <small>Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
@@ -72,7 +71,7 @@
             </div>
         </div>
         <div>
-            <div class="stat-card bg-success h-100">
+            <div class="stat-card bg-success h-100" data-card-help="Konsumsi Bulan Ini|Akumulasi energi sepanjang bulan berjalan.|Rumus: kWh bulan = Σ konsumsi harian bulan ini|Rata-rata/hari = kWh bulan ÷ tanggal berjalan">
                 <div class="stat-label">Bulan Ini</div>
                 <div class="stat-value" id="usageMonth">0 kWh</div>
                 <small>Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
@@ -80,7 +79,7 @@
             </div>
         </div>
         <div>
-            <div class="stat-card bg-info h-100">
+            <div class="stat-card bg-info h-100" data-card-help="Konsumsi Tahun Ini|Akumulasi energi sepanjang tahun berjalan.|Rumus: kWh tahun = Σ konsumsi bulanan tahun ini|Rata-rata/bulan = kWh tahun ÷ jumlah bulan berjalan">
                 <div class="stat-label">Tahun Ini</div>
                 <div class="stat-value" id="usageYear">0 kWh</div>
                 <small>Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
@@ -88,7 +87,7 @@
             </div>
         </div>
         <div>
-            <div class="stat-card bg-warning h-100">
+            <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya|Perkiraan biaya listrik dari konsumsi yang sudah terpakai.|Rumus: Estimasi Biaya = kWh × Tarif (Rp/kWh)|Tarif default Rp1.500/kWh — bisa diatur per device di Settings.">
                 <div class="stat-label">Estimasi Biaya</div>
                 <div class="stat-value" id="usageCost">Rp 0</div>
                 <small>Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
@@ -100,7 +99,7 @@
     <!-- Charts -->
     <div class="chart-row mb-3 mb-md-4">
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Grafik Per Jam|Profil konsumsi energi tiap jam pada tanggal terpilih — berguna melihat pola pemakaian siang vs malam.|Rumus: kWh jam = total energi yang terakumulasi pada jam tersebut|Jam dengan batang tertinggi = jam paling boros.">
                 <div class="card-header bg-primary text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-clock"></i> Per Jam</h6>
                 </div>
@@ -110,7 +109,7 @@
             </div>
         </div>
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Grafik Per Hari|Konsumsi energi harian — membandingkan penggunaan antar hari.|Rumus: kWh hari = Σ energi harian seluruh device|Puncak batang tertinggi = hari paling boros.">
                 <div class="card-header bg-success text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Per Hari</h6>
                 </div>
@@ -120,7 +119,7 @@
             </div>
         </div>
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Grafik Per Bulan|Tren konsumsi energi bulanan — melihat pola musiman dan efektivitas penghematan.|Rumus: kWh bulan = Σ konsumsi harian dalam bulan tersebut|Bandingkan batang antar bulan untuk melihat kenaikan/penurunan.">
                 <div class="card-header bg-info text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Per Bulan</h6>
                 </div>
@@ -134,7 +133,7 @@
     <!-- Peak Info -->
     <div class="peak-row">
         <div>
-            <div class="card bg-light">
+            <div class="card bg-light" data-card-help="Peak Hour|Jam dengan konsumsi energi tertinggi pada periode terpilih.|Rumus: Peak Hour = jam dengan kWh maksimum|Nilainya = energi terkonsumsi di jam tersebut.">
                 <div class="card-body py-2">
                     <h6 class="text-muted mb-1"><i class="fas fa-bolt text-warning"></i> Peak Hour</h6>
                     <h5 class="text-primary mb-1" id="peakHourValue">0 kWh</h5>
@@ -143,7 +142,7 @@
             </div>
         </div>
         <div>
-            <div class="card bg-light">
+            <div class="card bg-light" data-card-help="Peak Day|Tanggal dengan konsumsi energi tertinggi pada periode terpilih.|Rumus: Peak Day = hari dengan kWh maksimum|Nilainya = energi terkonsumsi pada tanggal tersebut.">
                 <div class="card-body py-2">
                     <h6 class="text-muted mb-1"><i class="fas fa-calendar-day text-success"></i> Peak Day</h6>
                     <h5 class="text-success mb-1" id="peakDayValue">0 kWh</h5>
@@ -152,7 +151,7 @@
             </div>
         </div>
         <div>
-            <div class="card bg-light">
+            <div class="card bg-light" data-card-help="Peak Month|Bulan dengan konsumsi energi tertinggi pada periode terpilih.|Rumus: Peak Month = bulan dengan kWh maksimum|Nilainya = energi terkonsumsi pada bulan tersebut.">
                 <div class="card-body py-2">
                     <h6 class="text-muted mb-1"><i class="fas fa-calendar-alt text-info"></i> Peak Month</h6>
                     <h5 class="text-info mb-1" id="peakMonthValue">0 kWh</h5>
@@ -173,7 +172,7 @@
     <!-- Financial Charts Row -->
     <div class="chart-row mb-3">
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="WBP / LWBP Split|Perbandingan pemakaian pada jam Beban Puncak (WBP) vs Luar Beban Puncak (LWBP).|Rumus: Rasio WBP = kWh WBP ÷ total kWh × 100&#10;Biaya = kWh WBP × tarif WBP + kWh LWBP × tarif LWBP|Jam WBP default:18.00–22.00 (bisa diubah per device). Memilih jam LWBP menghemat biaya.">
                 <div class="card-header py-2" style="background-color:#5b5ea6!important;color:#fff">
                     <h6 class="mb-0"><i class="fas fa-bolt"></i> WBP / LWBP Split</h6>
                 </div>
@@ -185,7 +184,7 @@
             </div>
         </div>
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Budget vs Actual|Perbandingan anggaran energi bulanan dengan konsumsi riil.|Rumus: Variance = Actual kWh − Budget kWh&#10;Variance % = (Actual − Budget) ÷ Budget × 100|>100% = over budget. Budget diatur per device di Settings.">
                 <div class="card-header bg-success text-white py-2" id="budgetCardHeader">
                     <h6 class="mb-0"><i class="fas fa-wallet"></i> Budget vs Actual</h6>
                 </div>
@@ -201,7 +200,7 @@
     <!-- Projection Chart -->
     <div class="chart-row mb-3">
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Proyeksi Konsumsi|Estimasi total energi sampai akhir bulan/tahun berjalan.|Rumus: Proyeksi = rata-rata konsumsi per hari × jumlah hari dalam periode|Membantu memperkirakan apakah konsumsi akan melebihi target.">
                 <div class="card-header bg-orange text-white py-2 d-flex align-items-center justify-content-between">
                     <h6 class="mb-0"><i class="fas fa-chart-line"></i> Proyeksi Konsumsi</h6>
                     <div class="proj-tab-group">
@@ -216,7 +215,7 @@
             </div>
         </div>
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Proyeksi Biaya|Estimasi tagihan listrik sampai akhir periode berjalan.|Rumus: Proyeksi Biaya = Proyeksi kWh × Tarif (Rp/kWh)|Membantu mengantisipasi tagihan sebelum periode berakhir.">
                 <div class="card-header bg-teal text-white py-2 d-flex align-items-center justify-content-between">
                     <h6 class="mb-0"><i class="fas fa-chart-area"></i> Proyeksi Biaya</h6>
                     <div class="proj-tab-group">
@@ -235,7 +234,7 @@
     <!-- Financial Summary & Anomaly Cost — 2 columns -->
     <div class="fin-summary-grid mb-3">
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Financial Summary|Ringkasan metrik finansial periode terpilih.|Rumus: Waste% = Waste kWh ÷ total kWh × 100&#10;MoM% = Δ vs bulan lalu ÷ bulan lalu × 100 · YoY% = Δ vs tahun lalu ÷ tahun lalu × 100&#10;Load Factor = kWh ÷ (kapasitas × jam berjalan) × 100 (maks 100%)&#10;Unit Econ = biaya ÷ luas (m²) dan biaya ÷ jam berjalan|Waste >5% dan LF >80% = perhatian.">
                 <div class="card-header bg-dark text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-th-large"></i> Financial Summary</h6>
                 </div>
@@ -277,7 +276,7 @@
         </div>
 
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Dampak Biaya Anomali|Estimasi biaya tambahan akibat anomali (overload / device drop).|Rumus: Excess kWh ≈ daya berlebih (W) ÷1000 ×0,25 jam per kejadian&#10;Dampak Biaya = Excess kWh × Tarif (Rp/kWh)|Dihitung otomatis dari log anomali pada periode terpilih.">
                 <div class="card-header bg-primary text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-exclamation-circle"></i> Dampak Biaya Anomali</h6>
                 </div>
@@ -292,7 +291,7 @@
     <div class="report-grid mb-3">
         <!-- Report: Daily -->
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Laporan Harian|Ringkasan otomatis konsumsi dan biaya per hari.|Rumus: kWh hari = Σ energi harian · Biaya = kWh × tarif|Isi laporan diperbarui otomatis dari data monitoring.">
                 <div class="card-header bg-info text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Harian</h6>
                 </div>
@@ -304,7 +303,7 @@
 
         <!-- Report: Monthly -->
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Laporan Bulanan|Ringkasan konsumsi, biaya, dan perbandingan antar bulan.|Rumus: kWh bulan = Σ konsumsi harian · MoM% = Δ vs bulan lalu ÷ bulan lalu × 100|Termasuk indikasi over-budget jika melebihi anggaran.">
                 <div class="card-header bg-warning text-dark py-2">
                     <h6 class="mb-0"><i class="fas fa-calendar-week"></i> Laporan Bulanan</h6>
                 </div>
@@ -316,7 +315,7 @@
 
         <!-- Report: Yearly -->
         <div>
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm h-100" data-card-help="Laporan Tahunan|Ringkasan konsumsi dan biaya tahunan serta perbandingan YoY.|Rumus: kWh tahun = Σ konsumsi bulanan · YoY% = Δ vs tahun lalu ÷ tahun lalu × 100| Berguna melihat tren penghematan antar tahun.">
                 <div class="card-header bg-indigo text-white py-2">
                     <h6 class="mb-0"><i class="fas fa-calendar"></i> Laporan Tahunan</h6>
                 </div>

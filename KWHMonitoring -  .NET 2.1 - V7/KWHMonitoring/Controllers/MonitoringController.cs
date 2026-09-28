@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using KWHMonitoring.Models;
 using KWHMonitoring.Services;
 
@@ -18,18 +19,31 @@ namespace KWHMonitoring.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IEmailService _emailService;
         private readonly IDeviceSettingsService _deviceSettingsService;
+        private readonly ITitikLokasiService _titikLokasiService;
+        private readonly ILogger<MonitoringController> _logger;
         private static AppSettings _appSettings = new AppSettings();
 
-        public MonitoringController(ApplicationDbContext context, IEmailService emailService, IDeviceSettingsService deviceSettingsService)
+        public MonitoringController(
+            ApplicationDbContext context,
+            IEmailService emailService,
+            IDeviceSettingsService deviceSettingsService,
+            ITitikLokasiService titikLokasiService,
+            ILogger<MonitoringController> logger)
         {
             _context = context;
             _emailService = emailService;
             _deviceSettingsService = deviceSettingsService;
+            _titikLokasiService = titikLokasiService;
+            _logger = logger;
         }
 
         // ============================================
         // PANEL MONITORING (Halaman Utama)
+        // Halaman utama bersifat PUBLIK — dapat diakses oleh siapapun
+        // tanpa login. Fitur kontrol (relay ON/OFF) tetap dilindungi
+        // role Operator/Admin melalui endpoint API-nya masing-masing.
         // ============================================
+        [AllowAnonymous]
         public async Task<IActionResult> Index()
         {
             try
@@ -86,6 +100,33 @@ namespace KWHMonitoring.Controllers
                         Total_Energy_Wh = data.Total_Energy_Wh ?? 0m,
                         Frekuensi_Hz = data.Frekuensi_Hz ?? 0m
                     });
+                }
+
+                // Lengkapi tiap panel dengan info titik lokasi dari database ERP
+                // (WWMERP2019.dbo.TitikLokasi) — dipasangkan lewat DeviceKey = TitikLokasiID.
+                // Info ini dipakai tooltip header kartu panel (_PanelCard).
+                // Kegagalan database ERP tidak boleh mengganggu halaman monitoring.
+                try
+                {
+                    if (viewModel.Panels.Count > 0)
+                    {
+                        var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                            viewModel.Panels.Select(p => p.DeviceKey));
+
+                        foreach (var panel in viewModel.Panels)
+                        {
+                            var deviceKey = (panel.DeviceKey ?? string.Empty).Trim();
+                            if (!lokasiMap.TryGetValue(deviceKey, out var lokasi) || lokasi == null) continue;
+
+                            panel.KodeLokasi = lokasi.KodeLokasi;
+                            panel.Alamat = lokasi.Address;
+                            panel.KotaProvinsi = lokasi.KotaProvinsi;
+                        }
+                    }
+                }
+                catch (Exception lokasiEx)
+                {
+                    _logger.LogWarning(lokasiEx, "Gagal melengkapi info TitikLokasi pada panel monitoring.");
                 }
 
                 if (validData.Any())

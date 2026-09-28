@@ -24,7 +24,7 @@
     </div>
 
     <!-- 1. Gambaran Umum -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="1. Gambaran Umum|Pengantar cara kerja perhitungan di halaman Usage Statistics.|Menjelaskan ruang lingkup: sumber data → olah → rumus → baca hasil|Membantu memahami semua kartu dan angka di halaman statistik.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-eye"></i> 1. Gambaran Umum
         </div>
@@ -50,7 +50,7 @@
     </div>
 
     <!-- 2. Sumber Data -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="2. Sumber Data|Tabel asal data: endpoint API, parameter, dan field yang dipakai perhitungan.|Sumber utama: HourlyEnergy, DailyEnergy, MonthlyEnergy, DeviceSettings|Memastikan setiap angka bisa ditelusuri ke datanya.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-database"></i> 2. Sumber Data
         </div>
@@ -101,7 +101,7 @@
     </div>
 
     <!-- 3. Pengolahan Data -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="3. Pengolahan Data|Cara data di-agregasi: di server vs mode Semua Panel (client-side), WBP/LWBP, budget, biaya.|Mode Semua Panel = agregasi paralel per device lalu dijumlah|Menjelaskan kenapa angka kadang dihitung ulang di browser.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-cogs"></i> 3. Pengolahan Data
         </div>
@@ -132,7 +132,7 @@
     </div>
 
     <!-- 4. Daftar Perhitungan -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="4. Daftar Perhitungan Lengkap|Semua rumus: Total kWh, Total Cost, tarif rata-rata, WBP/LWBP, budget, MoM &amp; YoY.|Rumus utama: estimatedCost = kWh bulan × tarifPerKWh|Setiap metrik di Usage Statistics dijelaskan rumus &amp; contohnya di sini.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-calculator"></i> 4. Daftar Perhitungan Lengkap
         </div>
@@ -251,7 +251,7 @@ wastePercent = (wasteKWh / totalKWh) * 100%</pre>
     </div>
 
     <!-- 5. Cara Membaca -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="5. Cara Membaca &amp; Menganalisa|Panduan membaca hasil: interpretasi tren, peak, waste, dan indikator keuangan.|Termasuk cara membandingkan periode dan membaca grafik|Membantu pengambilan keputusan dari data yang tampil.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-glasses"></i> 5. Cara Membaca &amp; Menganalisa
         </div>
@@ -274,7 +274,7 @@ wastePercent = (wasteKWh / totalKWh) * 100%</pre>
     </div>
 
     <!-- 6. Decision Matrix -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="6. Decision Matrix &amp; Saran Keputusan|Panduan tindakan berdasarkan kondisi: waste >5%, load factor 30–80% optimal, over budget, dll.|Klasifikasi: aman (hijau) · perhatian (kuning) · bahaya (merah)|Menerjemahkan angka menjadi aksi penghematan.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-chess"></i> 6. Decision Matrix &amp; Saran Keputusan
         </div>
@@ -298,7 +298,7 @@ wastePercent = (wasteKWh / totalKWh) * 100%</pre>
     </div>
 
     <!-- 7. Catatan Validasi -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3" data-card-help="7. Catatan Validasi &amp; Keterbatasan|Batasan akurasi data: asumsi tarif, device representatif, dan hal yang perlu diperhatikan.|Catatan: mode agregasi memakai tarif flat default Rp1.500/kWh|Bacalah sebelum memakai angka untuk keputusan finansial resmi.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-check-double"></i> 7. Catatan Validasi &amp; Keterbatasan
         </div>

@@ -10,35 +10,35 @@
 <!-- Content: Panel Monitoring -->
 <div class="stats-row mb-3 mb-md-4">
     <div>
-        <div class="stat-card bg-primary h-100">
+        <div class="stat-card bg-primary h-100" data-card-help="Total Daya|Jumlah daya aktif semua panel yang sedang berjalan saat ini. Diperbarui otomatis tiap 10 detik.|Rumus: Total Daya = Σ Daya_Watt (semua panel) — satuan Watt|Sumber: nilai daya terakhir tiap device dari database monitoring.">
             <div class="stat-label">Total Daya</div>
             <div class="stat-value">@Model.TotalStats.TotalDaya.ToString("N0") W</div>
             <i class="fas fa-bolt stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card bg-success h-100">
+        <div class="stat-card bg-success h-100" data-card-help="Total Energi|Akumulasi energi kumulatif seluruh panel sejak perangkat dihitung.|Rumus: Total Energi = Σ Total_Energy_Wh (semua panel) — satuan Wh|Konversi: kWh = Wh ÷ 1.000 · Biaya = kWh × tarif listrik.">
             <div class="stat-label">Total Energy</div>
             <div class="stat-value">@Model.TotalStats.TotalEnergy.ToString("N0") Wh</div>
             <i class="fas fa-battery-full stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card bg-warning h-100">
+        <div class="stat-card bg-warning h-100" data-card-help="Energi Aktif|Akumulasi energi aktif — energi yang benar-benar digunakan dan dibebankan ke tagihan.|Rumus: Energi Aktif = Σ Energi_Aktif_Wh (semua panel) — satuan Wh|Energi reaktif (reaktan) tidak dihitung dalam biaya listrik.">
             <div class="stat-label">Energi Aktif</div>
             <div class="stat-value">@Model.TotalStats.TotalEnergiAktif.ToString("N0") Wh</div>
             <i class="fas fa-plug stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card bg-secondary h-100">
+        <div class="stat-card bg-secondary h-100" data-card-help="Active Panels|Jumlah panel/device yang aktif mengirim data ke sistem.|Rumus: Active Panels = jumlah device yang memiliki data pengukuran terakhir|Device tanpa data terbaru tidak dihitung sebagai aktif.">
             <div class="stat-label">Active Panels</div>
             <div class="stat-value">@Model.TotalStats.ActivePanels</div>
             <i class="fas fa-th stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card bg-dark h-100">
+        <div class="stat-card bg-dark h-100" data-card-help="Avg Power Factor|Rata-rata faktor daya semua panel — indikator efisiensi pemakaian listrik (0 s/d 1).|Rumus: Avg PF = Σ Cos_Phi ÷ jumlah panel|Mendekati 1.0 = efisien; di bawah 0.85 menandakan pemborosan daya reaktif.">
             <div class="stat-label">Avg Power Factor</div>
             <div class="stat-value">@Model.TotalStats.AvgPowerFactor.ToString("N3")</div>
             <i class="fas fa-wave-square stat-icon"></i>
@@ -188,6 +188,12 @@
         var otpCountdownTimer = null;
         var otpCountdownSeconds = 0;
         var otpSending = false;
+
+        // Status login user (di-render server oleh Razor).
+        // Dipakai agar tamu (belum login) tetap nyaman membuka halaman utama:
+        // request API yang membutuhkan login di-skip di sisi client sehingga
+        // tidak memicu global ajaxError handler (401 -> redirect ke Login).
+        var IS_USER_AUTHENTICATED = @(User.Identity.IsAuthenticated ? "true" : "false");
 
         function openRelayOtpModal(deviceId, rcValue, pulse, groupName, $btn, $wrapper, actionText, onComplete) {
             pendingOtpRelay = {
@@ -1027,6 +1033,16 @@
                 return;
             }
             anomalyCooldown[cooldownKey] = now;
+
+            // Tamu (belum login): tampilkan peringatan anomali secara lokal saja.
+            // Jangan POST ke log-anomaly (butuh role Operator/Admin) karena respons 401
+            // akan memicu global ajaxError handler di layout -> redirect ke halaman Login,
+            // yang membuat pengunjung tanpa login "dipaksa" login dari halaman utama.
+            if (!IS_USER_AUTHENTICATED) {
+                anomalyConfirmation.counts[confirmationKey] = 0;
+                showAnomalyAlert(deviceKey, anomalyType, currentPower, thresholdValue, deviation);
+                return;
+            }
 
             // Log ke database
             $.ajax({

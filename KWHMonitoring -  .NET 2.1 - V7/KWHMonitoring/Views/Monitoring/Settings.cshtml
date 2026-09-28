@@ -1,4 +1,4 @@
-﻿@{
+@{
     ViewData["Title"] = "Settings";
     var settings = ViewBag.CurrentSettings as Dictionary<string, string> ?? new Dictionary<string, string>();
 
@@ -411,7 +411,7 @@
                 <div class="settings-section-body">
                     <!-- Report Toggles -->
                     <div class="settings-toggles-grid">
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Instant Alert|Kirim notifikasi email ke admin begitu anomali terdeteksi (daya melampaui threshold).|Pemicu: daya/tegangan di luar batas → 1 notifikasi per kejadian|Jika nonaktif, anomali tetap tercatat di Anomaly Logs.">
                             <input type="checkbox" id="sendInstantAlert" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-bell text-danger"></i>
@@ -419,7 +419,7 @@
                                 <small>Notifikasi saat anomali terdeteksi</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Hourly Report|Kirim ringkasan konsumsi listrik setiap 1 jam.|Isi: kWh per jam, daya rata-rata, dan status device|Alamat penerima mengikuti pengaturan email di bagian atas halaman.">
                             <input type="checkbox" id="sendHourlyReport" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-clock text-warning"></i>
@@ -427,7 +427,7 @@
                                 <small>Laporan setiap 1 jam</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Daily Report|Kirim ringkasan konsumsi harian (00:00–23:59).|Isi: total kWh, biaya per hari, peak, dan perbandingan hari sebelumnya|Dibuat setelah agregasi harian selesai.">
                             <input type="checkbox" id="sendDailyReport">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-calendar-alt text-success"></i>
@@ -435,7 +435,7 @@
                                 <small>Laporan harian</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Monthly Report|Kirim ringkasan konsumsi bulanan.|Isi: total kWh &amp; biaya bulan, WBP/LWBP, MoM, YoY, dan status budget|Berguna untuk pelaporan keuangan bulanan.">
                             <input type="checkbox" id="sendMonthlyReport">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-calendar-check text-primary"></i>
@@ -558,7 +558,7 @@
 
                     <!-- Toggle Options -->
                     <div class="settings-toggles-grid">
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Show EMA Line|Menampilkan garis Exponential Moving Average (EMA) pada Power Chart.|EMA_t = α × P_t + (1 − α) × EMA_(t−1), dengan α = 2 ÷ (n + 1)|Membantu melihat tren daya tanpa noise fluktuasi.">
                             <input type="checkbox" id="emaShowLine" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-chart-line text-primary"></i>
@@ -566,7 +566,7 @@
                                 <small>Tampilkan garis EMA pada Power Chart</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Show Threshold Lines|Menampilkan garis batas Upper/Lower Threshold pada Power Chart.|Batas diambil dari threshold device/Day vs Weekend pada bagian konfigurasi|Daya melewati garis = indikasi anomali atau waste.">
                             <input type="checkbox" id="emaShowThresholds" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-arrows-alt-v text-warning"></i>
@@ -574,7 +574,7 @@
                                 <small>Tampilkan garis Upper/Lower Threshold</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="100 Initial Points|Gunakan 100 titik data pertama sebagai baseline perhitungan EMA.|Rumus: EMA dihitung dari rata-rata 100 sampel awal, bukan 1 sampel|Menghindari lonjakan semu di awal grafik saat data masih sedikit.">
                             <input type="checkbox" id="useInitial100ForEma">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-database text-info"></i>

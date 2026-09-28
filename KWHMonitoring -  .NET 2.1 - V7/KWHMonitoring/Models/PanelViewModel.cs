@@ -27,6 +27,19 @@ namespace KWHMonitoring.Models
         public decimal Total_Energy_Wh { get; set; }
         public decimal Frekuensi_Hz { get; set; }
 
+        // ============================================
+        // Info titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi).
+        // Dipasangkan lewat DeviceKey = TitikLokasiID; hanya dipakai untuk
+        // melengkapi tooltip header kartu panel monitoring (_PanelCard).
+        // ============================================
+        public string KodeLokasi { get; set; } = string.Empty;
+        public string Alamat { get; set; } = string.Empty;
+        public string KotaProvinsi { get; set; } = string.Empty;
+
+        public bool HasTitikLokasi => !string.IsNullOrWhiteSpace(KodeLokasi)
+                                      || !string.IsNullOrWhiteSpace(Alamat)
+                                      || !string.IsNullOrWhiteSpace(KotaProvinsi);
+
         // 1-phase devices report 0.0 (not null) for S/T, so require > 0
         public bool IsThreePhase => Volt_S.HasValue && Volt_S.Value > 0
                                     && Volt_T.HasValue && Volt_T.Value > 0;
