@@ -21,6 +21,13 @@
             fibLower: 0.618
         };
 
+        // API settings may legitimately contain numeric zero (for example, a
+        // disabled threshold). Preserve that value instead of treating it as
+        // missing and silently substituting a different preset.
+        function settingValue(value, fallback) {
+            return value === null || value === undefined || value === '' ? fallback : value;
+        }
+
         // Time-based cooldown DIHAPUS - sekarang hanya condition-based (trigger saat power normal)
         // let anomalyCooldown = {};  // âŒ REMOVED: No more timer-based cooldown
         
@@ -326,13 +333,13 @@
                         // ============================================
                         // EMA SETTINGS (dari get-ema-settings)
                         // ============================================
-                        anomalyServiceConfig.emaPeriod = data.emaPeriod || 20;
-                        anomalyServiceConfig.mode = data.emaMode || 'manual';
-                        anomalyServiceConfig.upperThreshold = data.emaUpperThreshold || 0;
-                        anomalyServiceConfig.lowerThreshold = data.emaLowerThreshold || 0;
-                        anomalyServiceConfig.fibUpper = data.emaFibUpper || 0;
-                        anomalyServiceConfig.fibLower = data.emaFibLower || 0;
-                        useInitial100ForEma = data.useInitial100ForEma || false;
+                        anomalyServiceConfig.emaPeriod = Number(settingValue(data.emaPeriod, 20));
+                        anomalyServiceConfig.mode = settingValue(data.emaMode, 'manual');
+                        anomalyServiceConfig.upperThreshold = Number(settingValue(data.emaUpperThreshold, 0));
+                        anomalyServiceConfig.lowerThreshold = Number(settingValue(data.emaLowerThreshold, 0));
+                        anomalyServiceConfig.fibUpper = Number(settingValue(data.emaFibUpper, 0));
+                        anomalyServiceConfig.fibLower = Number(settingValue(data.emaFibLower, 0));
+                        useInitial100ForEma = settingValue(data.useInitial100ForEma, false) === true;
                         
                         // Anomaly & Notification settings TIDAK ada di get-ema-settings
                         // Mereka di-load dari get-notification-settings (panggilan ketiga di bawah)
@@ -421,11 +428,12 @@
                     timeout: 5000,
                     success: function(data) {
                         // Anomaly detection settings
-                        if (data.anomalyCheckInterval) {
-                            var newInterval = data.anomalyCheckInterval * 1000; // Convert ke ms
-                            anomalyServiceConfig.checkInterval = data.anomalyCheckInterval;
+                        if (data.anomalyCheckInterval !== null && data.anomalyCheckInterval !== undefined && Number(data.anomalyCheckInterval) > 0) {
+                            var configuredInterval = Number(data.anomalyCheckInterval);
+                            var newInterval = configuredInterval * 1000; // Convert ke ms
+                            anomalyServiceConfig.checkInterval = configuredInterval;
                             anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
-                            anomalyConfirmation.cooldownTime = (data.anomalyCooldownTime || 60) * 1000; // Convert ke ms
+                            anomalyConfirmation.cooldownTime = Number(settingValue(data.anomalyCooldownTime, 60)) * 1000; // Convert ke ms
 
                             // Sampling mengikuti interval anomaly dari preset.
                             if (anomalyTimer && newInterval !== anomalyTimerInterval) {
