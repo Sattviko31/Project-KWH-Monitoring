@@ -1,4 +1,4 @@
-﻿@model KWHMonitoring.Models.DashboardViewModel
+@model KWHMonitoring.Models.DashboardViewModel
 @{
     ViewData["Title"] = "All Charts";
 }
@@ -40,7 +40,7 @@
     {
         var safeKey = panel.DeviceKey.Replace("-", "_");
         <div id="chartCard_@safeKey" data-device-key="@panel.DeviceKey" data-group-name="@panel.GroupName" data-category="Billboard">
-            <div class="card shadow-sm h-100" data-card-help="Grafik Device|Grafik pengukuran device ini — pilih jenis via dropdown di header (Power/Voltage/Current).|Daya (W) = P sesaat · Tegangan (V) · Arus (A)|Data diperbarui otomatis; gunakan filter periode di atas halaman.">
+            <div class="card shadow-sm h-100" >
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2" style="gap: 8px;">
                     <h6 class="mb-0 flex-grow-1 text-truncate" style="font-size:0.82rem; min-width: 0;">
                         <i class="fas fa-chart-area"></i> @panel.GroupName
@@ -83,7 +83,7 @@
     <div class="modal-dialog ema-modal-dialog">
         <div class="modal-content ema-modal-content">
             <div class="modal-header bg-primary text-white py-2">
-                <h6 class="modal-title mb-0"><i class="fas fa-th"></i> Chart Display Settings</h6>
+                <h6 class="modal-title mb-0"><i class="fas fa-th"></i> Pengaturan Tampilan Grafik</h6>
                 <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body ema-modal-body">
@@ -120,7 +120,7 @@
                         <label class="form-check-label">Show Legend</label>
                     </div>
                 </div>
-                <small class="text-muted ema-hint"><i class="fas fa-info-circle"></i> Settings disimpan di browser (localStorage) — tidak mempengaruhi database.</small>
+                <small class="text-muted ema-hint"><i class="fas fa-info-circle"></i> Pengaturan disimpan di peramban dan tidak memengaruhi basis data.</small>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
@@ -187,7 +187,7 @@
                     // Expose globally for _AnomalyService
                     window._categoryMetaMap = categoryMetaMap;
                 },
-                error: function() { console.warn('Failed to load categories meta'); }
+                error: function() { /* console.warn('Failed to load categories meta') */; }
             });
         }
         var panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new {
@@ -219,9 +219,9 @@
                     });
                     // Re-apply filter after categories are loaded
                     applyChartFilter();
-                    console.log('Device categories loaded:', deviceCategoryMap);
+                    /* console.log('Device categories loaded:', deviceCategoryMap) */;
                 },
-                error: function() { console.warn('Failed to load device categories'); }
+                error: function() { /* console.warn('Failed to load device categories') */; }
             });
         }
 
@@ -256,9 +256,9 @@
                 timeout: 5000,
                 success: function(data) {
                     categoryDowntimeMap[category] = data.isDowntime || false;
-                    console.log('Downtime status for ' + category + ':', data.isDowntime ? 'DOWNTIME' : 'NORMAL');
+                    /* console.log('Downtime status for ' + category + ':', data.isDowntime ? 'DOWNTIME' : 'NORMAL') */;
                 },
-                error: function() { console.warn('Failed to check downtime for ' + category); }
+                error: function() { /* console.warn('Failed to check downtime for ' + category) */; }
             });
         }
 
@@ -544,8 +544,8 @@
                 } else {
                     upper = ema.map(function(v) { return (v != null ? v : 0) * (1 + uv / 100); });
                     lower = ema.map(function(v) { return (v != null ? v : 0) * (1 - lv / 100); });
-                }
-            } catch(e) { console.error('Error calculating thresholds:', e); }
+                 }
+            } catch(e) { /* console.error('Error  calculating thresholds:', e) */; }
             return { upper: upper, lower: lower };
         }
 
@@ -596,8 +596,8 @@
                             showThresholds: data.emaShowThresholds !== false,
                             useInitial100ForEma: data.useInitial100ForEma || false,
                             refreshInterval: data.refreshInterval || 10
-                        };
-                        console.log('EMA Settings loaded:', emaSettings);
+                         };
+                        /* console.log(' EMA Settings loaded:', emaSettings) */;
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -621,8 +621,8 @@
                             systemSettings.showGridY = data.settings['Chart.ShowGridY'] !== 'false';
                             systemSettings.gridColor = data.settings['Chart.GridColor'] || '#e0e0e0';
                             systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
-                        }
-                        console.log('System Settings loaded:', systemSettings);
+                         }
+                        /* console.log(' System Settings loaded:', systemSettings) */;
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -643,10 +643,10 @@
                     emaSettings.showEMA = settings.showEMA !== false;
                     emaSettings.showThresholds = settings.showThresholds !== false;
                     emaSettings.showMaxCapacity = settings.showMaxCapacity !== false;
-                    console.log('Display Settings loaded from localStorage:', settings);
+                    /* console.log('Display Settings lo aded from localStorage:', settings) */;
                 }
-            } catch (e) {
-                console.warn('Error loading display settings:', e);
+             } catch (e) {
+                /* console.warn('Error loading display settings:', e) */;
             }
         }
 
@@ -665,7 +665,7 @@
                         downtimeSettings.startHour = data.startHour != null ? data.startHour : 22;
                         downtimeSettings.endHour = data.endHour != null ? data.endHour : 6;
                         downtimeSettings.description = data.description || '';
-                        console.log('Downtime Settings loaded:', downtimeSettings);
+                        /* console.log('Down time Settings loaded:', downtimeSettings) */;
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -860,7 +860,7 @@
         // ============================================
         function fetchAndApplyEma(deviceKey, powerData) {
             if (!deviceKey) {
-                console.warn('fetchAndApplyEma: deviceKey is missing, using regular EMA');
+                /* console.warn('fetchAndApplyEma: deviceKey is missing, using regular EMA') */;
                 return $.Deferred().resolve(calculateEMA(powerData, emaSettings.period)).promise();
             }
 
@@ -874,14 +874,14 @@
                 }).then(function(initialData) {
                     if (initialData.success && initialData.emaBaseline != null) {
                         var emaBaseline = initialData.emaBaseline;
-                        console.log('Using EMA Baseline for ' + deviceKey + ':', emaBaseline);
+                        /* console.log('Using EMA Baseline for ' + deviceKey + ':', emaBaseline) */;
                         return calculateEMAWithBaseline(powerData, emaSettings.period, emaBaseline);
                     } else {
-                        console.log('No EMA baseline found, using regular EMA');
+                        /* console.log('No EMA baseline found, using regular EMA') */;
                         return calculateEMA(powerData, emaSettings.period);
                     }
                 }).fail(function() {
-                    console.log('Error fetching EMA baseline, using regular EMA');
+                    /* console.log('Error fetching EMA baseline, using regular EMA') */;
                     return calculateEMA(powerData, emaSettings.period);
                 });
             } else {
@@ -1007,19 +1007,19 @@
 
                                         charts['power_' + safeKey].update('none');
                                     } catch(err) {
-                                        console.error('Error applying EMA to chart:', err);
+                                        /* console.error('Error applying EMA to chart:', err) */;
                                     }
                                 });
                             } else {
                                 charts['power_' + safeKey].update('none');
                             }
                         }
-                    } catch(e) {
-                        console.error('Error updating charts for ' + deviceKey + ':', e);
+                    } catch( e) {
+                        /* console.error('Error updating chart s for ' + deviceKey + ':', e) */;
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error loading chart for ' + deviceKey + ':', error);
+                    /* console.error('Error loading chart for ' + deviceKey + ':', error) */;
                 }
             });
         }
@@ -1099,7 +1099,7 @@
                     '</div>' +
                     '<div class="mb-2"><label class="form-label ema-label">Deskripsi</label>' +
                     '<input type="text" class="form-control form-control-sm cat-downtime-desc" id="downtime' + cat + 'Description" data-category="' + cat + '" placeholder="Contoh: ' + cat + ' mati malam hari"></div>' +
-                    '<div class="card border" id="downtime' + cat + 'StatusCard" data-card-help="Status Downtime|Status jendela downtime (luar jam operasional) untuk kategori ini.|Downtime aktif = device terdeteksi menyala di luar jam kerja (waste)|Jam downtime diatur pada Settings → Downtime."><div class="card-body text-center py-1">' +
+                    '<div class="card border" id="downtime' + cat + 'StatusCard" data-card-help="Status waktu henti|Status jendela waktu henti (luar jam operasional) untuk kategori ini.|waktu henti aktif = perangkat terdeteksi menyala di luar jam kerja (pemborosan)|Jam waktu henti diatur pada Pengaturan → waktu henti."><div class="card-body text-center py-1">' +
                     '<div id="downtime' + cat + 'Status" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>' +
                     '</div></div></div>';
                 $content.append(paneHtml);
@@ -1182,11 +1182,13 @@
             var s = categoryDowntimeSettings[cat];
             var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
             var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
+            var isEnglish = false;
+            try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (_) { }
             if (isDowntime) {
-                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">Downtime period active (' + startLabel + '–' + endLabel + ') - Lower threshold disabled</small>');
+                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> ' + (isEnglish ? 'DOWNTIME ACTIVE' : 'WAKTU HENTI AKTIF') + '</span><br><small class="text-muted">' + (isEnglish ? 'Downtime period active (' + startLabel + '–' + endLabel + ') — lower threshold is disabled.' : 'Periode waktu henti aktif (' + startLabel + '–' + endLabel + ') — ambang batas bawah dinonaktifkan.') + '</small>');
                 $card.removeClass('border-success').addClass('border-danger');
             } else {
-                $status.html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">Normal operation - All thresholds active</small>');
+                $status.html('<span class="text-success"><i class="fas fa-sun"></i> ' + (isEnglish ? 'NORMAL OPERATION' : 'OPERASI NORMAL') + '</span><br><small class="text-muted">' + (isEnglish ? 'Normal operation — all thresholds are active.' : 'Operasi berjalan normal — seluruh ambang batas aktif.') + '</small>');
                 $card.removeClass('border-danger').addClass('border-success');
             }
         }
@@ -1281,17 +1283,17 @@
 
             // Real-time update saat cooldown state berubah (dari anomaly service)
             window.addEventListener('anomalyCooldownChanged', function(e) {
-                console.log('🔄 Anomaly cooldown changed (charts):', e.detail);
+                /* console.log('🔄 Anoma ly cooldown changed (charts):', e.detail) */;
                 updateChartAnomalyStatus();
             });
 
             // Load all settings in parallel (including per-device settings), then init charts
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), loadCategoriesMetaForCharts(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
-                console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Devices:', Object.keys(window._deviceSettings || {}).length);
-                console.log('Settings loaded, loading categories...');
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), loadCategoriesMetaForCharts(), Promise.resolve(window._deviceSettingsPromise)]) .then(function() {
+                /* console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Devices:', Object.keys(window._deviceSettings || {}).length) */;
+                /* console.log('Setti ngs loaded, loading categories...') */;
                 // Load device categories, then init
-                loadDeviceCategories().then(function() {
-                    console.log('All settings + categories loaded, initializing charts...');
+                loadDeviceCategories ().then(function() {
+                    /* console.log('All settings + ca tegories loaded, initializing charts...') */;
                     updateSettingsModalUI();
                     panelList.forEach(function(panel) {
                         initPanelCharts(panel.deviceKey, panel.safeKey, panel.isThreePhase);

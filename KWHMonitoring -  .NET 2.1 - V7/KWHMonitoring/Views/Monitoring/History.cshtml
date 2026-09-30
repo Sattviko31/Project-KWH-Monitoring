@@ -47,7 +47,7 @@
 <div id="historyDataGrid" style="width:100%;"></div>
 
 <style>
-    /* Full width grid */
+     Full width grid 
     #historyDataGrid {
         width: 100% !important;
     }
@@ -110,7 +110,7 @@
         white-space: nowrap;
     }
 
-    /* Fix DevExtreme toolbar icons - use text instead */
+     Fix DevExtreme toolbar icons - use text instead 
     .dx-datagrid .dx-toolbar .dx-button .dx-button-content {
         font-size: 12px;
     }
@@ -224,7 +224,7 @@
                                 timeout: 30000,
                                 success: function(response) {
                                     currentPage++;
-                                    console.log('History API page:', currentPage, '- loaded:', (response.data||[]).length, 'hasMore:', response.hasMore);
+                                    /* console.log('History API page:', currentPage, '- loaded:', (response.data||[]).length, 'hasMore:', response.hasMore) */;
                                     var mapped = (response.data || []).map(function(item) {
                                         return {
                                             historyId: item.historyId || 0,
@@ -260,7 +260,7 @@
                                     d.resolve(mapped, mapped.length);
                                 },
                                 error: function(xhr, status, error) {
-                                    console.error('Error loading data:', status, error);
+                                    /* console.error('Error loading data:', status, error) */;
                                     d.reject(error);
                                 }
                             });
@@ -355,7 +355,7 @@
                         var d = options.data;
                         var borderCls = d.status === 'HIGH LOAD' ? 'danger' : d.status === 'MEDIUM LOAD' ? 'warning' : 'success';
                         var html = '<div class="row g-2 p-2">'
-                            + '<div class="col-md-3 col-6"><div class="card border-' + borderCls + ' h-100" data-card-help="Status Beban|Status beban baris histori ini.|Kategori: HIGH LOAD >70% · MEDIUM LOAD 30–70% · NORMAL ≤30% kapasitas|Warna border kartu mengikuti status beban."><div class="card-body p-2">'
+                            + '<div class="col-md-3 col-6"><div class="card border-' + borderCls + ' h-100" data-card-help="Status Beban|Status beban baris histori ini.|Kategori: Tinggi BEBAN >70% · SEDANG BEBAN 30–70% · NORMAL ≤30% kapasitas|Warna border kartu mengikuti status beban."><div class="card-body p-2">'
                             + '<small class="text-muted"><i class="fas fa-info-circle"></i> Status</small><br>'
                             + '<span class="badge bg-' + borderCls + '">' + d.status + '</span>'
                             + '</div></div></div>'
@@ -719,24 +719,32 @@
         }
 
         function copyRowToClipboard(data) {
+            var isEnglish = false;
+            try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (e) { }
+            var label = isEnglish
+                ? { id: 'History ID', device: 'Device', group: 'Group', terminal: 'Terminal Time', received: 'Received Time', voltage: 'Voltage', current: 'Current', cosPhi: 'Power Factor', power: 'Active Power', total: 'Total Energy', frequency: 'Frequency', status: 'Status' }
+                : { id: 'Nomor Riwayat', device: 'Perangkat', group: 'Grup', terminal: 'Waktu pada Perangkat', received: 'Waktu Penerimaan', voltage: 'Tegangan', current: 'Arus', cosPhi: 'Faktor Daya', power: 'Daya Aktif', total: 'Energi Total', frequency: 'Frekuensi', status: 'Status' };
+            var status = data.status;
+            if (!isEnglish && status === 'HIGH LOAD') status = 'BEBAN TINGGI';
+            else if (!isEnglish && status === 'MEDIUM LOAD') status = 'BEBAN SEDANG';
+            else if (!isEnglish && status === 'NORMAL') status = 'NORMAL';
             var lines = [
-                'History ID: ' + data.historyId,
-                'Device: ' + data.deviceKey,
-                'Group: ' + data.groupName,
-                'Terminal Time: ' + formatDateTime(data.terminalTime),
-                'Received Time: ' + formatDateTime(data.receivedTime),
-                'Volt R: ' + fmt(data.phaseR, 1) + 'V',
-                'Volt S: ' + (data.phaseS != null ? fmt(data.phaseS, 1) + 'V' : '-'),
-                'Volt T: ' + (data.phaseT != null ? fmt(data.phaseT, 1) + 'V' : '-'),
-                'Amp R: ' + fmt(data.ampereR, 3) + 'A',
-                'Amp S: ' + (data.ampereS != null ? fmt(data.ampereS, 3) + 'A' : '-'),
-                'Amp T: ' + (data.ampereT != null ? fmt(data.ampereT, 3) + 'A' : '-'),
-                'Cos Phi: ' + fmt(data.cosPhi, 3),
-                'Daya: ' + fmt(data.w, 0) + ' W',
-                'Aktif Power: ' + fmt(data.aktifPower, 0) + ' Wh',
-                'Total W: ' + fmt(data.totalW, 0) + ' Wh',
-                'Frekuensi: ' + fmt(data.f, 2) + ' Hz',
-                'Status: ' + data.status
+                label.id + ': ' + data.historyId,
+                label.device + ': ' + data.deviceKey,
+                label.group + ': ' + data.groupName,
+                label.terminal + ': ' + formatDateTime(data.terminalTime),
+                label.received + ': ' + formatDateTime(data.receivedTime),
+                label.voltage + ' R: ' + fmt(data.phaseR, 1) + ' V',
+                label.voltage + ' S: ' + (data.phaseS != null ? fmt(data.phaseS, 1) + ' V' : '-'),
+                label.voltage + ' T: ' + (data.phaseT != null ? fmt(data.phaseT, 1) + ' V' : '-'),
+                label.current + ' R: ' + fmt(data.ampereR, 3) + ' A',
+                label.current + ' S: ' + (data.ampereS != null ? fmt(data.ampereS, 3) + ' A' : '-'),
+                label.current + ' T: ' + (data.ampereT != null ? fmt(data.ampereT, 3) + ' A' : '-'),
+                label.cosPhi + ': ' + fmt(data.cosPhi, 3),
+                label.power + ': ' + fmt(data.aktifPower != null ? data.aktifPower : data.w, 0) + ' Wh',
+                label.total + ': ' + fmt(data.totalW, 0) + ' Wh',
+                label.frequency + ': ' + fmt(data.f, 2) + ' Hz',
+                label.status + ': ' + status
             ];
             var text = lines.join('\n');
             if (navigator.clipboard) {
@@ -749,7 +757,7 @@
                 document.execCommand('copy');
                 document.body.removeChild(ta);
             }
-            DevExpress.ui.notify('Data copied to clipboard', 'success', 2000);
+            DevExpress.ui.notify(isEnglish ? 'Data copied to the clipboard.' : 'Data berhasil disalin ke papan klip.', 'success', 2000);
         }
     </script>
 }

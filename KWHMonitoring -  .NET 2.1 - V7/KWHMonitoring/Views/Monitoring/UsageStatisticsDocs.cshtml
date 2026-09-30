@@ -1,99 +1,99 @@
 @{
-    ViewData["Title"] = "Dokumentasi Perhitungan Usage Statistics";
+    ViewData["Title"] = "Dokumentasi Perhitungan Statistik Penggunaan";
 }
 
 <!-- Breadcrumb -->
 <div class="erp-breadcrumb">
-    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dasbor</a>
     <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
-    <a asp-controller="Monitoring" asp-action="UsageStatistics">Usage Statistics</a>
+    <a asp-controller="Monitoring" asp-action="UsageStatistics">Statistik Penggunaan</a>
     <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
     <span class="current">Dokumentasi Perhitungan</span>
 </div>
 
 <div class="container-fluid py-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <h4 class="mb-0"><i class="fas fa-book text-info"></i> Dokumentasi Perhitungan Usage Statistics</h4>
+        <h4 class="mb-0"><i class="fas fa-book text-info"></i> Dokumentasi Perhitungan Statistik Penggunaan</h4>
         <a asp-controller="Monitoring" asp-action="UsageStatistics" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Kembali ke Usage Statistics
+            <i class="fas fa-arrow-left"></i> Kembali ke Statistik Penggunaan
         </a>
     </div>
 
     <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Dokumen ini menjelaskan cara kerja perhitungan di halaman <strong>Usage Statistics</strong>, mulai dari sumber data, pengolahan data, rumus, cara membaca hasil, hingga saran pengambilan keputusan.
+        <i class="fas fa-info-circle"></i> Dokumen ini menjelaskan perhitungan pada halaman <strong>Statistik Penggunaan</strong>, mulai dari sumber dan pengolahan data, rumus, cara membaca hasil, hingga saran pengambilan keputusan.
     </div>
 
     <!-- 1. Gambaran Umum -->
-    <div class="card shadow-sm mb-3" data-card-help="1. Gambaran Umum|Pengantar cara kerja perhitungan di halaman Usage Statistics.|Menjelaskan ruang lingkup: sumber data → olah → rumus → baca hasil|Membantu memahami semua kartu dan angka di halaman statistik.">
+    <div class="card shadow-sm mb-3" data-card-help="1. Gambaran Umum|Pengantar cara kerja perhitungan pada halaman Statistik Penggunaan.|Menjelaskan ruang lingkup: sumber data, pengolahan, rumus, dan cara membaca hasil.|Membantu memahami seluruh kartu dan angka pada halaman statistik.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-eye"></i> 1. Gambaran Umum
         </div>
         <div class="card-body">
-            <p>Halaman <strong>Usage Statistics</strong> menggabungkan data energi per jam/hari/bulan dengan data finansial per device untuk menghasilkan:</p>
+            <p>Halaman <strong>Statistik Penggunaan</strong> menggabungkan data energi per jam, hari, dan bulan dengan data keuangan setiap perangkat untuk menyajikan:</p>
             <ul>
                 <li>Ringkasan konsumsi harian, bulanan, dan tahunan.</li>
                 <li>Biaya energi aktual dan proyeksi.</li>
                 <li>Analisis WBP/LWBP (tarif berbasis waktu).</li>
-                <li>Analisis budget vs aktual.</li>
-                <li>Perbandingan periode (MoM, YoY).</li>
-                <li>Load factor, unit economics, anomaly cost impact, dan waste.</li>
+                <li>Analisis anggaran dan realisasi.</li>
+                <li>Perbandingan dengan periode sebelumnya secara bulanan dan tahunan.</li>
+                <li>Faktor beban, biaya per unit, dampak biaya anomali, dan konsumsi selama waktu henti.</li>
             </ul>
-            <p>Terdapat dua mode tampilan:</p>
+            <p>Tersedia dua mode tampilan:</p>
             <table class="table table-sm table-bordered">
                 <thead><tr><th>Mode</th><th>Deskripsi</th></tr></thead>
                 <tbody>
-                    <tr><td>Single Device</td><td>Menggunakan data finansial langsung dari device terpilih.</td></tr>
-                    <tr><td>All Devices</td><td>Menggabungkan (aggregate) data dari semua device yang tersedia.</td></tr>
+                    <tr><td>Satu Perangkat</td><td>Menggunakan data keuangan dari perangkat yang dipilih.</td></tr>
+                    <tr><td>Semua Perangkat</td><td>Menggabungkan data dari seluruh perangkat yang tersedia.</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <!-- 2. Sumber Data -->
-    <div class="card shadow-sm mb-3" data-card-help="2. Sumber Data|Tabel asal data: endpoint API, parameter, dan field yang dipakai perhitungan.|Sumber utama: HourlyEnergy, DailyEnergy, MonthlyEnergy, DeviceSettings|Memastikan setiap angka bisa ditelusuri ke datanya.">
+    <div class="card shadow-sm mb-3" data-card-help="2. Sumber Data|Tabel sumber data, titik akhir API, parameter, dan kolom yang digunakan dalam perhitungan.|Sumber utama: HourlyEnergy, DailyEnergy, MonthlyEnergy, dan DeviceSettings.|Setiap angka dapat ditelusuri ke sumber datanya.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-database"></i> 2. Sumber Data
         </div>
         <div class="card-body">
-            <h6>A. Endpoint API Utama</h6>
+            <h6>A. Titik Akhir API Utama</h6>
             <table class="table table-sm table-bordered">
-                <thead><tr><th>Endpoint</th><th>Metode</th><th>Kegunaan</th></tr></thead>
+                <thead><tr><th>Titik Akhir</th><th>Metode</th><th>Kegunaan</th></tr></thead>
                 <tbody>
-                    <tr><td><code>/api/Api/panels</code></td><td>GET</td><td>Daftar panel/device: deviceKey, groupName, deviceId, deviceCategory, dll.</td></tr>
-                    <tr><td><code>/api/Api/device-categories</code></td><td>GET</td><td>Kategori valid dan mapping deviceKey &rarr; category.</td></tr>
-                    <tr><td><code>/api/Api/usage-statistics</code></td><td>POST</td><td>Data aggregate semua device untuk tanggal yang dipilih.</td></tr>
-                    <tr><td><code>/api/Api/usage-statistics/{deviceKey}</code></td><td>POST</td><td>Data per device individual.</td></tr>
-                    <tr><td><code>/api/Api/device-financial/{deviceKey}</code></td><td>GET</td><td>Data finansial per device untuk rentang tanggal.</td></tr>
-                    <tr><td><code>/api/Api/device-financial/batch</code></td><td>POST</td><td>Batch data finansial dari beberapa device.</td></tr>
-                    <tr><td><code>/api/Api/categories</code></td><td>GET</td><td>Metadata kategori (icon, color, description).</td></tr>
+                    <tr><td><code>/api/Api/panels</code></td><td>GET</td><td>Daftar panel dan perangkat, termasuk kunci, grup, ID, dan kategori perangkat.</td></tr>
+                    <tr><td><code>/api/Api/device-categories</code></td><td>GET</td><td>Daftar kategori yang valid dan pemetaan kunci perangkat ke kategori.</td></tr>
+                    <tr><td><code>/api/Api/usage-statistics</code></td><td>POST</td><td>Data agregat seluruh perangkat untuk tanggal yang dipilih.</td></tr>
+                    <tr><td><code>/api/Api/usage-statistics/{deviceKey}</code></td><td>POST</td><td>Data untuk satu perangkat.</td></tr>
+                    <tr><td><code>/api/Api/device-financial/{deviceKey}</code></td><td>GET</td><td>Data keuangan satu perangkat untuk rentang tanggal tertentu.</td></tr>
+                    <tr><td><code>/api/Api/device-financial/batch</code></td><td>POST</td><td>Data keuangan beberapa perangkat sekaligus.</td></tr>
+                    <tr><td><code>/api/Api/categories</code></td><td>GET</td><td>Metadata kategori, seperti ikon, warna, dan deskripsi.</td></tr>
                 </tbody>
             </table>
 
             <h6>B. Parameter Request</h6>
-            <p>User memilih tanggal; aplikasi menghitung periode:</p>
+            <p>Pengguna memilih tanggal, lalu aplikasi menghitung data untuk periode berikut:</p>
             <ul>
                 <li><strong>Hari ini</strong>: 00:00 &ndash; 23:59:59 tanggal yang dipilih.</li>
                 <li><strong>Bulan ini</strong>: seluruh bulan dari tanggal yang dipilih.</li>
                 <li><strong>Tahun ini</strong>: seluruh tahun dari tanggal yang dipilih.</li>
             </ul>
 
-            <h6>C. Field Utama yang Dikembalikan API</h6>
+            <h6>C. Properti Utama yang Dikembalikan API</h6>
             <table class="table table-sm table-bordered">
-                <thead><tr><th>Field</th><th>Deskripsi</th></tr></thead>
+                <thead><tr><th>Properti</th><th>Deskripsi</th></tr></thead>
                 <tbody>
-                    <tr><td><code>today.total</code>, <code>today.avgPerHour</code>, <code>today.peakHour</code>, <code>today.hourlyData</code></td><td>Data jam-jaman hari ini.</td></tr>
-                    <tr><td><code>month.total</code>, <code>month.avgPerDay</code>, <code>month.peakDay</code>, <code>month.dailyData</code></td><td>Data harian dalam bulan ini.</td></tr>
-                    <tr><td><code>year.total</code>, <code>year.avgPerMonth</code>, <code>year.peakMonth</code>, <code>year.monthlyData</code></td><td>Data bulanan dalam tahun ini.</td></tr>
-                    <tr><td><code>tariffPerKWh</code></td><td>Tarif flat default per kWh (fallback Rp 1.500).</td></tr>
+                    <tr><td><code>today.total</code>, <code>today.avgPerHour</code>, <code>today.peakHour</code>, <code>today.hourlyData</code></td><td>Data per jam untuk hari ini.</td></tr>
+                    <tr><td><code>month.total</code>, <code>month.avgPerDay</code>, <code>month.peakDay</code>, <code>month.dailyData</code></td><td>Data per hari untuk bulan ini.</td></tr>
+                    <tr><td><code>year.total</code>, <code>year.avgPerMonth</code>, <code>year.peakMonth</code>, <code>year.monthlyData</code></td><td>Data per bulan untuk tahun ini.</td></tr>
+                    <tr><td><code>tariffPerKWh</code></td><td>Tarif tetap bawaan per kWh. Jika tarif belum dikonfigurasi, aplikasi menggunakan Rp1.500.</td></tr>
                     <tr><td><code>estimatedCost</code></td><td>Estimasi biaya bulan ini = <code>month.total * tariffPerKWh</code>.</td></tr>
                     <tr><td><code>realtimeKWh</code>, <code>currentHourLabel</code>, <code>secondsToNextHour</code>, <code>isToday</code></td><td>Data jam berjalan jika memilih hari ini.</td></tr>
                     <tr><td><code>wbpLwbp</code></td><td>Konfigurasi &amp; hasil split WBP/LWBP.</td></tr>
-                    <tr><td><code>waste</code></td><td>Konsumsi saat downtime.</td></tr>
-                    <tr><td><code>budget</code></td><td>Budget kWh vs aktual.</td></tr>
-                    <tr><td><code>periodComparison</code></td><td>Perbandingan MoM &amp; YoY.</td></tr>
+                    <tr><td><code>waste</code></td><td>Konsumsi energi selama waktu henti.</td></tr>
+                    <tr><td><code>budget</code></td><td>Perbandingan anggaran energi dengan realisasi.</td></tr>
+                    <tr><td><code>periodComparison</code></td><td>Perbandingan konsumsi bulanan dan tahunan dengan periode sebelumnya.</td></tr>
                     <tr><td><code>billProjection</code></td><td>Proyeksi tagihan akhir bulan.</td></tr>
-                    <tr><td><code>anomalyCostImpact</code></td><td>Dampak biaya dari anomali OVERLOAD.</td></tr>
-                    <tr><td><code>loadFactorInfo</code></td><td>Load factor berdasarkan max capacity.</td></tr>
+                    <tr><td><code>anomalyCostImpact</code></td><td>Dampak biaya akibat anomali beban berlebih.</td></tr>
+                    <tr><td><code>loadFactorInfo</code></td><td>Faktor beban berdasarkan kapasitas maksimum.</td></tr>
                     <tr><td><code>unitEconomics</code></td><td>Biaya per m&sup2; dan per jam.</td></tr>
                 </tbody>
             </table>
@@ -101,38 +101,38 @@
     </div>
 
     <!-- 3. Pengolahan Data -->
-    <div class="card shadow-sm mb-3" data-card-help="3. Pengolahan Data|Cara data di-agregasi: di server vs mode Semua Panel (client-side), WBP/LWBP, budget, biaya.|Mode Semua Panel = agregasi paralel per device lalu dijumlah|Menjelaskan kenapa angka kadang dihitung ulang di browser.">
+    <div class="card shadow-sm mb-3" data-card-help="3. Pengolahan Data|Cara data diagregasi di server dan dalam mode Semua Panel di sisi klien, termasuk penghitungan WBP/LWBP, anggaran, dan biaya.|Mode Semua Panel mengagregasi data setiap perangkat secara paralel, lalu menjumlahkan hasilnya.|Menjelaskan alasan sebagian angka dihitung ulang di peramban.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-cogs"></i> 3. Pengolahan Data
         </div>
         <div class="card-body">
             <h6>A. Agregasi di Server</h6>
-            <p>Server membaca tabel pre-aggregated:</p>
+            <p>Server membaca tabel yang telah diagregasi sebelumnya:</p>
             <ul>
-                <li><strong>HourlyEnergy</strong>: konsumsi per jam untuk chart harian.</li>
-                <li><strong>DailyEnergy</strong>: konsumsi per hari untuk chart bulanan.</li>
-                <li><strong>MonthlyEnergy</strong>: konsumsi per bulan untuk chart tahunan.</li>
+                <li><strong>HourlyEnergy</strong>: konsumsi per jam untuk grafik harian.</li>
+                <li><strong>DailyEnergy</strong>: konsumsi per hari untuk grafik bulanan.</li>
+                <li><strong>MonthlyEnergy</strong>: konsumsi per bulan untuk grafik tahunan.</li>
             </ul>
 
-            <h6>B. Mode &quot;Semua Panel / All Devices&quot;</h6>
+            <h6>B. Mode "Semua Panel"</h6>
             <ol>
-                <li>Panggil <code>/api/Api/usage-statistics</code> (aggregate) untuk energi &amp; chart.</li>
+                <li>Panggil <code>/api/Api/usage-statistics</code> untuk mengagregasi data energi dan grafik.</li>
                 <li>Panggil setiap <code>/api/Api/usage-statistics/{deviceKey}</code> secara paralel.</li>
-                <li>Jalankan <code>aggregateFinancialData()</code> di client untuk menjumlahkan dan menghitung ulang metric.</li>
+                <li>Jalankan <code>aggregateFinancialData()</code> di sisi klien untuk menjumlahkan data dan menghitung ulang metrik.</li>
             </ol>
 
-            <h6>C. Penanganan WBP/LWBP, Budget, dan Biaya</h6>
+            <h6>C. Penanganan WBP/LWBP, Anggaran, dan Biaya</h6>
             <ul>
-                <li>Jika device memiliki <code>TariffWBP</code> dan <code>TariffLWBP</code> &gt; 0, dianggap <strong>WBP/LWBP</strong>.</li>
-                <li>Jika tidak, device dianggap <strong>tarif flat</strong> (<code>TariffPerKWh</code> atau fallback Rp 1.500).</li>
-                <li>Budget diambil dari <code>DeviceSettings.BudgetKWh</code>.</li>
-                <li>Biaya aktual = <code>actualKWh * effectiveTariff</code> atau langsung dari perhitungan WBP/LWBP.</li>
+                <li>Jika perangkat memiliki nilai <code>TariffWBP</code> dan <code>TariffLWBP</code> lebih dari nol, perangkat menggunakan tarif WBP/LWBP.</li>
+                <li>Jika tidak, perangkat menggunakan tarif tetap melalui <code>TariffPerKWh</code>. Nilai bawaan yang digunakan jika belum dikonfigurasi adalah Rp1.500.</li>
+                <li>Nilai anggaran diambil dari <code>DeviceSettings.BudgetKWh</code>.</li>
+                <li>Biaya aktual dihitung dengan rumus <code>actualKWh * effectiveTariff</code> atau melalui perhitungan WBP/LWBP.</li>
             </ul>
         </div>
     </div>
 
     <!-- 4. Daftar Perhitungan -->
-    <div class="card shadow-sm mb-3" data-card-help="4. Daftar Perhitungan Lengkap|Semua rumus: Total kWh, Total Cost, tarif rata-rata, WBP/LWBP, budget, MoM &amp; YoY.|Rumus utama: estimatedCost = kWh bulan × tarifPerKWh|Setiap metrik di Usage Statistics dijelaskan rumus &amp; contohnya di sini.">
+    <div class="card shadow-sm mb-3" data-card-help="4. Daftar Perhitungan Lengkap|Seluruh rumus untuk total kWh dan biaya, tarif rata-rata, WBP/LWBP, anggaran, serta perubahan bulanan dan tahunan.|Rumus utama: estimatedCost = kWh bulanan × tariffPerKWh.|Rumus dan contoh setiap metrik pada halaman Statistik Penggunaan dijelaskan di sini.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-calculator"></i> 4. Daftar Perhitungan Lengkap
         </div>
@@ -140,7 +140,7 @@
 
             <h6>4.1 Total kWh</h6>
             <table class="table table-sm table-bordered">
-                <thead><tr><th>Metric</th><th>Rumus</th></tr></thead>
+                <thead><tr><th>Metrik</th><th>Rumus</th></tr></thead>
                 <tbody>
                     <tr><td>Total hari ini</td><td><code>&Sigma; HourlyEnergy untuk tanggal pilihan</code></td></tr>
                     <tr><td>Total bulan ini</td><td><code>&Sigma; DailyEnergy bulan tersebut + kWh hari ini</code></td></tr>
@@ -148,169 +148,169 @@
                 </tbody>
             </table>
 
-            <h6>4.2 Total Cost</h6>
+            <h6>4.2 Total Biaya</h6>
             <ul>
-                <li><strong>Aggregate / per-device server</strong>: <code>estimatedCost = monthKWh * tariffPerKWh</code></li>
-                <li><strong>All-devices client-side</strong>: <code>totalEstimatedCost = &Sigma; devEstimatedCost</code>, di mana <code>devEstimatedCost = budget.actualCost</code> atau <code>monthKWh * devTariff</code>.</li>
+                <li><strong>Agregat di server untuk satu atau beberapa perangkat</strong>: <code>estimatedCost = monthKWh * tariffPerKWh</code>.</li>
+                <li><strong>Agregat di sisi klien untuk semua perangkat</strong>: <code>totalEstimatedCost = &Sigma; devEstimatedCost</code>, dengan <code>devEstimatedCost = budget.actualCost</code> atau <code>monthKWh * devTariff</code>.</li>
             </ul>
 
-            <h6>4.3 Average Tariff (Tarif Rata-Rata)</h6>
-            <p>Untuk device WBP/LWBP:</p>
+            <h6>4.3 Tarif Rata-Rata</h6>
+            <p>Untuk perangkat dengan tarif WBP/LWBP:</p>
             <pre class="bg-light p-2 border">weightedTariff = (wbpKWh * tariffWBP + lwbpKWh * tariffLWBP) / (wbpKWh + lwbpKWh)</pre>
             <p>Jika tidak ada konsumsi, digunakan rata-rata dari kedua tarif.</p>
-            <p>Aggregate average (unweighted by consumption):</p>
+            <p>Rata-rata agregat tanpa pembobotan berdasarkan konsumsi:</p>
             <pre class="bg-light p-2 border">avgTariffPerKWh = round(&#x2211; devTariff / deviceCount)</pre>
 
-            <h6>4.4 WBP / LWBP Split</h6>
+            <h6>4.4 Pembagian WBP dan LWBP</h6>
             <table class="table table-sm table-bordered">
-                <thead><tr><th>Metric</th><th>Rumus</th></tr></thead>
+                <thead><tr><th>Metrik</th><th>Rumus</th></tr></thead>
                 <tbody>
                     <tr><td>WBP kWh</td><td><code>&Sigma; energi pada jam WBP</code></td></tr>
                     <tr><td>LWBP kWh</td><td><code>&Sigma; energi pada jam LWBP</code></td></tr>
-                    <tr><td>WBP Ratio</td><td><code>wbpKWh / (wbpKWh + lwbpKWh) * 100%</code></td></tr>
+                    <tr><td>Rasio WBP</td><td><code>wbpKWh / (wbpKWh + lwbpKWh) * 100%</code></td></tr>
                     <tr><td>Biaya WBP</td><td><code>wbpKWh * tariffWBP</code></td></tr>
                     <tr><td>Biaya LWBP</td><td><code>lwbpKWh * tariffLWBP</code></td></tr>
                 </tbody>
             </table>
 
-            <h6>4.5 Budget vs Actual</h6>
+            <h6>4.5 Anggaran dan Realisasi</h6>
             <pre class="bg-light p-2 border">variance           = actualKWh - budgetKWh
 variancePercent    = (variance / budgetKWh) * 100%
 budgetCost         = budgetKWh * tariffPerKWh
 actualCost         = actualKWh * tariffPerKWh</pre>
-            <p><strong>Konversi Budget Rupiah &harr; kWh:</strong> UI menampilkan <code>BudgetKWh * TariffPerKWh</code>. Saat disimpan, nilai Rupiah dikonversi kembali ke kWh dengan <code>BudgetKWh = budgetRupiah / tariffPerKWh</code>.</p>
+            <p><strong>Konversi anggaran rupiah ke kWh:</strong> Antarmuka menampilkan <code>BudgetKWh * TariffPerKWh</code>. Saat disimpan, nilai rupiah dikonversi kembali ke kWh menggunakan <code>BudgetKWh = budgetRupiah / tariffPerKWh</code>.</p>
 
-            <h6>4.6 Period Comparison (MoM &amp; YoY)</h6>
+            <h6>4.6 Perbandingan Periode (Bulanan dan Tahunan)</h6>
             <pre class="bg-light p-2 border">momChange        = monthKWh - lastMonthKWh
 momChangePercent = (momChange / lastMonthKWh) * 100%
 yoyChange        = monthKWh - lastYearSameMonthKWh
 yoyChangePercent = (yoyChange / lastYearSameMonthKWh) * 100%</pre>
 
-            <h6>4.7 Bill Projection</h6>
+            <h6>4.7 Proyeksi Tagihan</h6>
             <pre class="bg-light p-2 border">projectedMonthKWh = round(monthKWh / dayOfMonth * daysInMonth)
 projectedCost     = round(projectedMonthKWh * tariffPerKWh)
 daysRemaining     = daysInMonth - dayOfMonth</pre>
 
-            <h6>4.8 Cost Projection &mdash; Monthly</h6>
-            <pre class="bg-light p-2 border">costPerKWh    = monthActualCost / monthKWh  // fallback ke tariff jika bulan ini kosong
+            <h6>4.8 Proyeksi Biaya Bulanan</h6>
+            <pre class="bg-light p-2 border">costPerKWh    = monthActualCost / monthKWh  // gunakan tarif sebagai pengganti jika tidak ada konsumsi bulan ini
 dailyCost[i]  = dailyEnergy[i] * costPerKWh
 avgDailyCost  = cumulativeCost / dayOfMonth
 totalProjectedMonthCost = cumulativeCost + avgDailyCost * (daysInMonth - dayOfMonth)</pre>
 
-            <h6>4.9 Cost Projection &mdash; Yearly</h6>
+            <h6>4.9 Proyeksi Biaya Tahunan</h6>
             <pre class="bg-light p-2 border">monthlyCost[i]    = monthlyEnergy[i] * costPerKWh
 avgMonthlyCost    = cumulativeCost / currentMonth
 totalProjectedYearCost = cumulativeCost + avgMonthlyCost * (12 - currentMonth)</pre>
 
-            <h6>4.10 Energy Projection &mdash; Monthly</h6>
+            <h6>4.10 Proyeksi Energi Bulanan</h6>
             <pre class="bg-light p-2 border">recentAvg = rata-rata 7 hari terakhir yang terisi
 olderAvg  = rata-rata hari-hari sebelumnya
 projectedDailyKWh = recentAvg * 0.6 + olderAvg * 0.4
 totalProjectedMonth = totalActualMonth + projectedDailyKWh * (daysInMonth - dayOfMonth)</pre>
 
-            <h6>4.11 Energy Projection &mdash; Yearly</h6>
+            <h6>4.11 Proyeksi Energi Tahunan</h6>
             <pre class="bg-light p-2 border">recentAvg = rata-rata 3 bulan terakhir yang terisi
 olderAvg  = rata-rata bulan-bulan sebelumnya
 projectedMonthlyKWh = recentAvg * 0.6 + olderAvg * 0.4
 totalProjectedYear = totalActualYear + projectedMonthlyKWh * (12 - currentMonth)</pre>
 
-            <h6>4.12 Load Factor</h6>
+            <h6>4.12 Faktor Beban</h6>
             <pre class="bg-light p-2 border">maxCapKVA = maxCapacity / 1000
 opHours   = dayOfMonth * 24
 loadFactor = (monthKWh / (maxCapKVA * opHours)) * 100%</pre>
             <p>Hasil dibatasi maksimum 100%. Klasifikasi:</p>
             <ul>
-                <li>&lt; 30%: Under-utilized</li>
+                <li>&lt; 30%: Pemanfaatan rendah</li>
                 <li>30% &ndash; 80%: Optimal</li>
-                <li>&gt; 80%: High Risk</li>
+                <li>&gt; 80%: Risiko tinggi</li>
             </ul>
 
-            <h6>4.13 Unit Economics</h6>
+            <h6>4.13 Biaya per Unit</h6>
             <pre class="bg-light p-2 border">costPerM2   = actualCost / surfaceArea
 costPerHour = actualCost / (dayOfMonth * 24)</pre>
 
-            <h6>4.14 Anomaly Cost Impact</h6>
+            <h6>4.14 Dampak Biaya Anomali</h6>
             <pre class="bg-light p-2 border">excessPower = max(powerValue - thresholdValue, 0)
 excessKWh   = excessPower * 0.25 / 1000  // asumsi durasi 15 menit
 anomalyCost = excessKWh * tariffPerKWh</pre>
-            <p>Total dampak = penjumlahan dari semua anomali OVERLOAD dalam bulan tersebut.</p>
+            <p>Total dampak biaya merupakan jumlah dampak biaya dari seluruh anomali beban berlebih pada bulan tersebut.</p>
 
-            <h6>4.15 Waste</h6>
-            <pre class="bg-light p-2 border">wasteKWh    = &Sigma; energi yang terjadi saat downtime
+            <h6>4.15 Pemborosan Energi</h6>
+            <pre class="bg-light p-2 border">wasteKWh    = &Sigma; energi yang digunakan selama waktu henti
 wastePercent = (wasteKWh / totalKWh) * 100%</pre>
-            <p>Threshold peringatan: <code>wastePercent &gt; 5%</code>.</p>
+            <p>Ambang batas peringatan: <code>wastePercent &gt; 5%</code>.</p>
 
-            <h6>4.16 Daily / Monthly / Yearly Report</h6>
-            <p>Report di-render sepenuhnya di client berdasarkan <code>lastEnergyData</code> dan <code>lastFinancialData</code>:</p>
+            <h6>4.16 Laporan Harian, Bulanan, dan Tahunan</h6>
+            <p>Laporan ditampilkan sepenuhnya di sisi klien berdasarkan <code>lastEnergyData</code> dan <code>lastFinancialData</code>:</p>
             <ul>
-                <li><strong>Daily</strong>: total hari ini, estimasi biaya hari ini, peak hour, vs rata-rata harian, budget pace, waste, WBP ratio, anomaly, load factor, proyeksi bulan.</li>
-                <li><strong>Monthly</strong>: konsumsi bulan, biaya aktual, peak day, proyeksi EOM, budget %, load factor, MoM, YoY, unit economics.</li>
-                <li><strong>Yearly</strong>: total tahun, biaya tahunan, peak month, best/worst month, YoY, budget tahunan, proyeksi akhir tahun.</li>
+                <li><strong>Harian</strong>: total energi hari ini, estimasi biayanya, jam puncak, perbandingan dengan rata-rata harian, pemakaian anggaran, pemborosan, rasio WBP, anomali, faktor beban, dan proyeksi bulanan.</li>
+                <li><strong>Bulanan</strong>: konsumsi dan biaya aktual, hari puncak, proyeksi akhir bulan, persentase anggaran, faktor beban, perubahan bulanan dan tahunan, serta biaya per unit.</li>
+                <li><strong>Tahunan</strong>: total konsumsi, biaya tahunan, bulan puncak, bulan dengan konsumsi tertinggi dan terendah, perubahan tahunan, anggaran, serta proyeksi akhir tahun.</li>
             </ul>
         </div>
     </div>
 
     <!-- 5. Cara Membaca -->
-    <div class="card shadow-sm mb-3" data-card-help="5. Cara Membaca &amp; Menganalisa|Panduan membaca hasil: interpretasi tren, peak, waste, dan indikator keuangan.|Termasuk cara membandingkan periode dan membaca grafik|Membantu pengambilan keputusan dari data yang tampil.">
+    <div class="card shadow-sm mb-3" data-card-help="5. Cara Membaca Hasil|Panduan menafsirkan tren, periode puncak, pemborosan, dan indikator keuangan.|Mencakup cara membandingkan periode dan membaca grafik.|Mendukung pengambilan keputusan berdasarkan data yang ditampilkan.">
         <div class="card-header bg-dark text-white">
-            <i class="fas fa-glasses"></i> 5. Cara Membaca &amp; Menganalisa
+            <i class="fas fa-glasses"></i> 5. Cara Membaca Hasil
         </div>
         <div class="card-body">
             <table class="table table-sm table-bordered">
                 <thead><tr><th>Komponen</th><th>Cara Baca</th></tr></thead>
                 <tbody>
-                    <tr><td>Summary Cards (atas)</td><td>Lihat total kWh dan estimasi biaya untuk periode aktif.</td></tr>
-                    <tr><td>Chart Per Jam / Hari / Bulan</td><td>Biru/hijau/biru-muda = aktual; oranye = periode berjalan; abu-abu = masa depan.</td></tr>
-                    <tr><td>WBP / LWBP Split</td><td>Jika slice WBP besar, konsumsi banyak terjadi saat tarif tinggi; pertimbangkan shift beban.</td></tr>
-                    <tr><td>Budget vs Actual</td><td>Persentase = <code>actual / budget * 100</code>. Hijau &le;80%, kuning 80&ndash;100%, merah &gt;100%.</td></tr>
-                    <tr><td>Proyeksi Konsumsi</td><td>Bandingkan aktual, proyeksi, dan pace budget.</td></tr>
-                    <tr><td>Proyeksi Biaya</td><td>Perhatikan proyeksi EOM vs budget biaya; garis hijau = pace budget.</td></tr>
-                    <tr><td>Financial Summary Grid</td><td>Waste, MoM, YoY, Proyeksi, Load Factor, Unit Econ &mdash; warna merah/hijau menunjukkan kondisi.</td></tr>
-                    <tr><td>Dampak Biaya Anomali</td><td>Total estimasi biaya karena overload; prioritas perbaikan pada top 5 anomali.</td></tr>
-                    <tr><td>Laporan Harian/Bulanan/Tahunan</td><td>Insight otomatis berdasarkan threshold WBP, budget, waste, dan load factor.</td></tr>
+                    <tr><td>Kartu Ringkasan</td><td>Tinjau total kWh dan estimasi biaya untuk periode yang dipilih.</td></tr>
+                    <tr><td>Grafik Per Jam, Hari, dan Bulan</td><td>Warna biru, hijau, dan biru muda menunjukkan data aktual; oranye menunjukkan periode berjalan; abu-abu menunjukkan periode mendatang.</td></tr>
+                    <tr><td>Perbandingan WBP dan LWBP</td><td>Jika porsi WBP besar, sebagian besar konsumsi terjadi saat tarif tinggi. Pertimbangkan untuk mengalihkan beban ke waktu LWBP.</td></tr>
+                    <tr><td>Anggaran dan Realisasi</td><td>Persentase = <code>actual / budget * 100</code>. Hijau berarti paling banyak 80%, kuning 80–100%, dan merah lebih dari 100%.</td></tr>
+                    <tr><td>Proyeksi Konsumsi</td><td>Bandingkan konsumsi aktual dan proyeksi dengan laju pemakaian anggaran.</td></tr>
+                    <tr><td>Proyeksi Biaya</td><td>Bandingkan proyeksi biaya akhir bulan dengan anggaran. Garis hijau menunjukkan laju pemakaian anggaran.</td></tr>
+                    <tr><td>Ringkasan Keuangan</td><td>Ringkasan mencakup pemborosan, perubahan bulanan dan tahunan, proyeksi, faktor beban, serta biaya per unit. Warna merah dan hijau menunjukkan kondisi yang perlu diperhatikan.</td></tr>
+                    <tr><td>Dampak Biaya Anomali</td><td>Menunjukkan estimasi total biaya akibat beban berlebih. Prioritaskan penanganan pada lima anomali dengan dampak terbesar.</td></tr>
+                    <tr><td>Laporan Harian, Bulanan, dan Tahunan</td><td>Berisi analisis otomatis berdasarkan ambang batas WBP, anggaran, pemborosan, dan faktor beban.</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- 6. Decision Matrix -->
-    <div class="card shadow-sm mb-3" data-card-help="6. Decision Matrix &amp; Saran Keputusan|Panduan tindakan berdasarkan kondisi: waste >5%, load factor 30–80% optimal, over budget, dll.|Klasifikasi: aman (hijau) · perhatian (kuning) · bahaya (merah)|Menerjemahkan angka menjadi aksi penghematan.">
+    <!-- 6. Matriks Keputusan -->
+    <div class="card shadow-sm mb-3" data-card-help="6. Matriks Keputusan dan Saran Tindakan|Panduan tindakan berdasarkan kondisi, seperti pemborosan di atas 5%, faktor beban optimal 30–80%, atau konsumsi yang melampaui anggaran.|Klasifikasi kondisi: aman (hijau), perlu perhatian (kuning), dan berisiko (merah).|Membantu mengubah hasil pengukuran menjadi langkah penghematan.">
         <div class="card-header bg-dark text-white">
-            <i class="fas fa-chess"></i> 6. Decision Matrix &amp; Saran Keputusan
+            <i class="fas fa-chess"></i> 6. Matriks Keputusan dan Saran Tindakan
         </div>
         <div class="card-body">
             <table class="table table-sm table-bordered">
                 <thead><tr><th>Kondisi</th><th>Indikasi</th><th>Saran Tindakan</th></tr></thead>
                 <tbody>
-                    <tr><td>Budget usage &gt; 100%</td><td>Konsumsi melebihi anggaran</td><td>Segera lakukan penghematan; realokasi beban atau audit operasional.</td></tr>
-                    <tr><td>Budget usage 80&ndash;100%</td><td>Mendekati batas anggaran</td><td>Waspada; pantau konsumsi harian, pertimbangkan mengurangi beban non-kritis.</td></tr>
-                    <tr><td>WBP Ratio &gt; 40%</td><td>Banyak konsumsi di jam tarif tinggi</td><td>Shift operasional ke jam LWBP; sesuaikan jadwal downtime/maintenance.</td></tr>
-                    <tr><td>Waste &gt; 5%</td><td>Konsumsi saat downtime</td><td>Periksa aktivasi perangkat saat downtime; audit schedule.</td></tr>
-                    <tr><td>Load Factor &gt; 80%</td><td>Kapasitas mendekati batas</td><td>Risiko tinggi; siapkan cadangan atau upgrade infrastruktur.</td></tr>
-                    <tr><td>Load Factor &lt; 30%</td><td>Kapasitas terlalu besar</td><td>Under-utilized; evaluasi efisiensi investasi/kapasitas.</td></tr>
-                    <tr><td>MoM &gt; 10% naik</td><td>Tren kenaikan signifikan</td><td>Cari anomali/kebocoran; bandingkan dengan aktivitas operasional.</td></tr>
-                    <tr><td>YoY &gt; 20% naik</td><td>Kenaikan tahunan drastis</td><td>Evaluasi strategis efisiensi energi.</td></tr>
-                    <tr><td>Anomaly cost impact tinggi</td><td>Banyak overload terjadi</td><td>Prioritaskan perbaikan pada device dengan anomali overload berulang.</td></tr>
-                    <tr><td>Pace hari ini &gt; budget harian</td><td>Hari ini over pace</td><td>Tunda beban non-esensial ke jam/hari lain.</td></tr>
+                    <tr><td>Pemakaian anggaran &gt; 100%</td><td>Konsumsi melampaui anggaran</td><td>Lakukan penghematan dengan mengatur ulang distribusi beban atau mengaudit kegiatan operasional.</td></tr>
+                    <tr><td>Pemakaian anggaran 80–100%</td><td>Konsumsi mendekati batas anggaran</td><td>Pantau konsumsi harian dan pertimbangkan pengurangan beban yang tidak penting.</td></tr>
+                    <tr><td>Rasio WBP &gt; 40%</td><td>Konsumsi tinggi pada waktu bertarif mahal</td><td>Alihkan kegiatan operasional ke waktu LWBP dan sesuaikan jadwal waktu henti atau pemeliharaan.</td></tr>
+                    <tr><td>Pemborosan &gt; 5%</td><td>Konsumsi terjadi selama waktu henti</td><td>Periksa perangkat yang masih aktif selama waktu henti dan tinjau jadwal operasionalnya.</td></tr>
+                    <tr><td>Faktor beban &gt; 80%</td><td>Kapasitas mendekati batas</td><td>Siapkan kapasitas cadangan atau tingkatkan kapasitas infrastruktur.</td></tr>
+                    <tr><td>Faktor beban &lt; 30%</td><td>Kapasitas terlalu besar dibandingkan kebutuhan</td><td>Tinjau efisiensi investasi dan kapasitas perangkat.</td></tr>
+                    <tr><td>Kenaikan bulanan &gt; 10%</td><td>Tren konsumsi meningkat secara signifikan</td><td>Periksa kemungkinan anomali atau kebocoran dan bandingkan dengan kegiatan operasional.</td></tr>
+                    <tr><td>Kenaikan tahunan &gt; 20%</td><td>Konsumsi meningkat tajam dari tahun sebelumnya</td><td>Tinjau strategi efisiensi energi.</td></tr>
+                    <tr><td>Dampak biaya anomali tinggi</td><td>Banyak kejadian beban berlebih</td><td>Prioritaskan perbaikan pada perangkat yang berulang kali mengalami anomali beban berlebih.</td></tr>
+                    <tr><td>Laju pemakaian hari ini &gt; anggaran harian</td><td>Pemakaian harian melampaui rencana</td><td>Tunda beban yang tidak penting ke waktu lain.</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <!-- 7. Catatan Validasi -->
-    <div class="card shadow-sm mb-3" data-card-help="7. Catatan Validasi &amp; Keterbatasan|Batasan akurasi data: asumsi tarif, device representatif, dan hal yang perlu diperhatikan.|Catatan: mode agregasi memakai tarif flat default Rp1.500/kWh|Bacalah sebelum memakai angka untuk keputusan finansial resmi.">
+    <div class="card shadow-sm mb-3" data-card-help="7. Catatan Validasi dan Keterbatasan|Batas akurasi data meliputi asumsi tarif, penggunaan perangkat sebagai acuan, dan hal lain yang perlu diperhatikan.|Mode agregasi menggunakan tarif tetap bawaan sebesar Rp1.500/kWh.|Tinjau catatan ini sebelum menggunakan angka untuk keputusan keuangan resmi.">
         <div class="card-header bg-dark text-white">
-            <i class="fas fa-check-double"></i> 7. Catatan Validasi &amp; Keterbatasan
+            <i class="fas fa-check-double"></i> 7. Catatan Validasi dan Keterbatasan
         </div>
         <div class="card-body">
             <ul>
-                <li>Tarif default ke <strong>Rp 1.500/kWh</strong> jika tidak dikonfigurasi.</li>
-                <li>Konversi budget dari Rupiah ke kWh menggunakan tarif per device; perubahan tarif akan mempengaruhi nilai BudgetKWh yang tersimpan.</li>
-                <li>Perhitungan anomaly cost mengasumsikan durasi overload <strong>15 menit</strong> untuk setiap kejadian.</li>
-                <li>Load factor aggregate menjumlahkan max capacity semua device; interpretasi paling cocok untuk device yang beroperasi secara paralel dalam satu sistem.</li>
-                <li>Average tariff aggregate adalah rata-rata aritmatika (unweighted) antar device, bukan weighted by kWh.</li>
-                <li>Proyeksi mengasumsikan pola konsumsi tidak berubah drastis; hasil paling akhir pada pertengahan bulan atau kuartal.</li>
-                <li>Endpoint aggregate server menggunakan &quot;representative device&quot; untuk beberapa metric; UI All Devices menimpanya dengan agregasi client-side per-device.</li>
+                <li>Jika tarif belum dikonfigurasi, sistem menggunakan tarif bawaan sebesar <strong>Rp1.500/kWh</strong>.</li>
+                <li>Konversi anggaran rupiah ke kWh menggunakan tarif setiap perangkat. Perubahan tarif akan memengaruhi nilai <code>BudgetKWh</code> yang tersimpan.</li>
+                <li>Perhitungan dampak biaya anomali mengasumsikan durasi beban berlebih selama <strong>15 menit</strong> untuk setiap kejadian.</li>
+                <li>Perhitungan faktor beban agregat menjumlahkan kapasitas maksimum semua perangkat. Hasilnya paling sesuai untuk perangkat yang beroperasi secara bersamaan dalam satu sistem.</li>
+                <li>Tarif rata-rata agregat merupakan rata-rata aritmetika antarperangkat, tanpa pembobotan berdasarkan konsumsi kWh.</li>
+                <li>Proyeksi mengasumsikan pola konsumsi relatif tetap. Akurasinya dapat berkurang pada pertengahan bulan atau kuartal.</li>
+                <li>API agregat di server menggunakan satu perangkat sebagai acuan untuk beberapa metrik. Tampilan semua perangkat mengganti nilai tersebut dengan hasil agregasi setiap perangkat di sisi klien.</li>
             </ul>
         </div>
     </div>

@@ -317,6 +317,74 @@ namespace KWHMonitoring.Controllers
             return View();
         }
 
+        [HttpGet]
+        public async Task<IActionResult> UsageRanking(string period = "today")
+        {
+            var now = DateTime.Now;
+            var today = now.Date;
+            var monthStart = new DateTime(now.Year, now.Month, 1);
+            var energyByDevice = new Dictionary<string, decimal>();
+
+            if (period == "month")
+            {
+                var daily = await _context.DailyEnergy.Where(x => x.Date >= monthStart && x.Date < today)
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in daily) energyByDevice[item.DeviceKey] = item.KWh;
+                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+            }
+            else if (period == "year")
+            {
+                var yearlyParts = await _context.MonthlyEnergy.Where(x => x.Year == now.Year && x.Month < now.Month)
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in yearlyParts) energyByDevice[item.DeviceKey] = item.KWh;
+                var daily = await _context.DailyEnergy.Where(x => x.Date >= monthStart && x.Date < today)
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in daily) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+            }
+            else
+            {
+                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in hourly) energyByDevice[item.DeviceKey] = item.KWh;
+            }
+
+            var latest = await _context.KWH_Monitoring.GroupBy(x => x.DeviceKey)
+                .Select(g => g.OrderByDescending(x => x.Waktu_Server).FirstOrDefault()).ToListAsync();
+            var settings = await _deviceSettingsService.GetAllEffectiveAsync();
+            var locationMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                latest.Where(x => x != null).Select(x => x.DeviceKey));
+            var globalTariffText = await _context.AppSettingsRecords
+                .Where(x => x.SettingKey == "Tariff.PerKWh" || x.SettingKey == "TariffPerKWh")
+                .Select(x => x.SettingValue).FirstOrDefaultAsync();
+            var globalTariff = decimal.TryParse(globalTariffText, out var parsedTariff) ? parsedTariff : 1500m;
+            var rows = latest.Where(x => x != null).Select(device =>
+            {
+                var kwh = energyByDevice.GetValueOrDefault(device.DeviceKey);
+                var tariff = settings.TryGetValue(device.DeviceKey, out var deviceSetting)
+                    ? deviceSetting.TariffPerKWh : globalTariff;
+                locationMap.TryGetValue((device.DeviceKey ?? string.Empty).Trim(), out var location);
+                return new
+                {
+                    deviceKey = device.DeviceKey,
+                    deviceId = device.DeviceId,
+                    kodeLokasi = location?.KodeLokasi ?? string.Empty,
+                    groupName = device.GroupName,
+                    kwh = Math.Round(kwh, 3),
+                    cost = Math.Round(kwh * tariff, 0),
+                    power = device.Daya_Watt ?? 0m,
+                    powerFactor = device.Cos_Phi ?? 0m,
+                    lastSeen = device.Waktu_Server
+                };
+            }).OrderByDescending(x => x.kwh).ToList();
+
+            return Json(rows);
+        }
+
         // DOCUMENTATION: Usage Statistics Calculations
         public IActionResult UsageStatisticsDocs()
         {

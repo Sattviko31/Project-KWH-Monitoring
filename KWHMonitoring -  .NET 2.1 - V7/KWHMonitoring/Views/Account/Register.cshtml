@@ -6,7 +6,7 @@
 }
 
 <div class="auth-page">
-    <div class="auth-card" data-card-help="Registrasi Akun|Membuat akun baru untuk mengakses sistem monitoring.|Alur: isi data → verifikasi email → persetujuan master admin.|Password disimpan ter-hash (PBKDF2-HMACSHA256, 100.000 iterasi), tidak pernah tersimpan polos.">
+    <div class="auth-card" data-card-help="Pendaftaran Akun|Buat akun untuk mengakses sistem pemantauan.|Alur pendaftaran: isi data, verifikasi alamat email, lalu tunggu persetujuan administrator utama.|Kata sandi disimpan dalam bentuk hash (PBKDF2-HMACSHA256, 100.000 iterasi) dan tidak disimpan sebagai teks biasa.">
         <div class="card-body text-center">
             <div class="auth-logo">
                 <i class="fas fa-user-plus"></i>
@@ -36,12 +36,12 @@
                 </div>
 
                 <div class="auth-input-group text-start">
-                    <label asp-for="Password" class="auth-input-label">Password</label>
+                    <label asp-for="Password" class="auth-input-label">Kata Sandi</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-lock"></i></span>
                         <input asp-for="Password" class="form-control" placeholder="Minimal 8 karakter" autocomplete="new-password" />
                         <span class="input-group-btn">
-                            <button type="button" class="auth-password-toggle" data-toggle-password="#Password" aria-label="Tampilkan password">
+                            <button type="button" class="auth-password-toggle" data-toggle-password="#Password" aria-label="Tampilkan kata sandi">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </span>
@@ -50,12 +50,12 @@
                 </div>
 
                 <div class="auth-input-group text-start">
-                    <label asp-for="ConfirmPassword" class="auth-input-label">Konfirmasi Password</label>
+                    <label asp-for="ConfirmPassword" class="auth-input-label">Konfirmasi Kata Sandi</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                        <input asp-for="ConfirmPassword" class="form-control" placeholder="Ulangi password" autocomplete="new-password" />
+                        <input asp-for="ConfirmPassword" class="form-control" placeholder="Ulangi kata sandi" autocomplete="new-password" />
                         <span class="input-group-btn">
-                            <button type="button" class="auth-password-toggle" data-toggle-password="#ConfirmPassword" aria-label="Tampilkan password">
+                            <button type="button" class="auth-password-toggle" data-toggle-password="#ConfirmPassword" aria-label="Tampilkan kata sandi">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </span>
@@ -69,7 +69,7 @@
             </form>
 
             <div class="auth-links">
-                Sudah punya akun? <a href="/Account/Login">Login ke akun Anda</a>
+            Sudah memiliki akun? <a href="/Account/Login">Masuk ke akun Anda</a>
             </div>
         </div>
     </div>

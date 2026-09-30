@@ -55,6 +55,25 @@ namespace KWHMonitoring.Controllers
             _deviceSettingsService = deviceSettingsService;
         }
 
+        // Revenue loss is an estimate based on configured hourly revenue and the
+        // duration of a DROP. Keep this calculation shared by list, detail and summaries.
+        private static decimal EstimateRevenueLoss(string anomalyType, DateTime detectedTime, bool isResolved, DateTime? resolvedTime, decimal revenuePerHour, DateTime now)
+        {
+            if ((anomalyType != "DROP" && anomalyType != "DEVICE_DROP") || revenuePerHour <= 0m)
+                return 0m;
+
+            // A resolved record without a resolution timestamp has no defensible
+            // duration, so report zero instead of continuing to accrue it.
+            var endTime = isResolved
+                ? (resolvedTime.HasValue ? resolvedTime.Value : detectedTime)
+                : now;
+            var elapsedHours = (decimal)(endTime - detectedTime).TotalHours;
+            if (elapsedHours <= 0m)
+                return 0m;
+
+            return Math.Round(elapsedHours * revenuePerHour, 0, MidpointRounding.AwayFromZero);
+        }
+
         private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
         {
             var record = await _context.AppSettingsRecords
@@ -233,6 +252,7 @@ namespace KWHMonitoring.Controllers
                     .ToListAsync();
 
                 var labels = data.Select(x => x.Waktu_Server.ToString("HH:mm:ss")).ToList();
+                var timestamps = data.Select(x => x.Waktu_Server).ToList();
                 var voltageR = data.Select(x => (double)(x.Volt_R ?? 0m)).ToList();
                 var voltageS = data.Select(x => x.Volt_S.HasValue ? (double?)x.Volt_S.Value : null).ToList();
                 var voltageT = data.Select(x => x.Volt_T.HasValue ? (double?)x.Volt_T.Value : null).ToList();
@@ -240,6 +260,7 @@ namespace KWHMonitoring.Controllers
                 var ampS = data.Select(x => x.Amp_S.HasValue ? (double?)x.Amp_S.Value : null).ToList();
                 var ampT = data.Select(x => x.Amp_T.HasValue ? (double?)x.Amp_T.Value : null).ToList();
                 var power = data.Select(x => (double)(x.Daya_Watt ?? 0m)).ToList();
+                var powerValid = data.Select(x => x.Daya_Watt.HasValue).ToList();
 
                 var isThreePhase = data.Any(x => x.IsThreePhase);
 
@@ -247,6 +268,8 @@ namespace KWHMonitoring.Controllers
                 {
                     deviceKey = deviceKey,
                     labels = labels,
+                    timestamps = timestamps,
+                    powerValid = powerValid,
                     isThreePhase = isThreePhase,
                     voltage = new { r = voltageR, s = voltageS, t = voltageT },
                     current = new { r = ampR, s = ampS, t = ampT },
@@ -3099,13 +3122,13 @@ namespace KWHMonitoring.Controllers
                     .ToListAsync();
 
                 // Resolve groupName and compute financial impact per anomaly
+                var calculationTime = DateTime.Now;
                 var result = logs.Select(x =>
                 {
                     var settings = deviceSettings.ContainsKey(x.deviceKey) ? deviceSettings[x.deviceKey] : null;
                     var category = settings?.DeviceCategory ?? "Unknown";
                     var tariffPerKWh = settings?.TariffPerKWh ?? 1500m;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
-                    var isDrop = x.anomalyType == "DROP" || x.anomalyType == "DEVICE_DROP";
                     var isOverload = x.anomalyType == "OVERLOAD";
 
                     // Duration in minutes
@@ -3121,13 +3144,7 @@ namespace KWHMonitoring.Controllers
                         responseTimeMinutes = (x.resolvedTime.Value - x.detectedTime).TotalMinutes;
 
                     // Revenue loss for DROP anomalies
-                    decimal revenueLoss = 0m;
-                    if (isDrop && revenuePerHour > 0)
-                    {
-                        var endTime = x.isResolved && x.resolvedTime.HasValue ? x.resolvedTime.Value : DateTime.Now;
-                        var hours = (decimal)(endTime - x.detectedTime).TotalHours;
-                        revenueLoss = Math.Round(hours * revenuePerHour, 0);
-                    }
+                    var revenueLoss = EstimateRevenueLoss(x.anomalyType, x.detectedTime, x.isResolved, x.resolvedTime, revenuePerHour, calculationTime);
 
                     // Energy cost impact for OVERLOAD anomalies
                     decimal anomalyCostImpact = 0m;
@@ -3667,7 +3684,6 @@ namespace KWHMonitoring.Controllers
                 var category = deviceSettings?.DeviceCategory ?? "Unknown";
                 var tariffPerKWh = deviceSettings?.TariffPerKWh ?? 1500m;
                 var revenuePerHour = deviceSettings?.RevenuePerHour ?? 0m;
-                var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
                 var isOverload = log.AnomalyType == "OVERLOAD";
 
                 double? durationMinutes = null;
@@ -3680,13 +3696,7 @@ namespace KWHMonitoring.Controllers
                 else if (log.IsResolved && log.ResolvedTime.HasValue)
                     responseTimeMinutes = (log.ResolvedTime.Value - log.DetectedTime).TotalMinutes;
 
-                decimal revenueLoss = 0m;
-                if (isDrop && revenuePerHour > 0)
-                {
-                    var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
-                    var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
-                    revenueLoss = Math.Round(hours * revenuePerHour, 0);
-                }
+                var revenueLoss = EstimateRevenueLoss(log.AnomalyType, log.DetectedTime, log.IsResolved, log.ResolvedTime, revenuePerHour, DateTime.Now);
 
                 decimal anomalyCostImpact = 0m;
                 if (isOverload)
@@ -3985,6 +3995,7 @@ namespace KWHMonitoring.Controllers
                     })
                     .ToListAsync();
 
+                var calculationTime = DateTime.Now;
                 foreach (var log in allLogs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
@@ -4003,9 +4014,7 @@ namespace KWHMonitoring.Controllers
 
                     if (isDrop && revenuePerHour > 0)
                     {
-                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
-                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
-                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        var loss = EstimateRevenueLoss(log.AnomalyType, log.DetectedTime, log.IsResolved, log.ResolvedTime, revenuePerHour, calculationTime);
                         totalRevenueLoss += loss;
                         if (!log.IsResolved)
                             ongoingRevenueLoss += loss;
@@ -4144,6 +4153,8 @@ namespace KWHMonitoring.Controllers
                 var drop = logs.Count(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
                 var affectedDevices = logs.Select(x => x.DeviceKey).Distinct().Count();
                 var avgDeviation = total > 0 ? logs.Average(x => (double)x.Deviation) : 0;
+                var criticalCount = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
+                var unresolvedCount = logs.Count(x => !x.IsResolved);
 
                 var topDevice = logs
                     .GroupBy(x => x.DeviceKey)
@@ -4171,6 +4182,7 @@ namespace KWHMonitoring.Controllers
                     .Take(3)
                     .ToList();
 
+                var calculationTime = DateTime.Now;
                 foreach (var log in logs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
@@ -4189,9 +4201,7 @@ namespace KWHMonitoring.Controllers
 
                     if (isDrop && revenuePerHour > 0)
                     {
-                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
-                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
-                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        var loss = EstimateRevenueLoss(log.AnomalyType, log.DetectedTime, log.IsResolved, log.ResolvedTime, revenuePerHour, calculationTime);
                         totalRevenueLoss += loss;
                         if (!log.IsResolved)
                             ongoingRevenueLoss += loss;
@@ -4201,35 +4211,36 @@ namespace KWHMonitoring.Controllers
 
                 var recommendations = new List<string>();
                 if (overload > drop)
-                    recommendations.Add("Overload mendominasi. Pertimbangkan untuk meninjau kapasitas panel dan mengurangi beban puncak.");
+                    recommendations.Add("Anomali beban berlebih paling banyak terjadi. Tinjau kapasitas panel dan kurangi beban pada jam puncak.");
                 if (drop > overload)
-                    recommendations.Add("Device drop mendominasi. Periksa kualitas koneksi dan power supply.");
+                    recommendations.Add("Gangguan perangkat paling banyak terjadi. Periksa kualitas koneksi dan catu daya.");
                 if (affectedDevices > 1)
-                    recommendations.Add($"{affectedDevices} device terdampak. Lakukan audit perangkat secara menyeluruh.");
-                if (logs.Any(x => x.Severity == "critical"))
-                    recommendations.Add("Terdapat anomali kritis. Segera lakukan tindak lanjut.");
+                    recommendations.Add($"Sebanyak {affectedDevices} perangkat terdampak. Lakukan pemeriksaan menyeluruh terhadap perangkat tersebut.");
+                if (criticalCount > 0)
+                    recommendations.Add("Terdapat anomali berkategori kritis. Segera lakukan penanganan.");
                 if (totalAnomalyCostImpact > 0)
-                    recommendations.Add($"Dampak biaya overload bulan ini Rp {totalAnomalyCostImpact:N0}. Pertimbangkan efisiensi beban.");
+                    recommendations.Add($"Dampak biaya akibat beban berlebih pada bulan ini sebesar Rp {totalAnomalyCostImpact:N0}. Tinjau penggunaan beban untuk meningkatkan efisiensi.");
                 if (totalRevenueLoss > 0)
-                    recommendations.Add($"Estimasi revenue loss bulan ini Rp {totalRevenueLoss:N0}. Prioritaskan availability device.");
+                    recommendations.Add($"Estimasi kehilangan pendapatan pada bulan ini sebesar Rp {totalRevenueLoss:N0}. Prioritaskan pemulihan ketersediaan perangkat.");
 
-                var report = new AnomalyMonthlyReport
+                var report = await _context.AnomalyMonthlyReports
+                    .OrderByDescending(x => x.GeneratedAt)
+                    .FirstOrDefaultAsync(x => x.Year == year && x.Month == month);
+                if (report == null)
                 {
-                    Year = year,
-                    Month = month,
-                    TotalAnomalies = total,
-                    OverloadCount = overload,
-                    DropCount = drop,
-                    AffectedDevices = affectedDevices,
-                    AverageDeviation = (decimal)avgDeviation,
-                    TopAffectedDevice = topDevice?.DeviceKey,
-                    SummaryText = $"Laporan anomali untuk {startDate:MMMM yyyy}. Total {total} anomali.",
-                    Recommendations = string.Join("\n", recommendations),
-                    GeneratedBy = User.Identity.Name ?? "system",
-                    GeneratedAt = DateTime.Now
-                };
-
-                _context.AnomalyMonthlyReports.Add(report);
+                    report = new AnomalyMonthlyReport { Year = year, Month = month };
+                    _context.AnomalyMonthlyReports.Add(report);
+                }
+                report.TotalAnomalies = total;
+                report.OverloadCount = overload;
+                report.DropCount = drop;
+                report.AffectedDevices = affectedDevices;
+                report.AverageDeviation = (decimal)avgDeviation;
+                report.TopAffectedDevice = topDevice?.DeviceKey;
+                report.SummaryText = $"Laporan anomali untuk {startDate:MMMM yyyy} mencatat {total} kejadian. Sebanyak {criticalCount} kejadian berkategori kritis dan {unresolvedCount} kejadian belum diselesaikan.";
+                report.Recommendations = string.Join("\n", recommendations);
+                report.GeneratedBy = User.Identity.Name ?? "system";
+                report.GeneratedAt = DateTime.Now;
                 await _context.SaveChangesAsync();
 
                 await LogSecurityActionAsync(
@@ -4252,6 +4263,9 @@ namespace KWHMonitoring.Controllers
                         report.AffectedDevices,
                         report.AverageDeviation,
                         report.TopAffectedDevice,
+                        topAffectedDeviceCount = topDevice?.Count ?? 0,
+                        criticalCount,
+                        unresolvedCount,
                         report.SummaryText,
                         report.Recommendations,
                         totalAnomalyCostImpact,
@@ -4293,6 +4307,12 @@ namespace KWHMonitoring.Controllers
                     .AsNoTracking()
                     .Where(x => x.DetectedTime >= startDate && x.DetectedTime < endDate)
                     .ToListAsync();
+                var criticalCount = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
+                var unresolvedCount = logs.Count(x => !x.IsResolved);
+                var topDevice = logs.GroupBy(x => x.DeviceKey)
+                    .Select(g => new { DeviceKey = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .FirstOrDefault();
 
                 var deviceSettingsDict = await _context.DeviceSettings
                     .ToDictionaryAsync(x => x.DeviceKey, x => new
@@ -4304,6 +4324,7 @@ namespace KWHMonitoring.Controllers
                 decimal totalAnomalyCostImpact = 0m;
                 decimal totalRevenueLoss = 0m;
                 decimal ongoingRevenueLoss = 0m;
+                var calculationTime = DateTime.Now;
                 foreach (var log in logs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
@@ -4320,9 +4341,7 @@ namespace KWHMonitoring.Controllers
 
                     if (isDrop && revenuePerHour > 0)
                     {
-                        var endTime = log.IsResolved && log.ResolvedTime.HasValue ? log.ResolvedTime.Value : DateTime.Now;
-                        var hours = (decimal)(endTime - log.DetectedTime).TotalHours;
-                        var loss = Math.Round(hours * revenuePerHour, 0);
+                        var loss = EstimateRevenueLoss(log.AnomalyType, log.DetectedTime, log.IsResolved, log.ResolvedTime, revenuePerHour, calculationTime);
                         totalRevenueLoss += loss;
                         if (!log.IsResolved)
                             ongoingRevenueLoss += loss;
@@ -4350,6 +4369,9 @@ namespace KWHMonitoring.Controllers
                         report.AffectedDevices,
                         report.AverageDeviation,
                         report.TopAffectedDevice,
+                        topAffectedDeviceCount = topDevice?.Count ?? 0,
+                        criticalCount,
+                        unresolvedCount,
                         report.SummaryText,
                         report.Recommendations,
                         totalAnomalyCostImpact,
@@ -4383,7 +4405,9 @@ namespace KWHMonitoring.Controllers
                     .AsNoTracking()
                     .Where(x => x.Action == SecurityAction.AnomalyAcknowledged
                         || x.Action == SecurityAction.AnomalyResolved
-                        || x.Action == SecurityAction.AnomalyActionTaken);
+                        || x.Action == SecurityAction.AnomalyActionTaken
+                        || x.Action == SecurityAction.AnomalyLogDeleted
+                        || x.Action == SecurityAction.AnomalyLogsCleared);
 
                 if (DateTime.TryParse(fromDate, out var from) && DateTime.TryParse(toDate, out var to))
                 {
@@ -4391,7 +4415,7 @@ namespace KWHMonitoring.Controllers
                 }
 
                 var total = await query.CountAsync();
-                var items = await query
+                var auditItems = await query
                     .OrderByDescending(x => x.Timestamp)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
@@ -4406,6 +4430,63 @@ namespace KWHMonitoring.Controllers
                         x.Timestamp
                     })
                     .ToListAsync();
+
+                var anomalyIds = auditItems
+                    .Select(x => System.Text.RegularExpressions.Regex.Match(x.Details ?? string.Empty, @"Anomaly #(\d+)"))
+                    .Where(match => match.Success)
+                    .Select(match => long.Parse(match.Groups[1].Value))
+                    .Distinct()
+                    .ToList();
+                var relatedAnomalies = anomalyIds.Count == 0
+                    ? new List<AnomalyLog>()
+                    : await _context.AnomalyLogs.AsNoTracking()
+                        .Where(x => anomalyIds.Contains(x.Id))
+                        .ToListAsync();
+                var anomalyById = relatedAnomalies.ToDictionary(x => x.Id);
+                var deviceKeys = relatedAnomalies.Select(x => x.DeviceKey)
+                    .Concat(auditItems.Select(x => x.TargetDevice))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToList();
+                var groupNameRows = deviceKeys.Count == 0
+                    ? new List<DeviceRegistry>()
+                    : await _context.DeviceRegistry.AsNoTracking()
+                        .Where(x => deviceKeys.Contains(x.DeviceKey))
+                        .ToListAsync();
+                var groupNames = groupNameRows
+                    .Where(x => !string.IsNullOrWhiteSpace(x.GroupName))
+                    .GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.First().GroupName);
+                var items = auditItems.Select(x =>
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(x.Details ?? string.Empty, @"Anomaly #(\d+)");
+                    AnomalyLog anomaly = null;
+                    if (match.Success && long.TryParse(match.Groups[1].Value, out var anomalyId))
+                        anomalyById.TryGetValue(anomalyId, out anomaly);
+
+                    var deviceKey = anomaly?.DeviceKey ?? x.TargetDevice;
+                    var maintenanceAction = anomaly?.OperatorAction;
+                    if (string.IsNullOrWhiteSpace(maintenanceAction))
+                    {
+                        var actionMatch = System.Text.RegularExpressions.Regex.Match(
+                            x.Details ?? string.Empty,
+                            @"Action:\s*(.*?)\.\s*Notes:",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (actionMatch.Success && actionMatch.Groups[1].Value != "-")
+                            maintenanceAction = actionMatch.Groups[1].Value.Trim();
+                    }
+                    return new
+                    {
+                        x.Id,
+                        x.Email,
+                        x.Action,
+                        groupName = groupNames.ContainsKey(deviceKey) ? groupNames[deviceKey] : deviceKey,
+                        maintenanceAction = maintenanceAction ?? string.Empty,
+                        x.Details,
+                        x.Success,
+                        x.Timestamp
+                    };
+                }).ToList();
 
                 return Ok(new
                 {
@@ -4435,7 +4516,9 @@ namespace KWHMonitoring.Controllers
                     .AsNoTracking()
                     .Where(x => x.Action == SecurityAction.AnomalyAcknowledged
                         || x.Action == SecurityAction.AnomalyResolved
-                        || x.Action == SecurityAction.AnomalyActionTaken);
+                        || x.Action == SecurityAction.AnomalyActionTaken
+                        || x.Action == SecurityAction.AnomalyLogDeleted
+                        || x.Action == SecurityAction.AnomalyLogsCleared);
 
                 if (DateTime.TryParse(fromDate, out var from) && DateTime.TryParse(toDate, out var to))
                 {
@@ -4450,7 +4533,9 @@ namespace KWHMonitoring.Controllers
                         Total = g.Count(),
                         Acknowledged = g.Count(x => x.Action == SecurityAction.AnomalyAcknowledged),
                         Resolved = g.Count(x => x.Action == SecurityAction.AnomalyResolved),
-                        ActionTaken = g.Count(x => x.Action == SecurityAction.AnomalyActionTaken)
+                        ActionTaken = g.Count(x => x.Action == SecurityAction.AnomalyActionTaken),
+                        Deleted = g.Count(x => x.Action == SecurityAction.AnomalyLogDeleted),
+                        LogsCleared = g.Count(x => x.Action == SecurityAction.AnomalyLogsCleared)
                     })
                     .OrderByDescending(x => x.Total)
                     .ToListAsync();
@@ -4480,46 +4565,87 @@ namespace KWHMonitoring.Controllers
                 if (snapshot == null)
                     return NotFound(new { success = false, error = "Chart snapshot not found" });
 
+                if (string.Equals(snapshot.SnapshotStatus, "complete", StringComparison.OrdinalIgnoreCase))
+                    return Ok(new { success = true, message = "Chart snapshot is already complete", status = snapshot.SnapshotStatus, afterCount = 50 });
+
                 if (data?.After != null && data.After.Count > 0)
                 {
-                    // Merge with existing after-data: keep whichever has MORE points
-                    // Client sends ALL accumulated points each time (not just new ones)
-                    var existingCount = 0;
+                    // Merge idempotently by sample timestamp so retries and overlapping
+                    // incremental uploads cannot replace a longer snapshot with a shorter one.
+                    var merged = new List<ChartDataPointRequest>();
                     if (!string.IsNullOrEmpty(snapshot.AfterDataJson))
                     {
                         try
                         {
                             var existingList = JsonConvert.DeserializeObject<List<ChartDataPointRequest>>(snapshot.AfterDataJson);
-                            existingCount = existingList?.Count ?? 0;
+                            if (existingList != null) merged.AddRange(existingList);
                         }
                         catch { }
                     }
+                    merged.AddRange(data.After);
+                    merged = merged
+                        .Where(point => point != null)
+                        .GroupBy(point => point.Timestamp.HasValue
+                            ? point.Timestamp.Value.ToString("o", CultureInfo.InvariantCulture)
+                            : JsonConvert.SerializeObject(point))
+                        .Select(group => group.Last())
+                        .OrderBy(point => point.Timestamp.HasValue ? 0 : 1)
+                        .ThenBy(point => point.Timestamp)
+                        .ToList();
+                    if (merged.Count > 50)
+                        merged = merged.Skip(merged.Count - 50).ToList();
 
-                    // Only replace if new data has more points than what we already have
-                    if (data.After.Count > existingCount)
-                    {
-                        snapshot.AfterDataJson = JsonConvert.SerializeObject(data.After);
-                        snapshot.UpdatedAt = DateTime.Now;
-                    }
+                    snapshot.AfterDataJson = JsonConvert.SerializeObject(merged);
+                    snapshot.UpdatedAt = DateTime.Now;
 
-                    // Mark complete when we have enough data OR client says it's final
-                    var isFinal = data.IsFinal || data.After.Count >= 50;
-                    if (isFinal)
+                    // "Complete" means all 50 post-anomaly samples are stored.
+                    if (merged.Count >= 50)
                     {
                         snapshot.SnapshotStatus = "complete";
-                        snapshot.UpdatedAt = DateTime.Now;
                     }
                     else
                     {
                         snapshot.SnapshotStatus = "partial";
-                        if (snapshot.UpdatedAt == null)
-                            snapshot.UpdatedAt = DateTime.Now;
                     }
 
                     await _context.SaveChangesAsync();
                 }
 
                 return Ok(new { success = true, message = "Chart snapshot updated", status = snapshot.SnapshotStatus, afterCount = data?.After?.Count ?? 0 });
+            }
+            catch (Exception ex)
+            {
+                return SafeError(ex);
+            }
+        }
+
+        [HttpGet("anomaly-logs/{id}/chart-snapshot")]
+        [Authorize(Policy = "RequireViewer")]
+        public async Task<IActionResult> GetAnomalyChartSnapshot(long id)
+        {
+            try
+            {
+                var snapshot = await _context.AnomalyChartSnapshots
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.AnomalyLogId == id);
+
+                if (snapshot == null)
+                    return NotFound(new { success = false, error = "Chart snapshot not found" });
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        detectedTime = snapshot.DetectedTime,
+                        beforeDataJson = snapshot.BeforeDataJson,
+                        afterDataJson = snapshot.AfterDataJson,
+                        upperThreshold = snapshot.UpperThreshold,
+                        lowerThreshold = snapshot.LowerThreshold,
+                        emaValue = snapshot.EMAValue,
+                        snapshotStatus = snapshot.SnapshotStatus
+                    }
+                });
             }
             catch (Exception ex)
             {

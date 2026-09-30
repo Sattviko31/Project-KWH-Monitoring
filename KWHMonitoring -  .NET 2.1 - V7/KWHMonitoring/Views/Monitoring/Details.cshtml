@@ -10,17 +10,17 @@
 
 <!-- Breadcrumb -->
 <div class="erp-breadcrumb">
-    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
+    <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dasbor</a>
     <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
-    <span class="current">Details - @Model.GroupName</span>
+    <span class="current"><span>Rincian</span> - @Model.GroupName</span>
 </div>
 
 <!-- Page Header -->
 <div class="erp-page-header">
     <div>
-        <h2><i class="fas fa-info-circle text-primary"></i> Details - @Model.GroupName</h2>
+        <h2><i class="fas fa-info-circle text-primary"></i> <span>Rincian</span> - @Model.GroupName</h2>
         <div class="subtitle">
-            <i class="fas fa-microchip"></i> Device: <strong>@deviceKey</strong>
+            <i class="fas fa-microchip"></i> Perangkat: <strong>@deviceKey</strong>
             <span class="d-none d-md-inline">
                 <span class="mx-2">|</span>
                 <i class="fas fa-server"></i> ID: @Model.DeviceId
@@ -65,7 +65,7 @@
             <div class="vr d-none d-md-block"></div>
             <div class="d-flex align-items-center gap-2">
                 <i class="fas fa-clock text-muted" style="font-size:0.8rem;"></i>
-                <small class="text-muted">Downtime:</small>
+                <small class="text-muted">Waktu Henti:</small>
                 <span class="badge bg-secondary" id="detailDowntimeLabel" style="font-size: 0.75rem;">Tidak Aktif</span>
             </div>
             <div class="vr d-none d-md-block"></div>
@@ -224,7 +224,7 @@
 
                         <!-- Power & Energy Section -->
                         <div>
-                            <div class="card h-100 border-start border-danger border-4" data-card-help="Daya &amp; Energi|Daya aktif sesaat (W), akumulasi energi aktif (Wh), dan status beban device.|Rumus: P = √3 × V × I × Cos Phi · kWh = Wh ÷1.000&#10;Status beban: >70% HIGH · 30–70% MEDIUM · ≤30% NORMAL|Biaya = kWh × Tarif (Rp/kWh).">
+                            <div class="card h-100 border-start border-danger border-4" data-card-help="Daya &amp; Energi|Daya aktif sesaat (W), akumulasi energi aktif (Wh), dan status beban perangkat.|Rumus: P = √3 × V × I × Cos Phi · kWh = Wh ÷1.000&#10;Status beban: >70% Tinggi · 30–70% SEDANG · ≤30% NORMAL|Biaya = kWh × Tarif (Rp/kWh).">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-fire text-danger"></i> Power & Energy
@@ -260,10 +260,10 @@
                     <div class="detail-stats-row">
                         <!-- Cos Phi & Frequency -->
                         <div>
-                            <div class="card h-100 border-start border-warning border-4" data-card-help="Power Factor &amp; Frekuensi|Cos Phi (efisiensi daya, 0–1) dan frekuensi jaringan (normal 50 Hz).|Status PF: ≥0,8 Excellent · ≥0,6 Good · <0,6 Poor|PF rendah → daya reaktif terbuang; frekuensi menyimpang → masalah pasokan.">
+                            <div class="card h-100 border-start border-warning border-4" data-card-help="Faktor daya &amp; Frekuensi|Cos Phi (efisiensi daya, 0–1) dan frekuensi jaringan (normal 50 Hz).|Status PF: ≥0,8 Sangat Baik · ≥0,6 Baik · <0,6 Buruk|PF rendah → daya reaktif terbuang; frekuensi menyimpang → masalah pasokan.">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
-                                        <i class="fas fa-percentage text-info"></i> Power Factor & Freq
+                                        <i class="fas fa-percentage text-info"></i> Faktor Daya dan Frekuensi
                                     </h6>
                                     <div class="d-flex gap-3 mb-3">
                                         <div class="flex-fill text-center p-2">
@@ -289,10 +289,10 @@
 
                         <!-- Power Factor Gauge -->
                         <div>
-                            <div class="card h-100 border-start border-success border-4" data-card-help="Power Factor Gauge|Visualisasi faktor daya device dalam persen.|Rumus: PF (%) = Cos Phi × 100|≥80% Excellent ·60–79% Good · <60% Poor (perlu kapasitor/koreksi).">
+                            <div class="card h-100 border-start border-success border-4" data-card-help="Indikator Faktor Daya|Visualisasi faktor daya perangkat dalam persen.|Rumus: PF (%) = Cos Phi × 100|≥80% Sangat Baik ·60–79% Baik · <60% Buruk (perlu kapasitor/koreksi).">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
-                                        <i class="fas fa-tachometer-alt text-success"></i> Power Factor
+                                        <i class="fas fa-tachometer-alt text-success"></i> Faktor Daya
                                     </h6>
                                     <div class="text-center mb-3">
                                         <h3 class="mb-1 fw-bold" id="pfPercentDisplay">@((Model.Cos_Phi * 100).ToString("N1"))%</h3>
@@ -314,7 +314,7 @@
 
                         <!-- Load Gauge -->
                         <div>
-                            <div class="card h-100 border-start border-primary border-4" data-card-help="Load (Beban)|Persentase beban terhadap kapasitas maksimal device.|Rumus: Load (%) = Daya ÷ Kapasitas Maks × 100 (dibatasi maks 100%)|>70% merah · 30–70% kuning · <30% biru. Kapasitas diatur di Settings.">
+                            <div class="card h-100 border-start border-primary border-4" data-card-help="Persentase Beban|Persentase beban terhadap kapasitas maksimum perangkat.|Rumus: BEBAN (%) = Daya ÷ Kapasitas Maks × 100 (dibatasi maksimal 100%)|>70% merah · 30–70% kuning · <30% biru. Kapasitas diatur di Pengaturan.">
                                 <div class="card-body p-3">
                                     <h6 class="text-muted mb-3 pb-2 border-bottom">
                                         <i class="fas fa-chart-line text-primary"></i> Load
@@ -397,7 +397,7 @@
             <!-- Summary Cards -->
             <div class="stats-row mb-3 mb-md-4">
                 <div>
-                    <div class="stat-card bg-primary h-100" data-card-help="Konsumsi Hari Ini (Device)|Energi terpakai device ini pada tanggal terpilih.|Rumus: kWh hari = Σ energi harian device|Rata-rata/jam = kWh hari ÷ jam berjalan">
+                    <div class="stat-card bg-primary h-100" data-card-help="Konsumsi Hari Ini (Perangkat)|Energi terpakai perangkat ini pada tanggal terpilih.|Rumus: kWh hari = Σ energi harian perangkat|Rata-rata/jam = kWh hari ÷ jam berjalan">
                         <div class="stat-label">Hari Ini</div>
                         <div class="stat-value" id="usageToday">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageTodayAvg">0</span> kWh/jam</small>
@@ -405,7 +405,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-success h-100" data-card-help="Konsumsi Bulan Ini (Device)|Akumulasi energi device sepanjang bulan berjalan.|Rumus: kWh bulan = Σ konsumsi harian device bulan ini|Rata-rata/hari = kWh bulan ÷ tanggal berjalan">
+                    <div class="stat-card bg-success h-100" data-card-help="Konsumsi Bulan Ini (Perangkat)|Akumulasi energi perangkat sepanjang bulan berjalan.|Rumus: kWh bulan = Σ konsumsi harian perangkat bulan ini|Rata-rata/hari = kWh bulan ÷ tanggal berjalan">
                         <div class="stat-label">Bulan Ini</div>
                         <div class="stat-value" id="usageMonth">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageMonthAvg">0</span> kWh/hari</small>
@@ -413,7 +413,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-info h-100" data-card-help="Konsumsi Tahun Ini (Device)|Akumulasi energi device sepanjang tahun berjalan.|Rumus: kWh tahun = Σ konsumsi bulanan device|Rata-rata/bulan = kWh tahun ÷ bulan berjalan">
+                    <div class="stat-card bg-info h-100" data-card-help="Konsumsi Tahun Ini (Perangkat)|Akumulasi energi perangkat sepanjang tahun berjalan.|Rumus: kWh tahun = Σ konsumsi bulanan perangkat|Rata-rata/bulan = kWh tahun ÷ bulan berjalan">
                         <div class="stat-label">Tahun Ini</div>
                         <div class="stat-value" id="usageYear">0 kWh</div>
                         <small style="opacity:0.75">Rata-rata: <span id="usageYearAvg">0</span> kWh/bulan</small>
@@ -421,7 +421,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya (Device)|Perkiraan biaya listrik dari konsumsi device ini.|Rumus: Estimasi Biaya = kWh × Tarif (Rp/kWh)|Tarif bisa diatur khusus per device di Settings; default Rp1.500/kWh.">
+                    <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya (Perangkat)|Perkiraan biaya listrik berdasarkan konsumsi perangkat ini.|Rumus: Estimasi Biaya = kWh × Tarif (Rp/kWh)|Tarif dapat diatur untuk setiap perangkat pada halaman Pengaturan. Tarif bawaan sebesar Rp1.500/kWh.">
                         <div class="stat-label">Estimasi Biaya</div>
                         <div class="stat-value" id="usageCost">Rp 0</div>
                         <small style="opacity:0.75">Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
@@ -433,7 +433,7 @@
             <!-- Charts -->
             <div class="chart-row mb-3 mb-md-4">
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Jam (Device)|Konsumsi energi device tiap jam pada tanggal terpilih.|Rumus: kWh jam = energi device yang terakumulasi pada jam tersebut|Jam batang tertinggi = jam device paling boros.">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Jam (Perangkat)|Konsumsi energi perangkat tiap jam pada tanggal terpilih.|Rumus: kWh jam = energi perangkat yang terakumulasi pada jam tersebut|Jam batang tertinggi = jam perangkat paling boros.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-clock"></i> Per Jam</h6>
                         </div>
@@ -443,7 +443,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Hari (Device)|Konsumsi energi device per hari — membandingkan antar hari.|Rumus: kWh hari = Σ energi harian device|Hari batang tertinggi = hari device paling boros.">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Hari (Perangkat)|Konsumsi energi perangkat per hari — membandingkan antar hari.|Rumus: kWh hari = Σ energi harian perangkat|Hari batang tertinggi = hari perangkat paling boros.">
                         <div class="card-header bg-success text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-day"></i> Per Hari</h6>
                         </div>
@@ -453,7 +453,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Bulan (Device)|Tren konsumsi energi device per bulan.|Rumus: kWh bulan = Σ konsumsi harian device dalam bulan|Membandingkan pola antar bulan (musiman).">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Per Bulan (Perangkat)|Tren konsumsi energi perangkat per bulan.|Rumus: kWh bulan = Σ konsumsi harian perangkat dalam bulan|Membandingkan pola antar bulan (musiman).">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-alt"></i> Per Bulan</h6>
                         </div>
@@ -467,7 +467,7 @@
             <!-- Peak Info -->
             <div class="peak-row">
                 <div>
-                    <div class="card bg-light" data-card-help="Peak Hour (Device)|Jam konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = jam dengan kWh maksimum untuk device ini|Manajemen beban: alihkan beban dari jam tersebut bila memungkinkan.">
+                    <div class="card bg-light" data-card-help="Jam Puncak (Perangkat)|Jam konsumsi tertinggi perangkat pada periode terpilih.|Rumus: puncak = jam dengan kWh maksimum untuk perangkat ini|Manajemen beban: alihkan beban dari jam tersebut bila memungkinkan.">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-bolt text-warning"></i> Peak Hour</h6>
                             <h5 class="text-primary mb-1" id="peakHourValue">0 kWh</h5>
@@ -476,7 +476,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card bg-light" data-card-help="Peak Day (Device)|Tanggal konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = hari dengan kWh maksimum untuk device ini|Cek faktor penyebab pada tanggal tersebut (event/jadwal khusus).">
+                    <div class="card bg-light" data-card-help="Hari Puncak (Perangkat)|Tanggal konsumsi tertinggi perangkat pada periode terpilih.|Rumus: puncak = hari dengan kWh maksimum untuk perangkat ini|Periksa faktor penyebab pada tanggal tersebut (event/jadwal khusus).">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-calendar-day text-success"></i> Peak Day</h6>
                             <h5 class="text-success mb-1" id="peakDayValue">0 kWh</h5>
@@ -485,7 +485,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card bg-light" data-card-help="Peak Month (Device)|Bulan konsumsi tertinggi device pada periode terpilih.|Rumus: Peak = bulan dengan kWh maksimum untuk device ini|Berguna melihat musim padat/menjelang libur.">
+                    <div class="card bg-light" data-card-help="Bulan Puncak (Perangkat)|Bulan konsumsi tertinggi perangkat pada periode terpilih.|Rumus: puncak = bulan dengan kWh maksimum untuk perangkat ini|Membantu melihat musim padat/menjelang libur.">
                         <div class="card-body py-2">
                             <h6 class="text-muted mb-1"><i class="fas fa-calendar-alt text-info"></i> Peak Month</h6>
                             <h5 class="text-info mb-1" id="peakMonthValue">0 kWh</h5>
@@ -497,15 +497,15 @@
 
             <!-- Financial Analysis -->
             <div class="mb-3 mt-3 mt-md-4">
-                <h6 class="text-muted mb-2"><i class="fas fa-chart-line"></i> Financial Analysis</h6>
+                <h6 class="text-muted mb-2"><i class="fas fa-chart-line"></i> Analisis Keuangan</h6>
             </div>
 
             <!-- Financial Charts Row -->
             <div class="chart-row mb-3">
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="WBP / LWBP Split (Device)|Pemakaian device pada jam Beban Puncak vs Luar Beban Puncak.|Rumus: Rasio WBP = kWh WBP ÷ total kWh × 100&#10;Biaya = kWh WBP × tarif WBP + kWh LWBP × tarif LWBP|Jam WBP default 18.00–22.00 (diatur per device).">
+                    <div class="card shadow-sm h-100" data-card-help="Perbandingan WBP dan LWBP (Perangkat)|Perbandingan konsumsi perangkat pada Waktu Beban Puncak (WBP) dan Luar Waktu Beban Puncak (LWBP).|Rumus: Rasio WBP = kWh WBP ÷ total kWh × 100&#10;Biaya = kWh WBP × tarif WBP + kWh LWBP × tarif LWBP|Waktu WBP bawaan adalah pukul 18.00–22.00 dan dapat diatur untuk setiap perangkat.">
                         <div class="card-header py-2" style="background-color:#5b5ea6!important;color:#fff">
-                            <h6 class="mb-0"><i class="fas fa-bolt"></i> WBP / LWBP Split</h6>
+                            <h6 class="mb-0"><i class="fas fa-bolt"></i> Perbandingan WBP dan LWBP</h6>
                         </div>
                         <div class="card-body fin-chart-body">
                             <canvas id="deviceWbpLwbpChart" style="display:none"></canvas>
@@ -515,9 +515,9 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Budget vs Actual (Device)|Anggaran vs konsumsi riil device bulan ini.|Rumus: Variance = Actual kWh − Budget kWh&#10;Variance % = (Actual − Budget) ÷ Budget × 100|>100% = over budget. Budget diatur per device di Settings.">
+                    <div class="card shadow-sm h-100" data-card-help="Anggaran dan Realisasi (Perangkat)|Perbandingan anggaran energi dengan konsumsi aktual perangkat pada bulan ini.|Rumus: selisih = konsumsi aktual (kWh) − anggaran (kWh). Persentase selisih = (konsumsi aktual − anggaran) ÷ anggaran × 100.|Nilai di atas 100% menunjukkan bahwa konsumsi melampaui anggaran. Anggaran dapat diatur untuk setiap perangkat pada halaman Pengaturan.">
                         <div class="card-header bg-success text-white py-2" id="deviceBudgetCardHeader">
-                            <h6 class="mb-0"><i class="fas fa-wallet"></i> Budget vs Actual</h6>
+                            <h6 class="mb-0"><i class="fas fa-wallet"></i> Anggaran dan Realisasi</h6>
                         </div>
                         <div class="card-body fin-chart-body">
                             <canvas id="deviceBudgetChart" style="display:none"></canvas>
@@ -531,7 +531,7 @@
             <!-- Projection Chart -->
             <div class="chart-row mb-3">
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Konsumsi (Device)|Estimasi total konsumsi device sampai akhir periode.|Rumus: Proyeksi = rata-rata konsumsi per hari device × jumlah hari periode|Tab Bulanan/Tahunan memilih skala perhitungan.">
+                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Konsumsi (Perangkat)|Estimasi total konsumsi perangkat sampai akhir periode.|Rumus: Proyeksi = rata-rata konsumsi per hari perangkat × jumlah hari periode|Tab Bulanan/Tahunan memilih skala perhitungan.">
                         <div class="card-header bg-orange text-white py-2 d-flex align-items-center justify-content-between">
                             <h6 class="mb-0"><i class="fas fa-chart-line"></i> Proyeksi Konsumsi</h6>
                             <div class="proj-tab-group">
@@ -546,7 +546,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Biaya (Device)|Estimasi tagihan device sampai akhir periode.|Rumus: Proyeksi Biaya = Proyeksi kWh device × Tarif (Rp/kWh)|Tab Bulanan/Tahunan memilih skala perhitungan.">
+                    <div class="card shadow-sm h-100" data-card-help="Proyeksi Biaya (Perangkat)|Estimasi tagihan perangkat sampai akhir periode.|Rumus: Proyeksi Biaya = Proyeksi kWh perangkat × Tarif (Rp/kWh)|Tab Bulanan/Tahunan memilih skala perhitungan.">
                         <div class="card-header bg-teal text-white py-2 d-flex align-items-center justify-content-between">
                             <h6 class="mb-0"><i class="fas fa-chart-area"></i> Proyeksi Biaya</h6>
                             <div class="proj-tab-group">
@@ -565,24 +565,24 @@
             <!-- Financial Summary & Anomaly Cost — 2 columns -->
             <div class="fin-summary-grid mb-3">
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Financial Summary (Device)|Metrik finansial khusus device: Waste, MoM, YoY, Proyeksi, Load Factor, Unit Economics.|Rumus: Waste% = Waste kWh ÷ total kWh × 100 · LF = kWh ÷ (kapasitas × jam) × 100 (maks 100%)&#10;MoM% = Δ bulan lalu ÷ bulan lalu × 100 · YoY% = Δ tahun lalu ÷ tahun lalu × 100|Unit Econ = biaya ÷ luas (m²) dan biaya ÷ jam berjalan.">
+                    <div class="card shadow-sm h-100" data-card-help="Ringkasan keuangan (Perangkat)|Metrik finansial khusus perangkat: Pemborosan, perubahan bulanan, perubahan tahunan, Proyeksi, Faktor beban, Biaya per Unit.|Rumus: Pemborosan% = Pemborosan kWh ÷ total kWh × 100 · faktor beban = kWh ÷ (kapasitas × jam) × 100 (maksimal 100%)&#10;perubahan bulanan% = Δ bulan lalu ÷ bulan lalu × 100 · perubahan tahunan% = Δ tahun lalu ÷ tahun lalu × 100|Biaya per unit = biaya ÷ luas (m²) dan biaya ÷ jam berjalan.">
                         <div class="card-header bg-dark text-white py-2">
-                            <h6 class="mb-0"><i class="fas fa-th-large"></i> Financial Summary</h6>
+                            <h6 class="mb-0"><i class="fas fa-th-large"></i> Ringkasan Keuangan</h6>
                         </div>
                         <div class="card-body py-2 px-3">
                             <div class="fin-metric-grid">
                                 <div class="fin-metric" id="deviceFinWaste">
-                                    <div class="fin-metric-label"><i class="fas fa-exclamation-triangle text-danger"></i> Waste</div>
+                                    <div class="fin-metric-label"><i class="fas fa-exclamation-triangle text-danger"></i> Pemborosan</div>
                                     <div class="fin-metric-value" id="deviceFinWasteValue">—</div>
                                     <div class="fin-metric-sub" id="deviceFinWasteSub"></div>
                                 </div>
                                 <div class="fin-metric" id="deviceFinMom">
-                                    <div class="fin-metric-label"><i class="fas fa-exchange-alt text-info"></i> MoM</div>
+                                    <div class="fin-metric-label"><i class="fas fa-exchange-alt text-info"></i> Perubahan Bulanan</div>
                                     <div class="fin-metric-value" id="deviceFinMomValue">—</div>
                                     <div class="fin-metric-sub" id="deviceFinMomSub"></div>
                                 </div>
                                 <div class="fin-metric" id="deviceFinYoy">
-                                    <div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> YoY</div>
+                                    <div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> Perubahan Tahunan</div>
                                     <div class="fin-metric-value" id="deviceFinYoyValue">—</div>
                                     <div class="fin-metric-sub" id="deviceFinYoySub"></div>
                                 </div>
@@ -592,7 +592,7 @@
                                     <div class="fin-metric-sub" id="deviceFinBillSub"></div>
                                 </div>
                                 <div class="fin-metric" id="deviceFinLf">
-                                    <div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Load Factor</div>
+                                    <div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Faktor Beban</div>
                                     <div class="fin-metric-value" id="deviceFinLfValue">—</div>
                                     <div class="fin-metric-sub" id="deviceFinLfSub"></div>
                                 </div>
@@ -606,7 +606,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Dampak Biaya Anomali (Device)|Estimasi biaya tambahan dari anomali overload device ini.|Rumus: Excess kWh ≈ daya berlebih (W) ÷1000 ×0,25 jam per kejadian&#10;Biaya = Excess kWh × Tarif (Rp/kWh)|Berdasarkan log anomali device pada periode terpilih.">
+                    <div class="card shadow-sm h-100" data-card-help="Dampak Biaya Anomali (Perangkat)|Estimasi biaya tambahan dari anomali beban berlebih perangkat ini.|Rumus: Kelebihan energi (kWh) ≈ daya berlebih (W) ÷1000 ×0,25 jam per kejadian&#10;Biaya = Kelebihan energi (kWh) × Tarif (Rp/kWh)|Berdasarkan log anomali perangkat pada periode terpilih.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-exclamation-circle"></i> Dampak Biaya Anomali</h6>
                         </div>
@@ -621,7 +621,7 @@
             <div class="report-grid mb-3">
                 <!-- Daily Report -->
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Laporan Harian (Device)|Ringkasan konsumsi &amp; biaya device per hari.|Rumus: kWh hari = Σ energi harian device · Biaya = kWh × tarif|Diperbarui otomatis dari data monitoring device.">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Harian (Perangkat)|Ringkasan konsumsi &amp; biaya perangkat per hari.|Rumus: kWh hari = Σ energi harian perangkat · Biaya = kWh × tarif|Diperbarui otomatis dari data monitoring perangkat.">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-file-alt"></i> Laporan Harian</h6>
                         </div>
@@ -633,7 +633,7 @@
 
                 <!-- Monthly Report -->
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Laporan Bulanan (Device)|Ringkasan konsumsi, biaya, dan perbandingan bulanan device.|Rumus: kWh bulan = Σ konsumsi harian · MoM% = Δ vs bulan lalu ÷ bulan lalu × 100|Termasuk indikasi over-budget device.">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Bulanan (Perangkat)|Ringkasan konsumsi dan biaya perangkat, termasuk perbandingan dengan bulan sebelumnya.|Rumus: kWh bulanan = jumlah konsumsi harian. Perubahan bulanan (%) = selisih dari bulan sebelumnya ÷ konsumsi bulan sebelumnya × 100.|Laporan juga menunjukkan indikasi konsumsi yang melampaui anggaran perangkat.">
                         <div class="card-header bg-warning text-dark py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar-week"></i> Laporan Bulanan</h6>
                         </div>
@@ -645,7 +645,7 @@
 
                 <!-- Yearly Report -->
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Laporan Tahunan (Device)|Ringkasan konsumsi &amp; biaya tahunan device serta tren YoY.|Rumus: kWh tahun = Σ konsumsi bulanan · YoY% = Δ vs tahun lalu ÷ tahun lalu × 100|Melihat efektivitas penghematan antar tahun.">
+                    <div class="card shadow-sm h-100" data-card-help="Laporan Tahunan (Perangkat)|Ringkasan konsumsi dan biaya tahunan perangkat serta tren perubahannya.|Rumus: kWh tahunan = jumlah konsumsi bulanan. Perubahan tahunan (%) = selisih dari tahun sebelumnya ÷ konsumsi tahun sebelumnya × 100.|Gunakan laporan ini untuk menilai efektivitas penghematan dari tahun ke tahun.">
                         <div class="card-header bg-indigo text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-calendar"></i> Laporan Tahunan</h6>
                         </div>
@@ -661,7 +661,7 @@
         <div class="tab-pane fade" id="tabCharts" role="tabpanel">
             <div class="chart-row">
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Tegangan|Kurva tegangan (V) device dari waktu ke waktu pada tanggal terpilih.|Normal: sekitar 220 V (1φ) / 380 V antar fasa (3φ)|Lonjakan/penurunan tajam menandakan masalah pasokan.">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Tegangan|Kurva tegangan (V) perangkat dari waktu ke waktu pada tanggal terpilih.|Normal: sekitar 220 V (1φ) / 380 V antar fasa (3φ)|Lonjakan/penurunan tajam menandakan masalah pasokan.">
                         <div class="card-header bg-primary text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-bolt"></i> Voltage (V)</h6>
                         </div>
@@ -671,7 +671,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Arus|Kurva arus (A) device dari waktu ke waktu.|Rumus hubungan daya: P = √3 × V × I × Cos Phi|Kenaikan arus tanpa tambahan beban → indikasi gangguan.">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Arus|Kurva arus (A) perangkat dari waktu ke waktu.|Rumus hubungan daya: P = √3 × V × I × Cos Phi|Kenaikan arus tanpa tambahan beban → indikasi gangguan.">
                         <div class="card-header bg-success text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-wave-square"></i> Current (A)</h6>
                         </div>
@@ -681,7 +681,7 @@
                     </div>
                 </div>
                 <div>
-                    <div class="card shadow-sm h-100" data-card-help="Grafik Daya|Kurva daya aktif (W) device dari waktu ke waktu — inti dari deteksi anomali.|Rumus: P = √3 × V × I × Cos Phi|Lonjakan di atas garis threshold memicu alert OVERLOAD.">
+                    <div class="card shadow-sm h-100" data-card-help="Grafik Daya|Kurva daya aktif (W) perangkat dari waktu ke waktu — inti dari deteksi anomali.|Rumus: P = √3 × V × I × Cos Phi|Lonjakan di atas garis ambang batas memicu alert beban berlebih.">
                         <div class="card-header bg-info text-white py-2">
                             <h6 class="mb-0"><i class="fas fa-fire"></i> Power (W)</h6>
                         </div>
@@ -695,7 +695,7 @@
 
         <!-- TAB 4: ANOMALY LOGS -->
         <div class="tab-pane fade" id="tabAnomalyLogs" role="tabpanel">
-            <div class="card shadow-sm" data-card-help="Anomaly Logs (Device)|Tabel kejadian anomali khusus device ini: waktu, tipe, daya, severity, status.|Rumus: Deviation % = (daya − threshold) ÷ threshold × 100|Klik baris untuk detail; Operator/Admin dapat acknowledge/resolve.">
+            <div class="card shadow-sm" data-card-help="Log Anomali (Perangkat)|Tabel kejadian anomali pada perangkat ini, yang mencakup waktu, jenis anomali, daya, tingkat keparahan, dan status.|Rumus: Deviasi (%) = (daya − ambang batas) ÷ ambang batas × 100|Pilih baris untuk melihat detail. Operator atau Administrator dapat mengonfirmasi penanganan atau menyelesaikan anomali.">
                 <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center py-2">
                     <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Anomaly Logs</h6>
                 </div>
@@ -714,7 +714,7 @@
     <div class="modal-dialog ema-modal-dialog">
         <div class="modal-content ema-modal-content">
             <div class="modal-header bg-primary text-white py-2">
-                <h6 class="modal-title mb-0"><i class="fas fa-th"></i> Chart Display Settings</h6>
+                <h6 class="modal-title mb-0"><i class="fas fa-th"></i> Pengaturan Tampilan Grafik</h6>
                 <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body ema-modal-body">
@@ -751,7 +751,7 @@
                         <label class="form-check-label">Show Legend</label>
                     </div>
                 </div>
-                <small class="text-muted ema-hint"><i class="fas fa-info-circle"></i> Settings disimpan di browser (localStorage) — tidak mempengaruhi database.</small>
+                <small class="text-muted ema-hint"><i class="fas fa-info-circle"></i> Pengaturan disimpan di peramban dan tidak memengaruhi basis data.</small>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
@@ -771,7 +771,7 @@
     #detailAnomalyGrid .dx-datagrid .dx-header-row td { text-align: center; }
     #detailAnomalyGrid .dx-datagrid .badge { font-size: 0.7rem; padding: 0.3em 0.55em; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
 
-    /* Horizontal scroll wrapper for DataGrid */
+     Horizontal scroll wrapper for DataGrid 
     .anomaly-grid-scroll-wrapper {
         width: 100%;
         overflow-x: auto;
@@ -915,9 +915,9 @@
                     updateCategoryUI(currentCategory);
                     // Build downtime category tabs in modal
                     buildDowntimeCategoryTabs();
-                    console.log('Categories meta loaded:', categoryMeta);
+                    @* console.log('Categories meta loaded:', categoryMeta); *@
                 },
-                error: function() { console.warn('Failed to load categories meta'); }
+                error: function() { @* console.warn('Failed to load categories m eta'); *@ }
             });
         }
 
@@ -933,9 +933,9 @@
                     }
                     currentCategory = deviceCategoryMap[deviceKey] || 'Billboard';
                     updateCategoryUI(currentCategory);
-                    console.log('Device category loaded:', deviceCategoryMap);
+                    @* console.log('Device category loaded:', deviceCategoryMap); *@
                 },
-                error: function() { console.warn('Failed to load device categories'); }
+                error: function() { @* console.warn('Failed to load device categor ies'); *@ }
             });
         }
 
@@ -969,7 +969,7 @@
                         });
                     }
                 },
-                error: function() { alert('Gagal menyimpan kategori device'); }
+                    error: function() { alert('Gagal menyimpan kategori perangkat.'); }
             });
         }
 
@@ -1006,7 +1006,7 @@
                 success: function(data) {
                     categoryDowntimeMap[category] = data.isDowntime || false;
                 },
-                error: function() { console.warn('Failed to check downtime for ' + category); }
+                 error: function() { @* console.warn('Failed to check dow ntime for ' + category); *@ }
             });
         }
 
@@ -1065,7 +1065,7 @@
                     '<div id="downtime' + cat + 'TimelineBar" style="position: absolute; top: 0; height: 100%; background: #1a1d23; transition: all 0.3s;"></div></div>' +
                     '<div class="d-flex justify-content-between mt-1" style="font-size: 0.6rem; color: #6c757d;">' +
                     '<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div></div>' +
-                    '<div class="card border" id="downtime' + cat + 'StatusCard" data-card-help="Status Downtime|Status jendela downtime (luar jam operasional) untuk kategori ini.|Downtime aktif = device terdeteksi menyala di luar jam kerja (waste)|Jam downtime diatur pada Settings → Downtime."><div class="card-body text-center py-1">' +
+                    '<div class="card border" id="downtime' + cat + 'StatusCard" data-card-help="Status waktu henti|Status jendela waktu henti (luar jam operasional) untuk kategori ini.|waktu henti aktif = perangkat terdeteksi menyala di luar jam kerja (pemborosan)|Jam waktu henti diatur pada Pengaturan → waktu henti."><div class="card-body text-center py-1">' +
                     '<div id="downtime' + cat + 'Status" class="fw-bold" style="font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Memuat...</div>' +
                     '</div></div></div>';
                 $content.append(paneHtml);
@@ -1134,7 +1134,7 @@
             var startLabel = (s.startHour < 10 ? '0' : '') + s.startHour + ':00';
             var endLabel = (s.endHour < 10 ? '0' : '') + s.endHour + ':00';
             if (isDowntime) {
-                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> DOWNTIME AKTIF</span><br><small class="text-muted">' + startLabel + '–' + endLabel + ' - Lower threshold disabled</small>');
+                $status.html('<span class="text-danger"><i class="fas fa-moon"></i> WAKTU HENTI AKTIF</span><br><small class="text-muted">' + startLabel + '–' + endLabel + ' — ambang batas bawah dinonaktifkan</small>');
                 $card.removeClass('border-success').addClass('border-danger');
             } else {
                 $status.html('<span class="text-success"><i class="fas fa-sun"></i> OPERASI NORMAL</span><br><small class="text-muted">All thresholds active</small>');
@@ -1145,8 +1145,8 @@
         function updateCategoryDowntimeUI(category) {
             // Don't update UI if downtime settings haven't been loaded yet
             var firstCat = Object.keys(categoryDowntimeSettings)[0];
-            if (!categoryDowntimeSettings[category] && !categoryDowntimeSettings[firstCat]) {
-                console.log('⏳ Downtime settings not loaded yet, skipping UI update for ' + category);
+            if (!categoryDowntimeSettings[category] && !categoryDowntimeSettings[ firstCat]) {
+                @* console.log('⏳ Downtime settings not loaded yet, skippin g UI update for ' + category); *@
                 return;
             }
 
@@ -1234,7 +1234,7 @@
         }
 
         function loadDeviceUsageStatistics() {
-            console.log('Loading device usage statistics for', deviceKey);
+            @* console.log('Loading device usage stat istics for', deviceKey); *@
 
             var startDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate());
             var endDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate(), 23, 59, 59);
@@ -1251,7 +1251,7 @@
                 timeout: 15000,
                 success: function(data) {
                     if (!data.success) {
-                        console.error('Error loading usage statistics');
+                        @* console.error('Err or loading usage statistics'); *@
                         return;
                     }
 
@@ -1283,10 +1283,10 @@
                     // Update financial analysis sections
                     updateDeviceFinancialUI(data);
 
-                    console.log('Device usage statistics loaded');
+                    @* console.log('Device usage statistics loaded'); *@
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error loading device usage statistics:', error);
+                    @* console.error('Error loading device usage statistics:', error); *@
                 }
             });
         }
@@ -1495,7 +1495,7 @@
                 var flatCost = finData.budget && finData.budget.actualCost ? finData.budget.actualCost : (monthKwh * tariff);
                 $notCfg.html(
                     '<div class="text-center py-2" style="font-size:0.8rem">' +
-                        '<i class="fas fa-tag text-info"></i> <strong>Device ini menggunakan tarif flat</strong>' +
+                        '<i class="fas fa-tag text-info"></i> <strong>Perangkat ini menggunakan tarif tetap</strong>' +
                         '<div class="mt-1">Konsumsi bulan ini: <strong>' + formatDecimal(monthKwh) + ' kWh</strong></div>' +
                         '<div>Estimasi biaya: <strong class="text-primary">Rp ' + formatNumber(flatCost) + '</strong> <span class="text-muted">(Rp ' + formatNumber(tariff) + '/kWh)</span></div>' +
                     '</div>'
@@ -1573,7 +1573,7 @@
 
             if (!budget.configured) {
                 $canvas.hide();
-                $notCfg.html('<i class="fas fa-cog"></i> Belum dikonfigurasi — set Budget Rp/bln di Settings').show();
+                $notCfg.html('<i class="fas fa-cog"></i> Anggaran bulanan belum dikonfigurasi. Atur anggaran rupiah per bulan pada halaman Pengaturan.').show();
                 $footer.hide();
                 $header.attr('class', 'card-header bg-success text-white py-2');
                 if (deviceUsageCharts.budget) { deviceUsageCharts.budget.destroy(); deviceUsageCharts.budget = null; }
@@ -1627,7 +1627,7 @@
                     plugins: {
                         legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, padding: 8, boxWidth: 12 } },
                         centerText: {
-                            line1: pct + '%', line2: isOver ? 'Over Budget' : 'terpakai', line3: isOver ? 'Over ' + (pct - 100) + '%' : 'Sisa ' + (100 - pct) + '%',
+                            line1: pct + '%', line2: isOver ? 'Melebihi Anggaran' : 'terpakai', line3: isOver ? 'Lebih ' + (pct - 100) + '%' : 'Sisa ' + (100 - pct) + '%',
                             color1: isOver ? '#dc3545' : (pct > 80 ? '#856404' : '#198754'), color2: '#888', color3: isOver ? '#dc3545' : '#aaa'
                         },
                         tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh'; } } }
@@ -1637,7 +1637,7 @@
 
             var budgetCost = budget.budgetCost || 0;
             var actualCost = budget.actualCost || 0;
-            var footHtml = '<div><strong>Budget:</strong> Rp ' + formatNumber(budgetCost) + ' (' + formatDecimal(budgetKwh) + ' kWh)</div>' +
+            var footHtml = '<div><strong>Anggaran:</strong> Rp ' + formatNumber(budgetCost) + ' (' + formatDecimal(budgetKwh) + ' kWh)</div>' +
                 '<div><strong>Actual:</strong> Rp ' + formatNumber(actualCost) + ' (' + formatDecimal(actualKwh) + ' kWh)</div>';
             if (variance !== 0) {
                 var vCls = variance > 0 ? 'text-danger' : 'text-success';
@@ -1751,7 +1751,7 @@
 
             var fh = '<div><strong>Aktual:</strong> ' + formatDecimal(totalActual) + ' kWh · <strong>Proyeksi EOM:</strong> ' + formatDecimal(totalProj) + ' kWh</div>';
             fh += '<div>Rata² aktual: ' + formatDecimal(filledDays > 0 ? filledSum / filledDays : 0) + ' kWh/hari · Proyeksi sisa: ' + formatDecimal(projKWh) + ' kWh/hari · Sisa ' + (daysInMonth - dayOfMonth) + ' hari</div>';
-            if (budgetKwh > 0) { var bp = Math.round(totalProj / budgetKwh * 100); fh += '<div class="' + (bp > 100 ? 'text-danger' : (bp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + bp + '% (' + formatDecimal(budgetKwh) + ' kWh)</div>'; }
+            if (budgetKwh > 0) { var bp = Math.round(totalProj / budgetKwh * 100); fh += '<div class="' + (bp > 100 ? 'text-danger' : (bp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + bp + '% (' + formatDecimal(budgetKwh) + ' kWh)</div>'; }
             $footer.html(fh).show();
         }
 
@@ -1806,7 +1806,7 @@
 
             var fh = '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> ' + formatDecimal(totalActualYear) + ' kWh · <strong>Proyeksi EOY:</strong> ' + formatDecimal(totalProjYear) + ' kWh</div>';
             fh += '<div>Rata² bulanan: ' + formatDecimal(filledMonths > 0 ? filledSum / filledMonths : 0) + ' kWh · Proyeksi sisa: ' + formatDecimal(projKWh) + ' kWh/bln</div>';
-            if (yearlyBudget > 0) { var yp = Math.round(totalProjYear / yearlyBudget * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + yp + '% (' + formatDecimal(yearlyBudget) + ' kWh/tahun)</div>'; }
+            if (yearlyBudget > 0) { var yp = Math.round(totalProjYear / yearlyBudget * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + yp + '% (' + formatDecimal(yearlyBudget) + ' kWh/tahun)</div>'; }
             $footer.html(fh).show();
         }
 
@@ -1873,7 +1873,7 @@
 
             var fh = '<div><strong>Biaya aktual bulan ini:</strong> Rp ' + formatInteger(cumCost) + ' · <strong>Proyeksi EOM:</strong> Rp ' + formatInteger(Math.round(totalProjMonthCost)) + '</div>';
             fh += '<div>Tarif efektif: Rp ' + formatInteger(Math.round(costPerKWh)) + '/kWh · Rata² harian: Rp ' + formatInteger(dayOfMonth > 0 ? Math.round(cumCost / dayOfMonth) : 0) + '</div>';
-            if (budgetKwh > 0) { var budgetCostMonth = Math.round(budgetKwh * costPerKWh); var bpPct = Math.round(totalProjMonthCost / budgetCostMonth * 100); fh += '<div class="' + (bpPct > 100 ? 'text-danger' : (bpPct > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + bpPct + '% (Rp ' + formatInteger(budgetCostMonth) + ')</div>'; }
+            if (budgetKwh > 0) { var budgetCostMonth = Math.round(budgetKwh * costPerKWh); var bpPct = Math.round(totalProjMonthCost / budgetCostMonth * 100); fh += '<div class="' + (bpPct > 100 ? 'text-danger' : (bpPct > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + bpPct + '% (Rp ' + formatInteger(budgetCostMonth) + ')</div>'; }
             $footer.html(fh).show();
         }
 
@@ -1925,7 +1925,7 @@
 
             var fh = '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> Rp ' + formatInteger(yCumCost) + ' · <strong>Proyeksi EOY:</strong> Rp ' + formatInteger(Math.round(totalProjYearCost)) + '</div>';
             fh += '<div>Rata² bulanan: Rp ' + formatInteger(currentMonth > 0 ? Math.round(yCumCost / currentMonth) : 0) + '</div>';
-            if (yearlyBudgetCost > 0) { var yp = Math.round(totalProjYearCost / yearlyBudgetCost * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi vs Budget: ' + yp + '% (Rp ' + formatInteger(Math.round(yearlyBudgetCost)) + '/tahun)</div>'; }
+            if (yearlyBudgetCost > 0) { var yp = Math.round(totalProjYearCost / yearlyBudgetCost * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + yp + '% (Rp ' + formatInteger(Math.round(yearlyBudgetCost)) + '/tahun)</div>'; }
             $footer.html(fh).show();
         }
 
@@ -2025,8 +2025,8 @@
                 $('#deviceFinBillSub').text('');
             }
 
-            // Load Factor — API returns 0-100 percentage
-            // Thresholds: <30 Under-utilized, 30-80 Optimal, >80 High Risk
+            // Faktor Beban — API returns 0-100 percentage
+            // Thresholds: <30 kapasitas kurang dimanfaatkan, 30-80 Optimal, >80 High Risk
             if (lf.loadFactor || lf.loadFactor === 0) {
                 var lfVal = lf.loadFactor || 0;
                 var lfPct = lfVal.toFixed(1);
@@ -2034,7 +2034,7 @@
                 if (lfVal > 80) {
                     lfCls = 'text-danger'; lfLabel = 'Risiko Tinggi'; lfCellCls = 'fin-critical';
                 } else if (lfVal < 30) {
-                    lfCls = 'text-warning'; lfLabel = 'Under-utilized'; lfCellCls = 'fin-warning';
+                    lfCls = 'text-warning'; lfLabel = 'kapasitas kurang dimanfaatkan'; lfCellCls = 'fin-warning';
                 } else {
                     lfCls = 'text-success'; lfLabel = 'Optimal'; lfCellCls = 'fin-ok';
                 }
@@ -2101,7 +2101,7 @@
                 var cost = a.estimatedCost || a.costImpact || 0;
                 var name = a.deviceName || a.deviceKey || '—';
                 var severity = a.severity || '';
-                var sevBadge = severity === 'high' ? ' <span class="badge bg-danger">HIGH</span>' : (severity === 'medium' ? ' <span class="badge bg-warning text-dark">MED</span>' : '');
+                var sevBadge = severity === 'high' ? ' <span class="badge bg-danger">TINGGI</span>' : (severity === 'medium' ? ' <span class="badge bg-warning text-dark">SEDANG</span>' : '');
                 html += '<div class="anomaly-cost-item d-flex justify-content-between align-items-center py-1' + (i < items.length - 1 && i < 4 ? ' border-bottom' : '') + '">' +
                     '<span class="anomaly-cost-name"><i class="fas ' + icon + '"></i> ' + name + sevBadge + '</span>' +
                     '<span class="text-danger fw-bold text-nowrap ms-2">Rp ' + formatNumber(cost) + '</span>' +
@@ -2195,7 +2195,7 @@
 
             // --- INSIGHT SECTION ---
             html += '<div class="daily-report-insights">';
-            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Insight</strong></div>';
+            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Wawasan</strong></div>';
 
             // 1. Consumption vs average
             if (vsAvgPct > 20) {
@@ -2220,7 +2220,7 @@
                     }
                 }
             } else {
-                html += '<div class="text-muted mb-1"><i class="fas fa-tag"></i> Tarif flat — konfigurasi WBP/LWBP untuk optimasi biaya</div>';
+                html += '<div class="text-muted mb-1"><i class="fas fa-tag"></i> Tarif tetap — atur tarif WBP/LWBP untuk mengoptimalkan biaya.</div>';
             }
 
             // 3. Budget pace
@@ -2230,34 +2230,34 @@
                 if (dailyBudget > 0) {
                     var budgetPacePct = (todayKwh / dailyBudget) * 100;
                     if (budgetPacePct > 110) {
-                        html += '<div class="text-danger mb-1"><i class="fas fa-wallet"></i> Pace harian ' + budgetPacePct.toFixed(0) + '% dari budget (target ' + formatDecimal(dailyBudget) + ' kWh/hari) — over pace</div>';
+                        html += '<div class="text-danger mb-1"><i class="fas fa-wallet"></i> Penggunaan anggaran harian ' + budgetPacePct.toFixed(0) + '% dari anggaran (target ' + formatDecimal(dailyBudget) + ' kWh/hari) — melampaui target</div>';
                     } else if (budgetPacePct > 90) {
-                        html += '<div class="text-warning mb-1"><i class="fas fa-wallet"></i> Pace harian ' + budgetPacePct.toFixed(0) + '% dari budget — mendekati batas</div>';
+                        html += '<div class="text-warning mb-1"><i class="fas fa-wallet"></i> Penggunaan anggaran harian ' + budgetPacePct.toFixed(0) + '% dari anggaran — mendekati batas</div>';
                     } else {
-                        html += '<div class="text-success mb-1"><i class="fas fa-wallet"></i> Pace harian ' + budgetPacePct.toFixed(0) + '% dari budget — sesuai target</div>';
+                        html += '<div class="text-success mb-1"><i class="fas fa-wallet"></i> Penggunaan anggaran harian ' + budgetPacePct.toFixed(0) + '% dari anggaran — sesuai target</div>';
                     }
                 }
             }
 
-            // 4. Waste detection
+            // 4. Pemborosan energi detection
             if (waste.configured) {
                 var wp = waste.wastePercent || 0;
                 if (wp > 5) {
-                    html += '<div class="text-danger mb-1"><i class="fas fa-exclamation-triangle"></i> Waste ' + wp.toFixed(1) + '% — ' + formatDecimal(waste.wasteKwh || 0) + ' kWh terbuang (Rp ' + formatNumber(waste.wasteCost || 0) + ')</div>';
+                    html += '<div class="text-danger mb-1"><i class="fas fa-exclamation-triangle"></i> Pemborosan energi ' + wp.toFixed(1) + '% — ' + formatDecimal(waste.wasteKwh || 0) + ' kWh terbuang (Rp ' + formatNumber(waste.wasteCost || 0) + ')</div>';
                 } else {
-                    html += '<div class="text-success mb-1"><i class="fas fa-check-circle"></i> Waste ' + wp.toFixed(1) + '% — dalam batas normal</div>';
+                    html += '<div class="text-success mb-1"><i class="fas fa-check-circle"></i> Pemborosan energi ' + wp.toFixed(1) + '% — dalam batas normal</div>';
                 }
             }
 
-            // 5. Load Factor status
+            // 5. Faktor Beban status
             if (lf.loadFactor || lf.loadFactor === 0) {
                 var lfVal = lf.loadFactor || 0;
                 if (lfVal > 80) {
-                    html += '<div class="text-danger mb-1"><i class="fas fa-tachometer-alt"></i> Load Factor ' + lfVal.toFixed(1) + '% — Risiko Tinggi, pertimbangkan redistribusi beban</div>';
+                    html += '<div class="text-danger mb-1"><i class="fas fa-tachometer-alt"></i> Faktor Beban ' + lfVal.toFixed(1) + '% — risiko tinggi; pertimbangkan redistribusi beban.</div>';
                 } else if (lfVal < 30) {
-                    html += '<div class="text-warning mb-1"><i class="fas fa-tachometer-alt"></i> Load Factor ' + lfVal.toFixed(1) + '% — Under-utilized, potensi efisiensi kapasitas</div>';
+                    html += '<div class="text-warning mb-1"><i class="fas fa-tachometer-alt"></i> Faktor Beban ' + lfVal.toFixed(1) + '% — kapasitas kurang dimanfaatkan; terdapat potensi efisiensi.</div>';
                 } else {
-                    html += '<div class="text-success mb-1"><i class="fas fa-tachometer-alt"></i> Load Factor ' + lfVal.toFixed(1) + '% — Optimal</div>';
+                    html += '<div class="text-success mb-1"><i class="fas fa-tachometer-alt"></i> Faktor Beban ' + lfVal.toFixed(1) + '% — optimal.</div>';
                 }
             }
 
@@ -2276,16 +2276,16 @@
                 var lwbpT = wbpLwbp.tariffLWBP || 0;
                 html += '<div class="text-muted mb-1"><i class="fas fa-tags"></i> Tarif WBP/LWBP — WBP Rp ' + formatNumber(wbpT) + '/kWh, LWBP Rp ' + formatNumber(lwbpT) + '/kWh</div>';
             } else {
-                html += '<div class="text-muted mb-1"><i class="fas fa-tag"></i> Tarif flat Rp ' + formatNumber(tariff) + '/kWh</div>';
+                html += '<div class="text-muted mb-1"><i class="fas fa-tag"></i> Tarif tetap Rp ' + formatNumber(tariff) + '/kWh</div>';
             }
 
-            // 8. MoM comparison
+            // 8. Perubahan bulanan comparison
             if (pc.momChangePercent || pc.momChangePercent === 0) {
                 var mv = pc.momChangePercent || 0;
                 if (Math.abs(mv) >= 0.1) {
                     var momCls = mv > 0 ? 'text-danger' : 'text-success';
                     var momArr = mv > 0 ? '▲' : '▼';
-                    html += '<div class="' + momCls + ' mb-1"><i class="fas fa-exchange-alt"></i> MoM ' + momArr + ' ' + Math.abs(mv).toFixed(1) + '% vs bulan lalu</div>';
+                    html += '<div class="' + momCls + ' mb-1"><i class="fas fa-exchange-alt"></i> Perubahan bulanan ' + momArr + ' ' + Math.abs(mv).toFixed(1) + '% vs bulan lalu</div>';
                 }
             }
 
@@ -2299,9 +2299,9 @@
                     if (budgetKwh2 > 0) {
                         var projPct = (projKwh / budgetKwh2) * 100;
                         if (projPct > 100) {
-                            html += '<div class="text-danger mb-1"><i class="fas fa-file-invoice-dollar"></i> Proyeksi ' + formatDecimal(projKwh) + ' kWh (Rp ' + formatNumber(projCost) + ') — melebihi budget ' + formatDecimal(budgetKwh2) + ' kWh</div>';
+                            html += '<div class="text-danger mb-1"><i class="fas fa-file-invoice-dollar"></i> Proyeksi ' + formatDecimal(projKwh) + ' kWh (Rp ' + formatNumber(projCost) + ') — melebihi anggaran ' + formatDecimal(budgetKwh2) + ' kWh</div>';
                         } else {
-                            html += '<div class="text-success mb-1"><i class="fas fa-file-invoice-dollar"></i> Proyeksi ' + formatDecimal(projKwh) + ' kWh (Rp ' + formatNumber(projCost) + ') — dalam budget</div>';
+                            html += '<div class="text-success mb-1"><i class="fas fa-file-invoice-dollar"></i> Proyeksi ' + formatDecimal(projKwh) + ' kWh (Rp ' + formatNumber(projCost) + ') — masih di bawah anggaran</div>';
                         }
                     }
                 } else {
@@ -2379,7 +2379,7 @@
             // Biaya Aktual
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-coins text-warning"></i> Biaya Aktual</div>';
             html += '<div class="fin-metric-value">Rp ' + formatNumber(actualCost) + '</div>';
-            html += '<div class="fin-metric-sub">' + (wbpLwbp.configured ? 'WBP/LWBP' : 'Flat') + ' · Rp ' + formatNumber(tariff) + '/kWh</div></div>';
+            html += '<div class="fin-metric-sub">' + (wbpLwbp.configured ? 'WBP/LWBP' : 'Tarif tetap') + ' · Rp ' + formatNumber(tariff) + '/kWh</div></div>';
 
             // Hari Puncak
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-arrow-up text-info"></i> Hari Puncak</div>';
@@ -2404,7 +2404,7 @@
             }
 
             // Load Factor
-            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Load Factor</div>';
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-tachometer-alt text-warning"></i> Faktor Beban</div>';
             if (lf.loadFactor || lf.loadFactor === 0) {
                 var lfVal = lf.loadFactor || 0;
                 var lfCls = lfVal > 80 ? 'text-danger' : (lfVal < 30 ? 'text-warning' : 'text-success');
@@ -2419,21 +2419,21 @@
 
             // Monthly insights
             html += '<div class="daily-report-insights">';
-            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Insight Bulanan</strong></div>';
+            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Wawasan Bulanan</strong></div>';
             var insights = [];
 
             // MoM
             if (pc.momChangePercent !== undefined && pc.lastMonthKWh > 0) {
                 var momArr = pc.momChangePercent > 0 ? '▲' : '▼';
                 var momCls = pc.momChangePercent > 10 ? 'text-danger' : (pc.momChangePercent < -10 ? 'text-success' : '');
-                insights.push('<span class="' + momCls + '">' + momArr + ' MoM ' + Math.abs(pc.momChangePercent).toFixed(1) + '% vs bulan lalu (' + formatDecimal(pc.lastMonthKWh) + ' kWh)</span>');
+                insights.push('<span class="' + momCls + '">' + momArr + ' Perubahan bulanan ' + Math.abs(pc.momChangePercent).toFixed(1) + '% vs bulan lalu (' + formatDecimal(pc.lastMonthKWh) + ' kWh)</span>');
             }
 
             // YoY
             if (pc.yoyChangePercent !== undefined && pc.lastYearSameMonthKWh > 0) {
                 var yoyArr = pc.yoyChangePercent > 0 ? '▲' : '▼';
                 var yoyCls = pc.yoyChangePercent > 20 ? 'text-danger' : (pc.yoyChangePercent < -20 ? 'text-success' : '');
-                insights.push('<span class="' + yoyCls + '">' + yoyArr + ' YoY ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% vs tahun lalu bulan yang sama</span>');
+                insights.push('<span class="' + yoyCls + '">' + yoyArr + ' Perubahan tahunan sebesar ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% dibandingkan dengan bulan yang sama pada tahun sebelumnya</span>');
             }
 
             // WBP/LWBP split
@@ -2453,18 +2453,18 @@
             // Waste
             if (waste.configured && waste.wastePercent > 0) {
                 if (waste.wastePercent > 5) {
-                    insights.push('<span class="text-danger"> Waste ' + waste.wastePercent.toFixed(1) + '% = ' + formatDecimal(waste.wasteKwh || 0) + ' kWh (Rp ' + formatNumber(waste.wasteCost || 0) + ')</span>');
+                    insights.push('<span class="text-danger"> Pemborosan energi ' + waste.wastePercent.toFixed(1) + '% = ' + formatDecimal(waste.wasteKwh || 0) + ' kWh (Rp ' + formatNumber(waste.wasteCost || 0) + ')</span>');
                 } else {
-                    insights.push(' Waste ' + waste.wastePercent.toFixed(1) + '% — dalam batas normal');
+                    insights.push(' Pemborosan energi ' + waste.wastePercent.toFixed(1) + '% — dalam batas normal');
                 }
             }
 
             // Projection vs budget
             if (projKwh > 0 && budget.configured && budgetKwh > 0) {
                 if (projKwh > budgetKwh) {
-                    insights.push('<span class="text-danger"> Proyeksi ' + formatDecimal(projKwh) + ' kWh melebihi budget ' + formatDecimal(budgetKwh) + ' kWh — perlu penghematan ' + formatDecimal(projKwh - budgetKwh) + ' kWh</span>');
+                    insights.push('<span class="text-danger"> Proyeksi ' + formatDecimal(projKwh) + ' kWh melebihi anggaran ' + formatDecimal(budgetKwh) + ' kWh — perlu penghematan ' + formatDecimal(projKwh - budgetKwh) + ' kWh</span>');
                 } else {
-                    insights.push('<span class="text-success"> Proyeksi ' + formatDecimal(projKwh) + ' kWh — dalam budget, sisa ' + formatDecimal(budgetKwh - projKwh) + ' kWh</span>');
+                    insights.push('<span class="text-success"> Proyeksi ' + formatDecimal(projKwh) + ' kWh — masih di bawah anggaran, dengan sisa ' + formatDecimal(budgetKwh - projKwh) + ' kWh</span>');
                 }
             }
 
@@ -2479,7 +2479,7 @@
             }
 
             if (insights.length === 0) {
-                insights.push('<span class="text-muted">Data belum cukup untuk analisa bulanan</span>');
+                insights.push('<span class="text-muted">Data belum mencukupi untuk melakukan analisis bulanan.</span>');
             }
 
             insights.forEach(function(insight) {
@@ -2556,7 +2556,7 @@
             }
 
             // YoY
-            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> YoY</div>';
+            html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-sync-alt text-info"></i> Perubahan Tahunan</div>';
             if (pc.yoyChangePercent !== undefined && pc.lastYearSameMonthKWh > 0) {
                 var yoyArr = pc.yoyChangePercent > 0 ? '▲' : '▼';
                 var yoyCls = pc.yoyChangePercent > 20 ? 'text-danger' : (pc.yoyChangePercent < -20 ? 'text-success' : '');
@@ -2573,7 +2573,7 @@
                 var yBudgetPct = Math.round(yearKwh / yearlyBudget * 100);
                 var ybCls = yBudgetPct > 100 ? 'text-danger' : (yBudgetPct > 80 ? 'text-warning' : 'text-success');
                 html += '<div class="fin-metric-value ' + ybCls + '">' + yBudgetPct + '%</div>';
-                html += '<div class="fin-metric-sub">Est. ' + formatDecimal(yearlyBudget) + ' kWh/tahun</div></div>';
+                html += '<div class="fin-metric-sub">Perkiraan: ' + formatDecimal(yearlyBudget) + ' kWh/tahun</div></div>';
             } else {
                 html += '<div class="fin-metric-value text-muted">—</div>';
                 html += '<div class="fin-metric-sub">Belum dikonfigurasi</div></div>';
@@ -2583,7 +2583,7 @@
 
             // Yearly insights
             html += '<div class="daily-report-insights">';
-            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Insight Tahunan</strong></div>';
+            html += '<div class="text-muted mb-1"><i class="fas fa-lightbulb text-warning"></i> <strong>Wawasan Tahunan</strong></div>';
             var insights = [];
 
             // Average costs
@@ -2598,7 +2598,7 @@
                 } else if (pc.yoyChangePercent < -20) {
                     insights.push('<span class="text-success"> Tren turun — ' + Math.abs(pc.yoyChangePercent).toFixed(1) + '% lebih rendah dari tahun lalu</span>');
                 } else {
-                    insights.push('Konsumsi relatif stabil vs tahun lalu (selisih ' + Math.abs(pc.yoyChangePercent || 0).toFixed(1) + '%)');
+                    insights.push('Konsumsi relatif stabil dibandingkan dengan tahun sebelumnya (selisih ' + Math.abs(pc.yoyChangePercent || 0).toFixed(1) + '%).');
                 }
             }
 
@@ -2618,11 +2618,11 @@
                 insights.push(' Proporsi WBP ' + wbpPct2 + '% · LWBP ' + lwbpPct2 + '%');
             }
 
-            // Waste annualized
+            // Pemborosan energi annualized
             if (waste.configured && waste.wastePercent > 0) {
                 var annualWasteKWh = (waste.wasteKwh || 0) * 12;
                 var annualWasteCost = (waste.wasteCost || 0) * 12;
-                insights.push('<span class="' + (waste.wastePercent > 5 ? 'text-danger' : '') + '"> Waste ' + waste.wastePercent.toFixed(1) + '% · Estimasi tahunan: ' + formatDecimal(annualWasteKWh) + ' kWh (Rp ' + formatNumber(annualWasteCost) + ')</span>');
+                insights.push('<span class="' + (waste.wastePercent > 5 ? 'text-danger' : '') + '"> Pemborosan energi ' + waste.wastePercent.toFixed(1) + '% · Estimasi tahunan: ' + formatDecimal(annualWasteKWh) + ' kWh (Rp ' + formatNumber(annualWasteCost) + ')</span>');
             }
 
             // Budget pace
@@ -2630,7 +2630,7 @@
                 var yBudgetPct2 = Math.round(yearKwh / yearlyBudget * 100);
                 var expectedPctByNow = Math.round(currentMonth / 12 * 100);
                 if (yBudgetPct2 > expectedPctByNow + 10) {
-                    insights.push('<span class="text-danger"> Penggunaan ' + yBudgetPct2 + '% dari budget tahunan, padahal baru ' + expectedPctByNow + '% waktu — over pace</span>');
+                    insights.push('<span class="text-danger"> Penggunaan ' + yBudgetPct2 + '% dari budget tahunan, padahal baru ' + expectedPctByNow + '% waktu — melampaui target</span>');
                 } else {
                     insights.push('<span class="text-success"> Penggunaan ' + yBudgetPct2 + '% dari budget tahunan · Pace ' + expectedPctByNow + '% — sesuai target</span>');
                 }
@@ -2644,7 +2644,7 @@
             }
 
             if (insights.length === 0) {
-                insights.push('<span class="text-muted">Data belum cukup untuk analisa tahunan</span>');
+                insights.push('<span class="text-muted">Data belum mencukupi untuk melakukan analisis tahunan.</span>');
             }
 
             insights.forEach(function(insight) {
@@ -2678,7 +2678,7 @@
                             refreshInterval: data.refreshInterval || 10,
                             enableAlerts: true
                         };
-                        console.log('EMA Settings loaded:', emaSettings);
+                        @* console.log('EMA Settings loaded:', emaSettings); *@
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -2703,7 +2703,7 @@
                             systemSettings.gridColor = data.settings['Chart.GridColor'] || '#e0e0e0';
                             systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
                         }
-                        console.log('System Settings loaded:', systemSettings);
+                        /* console.log('System Settings loaded:', systemSettings) */;
                         resolve();
                     },
                     error: function() { resolve(); }
@@ -2724,10 +2724,10 @@
                     emaSettings.showEMA = settings.showEMA !== false;
                     emaSettings.showThresholds = settings.showThresholds !== false;
                     emaSettings.showMaxCapacity = settings.showMaxCapacity !== false;
-                    console.log('Display Settings loaded from localStorage:', settings);
+                    /* console.log('Display Settings loaded from localStorage:', settings) */;
                 }
-            } catch (e) {
-                console.warn('Error loading display settings:', e);
+            } catch  (e) {
+                /* console.warn('Error loading  display settings:', e) */;
             }
         }
 
@@ -2742,12 +2742,12 @@
                     dataType: 'json',
                     timeout: 10000,
                     success: function(data) {
-                        anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
-                        console.log('Anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations);
+                        anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations  : 3;
+                        /* console.log('Anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations) */;
                         resolve();
                     },
                     error: function() {
-                        console.log('Using default anomalyMaxConfirmations:', anomalyConfirmation.maxConfirmations);
+                        /* console.log('Using default anomalyMaxConfirmations:', anomalyConfirmation.maxConfirmations) */;
                         resolve();
                     }
                 });
@@ -2757,7 +2757,7 @@
         function checkDowntimeStatus() {
             return checkCategoryDowntime(currentCategory).then(function() {
                 isDowntimeNow = isDowntimeForDevice();
-                console.log('Downtime status (' + currentCategory + '):', isDowntimeNow ? 'DOWNTIME' : 'NORMAL');
+                /* console.log('Downtime status (' + currentCategory + '):', isDowntimeNow ? 'DOWNTIME' : 'NORMAL') */;
             });
         }
 
@@ -2802,11 +2802,11 @@
                         data: JSON.stringify(systemData)
                     })
                 ).done(function() {
-                    systemSettings.refreshInterval = emaSettings.refreshInterval;
-                    console.log('EMA & System Settings saved');
-                    resolve();
-                }).fail(function(xhr, status, error) {
-                    console.error('Error saving settings:', error);
+                     systemSettings.refreshInterval = emaSettings.refreshInterval;
+                    /* console.log('EMA & System Settings saved') */;
+                     resolve();
+                 }).fail(function(xhr, status, error) {
+                    /* console.error('Error saving settings:', error) */;
                     reject(error);
                 });
             });
@@ -2855,9 +2855,9 @@
                     lower = ema.map(function(v) { return (v != null ? v : 0) * lv; });
                 } else {
                     upper = ema.map(function(v) { return (v != null ? v : 0) * (1 + uv / 100); });
-                    lower = ema.map(function(v) { return (v != null ? v : 0) * (1 - lv / 100); });
+                    lower = ema.map(function(v) { return (v != null ? v : 0) * ( 1 - lv / 100); });
                 }
-            } catch(e) { console.error('Error calculating thresholds:', e); }
+            } catch(e) { /* console.error('Error calculating thresholds:', e) */; }
             return { upper: upper, lower: lower };
         }
 
@@ -2895,39 +2895,39 @@
         // ============================================
         function detectAndLogAnomaly(deviceKey, powerData, ema, upperThreshold, lowerThreshold) {
             if (!emaSettings.enableAlerts) {
-                console.log('Anomaly alerts disabled');
-                return;
+                /* console.log('Anomaly alerts disabled') */;
+                 return;
             }
 
             if (anomalyConfirmation.maxConfirmations <= 0) {
-                console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')');
+                 /* console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')') */;
                 return;
             }
 
-            // Cek data point terakhir (real-time)
+            // Cek da ta point terakhir (real-time) 
             var lastIndex = powerData.length - 1;
             if (lastIndex < 0) {
-                console.log('No power data');
+                /* console.log('No power data') */;
                 return;
             }
 
             var currentPower = powerData[lastIndex];
-            var upper = upperThreshold[lastIndex];
-            var lower = lowerThreshold[lastIndex];
+            var upper =  upperThreshold[lastIndex];
+             var lower = lowerThreshold[lastIndex];
             var emaValue = ema[lastIndex];
 
-            console.log('=== ANOMALY CHECK ===');
-            console.log('Current Power:', currentPower);
-            console.log('Upper Threshold:', upper);
-            console.log('Lower Threshold:', lower);
-            console.log('EMA Value:', emaValue);
+            /* console.log('=== ANOMALY CHECK ===') */;
+            /* console.log('Current Power:', currentPower ) */;
+            /* console.log('Upper Threshold:', upper) */;
+            /* console.log('Lower Threshold:', lower) */;
+            /* console.log('E MA Value:', emaValue) */;
 
             if (currentPower === null || currentPower === undefined) {
-                console.log('Current power is null/undefined');
-                return;
+                /* console.log('Current power is null/undefined') */;
+                 return;
             }
-            if (upper === undefined || lower === undefined) {
-                console.log('Thresholds are undefined');
+             if (upper === undefined || lower === undefined) {
+                /* console.log('Thresholds are undefined') */;
                 return;
             }
 
@@ -2941,23 +2941,23 @@
                 anomalyType = 'OVERLOAD';
                 thresholdValue = emaValue;
                 deviation = ((currentPower - emaValue) / emaValue * 100);
-                console.log(' LISTRIK MENYALA SAAT JAM MATI! Power:', currentPower.toFixed(1), 'W | EMA:', emaValue.toFixed(1), 'W | Deviation:', deviation.toFixed(1) + '%');
+                /* console.log(' LISTRIK MENYALA SAAT JAM MATI!  Power:', currentPower.toFixed(1), 'W | EMA:', emaValue.toFixed(1), 'W | Deviation:', deviation.toFixed(1) + '%') */;
             }
             // NORMAL LOGIC: Use upper line as trigger
             else if (currentPower > upper) {
-                anomalyType = 'OVERLOAD';
+                anomalyType = 'OVERLO AD';
                 thresholdValue = upper;
-                deviation = ((currentPower - upper) / upper * 100);
-                console.log(' OVERLOAD DETECTED! Deviation:', deviation.toFixed(1) + '%');
+                deviation =  ((currentPower - upper) / upper * 100);
+                /* console.log(' OVERLOAD DETECTED! Deviation:', deviation.toFixed(1) + '%') */;
             }
             // DROP detection (normal operation only, suppressed during downtime)
             else if (!isDowntimeForDevice() && currentPower < lower) {
-                anomalyType = 'DROP';
+                anomalyType  = 'DROP';
                 thresholdValue = lower;
                 deviation = ((lower - currentPower) / lower * 100);
-                console.log(' DEVICE DROP DETECTED! Deviation:', deviation.toFixed(1) + '%');
+                /* console.log(' DEVICE DROP DETECTED! Deviation:', deviation.toFixed(1) + '%') */;
             } else {
-                console.log(' Power within normal range');
+                /* console.log(' Power within normal range') */;
                 return;
             }
 
@@ -2966,8 +2966,8 @@
             var now = Date.now();
             
             // Check cooldown first
-            if (anomalyCooldown[cooldownKey] && (now - anomalyCooldown[cooldownKey]) < anomalyConfirmation.cooldownTime) {
-                console.log(' Anomaly ' + anomalyType + ' for ' + deviceKey + ' in cooldown period');
+             if (anomalyCooldown[cooldownKey] && (now - anomalyCooldown[cooldownKey]) <  anomalyConfirmation.cooldownTime) {
+                /* console.log(' Anomaly ' + anomalyType + ' for ' + deviceKey + ' in cooldown period') */;
                 return;
             }
 
@@ -2979,14 +2979,14 @@
             
             // Log confirmation progress
             const statusMessage = isDowntimeForDevice() ? '[DOWNTIME]' : '[NORMAL]';
-            console.log(` ANOMALY CHECK: ${anomalyType} for ${deviceKey} ${statusMessage} - Threshold: ${thresholdValue.toFixed(2)}, Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`);
+            /* console.log(` ANOMALY CHECK: ${anomalyType} for ${deviceKey} ${statusMessage} - Threshold: ${thresholdValue.toFixed(2)}, Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`) */;
             
             // Only send log after 5 confirmed samples
             if (confirmedCount >= anomalyConfirmation.maxConfirmations) {
-                console.log(` ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/5 samples met`);
+                /* console.log(` ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/5 samples met`) */;
                 
                 // Log ke database
-                console.log('Posting anomaly log to database...');
+                /* console.log('Posting anomaly log to database...') */;
                 $.ajax({
                     url: '/api/Api/log-anomaly',
                     method: 'POST',
@@ -3003,7 +3003,7 @@
                     }),
                     timeout: 10000,
                     success: function(response) {
-                        console.log(' Anomaly logged successfully:', response);
+                        /* console.log(' Anomaly logged successfully:', response) */;
                         // Update badge counter
                         loadAnomalyLogs();
                         // Reset confirmation count and set cooldown
@@ -3011,8 +3011,8 @@
                         anomalyCooldown[cooldownKey] = now;
                     },
                     error: function(xhr, status, error) {
-                        console.error(' Error logging anomaly:', error);
-                        console.error('Response:', xhr.responseText);
+                        /* console.error(' Error logging anomaly:', error) */;
+                        /* console.error('Response:', xhr.responseText) */;
                         // Reset confirmation count on error so it can retry
                         anomalyConfirmation.counts[cooldownKey] = 0;
                     }
@@ -3020,22 +3020,24 @@
 
                 // Show alert modal
                 showAnomalyAlert(deviceKey, anomalyType, currentPower, thresholdValue, deviation);
-            } else {
-                console.log(` Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`);
+             } else {
+                /* console.log(` Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`) */;
                 // Continue checking without sending notification yet
             }
         }
 
         function showAnomalyAlert(deviceKey, type, power, threshold, deviation) {
             var isOverload = type === 'OVERLOAD';
+            var isEnglish = false;
+            try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (e) { }
             var content = '<div class="alert alert-' + (isOverload ? 'danger' : 'warning') + '">' +
-                '<h5><i class="fas ' + (isOverload ? 'fa-bolt' : 'fa-power-off') + '"></i> ' + (isOverload ? 'OVERLOAD' : 'DEVICE DROP') + ' DETECTED</h5>' +
+                '<h5><i class="fas ' + (isOverload ? 'fa-bolt' : 'fa-power-off') + '"></i> ' + (isEnglish ? (isOverload ? 'Overload detected' : 'Device failure detected') : (isOverload ? 'Beban berlebih terdeteksi' : 'Gangguan perangkat terdeteksi')) + '</h5>' +
                 '<hr>' +
-                '<p><strong>Device:</strong> ' + deviceKey + '</p>' +
-                '<p><strong>Power:</strong> ' + formatNumber(power) + ' W</p>' +
-                '<p><strong>Threshold:</strong> ' + formatNumber(threshold) + ' W</p>' +
-                '<p><strong>Deviation:</strong> ' + deviation.toFixed(1) + '%</p>' +
-                '<p><strong>Time:</strong> ' + new Date().toLocaleString('id-ID') + '</p>' +
+                '<p><strong>' + (isEnglish ? 'Device' : 'Perangkat') + ':</strong> ' + deviceKey + '</p>' +
+                '<p><strong>' + (isEnglish ? 'Power' : 'Daya') + ':</strong> ' + formatNumber(power) + ' W</p>' +
+                '<p><strong>' + (isEnglish ? 'Threshold' : 'Ambang batas') + ':</strong> ' + formatNumber(threshold) + ' W</p>' +
+                '<p><strong>' + (isEnglish ? 'Deviation' : 'Deviasi') + ':</strong> ' + deviation.toFixed(1) + '%</p>' +
+                '<p><strong>' + (isEnglish ? 'Time' : 'Waktu') + ':</strong> ' + new Date().toLocaleString(isEnglish ? 'en-US' : 'id-ID') + '</p>' +
                 '</div>';
             $('#anomalyContent').html(content);
             $('#anomalyModal').modal('show');
@@ -3045,7 +3047,7 @@
         // UPDATE PANEL MONITORING
         // ============================================
         function updatePanelMonitoring() {
-            console.log('Updating panel monitoring...');
+            /* console.log('Updatin g panel monitoring...') */;
 
             $.ajax({
                 url: '/api/Api/panels',
@@ -3055,7 +3057,7 @@
                 success: function(panels) {
                     var panel = panels.find(function(p) { return p.deviceKey === deviceKey; });
                     if (!panel) {
-                        console.log('Panel not found');
+                        /* console.log('Panel not found') */;
                         return;
                     }
 
@@ -3154,10 +3156,10 @@
                     $('#loadGauge').removeClass('bg-info bg-warning bg-danger bg-secondary').addClass(loadColor);
 
                     $('#statusText').text('Online');
-                    console.log('Panel monitoring updated');
+                    /* console.log('Panel monitoring updated') */;
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error updating monitoring:', error);
+                    /* console.error('Error updating monitoring:', error) */;
                     $('#statusText').text('Offline');
                 }
             });
@@ -3167,7 +3169,7 @@
         // CHART INITIALIZATION WITH EMA
         // ============================================
         function initDetailCharts() {
-            console.log('Initializing detail charts...');
+            /* console.log('Initializing detail charts...') */;
 
             var commonOptions = {
                 responsive: true,
@@ -3328,7 +3330,7 @@
         // ============================================
         function fetchAndApplyEma(devKey, powerData) {
             if (!devKey) {
-                console.warn('fetchAndApplyEma: deviceKey is missing, using regular EMA');
+                /* console.warn('fetchAndApplyEma: deviceKey is missing, using regular EMA') */;
                 return $.Deferred().resolve(calculateEMA(powerData, emaSettings.period)).promise();
             }
 
@@ -3341,14 +3343,14 @@
                 }).then(function(initialData) {
                     if (initialData.success && initialData.emaBaseline != null) {
                         var emaBaseline = initialData.emaBaseline;
-                        console.log('Using EMA Baseline:', emaBaseline);
+                        /* console.log('Using EMA Baseline:', emaBaseline) */;
                         return calculateEMAWithBaseline(powerData, emaSettings.period, emaBaseline);
                     } else {
-                        console.log('No EMA baseline found, using regular EMA');
+                        /* console.log('No EMA baseline found, using regular EMA') */;
                         return calculateEMA(powerData, emaSettings.period);
                     }
                 }).fail(function() {
-                    console.log('Error fetching EMA baseline, using regular EMA');
+                    /* console.log('Error fetching EMA  baseline, using regular EMA') */;
                     return calculateEMA(powerData, emaSettings.period);
                 });
             } else {
@@ -3360,7 +3362,7 @@
         // DATA LOADING WITH EMA & ANOMALY DETECTION
         // ============================================
         function loadDetailChartData() {
-            console.log('Loading chart data for', deviceKey);
+            /* console.log('Loading char t data for', deviceKey) */;
 
             var points = systemSettings.chartDataPoints || 20;
             $.ajax({
@@ -3469,21 +3471,21 @@
 
                                         charts.power.update('none');
                                     } catch(err) {
-                                        console.error('Error applying EMA to chart:', err);
+                                        /* console.error('Error applying EMA to chart:', err) */;
                                     }
                                 });
                             } else {
-                                charts.power.update('none');
-                            }
+                                charts.power .update('none');
+                             }
                         }
 
-                        console.log('Charts updated');
+                        /* console.log('Charts updated') */;
                     } catch(e) {
-                        console.error('Error updating charts:', e);
-                    }
+                        /* console.error('Error updating charts:', e) */;
+                     }
                 },
-                error: function(xhr, status, error) {
-                    console.error('Error loading chart data:', error);
+                 error: function(xhr, status, error) {
+                    /* console.error('Error loading chart data:', error) */;
                 }
             });
         }
@@ -3540,8 +3542,9 @@
                                     $('#anomalyCount').text(response.totalCount || 0);
                                     d.resolve(mapped, { totalCount: response.totalCount || 0 });
                                 },
-                                error: function(xhr, status, error) {
-                                    console.error('Error loading anomaly logs:', error);
+ 
+                                error: function(xhr , status, error) {
+                                    /* console.error('Error loading anomaly logs:', error) */;
                                     d.reject(error);
                                 }
                             });
@@ -3802,25 +3805,26 @@
         }
 
         // ============================================
-        // AUTO REFRESH
-        // ============================================
+        // AUTO REF RESH
+        // ======================= =====================
         function startAutoRefresh() {
-            console.log('Starting auto-refresh...');
+            /* console.log('Starting auto-refresh...') */;
 
             if (refreshTimer) clearInterval(refreshTimer);
+ 
             if (anomalyTimer) clearInterval(anomalyTimer);
 
             refreshTimer = setInterval(function() {
-                console.log('=== Auto-refresh triggered at', new Date().toLocaleTimeString(), '===');
+                /* console.log('=== Auto-refresh triggered at', new Date().toLocaleTimeString(), '===') */;
                 loadDetailChartData();
                 updatePanelMonitoring();
-            }, systemSettings.refreshInterval * 1000);
+            }, systemSettings.refreshInterval *  1000);
 
             anomalyTimer = setInterval(function() {
                 loadAnomalyLogs();
             }, 30000);
 
-            console.log('Auto-refresh started, interval:', systemSettings.refreshInterval, 'seconds');
+            /* console.log('Auto-refresh started, interval:', systemSettings.refreshInterval, 'seconds') */;
         }
 
         // ============================================
@@ -3851,10 +3855,10 @@
         }
 
         // ============================================
-        // REBUILD CHARTS
+         // REBUILD CHARTS
         // ============================================
         function rebuildCharts() {
-            console.log('Rebuilding charts...');
+            @* console.log('Rebuilding charts...'); *@
             if (charts.voltage) charts.voltage.destroy();
             if (charts.current) charts.current.destroy();
             if (charts.power) charts.power.destroy();
@@ -3863,21 +3867,21 @@
             loadDetailChartData();
         }
 
-        // ============================================
+        // ============================================ 
         // INITIALIZATION
         // ============================================
         $(document).ready(function() {
-            console.log('========================================');
+            @* console.log('========================================' );
             console.log('Details Page Initialized');
             console.log('Device Key:', deviceKey);
-            console.log('========================================');
+            console.log('========================================'); *@
 
             // Load all settings in parallel (including per-device settings), then init charts
             // NOTE: checkDowntimeStatus is NOT called here because currentCategory
             // is not yet known. It will be called after loadDeviceCategory() completes.
             Promise.all([loadEmaSettings(), loadSystemSettings(), loadAnomalyMaxConfirmations(), loadCategoryDowntimeSettings(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
-                console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Device settings:', window.getDeviceSettings ? window.getDeviceSettings(deviceKey) : 'N/A');
-                console.log('All settings loaded, loading categories...');
+                @* console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Device settings:', window.getDeviceSettings ? window.getDeviceSettings(deviceKey) : 'N/A');
+                console.log('All settings loaded, loading categories...'); *@
 
                 // Load categories meta first, then device category, then downtime
                 loadCategoriesMeta().then(function() {
@@ -3891,10 +3895,10 @@
                     // downtime status for the current device category and update UI
                     return checkDowntimeStatus();
                 }).then(function() {
-                    // Update header downtime display with actual data
+                    // Upd ate header downtime display with actual data
                     updateCategoryDowntimeUI(currentCategory);
 
-                    console.log('All settings + categories + downtime loaded, initializing charts...');
+                    @* console.log('All settings + categories + downtime loaded, initializing charts...'); *@
 
                     updateSettingsModalUI();
                     initDetailCharts();
@@ -3916,11 +3920,11 @@
                 });
             });
 
-            $('#statusText').text('Online');
+            $('#statusText').text('Online') ;
 
-            // Load usage statistics when tab is shown
+            // Load usage statistics  when tab is shown
             $('#usage-tab').on('shown.bs.tab', function() {
-                console.log('Usage Statistics tab shown');
+                @* console.log('Usage Statistics tab shown'); *@
                 updateDeviceDateInput();
                 updateDeviceDayName();
                 loadDeviceUsageStatistics();
@@ -3955,12 +3959,12 @@
                     deviceUsageDate = new Date(parts[0], parts[1] - 1, parts[2]);
                     updateDeviceDayName();
                     loadDeviceUsageStatistics();
-                }
+                 }
             });
 
-            // Button handlers
+             // Button handlers
             $('#btnRefresh').click(function() {
-                console.log('Manual refresh clicked');
+                @* console.log('Manual refresh clicked'); *@
                 loadDetailChartData();
                 updatePanelMonitoring();
                 loadAnomalyLogs();
@@ -4040,13 +4044,13 @@
                 emaSettings.showThresholds = displaySettings.showThresholds;
                 emaSettings.showMaxCapacity = displaySettings.showMaxCapacity;
 
-                // Rebuild all charts to apply changes
+                // Rebuild all charts to  apply changes
                 rebuildCharts();
 
                 $('#emaSettingsModal').modal('hide');
             });
 
-            console.log('Initialization Complete');
+            @* console.log('Initialization Complete'); *@
         });
     </script>
     <!-- Anomaly Alert Modal -->

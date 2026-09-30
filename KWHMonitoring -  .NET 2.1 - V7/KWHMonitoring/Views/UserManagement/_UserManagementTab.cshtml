@@ -7,7 +7,7 @@
         </div>
         <div class="settings-section-title">
             <h5>User Management</h5>
-            <p>Kelola akun pengguna lain. Hanya master admin yang dapat mengakses tab ini.</p>
+            <p>Kelola akun pengguna lainnya. Hanya administrator utama yang dapat mengakses tab ini.</p>
         </div>
     </div>
     <div class="settings-section-body">
@@ -16,7 +16,7 @@
             <div class="settings-info-banner settings-info-banner-warning">
                 <i class="fas fa-exclamation-triangle"></i>
                 <div>
-                    <strong>Pindahkan Master Admin</strong> — Pilih user Admin aktif untuk memindahkan hak master admin. Setelah dipindahkan, Anda akan kehilangan akses master admin.
+                    <strong>Alihkan Administrator Utama</strong> — Pilih akun administrator aktif untuk mengalihkan hak administrator utama. Setelah pengalihan, Anda tidak lagi memiliki hak tersebut.
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2 mt-2">
@@ -28,7 +28,7 @@
                     }
                 </select>
                 <button type="button" id="btnTransferMasterAdmin" class="btn btn-sm btn-warning">
-                    <i class="fas fa-exchange-alt"></i> Pindahkan Master Admin
+                    <i class="fas fa-exchange-alt"></i> Alihkan Administrator Utama
                 </button>
             </div>
         </div>
@@ -42,7 +42,7 @@
                         <th>Role</th>
                         <th>Status</th>
                         <th>Terdaftar</th>
-                        <th>Login Terakhir</th>
+                        <th>Waktu Masuk Terakhir</th>
                         <th style="width: 280px;">Aksi</th>
                     </tr>
                 </thead>
@@ -173,6 +173,10 @@
 
 <script>
 (function () {
+    function umIsEnglish() {
+        try { return localStorage.getItem('kwh_language') === 'en'; } catch (_) { return false; }
+    }
+
     function umNotify(message, type) {
         if (typeof showNotification === 'function') {
             showNotification(message, type);
@@ -184,11 +188,11 @@
     function reloadUserManagement() {
         var $container = $('#userManagementContainer');
         if ($container.length) {
-            $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data user...</p></div>');
+            $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data pengguna...</p></div>');
             $.get('/UserManagement/Index', function (html) {
                 $container.html(html);
             }).fail(function () {
-                $container.html('<div class="alert alert-danger">Gagal memuat data user.</div>');
+                $container.html('<div class="alert alert-danger">Gagal memuat data pengguna.</div>');
             });
         }
     }
@@ -211,16 +215,19 @@
         })
         .done(function (data) {
             if (data.success) {
-                umNotify('Role ' + userName + ' diubah ke ' + newRole, 'success');
+                var roleLabel = !umIsEnglish() && newRole === 'Viewer' ? 'Pengamat' : newRole;
+                umNotify(umIsEnglish()
+                    ? 'The role for ' + userName + ' was changed to ' + newRole + '.'
+                    : 'Peran akun ' + userName + ' berhasil diubah menjadi ' + roleLabel + '.', 'success');
                 reloadUserManagement();
             } else {
-                umNotify(data.message || 'Gagal mengubah role.', 'danger');
+                umNotify(data.message || (umIsEnglish() ? 'Failed to change the account role.' : 'Gagal mengubah peran akun.'), 'danger');
                 $select.val(prevRole);
                 $select.prop('disabled', false);
             }
         })
         .fail(function () {
-            umNotify('Gagal menghubungi server.', 'danger');
+            umNotify(umIsEnglish() ? 'Unable to contact the server.' : 'Tidak dapat menghubungi server.', 'danger');
             $select.val(prevRole);
             $select.prop('disabled', false);
         });
@@ -241,7 +248,9 @@
         $pendingToggleBtn = $btn;
         pendingToggleOrigHtml = $btn.html();
 
-        $('#umToggleMessage').text('Yakin ingin ' + action + ' akun ' + email + '?');
+        $('#umToggleMessage').text(umIsEnglish()
+            ? 'Are you sure you want to ' + (action === 'aktifkan' ? 'activate' : 'deactivate') + ' the account ' + email + '?'
+            : 'Apakah Anda yakin ingin ' + action + ' akun ' + email + '?');
         $('#umToggleModal').modal('show');
     });
 
@@ -263,12 +272,12 @@
                 umNotify(data.message, 'success');
                 reloadUserManagement();
             } else {
-                umNotify(data.message || 'Gagal mengubah status.', 'danger');
+                umNotify(data.message || (umIsEnglish() ? 'Failed to change the account status.' : 'Gagal mengubah status akun.'), 'danger');
                 $pendingToggleBtn.prop('disabled', false).html(pendingToggleOrigHtml);
             }
         })
         .fail(function () {
-            umNotify('Gagal menghubungi server.', 'danger');
+            umNotify(umIsEnglish() ? 'Unable to contact the server.' : 'Tidak dapat menghubungi server.', 'danger');
             $pendingToggleBtn.prop('disabled', false).html(pendingToggleOrigHtml);
         });
 
@@ -311,15 +320,17 @@
         })
         .done(function (data) {
             if (data.success) {
-                umNotify('User ' + pendingDeleteEmail + ' berhasil dihapus.', 'success');
+                umNotify(umIsEnglish()
+                    ? 'User account ' + pendingDeleteEmail + ' was deleted successfully.'
+                    : 'Akun pengguna ' + pendingDeleteEmail + ' berhasil dihapus.', 'success');
                 reloadUserManagement();
             } else {
-                umNotify(data.message || 'Gagal menghapus user.', 'danger');
+                umNotify(data.message || 'Gagal menghapus akun pengguna.', 'danger');
                 $pendingDeleteBtn.prop('disabled', false).html(pendingDeleteOrigHtml);
             }
         })
         .fail(function () {
-            umNotify('Gagal menghubungi server.', 'danger');
+            umNotify(umIsEnglish() ? 'Unable to contact the server.' : 'Tidak dapat menghubungi server.', 'danger');
             $pendingDeleteBtn.prop('disabled', false).html(pendingDeleteOrigHtml);
         });
 
@@ -334,16 +345,19 @@
         $transferBtn.on('click', function () {
             var newEmail = $('#transferMasterAdminSelect').val();
             if (!newEmail) {
-                umNotify('Pilih user Admin terlebih dahulu.', 'info');
+                umNotify(umIsEnglish() ? 'Select an administrator account first.' : 'Pilih akun administrator terlebih dahulu.', 'info');
                 return;
             }
 
-            if (!confirm('PERINGATAN: Anda akan memindahkan hak master admin ke ' + newEmail + '.\n\nSetelah dipindahkan, Anda akan kehilangan akses master admin dan tidak dapat mengembalikannya tanpa bantuan master admin baru.\n\nLanjutkan?')) {
+            var confirmMessage = umIsEnglish()
+                ? 'WARNING: You are about to transfer primary administrator privileges to ' + newEmail + '.\n\nAfter the transfer, you will no longer have these privileges. Only the new primary administrator can restore them.\n\nContinue?'
+                : 'PERINGATAN: Anda akan mengalihkan hak administrator utama kepada ' + newEmail + '.\n\nSetelah pengalihan, Anda tidak lagi memiliki hak tersebut. Hak administrator utama hanya dapat dipulihkan oleh administrator utama yang baru.\n\nLanjutkan?';
+            if (!confirm(confirmMessage)) {
                 return;
             }
 
             var origHtml = $transferBtn.html();
-            $transferBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Memproses...');
+            $transferBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> ' + (umIsEnglish() ? 'Processing...' : 'Memproses...'));
 
             $.ajax({
                 url: '/api/Api/transfer-master-admin',
@@ -354,15 +368,15 @@
             })
             .done(function (data) {
                 if (data.success) {
-                    umNotify('Master admin berhasil dipindahkan ke ' + newEmail + '.', 'success');
+                    umNotify(umIsEnglish() ? 'Primary administrator privileges were transferred to ' + newEmail + '.' : 'Hak administrator utama berhasil dialihkan kepada ' + newEmail + '.', 'success');
                     setTimeout(function () { location.reload(); }, 1500);
                 } else {
-                    umNotify(data.error || data.message || 'Gagal memindahkan master admin.', 'danger');
+                    umNotify(data.error || data.message || (umIsEnglish() ? 'Failed to transfer primary administrator privileges.' : 'Gagal mengalihkan hak administrator utama.'), 'danger');
                     $transferBtn.prop('disabled', false).html(origHtml);
                 }
             })
             .fail(function () {
-                umNotify('Gagal menghubungi server.', 'danger');
+                umNotify(umIsEnglish() ? 'Unable to contact the server.' : 'Tidak dapat menghubungi server.', 'danger');
                 $transferBtn.prop('disabled', false).html(origHtml);
             });
         });

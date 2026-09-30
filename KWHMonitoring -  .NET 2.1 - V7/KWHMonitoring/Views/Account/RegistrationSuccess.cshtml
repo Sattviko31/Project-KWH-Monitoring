@@ -1,30 +1,30 @@
 @{
-    ViewData["Title"] = "Registrasi Berhasil";
+    ViewData["Title"] = "Pendaftaran Berhasil";
     Layout = "_Layout";
     ViewData["AuthPage"] = true;
 }
 
 <div class="auth-page">
-    <div class="auth-card auth-card-success" data-card-help="Registrasi Berhasil|Pendaftaran akun sudah diterima sistem.|Langkah berikutnya: cek email untuk tautan verifikasi (berlaku 24 jam).|Setelah verifikasi, menunggu persetujuan master admin sebelum bisa login.">
+    <div class="auth-card auth-card-success" data-card-help="Pendaftaran Berhasil|Pendaftaran akun telah diterima oleh sistem.|Langkah berikutnya, periksa email untuk membuka tautan verifikasi yang berlaku selama 24 jam.|Setelah verifikasi, tunggu persetujuan administrator utama sebelum masuk.">
         <div class="card-body text-center">
             <div class="auth-logo auth-logo-success">
                 <i class="fas fa-envelope-open-text"></i>
             </div>
-            <h3 class="auth-title">Registrasi Berhasil!</h3>
-            <p class="auth-subtitle">Tinggal satu langkah lagi</p>
+            <h3 class="auth-title">Pendaftaran Berhasil!</h3>
+            <p class="auth-subtitle">Satu langkah lagi untuk mengaktifkan akun Anda.</p>
 
             <div class="auth-message">
                 Kami telah mengirimkan email verifikasi ke <strong>@ViewBag.Email</strong>.<br>
-                Silakan cek kotak masuk Anda dan klik link verifikasi untuk melanjutkan.
+                Periksa kotak masuk Anda, lalu buka tautan verifikasi untuk melanjutkan.
             </div>
 
             <a href="/Account/Login" class="auth-btn auth-btn-primary">
-                <i class="fas fa-arrow-left"></i> Ke Halaman Login
+                <i class="fas fa-arrow-left"></i> Ke Halaman Masuk
             </a>
 
             <p class="auth-hint">
                 <i class="fas fa-info-circle text-primary"></i>
-                Setelah verifikasi, admin master akan menerima permintaan persetujuan akses Anda.
+                Setelah verifikasi, administrator utama akan meninjau permintaan akses Anda.
             </p>
         </div>
     </div>

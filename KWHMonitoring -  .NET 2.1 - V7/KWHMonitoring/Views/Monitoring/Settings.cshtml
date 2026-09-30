@@ -1,4 +1,4 @@
-@{
+﻿@{
     ViewData["Title"] = "Settings";
     var settings = ViewBag.CurrentSettings as Dictionary<string, string> ?? new Dictionary<string, string>();
 
@@ -12,13 +12,13 @@
 <div class="erp-breadcrumb">
     <a asp-controller="Monitoring" asp-action="Index"><i class="fas fa-home"></i> Dashboard</a>
     <span class="separator"><i class="fas fa-chevron-right" style="font-size:0.6rem"></i></span>
-    <span class="current">Settings</span>
+    <span class="current">Pengaturan</span>
 </div>
 
 <!-- Page Header -->
 <div class="erp-page-header">
     <div>
-        <h2><i class="fas fa-cog text-primary"></i> System Settings</h2>
+        <h2><i class="fas fa-cog text-primary"></i> Pengaturan Sistem</h2>
         <div class="subtitle">Konfigurasi sistem KWH Monitoring — perubahan tersimpan permanen di database</div>
     </div>
     <div class="actions">
@@ -32,24 +32,24 @@
 <ul class="nav nav-tabs erp-tabs settings-tabs" id="settingsTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab active" id="system-tab" data-toggle="tab" href="#system" role="tab">
-            <i class="fas fa-cog"></i> <span>System</span>
+            <i class="fas fa-cog"></i> <span>Sistem</span>
         </a>
     </li>
     <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="categories-tab" data-toggle="tab" href="#categories" role="tab">
-            <i class="fas fa-sliders-h"></i> <span>Per-Device</span>
+            <i class="fas fa-sliders-h"></i> <span>Perangkat</span>
         </a>
     </li>
     <li class="nav-item" role="presentation">
         <a class="nav-link erp-tab" id="chatbot-tab" data-toggle="tab" href="#chatbot" role="tab">
-            <i class="fas fa-robot"></i> <span>AI Chatbot</span>
+            <i class="fas fa-robot"></i> <span>Asisten AI</span>
         </a>
     </li>
     @if (ViewBag.IsMasterAdmin == true)
     {
         <li class="nav-item" role="presentation">
             <a class="nav-link erp-tab" id="users-tab" data-toggle="tab" href="#users" role="tab">
-                <i class="fas fa-users-cog"></i> <span>User Management</span>
+                <i class="fas fa-users-cog"></i> <span>Manajemen Pengguna</span>
             </a>
         </li>
     }
@@ -69,7 +69,7 @@
                         <i class="fas fa-network-wired text-primary"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>MQTT Connection</h5>
+                        <h5>Koneksi MQTT</h5>
                         <p>Konfigurasi koneksi ke broker MQTT (Mosquitto)</p>
                     </div>
                     <div class="settings-section-action">
@@ -77,7 +77,7 @@
                             <i class="fas fa-plug"></i> Test
                         </button>
                         <button type="button" class="btn btn-primary btn-sm" id="btnSaveMqttSettings">
-                            <i class="fas fa-save"></i> Save
+                            <i class="fas fa-save"></i> Simpan
                         </button>
                         <span class="ms-2" id="connectionStatus"></span>
                     </div>
@@ -85,18 +85,18 @@
                 <div class="settings-section-body">
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">Broker Host / IP</label>
+                            <label class="form-label">Host / Alamat IP Broker</label>
                             <input type="text" class="form-control" id="mqttBroker"
                                    value="@GetSetting("MQTT.Broker", "localhost")"
                                    placeholder="localhost">
-                            <small class="text-muted">IP address atau hostname broker MQTT</small>
+                            <small class="text-muted">Alamat IP atau nama host broker MQTT</small>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Port</label>
                             <input type="number" class="form-control" id="mqttPort"
                                    value="@GetSetting("MQTT.Port", "1883")"
                                    placeholder="1883">
-                            <small class="text-muted">Default Mosquitto: 1883</small>
+                            <small class="text-muted">Port bawaan Mosquitto: 1883</small>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Client ID</label>
@@ -105,10 +105,10 @@
                                    placeholder="KWHMonitoringWeb">
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Use TLS</label>
+                            <label class="form-label">Gunakan TLS</label>
                             <select class="form-select" id="mqttUseTls">
-                                <option value="false">No</option>
-                                <option value="true">Yes</option>
+                                <option value="false">Tidak</option>
+                                <option value="true">Ya</option>
                             </select>
                             <script>
                                 (function() {
@@ -118,16 +118,16 @@
                             </script>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Username</label>
+                            <label class="form-label">Nama Pengguna</label>
                             <input type="text" class="form-control" id="mqttUsername"
                                    value="@GetSetting("MQTT.Username", "")"
-                                   placeholder="(optional)">
+                                   placeholder="(opsional)">
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Password</label>
+                            <label class="form-label">Kata Sandi</label>
                             <input type="password" class="form-control" id="mqttPassword"
                                    value="@GetSetting("MQTT.Password", "")"
-                                   placeholder="(optional)">
+                                   placeholder="(opsional)">
                         </div>
                     </div>
 
@@ -138,36 +138,36 @@
                                 <i class="fas fa-shield-alt text-primary"></i> TLS / SSL Certificate Options
                             </h6>
                             <small class="text-muted" style="font-size:0.74rem;">
-                                Port standar MQTT over TLS: <b>8883</b>. Sertifikat di-upload dan disimpan di server, lalu langsung dipakai untuk Test Connection &amp; koneksi produksi.
+                                Port standar MQTT over TLS: <b>8883</b>. Sertifikat di-upload dan disimpan di server, lalu langsung dipakai untuk Uji Koneksi &amp; koneksi produksi.
                             </small>
                         </div>
                         <div class="settings-grid">
                             <div class="settings-field">
-                                <label class="form-label">CA Certificate <span class="text-muted">(opsional)</span></label>
+                                <label class="form-label">Sertifikat CA <span class="text-muted">(opsional)</span></label>
                                 <input type="file" class="form-control" id="mqttCaCertFile" accept=".pem,.crt,.cer,.der">
                                 <small class="text-muted" id="mqttCaCertStatus" data-stored="@GetSetting("MQTT.TlsCaCertFile", "")"></small>
                                 <small class="text-muted">Validasi identitas broker (.pem / .crt / .cer / .der)</small>
                             </div>
                             <div class="settings-field">
-                                <label class="form-label">Client Certificate <span class="text-muted">(opsional)</span></label>
+                                <label class="form-label">Sertifikat Klien <span class="text-muted">(opsional)</span></label>
                                 <input type="file" class="form-control" id="mqttClientCertFile" accept=".pfx,.p12">
                                 <small class="text-muted" id="mqttClientCertStatus" data-stored="@GetSetting("MQTT.TlsClientCertFile", "")"></small>
-                                <small class="text-muted">Autentikasi client ke broker — mutual TLS (.pfx / .p12)</small>
+                                <small class="text-muted">Autentikasi klien ke broker — TLS timbal balik (.pfx / .p12)</small>
                             </div>
                             <div class="settings-field">
-                                <label class="form-label">Client Certificate Password</label>
+                                <label class="form-label">Kata Sandi Sertifikat Klien</label>
                                 <input type="password" class="form-control" id="mqttClientCertPassword"
                                        value="@GetSetting("MQTT.TlsClientCertPassword", "")"
-                                       placeholder="(optional)">
-                                <small class="text-muted">Password file .pfx — isi sebelum upload bila diperlukan</small>
+                                       placeholder="(opsional)">
+                                <small class="text-muted">Kata sandi berkas .pfx — isi sebelum mengunggah berkas jika diperlukan.</small>
                             </div>
                             <div class="settings-field">
-                                <label class="form-label">Skip Certificate Validation</label>
+                                <label class="form-label">Lewati Validasi Sertifikat</label>
                                 <select class="form-select" id="mqttSkipCertValidation">
-                                    <option value="false">No</option>
-                                    <option value="true">Yes</option>
+                                    <option value="false">Tidak</option>
+                                    <option value="true">Ya</option>
                                 </select>
-                                <small class="text-muted">Abaikan validasi sertifikat broker (self-signed tanpa CA)</small>
+                                <small class="text-muted">Abaikan validasi sertifikat broker (ditandatangani sendiri tanpa CA)</small>
                                 <script>
                                     (function() {
                                         var skipValidation = '@GetSetting("MQTT.TlsSkipCertValidation", "false")' === 'true';
@@ -187,22 +187,22 @@
                         <i class="fas fa-clock text-success"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>Sampling Interval</h5>
-                        <p>Interval refresh data untuk setiap halaman monitoring</p>
+                        <h5>Interval Pengambilan Data</h5>
+                        <p>Jangka waktu pembaruan data pada setiap halaman pemantauan.</p>
                     </div>
                     <div class="settings-section-action">
                         <button type="button" class="btn btn-outline-success btn-sm me-1" id="btnSyncIntervals">
                             <i class="fas fa-sync-alt"></i> Sync
                         </button>
                         <button type="button" class="btn btn-primary btn-sm" id="btnSaveIntervalSettings">
-                            <i class="fas fa-save"></i> Save
+                            <i class="fas fa-save"></i> Simpan
                         </button>
                     </div>
                 </div>
                 <div class="settings-section-body">
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">Dashboard Refresh</label>
+                            <label class="form-label">Pembaruan Dasbor</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="dashboardInterval"
                                        value="@GetSetting("Interval.Dashboard", "10")"
@@ -212,7 +212,7 @@
                             <small class="text-muted">Min: 5, Max: 300</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Charts Refresh</label>
+                            <label class="form-label">Pembaruan Grafik</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="chartsInterval"
                                        value="@GetSetting("Interval.Charts", "10")"
@@ -222,7 +222,7 @@
                             <small class="text-muted">Min: 5, Max: 300</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Details Page</label>
+                            <label class="form-label">Halaman Detail</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="detailsInterval"
                                        value="@GetSetting("Interval.Details", "10")"
@@ -232,7 +232,7 @@
                             <small class="text-muted">Min: 5, Max: 300</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Anomaly Check</label>
+                            <label class="form-label">Pemeriksaan Anomali</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="anomalyInterval"
                                        value="@GetSetting("Interval.Anomaly", "10")"
@@ -242,7 +242,7 @@
                             <small class="text-muted">Min: 5, Max: 300</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Chart Data Points</label>
+                            <label class="form-label">Jumlah Titik Data Grafik</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="chartDataPoints"
                                        value="@GetSetting("Chart.DataPoints", "20")"
@@ -252,14 +252,14 @@
                             <small class="text-muted">Jumlah titik data pada grafik</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Auto-Scan</label>
+                            <label class="form-label">Pemindaian Otomatis</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="autoScanInterval"
                                        value="@GetSetting("Interval.AutoScan", "60")"
                                        min="30" max="600" placeholder="60">
                                 <small class="text-muted">detik</small>
                             </div>
-                            <small class="text-muted">Interval scan panel baru</small>
+                            <small class="text-muted">Jangka waktu pemindaian panel baru.</small>
                         </div>
                     </div>
                 </div>
@@ -274,13 +274,13 @@
                         <i class="fas fa-envelope text-primary"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>Email Notification</h5>
+                        <h5>Notifikasi Email</h5>
                         <p>Konfigurasi SMTP untuk pengiriman email notifikasi</p>
                     </div>
                     <div class="settings-section-action">
                         <div class="form-check form-switch me-2">
                             <input class="form-check-input" type="checkbox" id="enableEmail">
-                            <label class="form-check-label small">Enable</label>
+                            <label class="form-check-label small">Aktifkan</label>
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmailSettings">
                             <i class="fas fa-save"></i> Save
@@ -300,32 +300,32 @@
                             <small class="text-muted">587 (TLS) atau 465 (SSL)</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Sender Email</label>
+                            <label class="form-label">Alamat Email Pengirim</label>
                             <input type="email" class="form-control" id="senderEmail" placeholder="your.email@gmail.com">
-                            <small class="text-muted">Email pengirim notifikasi</small>
+                            <small class="text-muted">Alamat email yang digunakan untuk mengirim notifikasi.</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">App Password</label>
-                            <input type="password" class="form-control" id="senderPassword" placeholder="App Password">
-                            <small class="text-muted">Gunakan App Password jika pakai Gmail</small>
+                            <label class="form-label">Kata Sandi Aplikasi</label>
+                            <input type="password" class="form-control" id="senderPassword" placeholder="Kata Sandi Aplikasi">
+                            <small class="text-muted">Gunakan kata sandi aplikasi jika menggunakan Gmail.</small>
                         </div>
                         <div class="settings-field settings-field-full">
-                            <label class="form-label">Master Admin Email</label>
+                            <label class="form-label">Email Administrator Utama</label>
                             <input type="email" class="form-control" id="masterAdminEmail" placeholder="master.admin@gmail.com" readonly>
-                            <small class="text-muted">Email admin master untuk verifikasi pendaftaran user baru. Hanya dapat diubah melalui User Management oleh master admin.</small>
+                            <small class="text-muted">Alamat email administrator yang menerima permintaan verifikasi pendaftaran pengguna baru. Pengaturan ini hanya dapat diubah oleh administrator utama melalui Manajemen Pengguna.</small>
                         </div>
                         <div class="settings-field settings-field-full">
                             <div class="settings-info-banner settings-info-banner-info">
                                 <i class="fas fa-info-circle"></i>
                                 <div>
-                                    <strong>Penerima Laporan Otomatis</strong> — Semua laporan (Alert, Hourly, Daily, Monthly) dikirim otomatis ke seluruh user aktif dengan role <strong>Operator</strong> dan <strong>Admin</strong>. Tidak perlu input manual.
+                                    <strong>Penerima Laporan Otomatis</strong> — Semua laporan (peringatan, per jam, harian, dan bulanan) dikirim secara otomatis kepada seluruh pengguna aktif dengan peran <strong>Operator</strong> atau <strong>Administrator</strong>. Alamat penerima tidak perlu dimasukkan secara manual.
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="settings-section-footer">
                         <button class="btn btn-outline-primary btn-sm" id="btnTestEmail">
-                            <i class="fas fa-paper-plane"></i> Test Email
+                            <i class="fas fa-paper-plane"></i> Uji Pengiriman Email
                         </button>
                     </div>
                 </div>
@@ -338,13 +338,13 @@
                         <i class="fab fa-whatsapp text-success"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>WhatsApp Notification</h5>
+                        <h5>Notifikasi WhatsApp</h5>
                         <p>Konfigurasi Wablas API untuk pengiriman pesan WhatsApp</p>
                     </div>
                     <div class="settings-section-action">
                         <div class="form-check form-switch me-2">
                             <input class="form-check-input" type="checkbox" id="enableWhatsApp">
-                            <label class="form-check-label small">Enable</label>
+                            <label class="form-check-label small">Aktifkan</label>
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" id="btnSaveWhatsappSettings">
                             <i class="fas fa-save"></i> Save
@@ -355,23 +355,23 @@
                     <div class="settings-info-banner settings-info-banner-info">
                         <i class="fas fa-info-circle"></i>
                         <div>
-                            <strong>Wablas</strong> — WhatsApp Gateway API untuk Indonesia.
+                            <strong>Wablas</strong> — layanan API gerbang WhatsApp untuk Indonesia.
                             <a href="https://wablas.com" target="_blank">Daftar di wablas.com <i class="fas fa-external-link-alt"></i></a>
                         </div>
                     </div>
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">Server URL</label>
+                            <label class="form-label">URL Server</label>
                             <input type="text" class="form-control" id="wablasServerUrl"
                                    placeholder="https://pati.wablas.com">
                         </div>
                         <div class="settings-field">
                             <label class="form-label">API Token</label>
-                            <input type="password" class="form-control" id="wablasToken" placeholder="Token dari dashboard Wablas">
+                            <input type="password" class="form-control" id="wablasToken" placeholder="Token dari dasbor Wablas">
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Secret Key</label>
-                            <input type="password" class="form-control" id="wablasSecretKey" placeholder="Secret key dari dashboard Wablas">
+                            <input type="password" class="form-control" id="wablasSecretKey" placeholder="Kunci rahasia dari dasbor Wablas">
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Nomor WhatsApp Penerima</label>
@@ -382,10 +382,10 @@
                     </div>
                     <div class="settings-section-footer">
                         <button class="btn btn-outline-success btn-sm" type="button" id="btnTestWablas">
-                            <i class="fab fa-whatsapp"></i> Test Kirim
+                            <i class="fab fa-whatsapp"></i> Uji Pengiriman
                         </button>
                         <button class="btn btn-outline-info btn-sm" type="button" id="btnCheckWablasDevice">
-                            <i class="fas fa-mobile-alt"></i> Cek Device
+                            <i class="fas fa-mobile-alt"></i> Periksa Perangkat
                         </button>
                         <div id="wablasStatus" class="ms-2"></div>
                     </div>
@@ -411,35 +411,35 @@
                 <div class="settings-section-body">
                     <!-- Report Toggles -->
                     <div class="settings-toggles-grid">
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Instant Alert|Kirim notifikasi email ke admin begitu anomali terdeteksi (daya melampaui threshold).|Pemicu: daya/tegangan di luar batas → 1 notifikasi per kejadian|Jika nonaktif, anomali tetap tercatat di Anomaly Logs.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Peringatan Langsung|Kirim notifikasi email kepada administrator segera setelah anomali terdeteksi (daya melampaui ambang batas).|Pemicu: daya/tegangan di luar batas → 1 notifikasi per kejadian|Jika nonaktif, anomali tetap tercatat di Log Anomali.">
                             <input type="checkbox" id="sendInstantAlert" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-bell text-danger"></i>
-                                <strong>Instant Alert</strong>
+                                <strong>Peringatan Seketika</strong>
                                 <small>Notifikasi saat anomali terdeteksi</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Hourly Report|Kirim ringkasan konsumsi listrik setiap 1 jam.|Isi: kWh per jam, daya rata-rata, dan status device|Alamat penerima mengikuti pengaturan email di bagian atas halaman.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Laporan Per Jam|Kirim ringkasan konsumsi listrik setiap 1 jam.|Isi: kWh per jam, daya rata-rata, dan status perangkat|Alamat penerima mengikuti pengaturan email di bagian atas halaman.">
                             <input type="checkbox" id="sendHourlyReport" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-clock text-warning"></i>
-                                <strong>Hourly Report</strong>
+                                <strong>Laporan Per Jam</strong>
                                 <small>Laporan setiap 1 jam</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Daily Report|Kirim ringkasan konsumsi harian (00:00–23:59).|Isi: total kWh, biaya per hari, peak, dan perbandingan hari sebelumnya|Dibuat setelah agregasi harian selesai.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Laporan Harian|Kirim ringkasan konsumsi harian (00:00–23:59).|Isi: total kWh, biaya per hari, puncak, dan perbandingan hari sebelumnya|Dibuat setelah agregasi harian selesai.">
                             <input type="checkbox" id="sendDailyReport">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-calendar-alt text-success"></i>
-                                <strong>Daily Report</strong>
+                                <strong>Laporan Harian</strong>
                                 <small>Laporan harian</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Monthly Report|Kirim ringkasan konsumsi bulanan.|Isi: total kWh &amp; biaya bulan, WBP/LWBP, MoM, YoY, dan status budget|Berguna untuk pelaporan keuangan bulanan.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Laporan Bulanan|Kirim ringkasan konsumsi bulanan.|Isi: total kWh &amp; biaya bulan, WBP/LWBP, perubahan bulanan, perubahan tahunan, dan status anggaran|Berguna untuk pelaporan keuangan bulanan.">
                             <input type="checkbox" id="sendMonthlyReport">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-calendar-check text-primary"></i>
-                                <strong>Monthly Report</strong>
+                                <strong>Laporan Bulanan</strong>
                                 <small>Laporan bulanan</small>
                             </div>
                         </label>
@@ -450,52 +450,52 @@
                     <!-- Schedule Settings -->
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">Hourly Report Schedule</label>
+                            <label class="form-label">Jadwal Laporan Per Jam</label>
                             <div class="form-control bg-light d-flex align-items-center" style="cursor: default;">
                                 <i class="fas fa-clock text-warning me-2"></i> Setiap jam tepat (00:00, 01:00, 02:00, dst)
                             </div>
                             <small class="form-text text-muted">Laporan dikirim otomatis setiap jam pada menit ke-0</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Daily Report Time</label>
+                            <label class="form-label">Waktu Pengiriman Laporan Harian</label>
                             <input type="time" class="form-control" id="dailyReportTime" value="08:00">
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Monthly Report Day & Time</label>
+                            <label class="form-label">Tanggal dan Waktu Pengiriman Laporan Bulanan</label>
                             <div class="input-group">
                                 <select class="form-select" id="monthlyReportDay">
-                                    <option value="1">Tgl 1</option>
-                                    <option value="2">Tgl 2</option>
-                                    <option value="3">Tgl 3</option>
-                                    <option value="4">Tgl 4</option>
-                                    <option value="5">Tgl 5</option>
-                                    <option value="6">Tgl 6</option>
-                                    <option value="7">Tgl 7</option>
-                                    <option value="8">Tgl 8</option>
-                                    <option value="9">Tgl 9</option>
-                                    <option value="10">Tgl 10</option>
-                                    <option value="11">Tgl 11</option>
-                                    <option value="12">Tgl 12</option>
-                                    <option value="13">Tgl 13</option>
-                                    <option value="14">Tgl 14</option>
-                                    <option value="15">Tgl 15</option>
-                                    <option value="16">Tgl 16</option>
-                                    <option value="17">Tgl 17</option>
-                                    <option value="18">Tgl 18</option>
-                                    <option value="19">Tgl 19</option>
-                                    <option value="20">Tgl 20</option>
-                                    <option value="21">Tgl 21</option>
-                                    <option value="22">Tgl 22</option>
-                                    <option value="23">Tgl 23</option>
-                                    <option value="24">Tgl 24</option>
-                                    <option value="25">Tgl 25</option>
-                                    <option value="26">Tgl 26</option>
-                                    <option value="27">Tgl 27</option>
-                                    <option value="28">Tgl 28</option>
+                                    <option value="1">Tanggal 1</option>
+                                    <option value="2">Tanggal 2</option>
+                                    <option value="3">Tanggal 3</option>
+                                    <option value="4">Tanggal 4</option>
+                                    <option value="5">Tanggal 5</option>
+                                    <option value="6">Tanggal 6</option>
+                                    <option value="7">Tanggal 7</option>
+                                    <option value="8">Tanggal 8</option>
+                                    <option value="9">Tanggal 9</option>
+                                    <option value="10">Tanggal 10</option>
+                                    <option value="11">Tanggal 11</option>
+                                    <option value="12">Tanggal 12</option>
+                                    <option value="13">Tanggal 13</option>
+                                    <option value="14">Tanggal 14</option>
+                                    <option value="15">Tanggal 15</option>
+                                    <option value="16">Tanggal 16</option>
+                                    <option value="17">Tanggal 17</option>
+                                    <option value="18">Tanggal 18</option>
+                                    <option value="19">Tanggal 19</option>
+                                    <option value="20">Tanggal 20</option>
+                                    <option value="21">Tanggal 21</option>
+                                    <option value="22">Tanggal 22</option>
+                                    <option value="23">Tanggal 23</option>
+                                    <option value="24">Tanggal 24</option>
+                                    <option value="25">Tanggal 25</option>
+                                    <option value="26">Tanggal 26</option>
+                                    <option value="27">Tanggal 27</option>
+                                    <option value="28">Tanggal 28</option>
                                 </select>
                                 <input type="time" class="form-control" id="monthlyReportTime" value="08:00">
                             </div>
-                            <small class="text-muted">Hari ke-X setiap bulan & jam pengiriman</small>
+                            <small class="text-muted">Tanggal pengiriman pada setiap bulan dan waktu pengiriman.</small>
                         </div>
                     </div>
 
@@ -504,16 +504,16 @@
                     <!-- Test Buttons -->
                     <div class="settings-test-grid">
                         <button type="button" class="btn btn-test-danger" id="btnTestInstantAlert">
-                            <i class="fas fa-bell"></i> Test Instant
+                            <i class="fas fa-bell"></i> Uji Peringatan
                         </button>
                         <button type="button" class="btn btn-test-warning" id="btnTestHourlyReport">
-                            <i class="fas fa-clock"></i> Test Hourly
+                            <i class="fas fa-clock"></i> Uji Laporan Per Jam
                         </button>
                         <button type="button" class="btn btn-test-success" id="btnTestDailyReport">
-                            <i class="fas fa-calendar-alt"></i> Test Daily
+                            <i class="fas fa-calendar-alt"></i> Uji Laporan Harian
                         </button>
                         <button type="button" class="btn btn-test-info" id="btnTestMonthlyReport">
-                            <i class="fas fa-calendar-check"></i> Test Monthly
+                            <i class="fas fa-calendar-check"></i> Uji Laporan Bulanan
                         </button>
                     </div>
                 </div>
@@ -526,8 +526,8 @@
                         <i class="fas fa-chart-line text-primary"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>EMA (Exponential Moving Average)</h5>
-                        <p>Konfigurasi deteksi anomali pada chart Power</p>
+                        <h5>EMA (Rata-rata Bergerak Eksponensial)</h5>
+                        <p>Pengaturan deteksi anomali pada grafik daya.</p>
                     </div>
                     <div class="settings-section-action">
                         <button type="button" class="btn btn-primary btn-sm" id="btnSaveEmaSectionSettings">
@@ -538,12 +538,12 @@
                 <div class="settings-section-body">
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">EMA Period</label>
+                            <label class="form-label">Periode EMA</label>
                             <input type="number" class="form-control" id="emaPeriod" value="20" min="1" max="1000000" step="1">
-                            <small class="text-muted">Kecil = responsif, Besar = smooth</small>
+                            <small class="text-muted">Nilai kecil membuat garis lebih responsif; nilai besar membuatnya lebih halus.</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">Auto-Refresh Interval</label>
+                            <label class="form-label">Interval Pembaruan Otomatis</label>
                             <input type="number" class="form-control" id="emaRefreshInterval" value="10" min="5" max="300">
                             <small class="text-muted">detik</small>
                         </div>
@@ -558,27 +558,27 @@
 
                     <!-- Toggle Options -->
                     <div class="settings-toggles-grid">
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Show EMA Line|Menampilkan garis Exponential Moving Average (EMA) pada Power Chart.|EMA_t = α × P_t + (1 − α) × EMA_(t−1), dengan α = 2 ÷ (n + 1)|Membantu melihat tren daya tanpa noise fluktuasi.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Tampilkan Garis EMA|Menampilkan garis Exponential Moving Average (EMA) pada Grafik daya.|EMA_t = α × P_t + (1 − α) × EMA_(t−1), dengan α = 2 ÷ (n + 1)|Membantu melihat tren daya tanpa gangguan akibat fluktuasi.">
                             <input type="checkbox" id="emaShowLine" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-chart-line text-primary"></i>
-                                <strong>Show EMA Line</strong>
-                                <small>Tampilkan garis EMA pada Power Chart</small>
+                                <strong>Tampilkan Garis EMA</strong>
+                                <small>Tampilkan garis EMA pada grafik daya.</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Show Threshold Lines|Menampilkan garis batas Upper/Lower Threshold pada Power Chart.|Batas diambil dari threshold device/Day vs Weekend pada bagian konfigurasi|Daya melewati garis = indikasi anomali atau waste.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="Tampilkan Garis Ambang Batas|Menampilkan garis batas ambang batas atas/bawah pada Grafik daya.|Batas diambil dari ambang batas perangkat/hari kerja dan akhir pekan pada bagian konfigurasi|Daya melewati garis = indikasi anomali atau pemborosan.">
                             <input type="checkbox" id="emaShowThresholds" checked>
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-arrows-alt-v text-warning"></i>
-                                <strong>Show Threshold Lines</strong>
-                                <small>Tampilkan garis Upper/Lower Threshold</small>
+                                <strong>Tampilkan Garis Ambang Batas</strong>
+                                <small>Tampilkan garis ambang batas atas dan bawah.</small>
                             </div>
                         </label>
-                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="100 Initial Points|Gunakan 100 titik data pertama sebagai baseline perhitungan EMA.|Rumus: EMA dihitung dari rata-rata 100 sampel awal, bukan 1 sampel|Menghindari lonjakan semu di awal grafik saat data masih sedikit.">
+                        <label class="settings-toggle-card" data-card-help-pos="below" data-card-help="100 Titik Data Awal|Gunakan 100 titik data pertama sebagai nilai acuan perhitungan EMA.|Rumus: EMA dihitung dari rata-rata 100 sampel awal, bukan 1 sampel|Menghindari lonjakan semu di awal grafik saat data masih sedikit.">
                             <input type="checkbox" id="useInitial100ForEma">
                             <div class="settings-toggle-card-inner">
                                 <i class="fas fa-database text-info"></i>
-                                <strong>100 Initial Points</strong>
+                                <strong>100 Titik Awal</strong>
                                 <small>Gunakan 100 data pertama untuk EMA baseline</small>
                             </div>
                         </label>
@@ -593,17 +593,17 @@
             <div class="settings-save-bar-inner">
                 @* <div class="settings-save-bar-info">
                     <i class="fas fa-info-circle text-muted"></i>
-                    <span>Perubahan System Settings akan tersimpan permanen di database</span>
+                    <span>Perubahan pengaturan sistem akan tersimpan di basis data.</span>
                 </div> *@
                 <div class="settings-save-bar-actions">
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetSystemSettings">
-                        <i class="fas fa-undo"></i> Reset Default
+                        <i class="fas fa-undo"></i> Pulihkan Pengaturan Bawaan
                     </button>
                     @* <button type="button" class="btn btn-outline-info btn-sm" id="btnExportSettings">
                         <i class="fas fa-download"></i> Export
                     </button> *@
                     <button type="button" class="btn btn-primary btn-sm" id="btnSaveSystemSettings">
-                        <i class="fas fa-save"></i> Save Settings
+                        <i class="fas fa-save"></i> Simpan Pengaturan
                     </button>
                 </div>
             </div>
@@ -628,12 +628,12 @@
                         <i class="fas fa-robot text-primary"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>AI Chatbot Configuration</h5>
+                        <h5>Pengaturan Asisten AI</h5>
                         <p>Konfigurasi provider, API key, dan model AI untuk asisten Voltra</p>
                     </div>
                     <div class="settings-section-action">
                         <button type="button" class="btn btn-outline-primary btn-sm chatbot-test-btn" id="btnTestChatbotConnection">
-                            <i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>
+                            <i class="fas fa-plug"></i> <span class="chatbot-btn-label">Uji Koneksi</span>
                         </button>
                         <span class="ms-2 d-inline-block" id="chatbotConnectionStatus"></span>
                     </div>
@@ -649,7 +649,7 @@
                     </div>
                     <div class="settings-grid">
                         <div class="settings-field">
-                            <label class="form-label">AI Provider</label>
+                            <label class="form-label">Penyedia AI</label>
                             <select class="form-select" id="chatbotProvider">
                                 <option value="qwen" selected>Qwen (Alibaba Cloud)</option>
                                 <option value="openai">OpenAI</option>
@@ -663,31 +663,31 @@
                                 <option value="siliconflow">SiliconFlow</option>
                                 <option value="mistral">Mistral AI</option>
                                 <option value="cohere">Cohere</option>
-                                <option value="custom">Custom Provider...</option>
+                                <option value="custom">Penyedia Khusus...</option>
                             </select>
-                            <small class="text-muted">Pilih provider AI — URL & model otomatis menyesuaikan</small>
+                            <small class="text-muted">Pilih penyedia AI; URL dan model akan disesuaikan secara otomatis.</small>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">API Key</label>
                             <input type="password" class="form-control" id="chatbotApiKey"
-                                   placeholder="Masukkan API key baru untuk mengganti">
-                            <small class="text-muted">Kosongkan jika tidak ingin mengubah API key</small>
+                                   placeholder="Masukkan kunci API baru sebagai pengganti kunci saat ini">
+                            <small class="text-muted">Kosongkan jika tidak ingin mengubah kunci API.</small>
                         </div>
                         <div class="settings-field">
-                            <label class="form-label">AI Model</label>
+                            <label class="form-label">Model AI</label>
                             <select class="form-select" id="chatbotModel">
                                 <!-- Dynamically populated based on provider -->
                             </select>
                             <small class="text-muted">Model</small>
                         </div>
                         <div class="settings-field settings-field-full" id="customModelField" style="display: none;">
-                            <label class="form-label">Custom Model Name</label>
+                            <label class="form-label">Nama Model Khusus</label>
                             <input type="text" class="form-control" id="chatbotCustomModel"
-                                   placeholder="Masukkan nama model custom">
+                                   placeholder="Masukkan nama model khusus">
                             <small class="text-muted">Nama model</small>
                         </div>
                         <div class="settings-field settings-field-full" id="customProviderUrlField" style="display: none;">
-                            <label class="form-label">Custom API Endpoint URL</label>
+                            <label class="form-label">URL Endpoint API Khusus</label>
                             <input type="url" class="form-control" id="chatbotCustomApiUrl"
                                    placeholder="https://api.your-provider.com/v1/chat/completions">
                             <small class="text-muted">URL endpoint (harus OpenAI-compatible <code>/chat/completions</code>)</small>
@@ -703,7 +703,7 @@
                         <i class="fas fa-info-circle text-info"></i>
                     </div>
                     <div class="settings-section-title">
-                        <h5>Status & Info</h5>
+                        <h5>Status dan Informasi</h5>
                         <p>Informasi koneksi dan konfigurasi chatbot saat ini</p>
                     </div>
                 </div>
@@ -738,10 +738,10 @@
             <div class="settings-save-bar-inner">
                 <div class="settings-save-bar-actions">
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetChatbotSettings">
-                        <i class="fas fa-undo"></i> <span class="chatbot-btn-label">Reset Default</span>
+                        <i class="fas fa-undo"></i> <span class="chatbot-btn-label">Pulihkan Bawaan</span>
                     </button>
                     <button type="button" class="btn btn-primary btn-sm" id="btnSaveChatbotSettings">
-                        <i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>
+                        <i class="fas fa-save"></i> <span class="chatbot-btn-label">Simpan Pengaturan</span>
                     </button>
                 </div>
             </div>
@@ -756,7 +756,7 @@
             <div id="userManagementContainer">
                 <div class="text-center py-5">
                     <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-                    <p class="text-muted mt-2">Memuat data user...</p>
+                    <p class="text-muted mt-2">Memuat data pengguna...</p>
                 </div>
             </div>
         </div>
@@ -818,11 +818,11 @@
             function loadUserManagementTab() {
                 var $container = $('#userManagementContainer');
                 if ($container.length) {
-                    $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data user...</p></div>');
+                    $container.html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><p class="text-muted mt-2">Memuat data pengguna...</p></div>');
                     $.get('/UserManagement/Index', function(html) {
                         $container.html(html);
                     }).fail(function() {
-                        $container.html('<div class="alert alert-danger">Gagal memuat data user.</div>');
+                        $container.html('<div class="alert alert-danger">Gagal memuat data pengguna.</div>');
                     });
                 }
             }
@@ -843,13 +843,13 @@
                 $('#chartsInterval').val(dashboardValue);
                 $('#detailsInterval').val(dashboardValue);
                 $('#anomalyInterval').val(dashboardValue);
-                showNotification('All intervals synced to ' + dashboardValue + ' seconds', 'success');
+                showNotification('Semua interval telah diselaraskan menjadi ' + dashboardValue + ' detik', 'success');
             });
 
             // Test MQTT connection
             $('#btnTestConnection').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Testing...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menguji...');
                 $('#connectionStatus').html('').removeClass('text-success text-danger');
 
                 var connectionData = {
@@ -869,9 +869,9 @@
                     contentType: 'application/json',
                     data: JSON.stringify(connectionData),
                     success: function(response) {
-                        $('#connectionStatus').html('<i class="fas fa-check-circle text-success"></i> Connection successful!').addClass('text-success');
-                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
-                        showNotification('MQTT connection successful!', 'success');
+                        $('#connectionStatus').html('<i class="fas fa-check-circle text-success"></i> Koneksi berhasil.').addClass('text-success');
+                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Uji Koneksi');
+                        showNotification('Koneksi MQTT berhasil.', 'success');
                     },
                     error: function(xhr) {
                         var errorMsg = 'Connection failed';
@@ -880,8 +880,8 @@
                             errorMsg = response.error || errorMsg;
                         } catch(e) {}
                         $('#connectionStatus').html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg).addClass('text-danger');
-                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Test Connection');
-                        showNotification('MQTT connection failed: ' + errorMsg, 'danger');
+                        btn.prop('disabled', false).html('<i class="fas fa-plug"></i> Uji Koneksi');
+                        showNotification('Koneksi MQTT gagal: ' + errorMsg, 'danger');
                     }
                 });
             });
@@ -894,7 +894,7 @@
                     'Simpan System Settings',
                     'Apakah Anda yakin ingin menyimpan perubahan System Settings?',
                     function() {
-                        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
 
                         var settings = {
                             'MQTT.Broker': $('#mqttBroker').val(),
@@ -923,14 +923,14 @@
                                 var notifReq = saveNotificationSettingsAjax();
                                 var emaReq = saveEmaSettingsAjax();
                                 $.when(notifReq, emaReq).always(function() {
-                                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                                    showNotification('All settings saved successfully!', 'success');
+                                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> Simpan Pengaturan');
+                                    showNotification('Semua pengaturan berhasil disimpan.', 'success');
                                     setTimeout(function() { location.reload(); }, 1000);
                                 });
                             },
                             error: function(xhr) {
-                                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Settings');
-                                showNotification('Error saving settings', 'danger');
+                                btn.prop('disabled', false).html('<i class="fas fa-save"></i> Simpan Pengaturan');
+                                showNotification('Gagal menyimpan pengaturan.', 'danger');
                             }
                         });
                     }
@@ -959,7 +959,7 @@
                     $('#autoScanInterval').val('60');
                     resetNotificationSettings();
                     resetEmaSettings();
-                    showNotification('Settings reset to default. Click Save to apply.', 'info');
+                    showNotification('Pengaturan bawaan dipulihkan. Klik Simpan untuk menerapkannya.', 'info');
                 }
             });
 
@@ -970,7 +970,7 @@
             // Save MQTT settings only
             $('#btnSaveMqttSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 var settings = {
                     'MQTT.Broker': $('#mqttBroker').val(),
                     'MQTT.Port': $('#mqttPort').val(),
@@ -987,10 +987,10 @@
                     contentType: 'application/json',
                     data: JSON.stringify(settings),
                     success: function() {
-                        showNotification('MQTT settings saved!', 'success');
+                        showNotification('Pengaturan MQTT berhasil disimpan.', 'success');
                     },
                     error: function() {
-                        showNotification('Error saving MQTT settings', 'danger');
+                        showNotification('Gagal menyimpan pengaturan MQTT.', 'danger');
                     },
                     complete: function() {
                         btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save');
@@ -1001,7 +1001,7 @@
             // Save Sampling Interval settings only
             $('#btnSaveIntervalSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 var settings = {
                     'Interval.Dashboard': $('#dashboardInterval').val(),
                     'Interval.Charts': $('#chartsInterval').val(),
@@ -1016,10 +1016,10 @@
                     contentType: 'application/json',
                     data: JSON.stringify(settings),
                     success: function() {
-                        showNotification('Interval settings saved!', 'success');
+                        showNotification('Pengaturan interval berhasil disimpan.', 'success');
                     },
                     error: function() {
-                        showNotification('Error saving interval settings', 'danger');
+                        showNotification('Gagal menyimpan pengaturan interval.', 'danger');
                     },
                     complete: function() {
                         btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save');
@@ -1027,43 +1027,43 @@
                 });
             });
 
-            // Save Email Notification settings (saves all notification data to keep consistent)
+            // Save pengaturan notifikasi email (saves all notification data to keep consistent)
             $('#btnSaveEmailSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 saveNotificationSettingsAjax()
-                    .done(function() { showNotification('Email & notification settings saved!', 'success'); })
-                    .fail(function() { showNotification('Error saving email settings', 'danger'); })
+                    .done(function() { showNotification('Pengaturan email dan notifikasi berhasil disimpan.', 'success'); })
+                    .fail(function() { showNotification('Gagal menyimpan pengaturan email.', 'danger'); })
                     .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
             });
 
             // Save WhatsApp Notification settings only
             $('#btnSaveWhatsappSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 saveWablasSettingsAjax()
-                    .done(function() { showNotification('WhatsApp settings saved!', 'success'); })
-                    .fail(function() { showNotification('Error saving WhatsApp settings', 'danger'); })
+                    .done(function() { showNotification('Pengaturan WhatsApp berhasil disimpan.', 'success'); })
+                    .fail(function() { showNotification('Gagal menyimpan pengaturan WhatsApp.', 'danger'); })
                     .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
             });
 
             // Save Schedule settings (saves all notification data to keep consistent)
             $('#btnSaveScheduleSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 saveNotificationSettingsAjax()
-                    .done(function() { showNotification('Schedule & notification settings saved!', 'success'); })
-                    .fail(function() { showNotification('Error saving schedule settings', 'danger'); })
+                    .done(function() { showNotification('Jadwal dan pengaturan notifikasi berhasil disimpan.', 'success'); })
+                    .fail(function() { showNotification('Gagal menyimpan jadwal laporan.', 'danger'); })
                     .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
             });
 
             // Save EMA settings only
             $('#btnSaveEmaSectionSettings').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
                 saveEmaSettingsAjax()
-                    .done(function() { showNotification('EMA settings saved!', 'success'); })
-                    .fail(function() { showNotification('Error saving EMA settings', 'danger'); })
+                    .done(function() { showNotification('Pengaturan EMA berhasil disimpan.', 'success'); })
+                    .fail(function() { showNotification('Gagal menyimpan pengaturan EMA.', 'danger'); })
                     .always(function() { btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save'); });
             });
 
@@ -1197,7 +1197,7 @@
                 document.body.appendChild(downloadAnchorNode);
                 downloadAnchorNode.click();
                 downloadAnchorNode.remove();
-                showNotification('Settings exported successfully!', 'success');
+                showNotification('Pengaturan berhasil diekspor.', 'success');
             });
 
             // ============================================
@@ -1220,72 +1220,72 @@
 
             $('#btnTestInstantAlert').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
                 $.ajax({
                     url: '/api/Api/test-instant-alert',
                     method: 'POST',
                     success: function(response) {
-                        showNotification(response.message || 'Test instant alert sent successfully!', 'success');
+                        showNotification(response.message || 'Peringatan uji berhasil dikirim.', 'success');
                     },
                     error: function(xhr, status, error) {
                         showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
                     },
                     complete: function() {
-                        btn.prop('disabled', false).html('<i class="fas fa-bell"></i> Test Instant');
+                        btn.prop('disabled', false).html('<i class="fas fa-bell"></i> Uji Peringatan');
                     }
                 });
             });
 
             $('#btnTestHourlyReport').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
                 $.ajax({
                     url: '/api/Api/test-hourly-report',
                     method: 'POST',
                     success: function(response) {
-                        showNotification(response.message || 'Test hourly report sent successfully!', 'success');
+                        showNotification(response.message || 'Laporan per jam uji berhasil dikirim.', 'success');
                     },
                     error: function(xhr, status, error) {
                         showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
                     },
                     complete: function() {
-                        btn.prop('disabled', false).html('<i class="fas fa-clock"></i> Test Hourly');
+                        btn.prop('disabled', false).html('<i class="fas fa-clock"></i> Uji Laporan Per Jam');
                     }
                 });
             });
 
             $('#btnTestDailyReport').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
                 $.ajax({
                     url: '/api/Api/test-daily-report',
                     method: 'POST',
                     success: function(response) {
-                        showNotification(response.message || 'Test daily report sent successfully!', 'success');
+                        showNotification(response.message || 'Laporan harian uji berhasil dikirim.', 'success');
                     },
                     error: function(xhr, status, error) {
                         showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
                     },
                     complete: function() {
-                        btn.prop('disabled', false).html('<i class="fas fa-calendar-alt"></i> Test Daily');
+                        btn.prop('disabled', false).html('<i class="fas fa-calendar-alt"></i> Uji Laporan Harian');
                     }
                 });
             });
 
             $('#btnTestMonthlyReport').click(function() {
                 var btn = $(this);
-                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
                 $.ajax({
                     url: '/api/Api/test-monthly-report',
                     method: 'POST',
                     success: function(response) {
-                        showNotification(response.message || 'Test monthly report sent successfully!', 'success');
+                        showNotification(response.message || 'Laporan bulanan uji berhasil dikirim.', 'success');
                     },
                     error: function(xhr, status, error) {
                         showNotification('Error: ' + (xhr.responseJSON?.error || error), 'danger');
                     },
                     complete: function() {
-                        btn.prop('disabled', false).html('<i class="fas fa-calendar-check"></i> Test Monthly');
+                        btn.prop('disabled', false).html('<i class="fas fa-calendar-check"></i> Uji Laporan Bulanan');
                     }
                 });
             });
@@ -1297,7 +1297,7 @@
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    console.log('[LOAD-NOTIF] API returned:', data);
+                    @* console.log('[LOAD-NOTIF] API returned:', data);
                     $('#smtpServer').val(data.smtpServer || 'smtp.gmail.com');
                     $('#smtpPort').val(data.smtpPort || 587);
                     $('#senderEmail').val(data.senderEmail || '');
@@ -1313,9 +1313,9 @@
                     $('#dailyReportTime').val(data.dailyReportTime || '08:00');
                     $('#monthlyReportDay').val(data.monthlyReportDay || 1);
                     $('#monthlyReportTime').val(data.monthlyReportTime || '08:00');
-                },
+                }, *@
                 error: function() {
-                    console.log('Using default notification settings');
+                    @* console.log('Using default notification settings'); *@
                 }
             });
 
@@ -1331,7 +1331,7 @@
                     $('#enableWhatsApp').prop('checked', data.enableWhatsApp || false);
                 },
                 error: function() {
-                    console.log('Wablas settings not yet configured');
+                    @* console.log('Wablas settings not yet configured'); *@
                 }
             });
         }
@@ -1370,10 +1370,10 @@
         function saveNotificationSettings() {
             saveNotificationSettingsAjax()
                 .done(function() {
-                    showNotification('Notification settings saved successfully!', 'success');
+                    showNotification('Pengaturan notifikasi berhasil disimpan.', 'success');
                 })
                 .fail(function(xhr, status, error) {
-                    showNotification('Error saving notification settings: ' + error, 'danger');
+                    showNotification('Gagal menyimpan pengaturan notifikasi: ' + error, 'danger');
                 });
         }
 
@@ -1396,36 +1396,36 @@
 
         function saveWablasSettings() {
             saveWablasSettingsAjax()
-                .done(function() { console.log('Wablas settings saved'); })
-                .fail(function(xhr) { console.log('Error saving Wablas settings:', xhr.responseJSON?.error); });
+                .done(function() { @* console.log('Wablas settings saved'); *@ })
+                .fail(function(xhr) { @* console.log('Error saving Wablas settings:', xhr.responseJSON?.error); *@ });
         }
 
         function testEmail() {
             var btn = $('#btnTestEmail');
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
 
             $.ajax({
                 url: '/api/Api/test-email-notification',
                 method: 'POST',
                 success: function(response) {
-                    showNotification('Test email sent successfully! Check your inbox.', 'success');
-                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Test Email');
+                    showNotification('Email uji berhasil dikirim. Periksa kotak masuk Anda.', 'success');
+                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Uji Pengiriman Email');
                 },
                 error: function(xhr, status, error) {
-                    showNotification('Error sending test email: ' + (xhr.responseJSON?.error || error), 'danger');
-                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Test Email');
+                    showNotification('Gagal mengirim email uji: ' + (xhr.responseJSON?.error || error), 'danger');
+                    btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Uji Pengiriman Email');
                 }
             });
         }
 
         function testWablas() {
             var btn = $('#btnTestWablas');
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Mengirim...');
 
             var phone = $('#wablasPhoneNumbers').val().split(',')[0].trim();
             if (!phone) {
-                showNotification('Masukkan nomor WhatsApp tujuan terlebih dahulu!', 'danger');
-                btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                showNotification('Masukkan nomor WhatsApp tujuan terlebih dahulu.', 'danger');
+                btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Uji Pengiriman');
                 return;
             }
 
@@ -1434,22 +1434,22 @@
                 method: 'POST',
                 data: JSON.stringify({
                     phone: phone,
-                    message: 'Test message dari KWH Monitoring System - ' + new Date().toLocaleString('id-ID')
+                    message: 'Pesan uji dari Sistem Pemantauan KWH - ' + new Date().toLocaleString('id-ID')
                 }),
                 success: function (response) {
                     $('#wablasStatus').html('<div class="alert alert-success py-1 px-2 mb-0"><i class="fas fa-check-circle"></i> ' + response.message + '</div>');
-                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Uji Pengiriman');
                 },
                 error: function (xhr) {
                     $('#wablasStatus').html('<div class="alert alert-danger py-1 px-2 mb-0"><i class="fas fa-exclamation-circle"></i> ' + (xhr.responseJSON?.error || 'Gagal mengirim') + '</div>');
-                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Test Kirim');
+                    btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Uji Pengiriman');
                 }
             });
         }
 
         function checkWablasDevice() {
             var btn = $('#btnCheckWablasDevice');
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Memeriksa...');
 
             $.ajax({
                 url: '/api/Api/wablas/device-status',
@@ -1460,7 +1460,7 @@
                         var info = response.data;
                         $('#wablasStatus').html(
                             '<div class="alert alert-success py-1 px-2 mb-0">' +
-                            '<i class="fas fa-check-circle"></i> <strong>Connected!</strong> ' +
+                            '<i class="fas fa-check-circle"></i> <strong>Terhubung.</strong> ' +
                             'Phone: ' + (info.phone || 'N/A') +
                             (info.name ? ' | Name: ' + info.name : '') +
                             (info.battery ? ' | Battery: ' + info.battery + '%' : '') +
@@ -1469,16 +1469,16 @@
                     } else {
                         $('#wablasStatus').html(
                             '<div class="alert alert-warning py-1 px-2 mb-0">' +
-                            '<i class="fas fa-exclamation-triangle"></i> Device not connected. ' +
+                            '<i class="fas fa-exclamation-triangle"></i> Perangkat tidak terhubung. ' +
                             'Pastikan WhatsApp sudah terhubung di dashboard Wablas.' +
                             '</div>'
                         );
                     }
-                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Cek Device');
+                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Periksa Perangkat');
                 },
                 error: function (xhr) {
-                    $('#wablasStatus').html('<div class="alert alert-danger py-1 px-2 mb-0"><i class="fas fa-exclamation-circle"></i> ' + (xhr.responseJSON?.error || 'Gagal cek status') + '</div>');
-                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Cek Device');
+                    $('#wablasStatus').html('<div class="alert alert-danger py-1 px-2 mb-0"><i class="fas fa-exclamation-circle"></i> ' + (xhr.responseJSON?.error || 'Gagal memeriksa status.') + '</div>');
+                    btn.prop('disabled', false).html('<i class="fas fa-mobile-alt"></i> Periksa Perangkat');
                 }
             });
         }
@@ -1502,7 +1502,7 @@
             $('#dailyReportTime').val('08:00');
             $('#monthlyReportDay').val(1);
             $('#monthlyReportTime').val('08:00');
-            showNotification('Notification settings reset to default. Click Save to apply.', 'info');
+            showNotification('Pengaturan notifikasi bawaan dipulihkan. Klik Simpan untuk menerapkannya.', 'info');
         }
 
         function formatNumber(num) {
@@ -1754,7 +1754,7 @@
                 provider.models.forEach(function(m) {
                     $select.append('<option value="' + m.value + '">' + m.label + '</option>');
                 });
-                $select.append('<option value="__custom__">Custom Model...</option>');
+                $select.append('<option value="__custom__">Model Khusus...</option>');
 
                 if (selectedModel) {
                     var exists = provider.models.some(function(m) { return m.value === selectedModel; });
@@ -1845,7 +1845,7 @@
         // Test chatbot connection
         $('#btnTestChatbotConnection').click(function() {
             var btn = $(this);
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Testing...</span>');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Menguji...</span>');
             $('#chatbotConnectionStatus').html('').removeClass('text-success text-danger');
 
             var testData = {
@@ -1862,19 +1862,19 @@
                 success: function(response) {
                     if (response.success) {
                         $('#chatbotConnectionStatus').html('<i class="fas fa-check-circle text-success"></i> <span class="chatbot-btn-label">' + response.message + '</span>').addClass('text-success');
-                        showNotification('Chatbot connection successful! AI replied: ' + (response.reply || 'OK'), 'success');
+                        showNotification('Koneksi chatbot berhasil. Balasan AI: ' + (response.reply || 'OK'), 'success');
                     } else {
                         $('#chatbotConnectionStatus').html('<i class="fas fa-times-circle text-danger"></i> <span class="chatbot-btn-label">' + response.message + '</span>').addClass('text-danger');
-                        showNotification('Chatbot connection failed: ' + response.message, 'danger');
+                        showNotification('Koneksi chatbot gagal: ' + response.message, 'danger');
                     }
-                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>');
+                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Uji Koneksi</span>');
                 },
                 error: function(xhr) {
                     var errorMsg = 'Connection failed';
                     try { errorMsg = xhr.responseJSON?.message || xhr.responseJSON?.error || errorMsg; } catch(e) {}
                     $('#chatbotConnectionStatus').html('<i class="fas fa-times-circle text-danger"></i> ' + errorMsg).addClass('text-danger');
-                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Test Connection</span>');
-                    showNotification('Chatbot connection error: ' + errorMsg, 'danger');
+                    btn.prop('disabled', false).html('<i class="fas fa-plug"></i> <span class="chatbot-btn-label">Uji Koneksi</span>');
+                    showNotification('Terjadi kesalahan pada koneksi chatbot: ' + errorMsg, 'danger');
                 }
             });
         });
@@ -1882,7 +1882,7 @@
         // Save chatbot settings
         $('#btnSaveChatbotSettings').click(function() {
             var btn = $(this);
-            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Saving...</span>');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span class="chatbot-btn-label">Menyimpan...</span>');
 
             var settings = {
                 apiKey: $('#chatbotApiKey').val().trim(),
@@ -1891,13 +1891,13 @@
             };
 
             if (!settings.model) {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Simpan Pengaturan</span>');
                 showNotification('Model AI harus diisi', 'danger');
                 return;
             }
             if (!settings.apiUrl) {
-                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
-                showNotification('API Endpoint URL harus diisi', 'danger');
+                btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Simpan Pengaturan</span>');
+                showNotification('URL endpoint API harus diisi.', 'danger');
                 return;
             }
 
@@ -1907,18 +1907,18 @@
                 contentType: 'application/json',
                 data: JSON.stringify(settings),
                 success: function(response) {
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Simpan Pengaturan</span>');
                     if (response.success) {
-                        showNotification('AI Chatbot settings saved successfully!', 'success');
+                        showNotification('Pengaturan asisten AI berhasil disimpan.', 'success');
                         $('#chatbotApiKey').val('');
                         loadChatbotSettings();
                     } else {
-                        showNotification('Error: ' + (response.error || 'Unknown error'), 'danger');
+                        showNotification('Error: ' + (response.error || 'Kesalahan tidak diketahui.'), 'danger');
                     }
                 },
                 error: function(xhr) {
-                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Save Settings</span>');
-                    showNotification('Error saving chatbot settings', 'danger');
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span class="chatbot-btn-label">Simpan Pengaturan</span>');
+                    showNotification('Gagal menyimpan pengaturan asisten AI.', 'danger');
                 }
             });
         });
@@ -1933,7 +1933,7 @@
                 $('#customProviderUrlField').hide();
                 $('#chatbotCustomApiUrl').val('');
                 populateChatbotModels('qwen');
-                showNotification('AI Chatbot settings reset to default. Click Save to apply.', 'info');
+                showNotification('Pengaturan asisten AI bawaan dipulihkan. Klik Simpan untuk menerapkannya.', 'info');
             }
         });
 
@@ -2018,7 +2018,7 @@
                     applyEmaValues(data);
                 },
                 error: function() {
-                    console.log('Using default EMA settings');
+                    @* console.log('Using default EMA settings'); *@
                 },
                 complete: function() {
                     // Load anomaly max confirmations independently
@@ -2031,7 +2031,7 @@
                             $('#anomalyMaxConfirmations').val(loadedMax);
                         },
                         error: function() {
-                            console.log('Using default anomalyMaxConfirmations: 3');
+                            @* console.log('Using default anomalyMaxConfirmations: 3'); *@
                         }
                     });
                 }
@@ -2072,10 +2072,10 @@
         function saveEmaSettings() {
             saveEmaSettingsAjax()
                 .done(function() {
-                    showNotification('EMA settings saved successfully!', 'success');
+                    showNotification('Pengaturan EMA berhasil disimpan.', 'success');
                 })
                 .fail(function() {
-                    showNotification('Error saving EMA settings', 'danger');
+                    showNotification('Gagal menyimpan pengaturan EMA.', 'danger');
                 });
         }
 
@@ -2087,7 +2087,7 @@
             $('#emaShowThresholds').prop('checked', true);
             $('#useInitial100ForEma').prop('checked', false);
 
-            showNotification('EMA settings reset to default. Click Save to apply.', 'info');
+            showNotification('Pengaturan EMA bawaan dipulihkan. Klik Simpan untuk menerapkannya.', 'info');
         }
 
         // Per-device settings handles its own downtime configuration

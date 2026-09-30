@@ -1,4 +1,4 @@
-﻿@* Background Anomaly Detection Service - Berjalan di semua halaman *@
+@* Background Anomaly Detection Service - Berjalan di semua halaman *@
 <script>
     (function() {
         'use strict';
@@ -22,11 +22,13 @@
         };
 
         // Time-based cooldown DIHAPUS - sekarang hanya condition-based (trigger saat power normal)
-        // let anomalyCooldown = {};  // ❌ REMOVED: No more timer-based cooldown
+        // let anomalyCooldown = {};  // âŒ REMOVED: No more timer-based cooldown
         
         let anomalyTimer = null;
         let anomalyTimerInterval = 0;    // Track current interval value (ms) - setInterval returns primitive, can't hold properties
         let settingsReloadTimer = null;  // Timer untuk reload settings secara berkala
+        let anomalyChecksInFlight = {};  // Hindari pemrosesan bersamaan untuk device yang sama
+        let lastProcessedSampleByDevice = {}; // Satu sampel hanya boleh dihitung sekali
 
         // Konfirmasi anomali - AKAN DI-LOAD DARI DATABASE
         let anomalyConfirmation = {
@@ -63,6 +65,12 @@
         }
 
         function getTimestampsFromChart(data) {
+            if (data && Array.isArray(data.timestamps) && data.timestamps.length > 0) {
+                return data.timestamps.map(function(timestamp) {
+                    var parsed = new Date(timestamp);
+                    return isNaN(parsed.getTime()) ? null : parsed;
+                });
+            }
             // Build DateTime timestamps from chart labels if available
             if (data && data.labels && Array.isArray(data.labels) && data.labels.length > 0) {
                 var today = new Date();
@@ -81,16 +89,18 @@
             return null;
         }
 
-        const CHART_SNAPSHOT_SEND_INTERVAL = 10; // Send every 10 points (~5 min at 30s)
+        const CHART_SNAPSHOT_SEND_INTERVAL = 1; // Send each sampled point so open detail charts stay current
         const CHART_SNAPSHOT_SEND_TIMEOUT = 300000; // Force send after 5 minutes even with few points
 
         function sendChartSnapshotAfter(logId, deviceKey, isFinal) {
             var buf = anomalyChartBuffers[deviceKey];
             if (!buf || !buf.afterBuffer || buf.afterBuffer.length === 0) return;
+            if (buf.uploadInFlight) return;
 
             var afterData = buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE);
             isFinal = isFinal || afterData.length >= CHART_SNAPSHOT_SIZE;
-            console.log('📊 Sending chart snapshot AFTER data for anomaly #' + logId + ' (' + afterData.length + ' points' + (isFinal ? ', FINAL' : ', incremental') + ')');
+            buf.uploadInFlight = true;
+            @* console.log('ðŸ“Š Sending chart snapshot AFTER data for anomaly #' + logId + ' (' + afterData.length + ' points' + (isFinal ? ', FINAL' : ', incremental') + ')'); *@
 
             $.ajax({
                 url: '/api/Api/anomaly-logs/' + logId + '/chart-snapshot',
@@ -98,18 +108,26 @@
                 contentType: 'application/json',
                 data: JSON.stringify({ After: afterData, IsFinal: isFinal }),
                 success: function() {
-                    console.log('✅ Chart snapshot AFTER data saved for anomaly #' + logId + ' (' + afterData.length + ' points)');
+                    buf.uploadInFlight = false;
+                    @* console.log('âœ… Chart snapshot AFTER data saved for anomaly #' + logId + ' (' + afterData.length + ' points)'); *@
                     if (isFinal) {
                         delete anomalyChartBuffers[deviceKey];
                     } else {
                         buf.lastSentCount = afterData.length;
                         buf.lastSentTime = Date.now();
+                        // Point mungkin masuk saat request sebelumnya masih berjalan.
+                        if (buf.afterBuffer.length > afterData.length) {
+                            setTimeout(function() {
+                                sendChartSnapshotAfter(logId, deviceKey, buf.afterBuffer.length >= CHART_SNAPSHOT_SIZE);
+                            }, 0);
+                        }
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error('❌ Error saving chart snapshot AFTER data:', error, xhr.status);
+                    buf.uploadInFlight = false;
+                    /* console.error('âŒ Error saving chart snapshot AFTER data:', error, xhr.status) */;
                     if (xhr.status === 401 || xhr.status === 403) {
-                        console.warn('⚠️ Auth error on chart-snapshot endpoint — will retry via sendBeacon on page unload');
+                        /* console.warn('âš ï¸ Auth error on chart-snapshot endpoint â€” will retry via sendBeacon on page unload') */;
                     }
                     // Keep buffer for retry on next check or sendBeacon on unload
                 }
@@ -170,10 +188,10 @@
                             var counts = JSON.parse(data.confirmationCounts);
                             if (counts && typeof counts === 'object') {
                                 anomalyConfirmation.counts = counts;
-                                console.log('📋 Restored confirmation counts from DB:', counts);
+                                @* console.log('ðŸ“‹ Restored confirmation counts from DB:', counts); *@
                             }
                         } catch (e) {
-                            console.warn('⚠️ Could not parse confirmation counts:', e);
+                            @* console.warn('âš ï¸ Could not parse confirmation counts:', e); *@
                         }
 
                         // Restore cooldown state
@@ -190,12 +208,12 @@
                                         if ((now - state.loggedAt) < 86400000) {
                                             cleaned[key] = state;
                                         } else {
-                                            console.log(`🧹 Cleaning stale cooldown for ${key} (older than 24h)`);
+                                            @* console.log(`ðŸ§¹ Cleaning stale cooldown for ${key} (older than 24h)`); *@
                                         }
                                     }
                                 });
-                                anomalyCooldownState = cleaned;
-                                console.log('📋 Restored cooldown state from DB:', cleaned);
+                                anomalyCooldownState =  cleaned;
+                                @* console.log('ðŸ“‹ Re stored cooldown state from DB:', cleaned); *@
 
                                 // Notify UI about restored cooldown states
                                 Object.keys(cleaned).forEach(function(deviceKey) {
@@ -204,13 +222,13 @@
                                     }
                                 });
                             }
-                        } catch (e) {
-                            console.warn('⚠️ Could not parse cooldown state:', e);
+                        } catch  (e) {
+                            @* console.warn('âš ï¸ C ould not parse cooldown state:', e); *@
                         }
                     }
                 },
-                error: function() {
-                    console.warn('⚠️ Could not load anomaly state from DB, using defaults');
+                error : function() {
+                    @* console.warn('âš ï¸ Could not load anom aly state from DB, using defaults'); *@
                 }
             });
         }
@@ -231,14 +249,14 @@
                         cooldownState: JSON.stringify(anomalyCooldownState)
                     }),
                     success: function() {
-                        console.log('💾 Anomaly state saved to DB');
+                        @* console.log('Anomaly state saved to DB'); *@
                     },
                     error: function(xhr) {
                         if (xhr.status === 401) {
-                            console.warn('🔒 Session expired — stopping anomaly timer');
+                            @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
                             if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
                         } else {
-                            console.error('❌ Error saving anomaly state:', xhr.statusText);
+                            @* console.error('âŒ Error saving anomaly state:', xhr.statusText); *@
                         }
                     }
                 });
@@ -260,14 +278,14 @@
                     cooldownState: JSON.stringify(anomalyCooldownState)
                 }),
                 success: function() {
-                    console.log('💾 Anomaly state saved to DB (immediate)');
+                    @* console.log('ðŸ’¾ Anomaly state saved to DB (immediate)'); *@
                 },
                 error: function(xhr) {
                     if (xhr.status === 401) {
-                        console.warn('🔒 Session expired — stopping anomaly timer');
+                        @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
                         if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
                     } else {
-                        console.error('❌ Error saving anomaly state:', xhr.statusText);
+                        @* console.error('âŒ Error saving anomaly state:', xhr.statusText); *@
                     }
                 }
             });
@@ -276,7 +294,7 @@
         // Reset server-side anomaly alert state saat power kembali normal
         // Ini memungkinkan alert baru dikirim lagi untuk device yang sama
         function resetServerAnomalyAlert(deviceKey) {
-            // Tamu (belum login): lewati — endpoint reset-anomaly-alert membutuhkan role Operator/Admin.
+            // Tamu (belum login): lewati â€” endpoint reset-anomaly-alert membutuhkan role Operator/Admin.
             if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             $.ajax({
                 url: '/api/Api/reset-anomaly-alert',
@@ -284,16 +302,16 @@
                 contentType: 'application/json',
                 data: JSON.stringify({ deviceKey: deviceKey }),
                 success: function() {
-                    console.log('🔓 Server anomaly alert reset for ' + deviceKey);
+                 @* console.log('ðŸ”“ Server anomaly a lert reset for ' + deviceKey); *@
                 },
                 error: function(xhr, status, error) {
-                    console.error('❌ Error resetting server anomaly alert:', error);
+                    @* console.error('âŒ Error reset ting server anomaly alert:', error); *@
                 }
             });
         }
 
         function loadAnomalySettings() {
-            console.log('🔄 Loading all settings from database...');
+            @* console.log('ï¿½ ï¿½ Loading all settings from database...'); *@
             
             return $.when(
                 // Load EMA, Anomaly, AND Notification settings PERSIS SAMA
@@ -319,7 +337,7 @@
                         // Anomaly & Notification settings TIDAK ada di get-ema-settings
                         // Mereka di-load dari get-notification-settings (panggilan ketiga di bawah)
                         
-                        console.log('✅ ALL SETTINGS LOADED FROM DATABASE:', {
+                        @* console.log('âœ… ALL SETTINGS LOADED FROM DATABASE:', {
                             emaSettings: {
                                 period: anomalyServiceConfig.emaPeriod,
                                 mode: anomalyServiceConfig.mode,
@@ -336,36 +354,36 @@
                                 emailEnabled: notificationSettings.enableEmail,
                                 whatsappEnabled: notificationSettings.enableWhatsApp
                             }
-                        });
+                        }); *@
                         
                         // ============================================
                         // VERIFIKASI SINKRONISASI - SEMUA DARI DB YANG SAMA
-                        // ============================================
-                        console.log('🔍 Verifying settings synchronization:');
-                        console.log(`   ✅ EMA Period: ${anomalyServiceConfig.emaPeriod} (from DB)`);
-                        console.log(`   ✅ Upper Threshold: ${anomalyServiceConfig.upperThreshold}% (from DB)`);
-                        console.log(`   ✅ Lower Threshold: ${anomalyServiceConfig.lowerThreshold}% (from DB)`);
-                        console.log(`   ✅ Max Confirmations: ${anomalyConfirmation.maxConfirmations} (from DB)`);
-                        console.log(`   ✅ Check Interval: ${anomalyServiceConfig.checkInterval / 1000}s (from DB)`);
-                        console.log(`   ✅ Cooldown Time: ${anomalyConfirmation.cooldownTime / 1000}s (from DB)`);
-                        console.log(`   ✅ Chart Refresh: ${chartRefreshInterval}s (from DB)`);
-                        console.log(`   ✅ Email Notifications: ${notificationSettings.enableEmail} (from DB)`);
-                        console.log(`   ✅ WhatsApp Notifications: ${notificationSettings.enableWhatsApp} (from DB)`);
-                        
+                        // ================================== ==========
+                        @* console.log('ðŸ” Ve rifying settings syn chronization:') ;
+                        console.log(`   EMA Period: ${anomalyServiceConfig.emaPeriod} (from DB)`);
+                        console.log(`   âœ… Upper Threshold: ${anomalyServiceConfig.upperThreshold}% (from D B)`);
+                        console.log(`   Lower Threshold: ${anomalyServiceConfig.lowerThreshold}% (from DB)`);
+                        console.log(`   âœ… Max Confirmations: ${anomalyConfirmation.maxConfirmations} (from DB)`);
+                        console.log(`   âœ… Check Interval: ${anomalyServiceConfig.checkInterval / 1000}s (from DB) `);
+                        console.log(`   Cooldown Time: ${anomalyConfirmation.cooldownTime / 1000}s (from DB)`);
+                        console.log(`    Chart Refresh: ${chartRefreshInterval}s (from DB)`);
+                        console.log(`   âœ… Email Notifica tions: ${notificationSettings.enableEmail} (from DB)`);
+                        console.log(`   âœ… WhatsApp Notifications: ${notificationSettings.enableWhatsApp} (from DB)`); *@
+                         
                         // Log perubahan yang signifikan
-                        if (oldConfig.emaPeriod !== anomalyServiceConfig.emaPeriod) {
-                            console.log(`⚙️ ⚠️ CHANGE DETECTED: EMA Period berubah: ${oldConfig.emaPeriod} → ${anomalyServiceConfig.emaPeriod}`);
+                        if (oldConfig.emaPeriod !==  anomalyServiceConfig.emaPeriod) {
+                            @* console.log(`CHANGE DETECTED: EMA Period berubah: ${oldConfig.emaPeriod} -> ${anomalyServiceConfig.emaPeriod}`); *@
                         }
                         if (oldConfig.upperThreshold !== anomalyServiceConfig.upperThreshold) {
-                            console.log(`⚙️ ⚠️ CHANGE DETECTED: Upper Threshold berubah: ${oldConfig.upperThreshold}% → ${anomalyServiceConfig.upperThreshold}%`);
+                            @* console.log(`âš™ï¸ âš ï¸ CHANGE DETECTED: Upper Threshold berubah: ${oldConfig.upperThreshold}% â†’  ${anomalyServiceConfig.upperThreshold}%`); *@
                         }
                         if (anomalyConfirmation.maxConfirmations !== 3) {
-                            console.log(`⚙️ ⚠️ CHANGE DETECTED: Max Confirmations diubah ke: ${anomalyConfirmation.maxConfirmations}`);
-                        }
+                            @* console.log(`âš™ï¸ âš ï¸ CHANGE DETECTED: Max Confirmations diubah ke : ${anomalyConfirmation.maxConfirmations}`); *@
+                         }
                     },
                     error: function(xhr, status, error) {
-                        console.error('❌ Error loading settings:', status, error);
-                        console.log('⚠️ Using default settings (checkInterval=30s, maxConfirmations=3, cooldown=60s)');
+                        @* console.error('âŒ Error loading settings:' , status, error);
+                        console.log('âš ï¸ Using default settings (checkInterval=30s, maxConfirmations=3, cooldown=60s)'); *@
                     }
                 }),
                 
@@ -381,24 +399,17 @@
                             var loadedInterval = parseInt(data.settings['Chart.RefreshInterval']) ||
                                                  parseInt(data.settings['RefreshInterval']) || 30;
 
-                            // Update chart refresh interval jika berbeda
+                            // Sampling anomaly berjalan dengan interval preset anomaly.
+                            // Refresh chart hanya mengatur frekuensi tampilan.
                             if (loadedInterval !== chartRefreshInterval) {
                                 chartRefreshInterval = loadedInterval;
-                                console.log(`⏱️ Chart refresh interval updated: ${chartRefreshInterval}s`);
-
-                                // Sync anomaly timer dengan chart interval
-                                if (anomalyTimer) {
-                                    clearInterval(anomalyTimer);
-                                    anomalyTimerInterval = chartRefreshInterval * 1000;
-                                    anomalyTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
-                                    console.log(`🔄 Anomaly check interval synced to chart: ${chartRefreshInterval}s`);
-                                }
+                                @* console.log(`â±ï¸ Cha rt refresh interval updated: ${chartRefreshInterval}s`); *@
                             }
                         }
-                        console.log('📊 System settings loaded: chartDataPoints=' + chartDataPoints + ', refreshInterval=' + chartRefreshInterval + 's');
+                         @* console.log('ðŸ“Š System settings loaded: chartDataPoints=' + chartDataPoints + ', refreshInterval=' +  chartRefreshInterval + 's'); *@
                     },
-                    error: function(xhr, status, error) {
-                        console.error('❌ Error loading system settings:', status, error);
+                     error: function(xhr, status, error) {
+                        @* console.error('âŒ Error loading system settings:', status, error); *@
                     }
                 }),
 
@@ -412,15 +423,16 @@
                         // Anomaly detection settings
                         if (data.anomalyCheckInterval) {
                             var newInterval = data.anomalyCheckInterval * 1000; // Convert ke ms
+                            anomalyServiceConfig.checkInterval = data.anomalyCheckInterval;
                             anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
                             anomalyConfirmation.cooldownTime = (data.anomalyCooldownTime || 60) * 1000; // Convert ke ms
 
-                            // Update timer jika interval berubah
+                            // Sampling mengikuti interval anomaly dari preset.
                             if (anomalyTimer && newInterval !== anomalyTimerInterval) {
                                 clearInterval(anomalyTimer);
                                 anomalyTimerInterval = newInterval;
                                 anomalyTimer = setInterval(runAnomalyCheck, newInterval);
-                                console.log(`⏱️ Anomaly check interval updated to ${newInterval / 1000}s`);
+                                @* console.log(`â±ï¸ Anomaly check interval updated to ${newInterval / 1000}s`); *@
                             }
                         }
 
@@ -430,11 +442,11 @@
                             notificationSettings.enableWhatsApp = data.enableWhatsApp || false;
                         }
 
-                        console.log('🔔 Notification settings loaded: email=' + notificationSettings.enableEmail + ', whatsapp=' + notificationSettings.enableWhatsApp);
-                        console.log('⚙️ Anomaly settings loaded: checkInterval=' + (anomalyServiceConfig.checkInterval / 1000) + 's, maxConfirmations=' + anomalyConfirmation.maxConfirmations + ', cooldownTime=' + (anomalyConfirmation.cooldownTime / 1000) + 's');
+                         @* console.log('ðŸ”” Notification settings loaded: email=' + notificationSettings.enableEmail + ', whatsapp=' + notificationSettings.enableWhatsApp); *@
+                        @* console.log('âš™ï¸ Anomaly settings loaded: checkInterval=' + (anomalyServiceConfig.checkInterval / 1000) + 's, maxConfirmations=' + anomalyConfirmation.maxConfirmations  + ', cooldownTime=' + (anomalyConfirmation.cooldownTime / 1000) + 's'); *@
                     },
                     error: function(xhr, status, error) {
-                        console.error('❌ Error loading notification settings:', status, error);
+                        @* console.error('âŒ Error loading notification settings:', status, error); *@
                     }
                 }),
 
@@ -454,14 +466,14 @@
                 method: 'GET',
                 dataType: 'json',
                 timeout: 5000,
-                success: function(data) {
+                 success: function(data) {
                     if (data.devices) {
                         deviceCategoryMap = data.devices;
-                    }
-                    console.log('📋 Device categories cached:', deviceCategoryMap);
+                     }
+                    @* console.log('ðŸ“‹ Device categories  cached:', deviceCategoryMap); *@
                 },
                 error: function() {
-                    console.warn('⚠️ Could not load device categories, using cache');
+                    @* console.warn('âš ï¸ Could not load device categories, using cache'); *@
                 }
             });
         }
@@ -478,12 +490,12 @@
                         categoryDowntimeCache[cat] = data.isDowntime || false;
                     },
                     error: function() {
-                        // Keep previous value on error
+                         // Keep previous value on error
                     }
-                });
+                 });
             });
             return $.when.apply($, requests).done(function() {
-                console.log('🕐 Category downtime cached:', categoryDowntimeCache);
+                @* console.log('📋 Category downtime cached:', categoryDowntimeCache); *@
             });
         }
 
@@ -544,14 +556,14 @@
                 timeout: 10000
             }).then(function(response) {
                 if (response.success && response.emaBaseline != null) {
-                    console.log(`🎯 EMA Baseline loaded for ${deviceKey}: ${response.emaBaseline.toFixed(2)}W`);
+                    @* console.log(`🎯 EMA Baseline loaded for ${deviceKey}: ${response.emaBaseline.toFixed(2)}W`); *@
                     return response.emaBaseline;
                 } else {
-                    console.log(`⚠️ No EMA baseline for ${deviceKey}, using fallback`);
+                    @* console.log(`⚠️ No EMA baseline for ${deviceKey}, using fallback`); *@
                     return null;
                 }
-            }).fail(function() {
-                console.log(`❌ Error fetching EMA baseline for ${deviceKey}`);
+            }, function() {
+                @* console.log(`❌ Error fetching EMA baseline for ${deviceKey}`); *@
                 return null;
             });
         }
@@ -573,6 +585,8 @@
             if (anomalyConfirmation.maxConfirmations <= 0) {
                 return;
             }
+            if (anomalyChecksInFlight[deviceKey]) return;
+            anomalyChecksInFlight[deviceKey] = true;
 
             // Gunakan chartDataPoints yang sudah diload dari system settings
             // Fetch MORE points for snapshot buffer: max(chartDataPoints, CHART_SNAPSHOT_SIZE)
@@ -587,7 +601,28 @@
                 dataType: 'json',
                 timeout: 5000,
                 success: function(data) {
-                    if (!data || !data.power || data.power.length === 0) return;
+                    if (!data || !data.power || data.power.length === 0) {
+                        delete anomalyChecksInFlight[deviceKey];
+                        return;
+                    }
+
+                    const lastIndex = data.power.length - 1;
+                    // Nilai null di database bukan pembacaan 0 W dan tidak boleh menjadi anomali.
+                    if (Array.isArray(data.powerValid) && data.powerValid[lastIndex] !== true) {
+                        delete anomalyChecksInFlight[deviceKey];
+                        return;
+                    }
+                    const sampleTime = data.timestamps && data.timestamps[lastIndex];
+                    if (!sampleTime) {
+                        delete anomalyChecksInFlight[deviceKey];
+                        return;
+                    }
+                    const sampleKey = new Date(sampleTime).getTime();
+                    if (!Number.isFinite(sampleKey) || lastProcessedSampleByDevice[deviceKey] === sampleKey) {
+                        delete anomalyChecksInFlight[deviceKey];
+                        return;
+                    }
+                    lastProcessedSampleByDevice[deviceKey] = sampleKey;
 
                     const powerData = data.power;
                     const timestamps = getTimestampsFromChart(data);
@@ -605,15 +640,17 @@
                             emaValues = calculateEMAWithBaseline(powerData, anomalyServiceConfig.emaPeriod, baseline);
 
                             processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue, timestamps);
+                            delete anomalyChecksInFlight[deviceKey];
                         });
                     } else {
                         // NORMAL MODE: Calculate EMA from current data points
                         emaValues = calculateEMA(powerData, anomalyServiceConfig.emaPeriod);
 
                         processAnomalyCheck(deviceKey, powerData, emaValues, null, timestamps);
+                        delete anomalyChecksInFlight[deviceKey];
                     }
                 },
-                error: function() {}
+                error: function() { delete anomalyChecksInFlight[deviceKey]; }
             });
         }
 
@@ -623,15 +660,9 @@
             var upperValue = ds.emaUpperThreshold || 0;
             var lowerValue = ds.emaLowerThreshold || 0;
 
-            // Fallback to global EMA settings if per-device thresholds not configured
-            if (upperValue <= 0 && lowerValue <= 0 && window.anomalyServiceConfig) {
-                upperValue = window.anomalyServiceConfig.emaUpperThreshold || 0;
-                lowerValue = window.anomalyServiceConfig.emaLowerThreshold || 0;
-            }
-
-            // Skip anomaly detection only if both global and per-device thresholds are 0
+            // Nilai 0 per-device berarti deteksi sengaja tidak dikonfigurasi untuk device ini.
             if (upperValue <= 0 && lowerValue <= 0) {
-                console.log('📈 No EMA thresholds configured (per-device or global) for ' + deviceKey + ', skipping anomaly check');
+                @* console.log('ðŸ“ˆ No per-device EMA thresholds configured for ' + deviceKey + ', skipping anomaly check'); *@
                 return;
             }
 
@@ -643,13 +674,13 @@
             // Threshold dihitung dari EMA, bukan dari baseline statis!
             // ============================================
 
-            const thresholds = calculateThresholds(ema, 'manual', upperValue, lowerValue);
+            const thresholds = calculateThresholds(ema, anomalyServiceConfig.mode, upperValue, lowerValue);
 
             const lastIndex = powerData.length - 1;
             const currentPower = powerData[lastIndex];
             const emaValue = ema[lastIndex];
-            const upper = thresholds.upper[lastIndex];  // ← Upper dari EMA (sama dengan chart!)
-            const lower = thresholds.lower[lastIndex];  // ← Lower dari EMA (sama dengan chart!)
+            const upper = thresholds.upper[lastIndex];  // â† Upper dari EMA (sama dengan chart!)
+            const lower = thresholds.lower[lastIndex];  // â† Lower dari EMA (sama dengan chart!)
 
             if (currentPower === null || currentPower === undefined) return;
             if (upper === undefined || lower === undefined) return;
@@ -670,18 +701,18 @@
                     Lower: lower,
                     EMA: emaValue
                 });
-                console.log('📊 Chart snapshot after-buffer: ' + chartBuf.afterBuffer.length + '/' + CHART_SNAPSHOT_SIZE + ' for ' + deviceKey);
+                @* console.log('ðŸ“Š Chart snapshot after-buffer: ' + chartBuf.afterBuffer.length + '/' + CHART_SNAPSHOT_SIZE + ' for ' + deviceKey); *@
 
                 // Send incrementally: every N points OR after timeout, OR when buffer is full
                 var timeSinceLastSend = chartBuf.lastSentTime ? (Date.now() - chartBuf.lastSentTime) : (Date.now() - chartBuf.createdAt);
                 if (chartBuf.afterBuffer.length >= CHART_SNAPSHOT_SIZE) {
-                    console.log('📊 Chart snapshot after-buffer COMPLETE for ' + deviceKey + ', sending final...');
+                    @* console.log('ðŸ“Š Chart snapshot after-buffer COMPLETE for ' + deviceKey + ', sending final...'); *@
                     sendChartSnapshotAfter(chartBuf.logId, deviceKey, true);
-                } else if (chartBuf.afterBuffer.length % CHART_SNAPSHOT_SEND_INTERVAL === 0) {
-                    console.log('📊 Chart snapshot after-buffer incremental send (' + chartBuf.afterBuffer.length + ' points) for ' + deviceKey);
+                } else if (chartBuf.afterBuffer.length % CHART_SNAPSHOT_SEND_INTERVAL  === 0) {
+                    @* console.log('ðŸ“Š Chart snapshot after-buffer incremental send (' + chartBuf.afterBuffer.length +  ' points) for ' + deviceKey); *@
                     sendChartSnapshotAfter(chartBuf.logId, deviceKey, false);
-                } else if (timeSinceLastSend >= CHART_SNAPSHOT_SEND_TIMEOUT && chartBuf.afterBuffer.length > 0) {
-                    console.log('📊 Chart snapshot after-buffer timeout send (' + chartBuf.afterBuffer.length + ' points, ' + Math.round(timeSinceLastSend/1000) + 's elapsed) for ' + deviceKey);
+                } else if (timeSinceLastSend >= CHART_SNAPSHOT_SEND_TIMEOUT && chartBuf.afterBuffer .length > 0) {
+                    @* console.log('ðŸ“Š Chart snapshot after-buffer timeout send (' + chartBuf.afterBuffer.length + ' points, ' + Math.round(timeSinceLastSend / 1000) + 's elapsed) for ' + deviceKey); *@
                     sendChartSnapshotAfter(chartBuf.logId, deviceKey, false);
                 }
             }
@@ -690,19 +721,19 @@
             // Tampilkan juga threshold settings yang digunakan
             const thresholdMode = anomalyServiceConfig.mode;
             const thresholdPercent = thresholdMode === 'fibonacci' ?
-                `FIB: ×${upperValue}/${lowerValue}` :
+                `FIB: Ã—${upperValue}/${lowerValue}` :
                 `MANUAL: +${upperValue}%/-${lowerValue}%`;
             
             if (baselineValue !== null && baselineValue !== undefined) {
-                console.log(`📈 [BASELINE=${baselineValue.toFixed(1)}W] ${deviceKey}: Power=${currentPower.toFixed(1)}W | EMA=${emaValue.toFixed(1)}W | Upper=${upper.toFixed(1)}W | Lower=${lower.toFixed(1)}W | ${thresholdPercent}`);
+                @* console.log(`📈 [BASELINE=${baselineValue.toFixed(1)}W] ${deviceKey}: Power=${currentPower.toFixed(1)}W | EMA=${emaValue.toFixed(1)}W | Upper=${upper.toFixed(1)}W | Lower=${lower.toFixed(1)}W | ${thresholdPercent}`); *@
             } else {
-                console.log(`📈 [NORMAL] ${deviceKey}: Power=${currentPower.toFixed(1)}W | EMA=${emaValue.toFixed(1)}W | Upper=${upper.toFixed(1)}W | Lower=${lower.toFixed(1)}W | ${thresholdPercent}`);
+                @* console.log(`📈 [NORMAL] ${deviceKey}: Power=${currentPower.toFixed(1)}W | EMA=${emaValue.toFixed(1)}W | Upper=${upper.toFixed(1)}W | Lower=${lower.toFixed(1)}W | ${thresholdPercent}`); *@
             }
 
-            // Check downtime status — CATEGORY-AWARE (from cache)
+            // Check downtime status â€” CATEGORY-AWARE (from cache)
             var isDowntime = isDowntimeForDevice(deviceKey);
             var deviceCat = deviceCategoryMap[deviceKey] || 'Unknown';
-            console.log(`🕐 Downtime check for ${deviceKey} (${deviceCat}): ${isDowntime ? 'DOWNTIME' : 'NORMAL'}`);
+            @* console.log(`🕐 Downtime check for ${deviceKey} (${deviceCat}): ${isDowntime ? 'DOWNTIME' : 'NORMAL'}`); *@
 
             let anomalyType = null;
             let thresholdValue = 0;
@@ -727,9 +758,9 @@
                 if (currentPower > emaValue) {
                     anomalyType = 'OVERLOAD';
                     thresholdValue = emaValue;
-                    deviation = ((currentPower - emaValue) / emaValue * 100);
-                    console.log(`⚡ DOWNTIME OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > EMA ${emaValue.toFixed(1)}W`);
-                }
+                    deviation = ((currentPower - emaValue ) / emaValue * 100);
+                    @* console.log(`DOWNTIME OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > EMA ${emaValue.toFixed(1)}W`); *@
+                }   
                 // DROP tidak dideteksi saat downtime karena lower threshold disembunyikan
             } else {
                 // NORMAL OPERATION LOGIC
@@ -738,14 +769,14 @@
                     anomalyType = 'OVERLOAD';
                     thresholdValue = upper;
                     deviation = ((currentPower - upper) / upper * 100);
-                    console.log(`⚡ NORMAL OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > Upper ${upper.toFixed(1)}W`);
+                    @* console.log(`âš¡ NORMAL OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > Upper ${upper.toFixed(1)}W`); *@
                 }
                 // DROP: Power < Lower Threshold (dari EMA, sama dengan chart!)
                 else if (currentPower < lower) {
                     anomalyType = 'DROP';
                     thresholdValue = lower;
                     deviation = ((lower - currentPower) / lower * 100);
-                    console.log(`⚡ NORMAL DROP: ${deviceKey} - Power ${currentPower.toFixed(1)}W < Lower ${lower.toFixed(1)}W`);
+                    @* console.log(`âš¡ NORMAL DROP: ${deviceKey} - Power ${currentPower.toFixed(1)}W < Lower ${lower.toFixed(1)}W`); *@
                 }
             }
 
@@ -758,28 +789,28 @@
 
                 // Jika ada cooldown aktif, clear juga (power normal = cooldown selesai)
                 if (anomalyCooldownState[deviceKey]) {
-                    console.log(`🔄 Power normal for ${deviceKey}, clearing cooldown state...`);
+                    @* console.log(`ðŸ”„ Power normal for ${deviceKey}, clearing cooldown state...`); *@
                     anomalyCooldownState[deviceKey] = null;
                     notifyCooldownChanged(deviceKey, false, null);
                     saveAnomalyStateImmediate(); // Critical: cooldown cleared
                     resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
                 }
 
-                console.log(`🔄 Reset all anomaly counters for ${deviceKey} (power back to normal)`);
+                @* console.log(`ðŸ”„ Reset all anomaly counters for ${deviceKey} (power back to normal)`); *@
                 saveAnomalyState(); // Debounced: save counter reset
                 return;
             }
 
             // ============================================
             // TYPE TRANSITION: Reset counter tipe berlawanan
-            // Untuk beban volatile (videotron/LED), perpindahan DROP↔OVERLOAD
-            // adalah pola normal — counter tipe sebelumnya harus di-reset
+            // Untuk beban volatile (videotron/LED), perpindahan DROPâ†”OVERLOAD
+            // adalah pola normal â€” counter tipe sebelumnya harus di-reset
             // agar tidak terakumulasi saat daya bouncing antar zona
             // ============================================
             const oppositeType = anomalyType === 'OVERLOAD' ? 'DROP' : 'OVERLOAD';
             const oppositeKey = deviceKey + '_' + oppositeType;
             if (anomalyConfirmation.counts[oppositeKey] > 0) {
-                console.log(`🔄 Anomaly type transition: ${oppositeType} → ${anomalyType} for ${deviceKey}, resetting ${oppositeType} counter from ${anomalyConfirmation.counts[oppositeKey]} to 0`);
+                @* console.log(`ðŸ”„ Anomaly type transition: ${oppositeType} â†’ ${anomalyType} for ${deviceKey}, resetting ${oppositeType} counter from ${anomalyConfirmation.counts[oppositeKey]} to 0`); *@
                 anomalyConfirmation.counts[oppositeKey] = 0;
                 saveAnomalyState(); // Debounced: save counter reset
             }
@@ -789,7 +820,7 @@
             // ============================================
             // Dua cara cooldown bisa clear:
             // 1. Power kembali ke zona normal (antara lower & upper)
-            // 2. Anomaly type berpindah (DROP → OVERLOAD atau OVERLOAD → DROP)
+            // 2. Anomaly type berpindah (DROP â†’ OVERLOAD atau OVERLOAD â†’ DROP)
             //    Untuk beban volatile videotron, transisi ini menandakan siklus normal
             // ============================================
             const cooldownState = anomalyCooldownState[deviceKey];
@@ -797,28 +828,28 @@
             if (cooldownState && cooldownState.waitingForNormal) {
                 // Jika tipe anomali berbeda dari cooldown, clear cooldown
                 // (misal: cooldown OVERLOAD tapi power sekarang DROP)
-                // Untuk videotron, DROP↔OVERLOAD transition = pola normal
-                if (anomalyType !== cooldownState.type) {
-                    console.log(`🔄 Anomaly type transition (${cooldownState.type} → ${anomalyType}) for ${deviceKey}, clearing cooldown`);
-                    console.log(`   For volatile videotron loads, DROP↔OVERLOAD transition indicates normal cycling`);
+                // Untuk videotron, DROPâ†”OVERLOAD transition = pola normal
+                if (anomalyType !== cooldownState .type) {
+                    @* console.log(`Anomaly type transition (${cooldownState.type} -> ${anomalyType}) for ${deviceKey}, clearing cooldown`);
+                    console.log(`   For volatile videotron loads, DROPâ†”OVERLOAD tr ansition indicates normal cycling`); *@
                     anomalyCooldownState[deviceKey] = null;
                     notifyCooldownChanged(deviceKey, false, null);
                     saveAnomalyStateImmediate();
                     resetServerAnomalyAlert(deviceKey);
-                    // Don't return — lanjut proses tipe anomali baru dengan counter fresh
-                } else {
-                    console.log(`🛑 ${anomalyType.toUpperCase()} for ${deviceKey} - IN COOLDOWN, waiting for power to return to normal`);
+                    // Don't return â€” lanjut proses tipe anomali baru dengan counter fresh
+                 } else {
+                    @* console.log(`ðŸ›‘ ${anomalyType.toUpperCase()} for ${deviceKey} - IN COOLDOWN , waiting for power to return to normal`); *@
 
                     // Check apakah sudah kembali normal
                     if (!isDowntime && currentPower >= lower && currentPower <= upper) {
-                        console.log(`✅ Power returned to normal for ${deviceKey}, clearing cooldown...`);
+                        @* console.log(`âœ… Power returned to normal for $ {deviceKey}, clearing cooldown...`); *@
                         anomalyCooldownState[deviceKey] = null;
                         notifyCooldownChanged(deviceKey, false, null);
                         saveAnomalyStateImmediate(); // Critical: cooldown cleared
                         resetServerAnomalyAlert(deviceKey); // Reset server-side dedup state
                         return; // Skip processing, will be checked in next interval
                     } else if (isDowntime && currentPower <= emaValue) {
-                        console.log(`✅ DOWNTIME ended (power back to zero), clearing cooldown for ${deviceKey}...`);
+                        @* console.log(`âœ… DOWNTIME ended (power back to zero), clea ring cooldown for ${deviceKey}...`); *@
                         anomalyCooldownState[deviceKey] = null;
                         notifyCooldownChanged(deviceKey, false, null);
                         saveAnomalyStateImmediate(); // Critical: cooldown cleared
@@ -833,15 +864,15 @@
             // Time-based cooldown DIHAPUS - hanya condition-based yang berlaku
             // const cooldownKey = `${deviceKey}_${anomalyType}`;
             // if (anomalyCooldown[cooldownKey] && (now - anomalyCooldown[cooldownKey]) < ...) { return; }
-            // ❌ REMOVED
+            // âŒ REMOVED
 
             // ============================================
             // KONFIRMASI ANOMALI REAL-TIME
             // ============================================
             // Konsep: "Touch & Hold" 
-            // - Kontak pertama dengan threshold → hitung 1 deteksi
-            // - Kontak kedua masih luar threshold → hitung 2 deteksi
-            // - Kembali normal → RESET ke 0
+            // - Kontak pertama dengan threshold â†’ hitung 1 deteksi
+            // - Kontak kedua masih luar threshold â†’ hitung 2 deteksi
+            // - Kembali normal â†’ RESET ke 0
             // - Hitung berapa kali menyentuh threshold dalam satu sesi
             
             const confirmationKey = `${deviceKey}_${anomalyType}`;
@@ -855,19 +886,19 @@
             // Log confirmation progress dengan detail lengkap
             const statusMessage = isDowntime ? '[DOWNTIME]' : '[NORMAL]';
             const modeLabel = anomalyServiceConfig.mode === 'fibonacci' ? 'FIB' : 'MANUAL';
-            console.log(`⚡ ANOMALY DETECTED #${confirmedCount}: ${anomalyType} for ${deviceKey} ${statusMessage}`);
-            
+            @* console.log(`ANOMALY DETECTED #${confirmedCount}: ${anomalyType} for ${deviceKey} ${statusMessage}`); *@
+
             if (isDowntime) {
-                console.log(`   Power: ${currentPower.toFixed(1)}W | EMA: ${emaValue.toFixed(1)}W | Threshold: ${thresholdValue.toFixed(1)}W`);
+                 @* console.log(`   Power: ${currentPower.toFixed(1)}W | EMA: ${emaValue.toFixed(1)}W | Threshold: ${thresholdValue.toFixed(1)}W`); *@
             } else {
-                console.log(`   Power: ${currentPower.toFixed(1)}W | Upper: ${upper.toFixed(1)}W | Lower: ${lower.toFixed(1)}W | Threshold: ${thresholdValue.toFixed(1)}W`);
+                @* console.log(`   Power: ${currentPower.toFixed(1)}W | Upper: ${upper.toFixed(1)}W | Lower: ${lower.toFixed(1)}W | Threshold: ${thresholdValue.toFixed(1)}W`); *@
             }
-            console.log(`   Mode: ${modeLabel} | Deviation: ${deviation.toFixed(1)}%`);
+            @* console.log(`   Mode: ${modeLabel} | Deviation: ${deviation.toFixed(1)}%`); *@
             
-            // KIRIM LOG SETELAH 3x TERUS-MENERUS di luar threshold (lebih cepat dari sebelumnya)
+            // KIRIM LOG SETELAH 3x TERUS-MENERUS di  luar threshold (lebih cepat dari sebelumnya)
             if (confirmedCount >= anomalyConfirmation.maxConfirmations) {
-                console.log(`✅ ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutive samples outside threshold`);
-                console.log(`   Final: Power=${currentPower.toFixed(1)}W, Threshold=${thresholdValue.toFixed(1)}W, Deviation=${deviation.toFixed(1)}%`);
+                @* console.log(`ANOMALY CONFIRMED! ${anomalyType} for ${deviceKey} - ${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutive samples outside threshold`); *@
+                @* console.log(`   Final: Power=${currentPower.toFixed(1)}W, Threshold=${thresholdValue.toFixed(1)}W, Deviation=${deviation.toFixed(1)}%`); *@
 
                 // ============================================
                 // CHART SNAPSHOT: Capture BEFORE data (last 50 points before anomaly)
@@ -890,9 +921,10 @@
                     UpperThreshold: upper,
                     LowerThreshold: lower,
                     EMAValue: emaValue
+ 
                 };
 
-                console.log('📊 Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey);
+                /* console.log('ðŸ“Š Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey) */;
 
                 // Tamu (belum login): jangan POST ke log-anomaly (butuh role Operator/Admin)
                 // agar tidak memicu respons 401 -> redirect ke halaman Login.
@@ -920,11 +952,11 @@
                         thresholdValue: thresholdValue,
                         deviation: Math.round(deviation * 10) / 10,
                         emaValue: emaValue,
-                        thresholdMode: anomalyServiceConfig.mode,
+                        thresholdMode: anomalyServiceConfig. mode,
                         chartSnapshot: chartSnapshotPayload
                     }),
                     success: function(response) {
-                        console.log(`✅ Anomaly logged: ${anomalyType} for ${deviceKey}`);
+                        @* console.log(`âœ… Anomaly logged: ${anomalyType} for ${deviceKey}`); *@
 
                         // ============================================
                         // CHART SNAPSHOT: Initialize AFTER buffer
@@ -937,9 +969,9 @@
                                 thresholds: { upper: upper, lower: lower },
                                 createdAt: Date.now(),
                                 lastSentCount: 0,
-                                lastSentTime: null
+                                 lastSentTime: null
                             };
-                            console.log('📊 Chart snapshot after-buffer initialized for anomaly #' + response.logId);
+                            @* console.log('ðŸ“Š Chart snapshot after-buffer initialized for anomaly #' + response.logId); *@
                         }
 
                         // Set cooldown STATE - TUNGGU SAMPAI KEMBALI NORMAL
@@ -960,18 +992,19 @@
                         saveAnomalyStateImmediate();
 
                         // Time-based cooldown DIHAPUS
-                        // anomalyCooldown[cooldownKey] = now;  // ❌ REMOVED
+                         // anomalyCooldown[cooldownK ey] = now;  // âŒ REMOVED
                     },
                     error: function(xhr, status, error) {
-                        console.error('Error logging anomaly:', error);
+                        /* console.error('Error logging anomaly:', error) */;
                         // Reset confirmation count on error so it can retry
                         anomalyConfirmation.counts[confirmationKey] = 0;
                         saveAnomalyState(); // Debounced: save counter reset
                     }
                 });
+ 
             } else {
-                console.log(`⏳ Still monitoring... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutive samples outside threshold)`);
-                console.log(`⏳ If power returns to normal before ${anomalyConfirmation.maxConfirmations}, counter will reset automatically`);
+                @* console.log(`â³ Still monitoring... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutiv e samples outside threshold)`); *@
+                @* console.log(`â³ If power returns to normal before ${anomalyConfirmation.maxConfirmations}, counter will reset automatically`); *@
             }
         }
 
@@ -987,40 +1020,40 @@
                     if (!panels || !Array.isArray(panels)) return;
                     const deviceKeys = [...new Set(panels.map(p => p.deviceKey))];
                     deviceKeys.forEach(function(deviceKey) {
-                        checkDeviceAnomaly(deviceKey);
+                        checkDeviceAnomaly( deviceKey);
                     });
                 },
-                error: function() {}
+                 error: function() {}
             });
-        }
+         }
 
         function startAnomalyService() {
-            console.log('=== ANOMALY BACKGROUND SERVICE STARTED ===');
-            console.log(`⏱️ Initial chart refresh interval: ${chartRefreshInterval}s`);
+            @* console.log('=== ANOMALY BACKGROUND SERVICE STARTED ==='); *@
+            @* console.log(`â±ï¸ Initial chart refresh interval: ${chartRefreshInterval}s`); *@
 
             // Load settings, anomaly state, AND per-device settings before starting checks
-            $.when(loadAnomalySettings(), loadAnomalyState(), (window._deviceSettingsPromise || $.Deferred().resolve())).done(function() {
-                console.log('Settings, anomaly state, and per-device settings loaded. Devices:', Object.keys(window._deviceSettings || {}).length);
-                console.log('Starting anomaly checks...');
+             $.when(loadAnomalySettings(), loadAnomalyState(), (window._deviceSettingsPromise || $.Deferred().resolve())).done(function() {
+                 @* console.log ('Settings, anomaly state, and per-device  settings loaded. Devices:', Object.keys(window._deviceSettings || {}).length); *@
+                @* console.log('Starting anomaly checks...'); *@
                 setTimeout(runAnomalyCheck, 2000);
                 
-                // Gunakan interval YANG SAMA dengan chart refresh
-                anomalyTimerInterval = chartRefreshInterval * 1000;
+                // Gunakan sampling interval dari preset anomaly.
+                anomalyTimerInterval = (anomalyServiceConfig.checkInterval || 30) * 1000;
                 anomalyTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
-                console.log(`🔄 Anomaly check started with interval: ${chartRefreshInterval}s`);
+                @* console.log(`ðŸ”„ Anomaly check started with interval: ${anomalyTimerInterval / 1000}s`); *@
                 
                 // ============================================
                 // RELOAD SETTINGS SETIAP 60 DETIK (2x chart interval)
-                // Agar perubahan method SMA/EMA langsung diterapkan
+                // Agar perubahan method SMA/EMA langs ung diterapkan
                 // tanpa perlu reload halaman
-                // ============================================
-                console.log('⏰ Settings reload timer started (every 60 seconds)');
+                 // ============================================
+                @* console.log('â° Settings reload timer started (every 60 seconds)'); *@
                 settingsReloadTimer = setInterval(function() {
-                    console.log('🔄 Reloading anomaly settings...');
+                    @* console.log('Reloading anomaly settings...'); *@
                     loadAnomalySettings().done(function() {
-                        console.log('✅ Settings reloaded successfully');
+                         @* console.log('âœ… Settings reloaded successfully'); *@
                     }).fail(function() {
-                        console.error('❌ Failed to reload settings');
+                        @* console.error('âŒ Failed to reload settings'); *@
                     });
                 }, 60000); // Setiap 60 detik (2x chart interval)
             });
@@ -1041,26 +1074,29 @@
                 });
                 var blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/Api/save-anomaly-state', blob);
-            } catch (e) { /* fallback: state akan di-save pada next load */ }
+            } catch (e) {
+                @* console.warn('Anomaly state save failed; it will be retried on the next page load.', e); *@
+            }
 
             // Save any remaining chart snapshot after-buffers via sendBeacon
             try {
                 Object.keys(anomalyChartBuffers).forEach(function(deviceKey) {
                     var buf = anomalyChartBuffers[deviceKey];
                     if (buf && buf.afterBuffer && buf.afterBuffer.length > 0 && buf.logId) {
-                        var snapPayload = JSON.stringify({ After: buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE), IsFinal: true });
-                        var snapBlob = new Blob([snapPayload], { type: 'application/json' });
-                        var sent = navigator.sendBeacon('/api/Api/anomaly-logs/' + buf.logId + '/chart-snapshot', snapBlob);
-                        console.log('📊 Sent chart snapshot via sendBeacon for #' + buf.logId + ' (' + buf.afterBuffer.length + ' points, sent=' + sent + ')');
+                        var finalAfterData = buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE);
+                        var snapPayload = JSON.stringify({ After: finalAfterData, IsFinal: finalAfterData.length >= CHART_SNAPSHOT_SIZE });
+                        var snapBlob = new Blob([snapPayload], { type:  'application/json' });
+                        var sent = navigator.sendBeacon('/api/Api/anomaly-logs/' + buf.logId + '/chart-snapshot ', snapBlob);
+                        @* console.log('ðŸ“Š Sent chart snapshot via sendBeacon  for #' + buf.logId + ' (' + buf.afterBuffer.length + ' points, sen t=' + sent + ')'); *@
                     }
                 });
             } catch (e) {
-                console.error('❌ Error sending chart snapshot via sendBeacon:', e);
+                @* console.error('âŒ Error sending chart snapshot via se ndBeacon:', e); *@
             }
 
-            if (anomalyTimer) clearInterval(anomalyTimer);
+             if (anomalyTimer) clearInterval(anomalyTimer);
             if (settingsReloadTimer) clearInterval(settingsReloadTimer);
-            console.log('🛑 Anomaly service stopped');
+            @* console.log('ðŸ›‘ Anomaly service stopped'); *@
         });
     })();
 </script>

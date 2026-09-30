@@ -68,8 +68,8 @@
                 <i class="fas fa-sliders-h text-primary"></i>
             </div>
             <div class="settings-section-title">
-                <h5>Per-Device Settings</h5>
-                <p>Konfigurasi spesifik untuk setiap device</p>
+                <h5>Pengaturan Perangkat</h5>
+                <p>Pengaturan khusus untuk setiap perangkat.</p>
             </div>
             <div class="settings-section-action">
                 <button type="button" class="btn btn-outline-primary btn-sm" id="btnSaveAllDeviceSettings">
@@ -81,7 +81,7 @@
             @if (!devices.Any())
             {
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Belum ada device yang terdaftar.
+                    <i class="fas fa-info-circle"></i> Belum ada perangkat yang terdaftar.
                 </div>
             }
             else
@@ -92,7 +92,7 @@
                         var settings = deviceSettings.ContainsKey(device.DeviceKey) ? deviceSettings[device.DeviceKey] : new KWHMonitoring.Models.DeviceSettings { DeviceKey = device.DeviceKey };
                         var safeKey = device.DeviceKey.Replace("-", "_");
                         <div class="device-settings-card" data-device-key="@device.DeviceKey" data-safe-key="@safeKey">
-                            <div class="card shadow-sm h-100 border-0" data-card-help="Pengaturan Device|Konfigurasi khusus device: kapasitas, threshold beban, tarif, budget, downtime, dan kontrol.|Load (%) = Daya ÷ Max Capacity × 100 · Biaya = kWh × Tarif|Perubahan disimpan via tombol Simpan dan memengaruhi kartu/grafik device ini.">
+                            <div class="card shadow-sm h-100 border-0" data-card-help="Pengaturan Perangkat|Konfigurasi khusus perangkat: kapasitas, ambang batas beban, tarif, anggaran, waktu henti, dan kontrol.|BEBAN (%) = Daya ÷ Kapasitas Maksimum × 100 · Biaya = kWh × Tarif|Perubahan disimpan melalui tombol Simpan dan memengaruhi kartu/grafik perangkat ini.">
                                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
                                     <h6 class="mb-0 text-truncate" style="font-size: 0.9rem;">
                                         <i class="fas fa-plug"></i> @device.GroupName
@@ -117,7 +117,7 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Max Cap (W)</label>
+                                                <label class="device-label">Kapasitas Maksimum (W)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)" min="0" step="100">
                                             </div>
                                             <div class="device-form-row">
@@ -128,16 +128,16 @@
                                         <div class="device-form-group">
                                             <div class="device-form-row">
                                                 <label class="device-label">Tarif WBP (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffWBP" value="@FormatNoTrailingZeros(settings.TariffWBP)" min="0" step="50" placeholder="0 = flat">
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffWBP" value="@FormatNoTrailingZeros(settings.TariffWBP)" min="0" step="50" placeholder="0 = tarif tetap">
                                             </div>
                                             <div class="device-form-row">
                                                 <label class="device-label">Tarif LWBP (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffLWBP" value="@FormatNoTrailingZeros(settings.TariffLWBP)" min="0" step="50" placeholder="0 = flat">
+                                                <input type="number" class="form-control form-control-sm" data-field="TariffLWBP" value="@FormatNoTrailingZeros(settings.TariffLWBP)" min="0" step="50" placeholder="0 = tarif tetap">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">WBP Start</label>
+                                                <label class="device-label">Awal WBP</label>
                                                 <select class="form-select form-select-sm" data-field="WbpStartHour">
                                                     @for (var h = 0; h < 24; h++)
                                                     {
@@ -146,7 +146,7 @@
                                                 </select>
                                             </div>
                                             <div class="device-form-row">
-                                                <label class="device-label">WBP End</label>
+                                                <label class="device-label">Akhir WBP</label>
                                                 <select class="form-select form-select-sm" data-field="WbpEndHour">
                                                     @for (var h = 0; h < 24; h++)
                                                     {
@@ -157,19 +157,19 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Budget Rp/bln</label>
+                                                <label class="device-label">Anggaran Bulanan (Rp)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="BudgetRupiah" value="@FormatNoTrailingZeros(settings.BudgetKWh * settings.TariffPerKWh)" min="0" step="1000" placeholder="0 = nonaktif">
                                                 <input type="hidden" data-field="BudgetKWh" value="@FormatNoTrailingZeros(settings.BudgetKWh)">
                                             </div>
                                             <div class="device-form-row">
                                                 <label class="device-label">Luas (m²)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="SurfaceArea" value="@FormatNoTrailingZeros(settings.SurfaceArea)" min="0" step="0.1" placeholder="0 = N/A">
+                                                <input type="number" class="form-control form-control-sm" data-field="SurfaceArea" value="@FormatNoTrailingZeros(settings.SurfaceArea)" min="0" step="0.1" placeholder="0 = tidak tersedia">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Rev/Jam (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000" placeholder="0 = N/A">
+                                                <label class="device-label">Pendapatan per Jam (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000" placeholder="0 = tidak tersedia">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
@@ -194,17 +194,17 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Start</label>
+                                                <label class="device-label">Mulai</label>
                                                 <input type="time" class="form-control form-control-sm" data-field="DowntimeStart" value="@settings.DowntimeStart.ToString(@"hh\:mm")">
                                             </div>
                                             <div class="device-form-row">
-                                                <label class="device-label">End</label>
+                                                <label class="device-label">Selesai</label>
                                                 <input type="time" class="form-control form-control-sm" data-field="DowntimeEnd" value="@settings.DowntimeEnd.ToString(@"hh\:mm")">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Control</label>
+                                                <label class="device-label">Mode Kendali</label>
                                                 <select class="form-select form-select-sm device-control-mode" data-field="ControlMode">
                                                     <option value="OnOff" selected="@(settings.ControlMode == "OnOff" ? "selected" : null)">ON/OFF</option>
                                                     <option value="Toggle" selected="@(settings.ControlMode == "Toggle" ? "selected" : null)">Toggle</option>
@@ -216,7 +216,7 @@
                                             <div class="device-form-row align-self-center">
                                                 <div class="form-check form-switch">
                                                     <input class="form-check-input" type="checkbox" data-field="DowntimeEnabled" @(settings.DowntimeEnabled ? "checked" : "")>
-                                                    <label class="form-check-label device-label">Downtime</label>
+                                                    <label class="form-check-label device-label">Waktu Henti</label>
                                                 </div>
                                             </div>
                                         </div>
@@ -225,8 +225,8 @@
                                 <div class="card-footer bg-light py-2 d-flex justify-content-between align-items-center">
                                     <small class="text-muted status-text" style="font-size: 0.75rem;">Belum disimpan</small>
                                     <div class="d-flex gap-1">
-                                        <button type="button" class="btn btn-outline-danger btn-sm btn-reset-chart-data" data-device-key="@device.DeviceKey" title="Hapus semua data chart untuk memperbarui SMA">
-                                            <i class="fas fa-trash-alt"></i> Reset Chart
+                                        <button type="button" class="btn btn-outline-danger btn-sm btn-reset-chart-data" data-device-key="@device.DeviceKey" title="Hapus seluruh data grafik untuk menghitung ulang nilai SMA">
+                                            <i class="fas fa-trash-alt"></i> Atur Ulang Grafik
                                         </button>
                                         <button type="button" class="btn btn-primary btn-sm btn-save-device-settings" data-device-key="@device.DeviceKey">
                                             <i class="fas fa-save"></i> Simpan
@@ -392,12 +392,17 @@
             var $card = $btn.closest('.device-settings-card');
             var $status = $card.find('.status-text');
 
-            if (!confirm('Reset semua data chart untuk device ' + deviceKey + '?\n\nData KWH akan dihapus dan SMA akan dihitung ulang dari data baru.\nAksi ini tidak dapat dibatalkan!')) {
+            var isEnglish = false;
+            try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (_) { }
+            var confirmMessage = isEnglish
+                ? 'Reset all chart data for device ' + deviceKey + '?\n\nEnergy data will be deleted and the simple moving average (SMA) will be recalculated from new data.\nThis action cannot be undone.'
+                : 'Atur ulang seluruh data grafik untuk perangkat ' + deviceKey + '?\n\nData energi akan dihapus dan nilai rata-rata bergerak sederhana (SMA) akan dihitung kembali berdasarkan data baru.\nTindakan ini tidak dapat dibatalkan.';
+            if (!confirm(confirmMessage)) {
                 return;
             }
 
-            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Reset...');
-            $status.text('Menghapus data chart...');
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> ' + (isEnglish ? 'Resetting...' : 'Mengatur ulang...'));
+            $status.text(isEnglish ? 'Deleting chart data...' : 'Menghapus data grafik...');
 
             $.ajax({
                 url: '/api/Api/reset-chart-data/' + encodeURIComponent(deviceKey),
@@ -405,21 +410,21 @@
                 success: function(response) {
                     if (response.success) {
                         var count = response.deletedCount || 0;
-                        $status.text('Chart direset (' + count + ' data)').removeClass('text-muted').addClass('text-success');
+                        $status.text(isEnglish ? 'Chart reset (' + count + ' records).' : 'Grafik berhasil diatur ulang (' + count + ' data).').removeClass('text-muted').addClass('text-success');
                         setTimeout(function() {
                             $status.text('Belum disimpan').removeClass('text-success').addClass('text-muted');
                         }, 5000);
                     } else {
-                        $status.text('Gagal: ' + response.message).removeClass('text-muted').addClass('text-danger');
+                        $status.text((isEnglish ? 'Failed: ' : 'Gagal: ') + response.message).removeClass('text-muted').addClass('text-danger');
                     }
                 },
                 error: function(xhr) {
-                    var msg = 'Error';
+                    var msg = isEnglish ? 'An error occurred.' : 'Terjadi kesalahan.';
                     try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
-                    $status.text('Gagal: ' + msg).removeClass('text-muted').addClass('text-danger');
+                    $status.text((isEnglish ? 'Failed: ' : 'Gagal: ') + msg).removeClass('text-muted').addClass('text-danger');
                 },
                 complete: function() {
-                    $btn.prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Reset Chart');
+                    $btn.prop('disabled', false).html('<i class="fas fa-trash-alt"></i> ' + (isEnglish ? 'Reset Chart' : 'Atur Ulang Grafik'));
                 }
             });
         });

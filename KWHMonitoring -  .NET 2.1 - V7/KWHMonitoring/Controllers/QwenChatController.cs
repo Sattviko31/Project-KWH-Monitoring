@@ -115,6 +115,7 @@ namespace KWHMonitoring.Controllers
             // Fitur Baru: Untuk menerima data yang sedang tampil di layar website
             // Sekarang menerima JObject/JArray untuk struktur data yang rapi
             public JToken RealTimeData { get; set; }
+            public string Language { get; set; }
         }
 
         private class PanelUsageData
@@ -131,6 +132,16 @@ namespace KWHMonitoring.Controllers
             public decimal AllTimeCost { get; set; }
             public decimal CurrentPower { get; set; }
             public string Status { get; set; }
+        }
+
+        private class ActivityLogItem
+        {
+            public string Id { get; set; }
+            public string Category { get; set; }
+            public string Title { get; set; }
+            public string Message { get; set; }
+            public string Severity { get; set; }
+            public DateTime Timestamp { get; set; }
         }
 
         [HttpPost("send")]
@@ -242,189 +253,26 @@ namespace KWHMonitoring.Controllers
                 // ==========================================
                 // INSTRUKSI SISTEM & INJEKSI DATA REAL-TIME
                 // ==========================================
-                string systemPrompt = "Nama kamu Voltra, Kamu adalah asisten virtual pintar dan suka banget humor yang KHUSUS melayani sistem KWH Monitoring. " +
-                                      "Fokus utamamu HANYA menjawab pertanyaan seputar data listrik, daya (Watt), Power Factor, tegangan, arus, konsumsi energi (WH/KWH), dan panduan penggunaan aplikasi. " +
-                                      "ATURAN MUTLAK: Jika pengguna bertanya tentang topik di luar sistem monitoring listrik (seperti resep masakan, cuaca, berita umum, coding di luar konteks, dll), kamu WAJIB menolak dengan humor dan beritahu mereka bahwa kamu hanya diprogram untuk KWH Monitoring.";
+                string systemPrompt = "Anda adalah Voltra, asisten virtual KWH Monitoring yang ramah, santun, dan profesional. " +
+                                      "Jawab pertanyaan seputar data listrik, daya (W), faktor daya, tegangan, arus, konsumsi energi (Wh/kWh), serta panduan penggunaan aplikasi. " +
+                                      "Tafsirkan konteks percakapan dengan cermat, hitung hanya dari data yang tersedia, jelaskan satuan dan waktu snapshot, bandingkan panel dan tren, serta ungkap ketidakpastian atau konflik antar tabel. Jangan mengarang angka. Identifikasi temuan systemFindings dan jelaskan tingkat urgensi serta langkah pemeriksaan yang relevan. Tetap fokus pada monitoring listrik dan penggunaan aplikasi.";
+
+                var responseLanguage = string.Equals(request.Language, "en", StringComparison.OrdinalIgnoreCase) ? "English" : "Bahasa Indonesia baku";
+                systemPrompt += "\n\nINSTRUKSI BAHASA WAJIB: Jawab sepenuhnya dalam " + responseLanguage +
+                                ". Gunakan tata bahasa, ejaan, dan pilihan kata yang baku serta alami. Hindari campur bahasa, bahasa percakapan yang tidak baku, dan terjemahan harfiah. Pertahankan nama perangkat, angka, satuan, serta istilah teknis yang diperlukan.";
 
                 // Jika ada data realtime dari frontend, masukkan ke memori AI dalam format terstruktur
                 if (request.RealTimeData != null && !request.RealTimeData.ToString().Equals("null", StringComparison.OrdinalIgnoreCase))
                 {
-                    string formattedData;
-                    try
-                    {
-                        // Cek apakah data ini punya struktur lengkap (snapshot dari /api/qwenchat/current-dashboard-data)
-                        var panelsToken = request.RealTimeData["panels"];
-                        var tariffToken = request.RealTimeData["tariff"];
-                        var statsToken = request.RealTimeData["systemStatistics"];
-                        var usageToken = request.RealTimeData["usageStatistics"];
-                        var anomaliesToken = request.RealTimeData["anomalies"];
-                        bool isFullSnapshot = (panelsToken != null || tariffToken != null || usageToken != null);
-
-                        if (isFullSnapshot)
-                        {
-                            // Format khusus untuk snapshot utuh — bagi per seksi agar AI mudah membaca
-                            var sb = new StringBuilder();
-                            sb.AppendLine("{");
-
-                            // Header metadata
-                            var ts = request.RealTimeData["timestamp"];
-                            if (ts != null)
-                                sb.AppendLine("  \"metadata\": { \"timestamp\": \"" + ts.ToString() + "\" },");
-
-                            // Tariff (PENTING UNTUK TAGIHAN)
-                            if (tariffToken != null)
-                            {
-                                sb.AppendLine("  \"tariff\": " + tariffToken.ToString());
-                            }
-
-                            // System Statistics (real-time monitoring)
-                            if (statsToken != null)
-                            {
-                                sb.AppendLine("  \"statistikSistemRealtime\": " + statsToken.ToString());
-                            }
-
-                            // Usage Statistics (untuk perhitungan tagihan — PALING AKURAT dengan perPanel.rankings)
-                            if (usageToken != null)
-                            {
-                                var perPanel = usageToken["perPanel"];
-                                if (perPanel != null && perPanel["rankings"] != null)
-                                {
-                                    sb.AppendLine("  \"usageStatistics\": {");
-                                    sb.AppendLine("    \"global\": " + (usageToken["global"]?.ToString() ?? "{}") + ",");
-                                    sb.AppendLine("    \"perPanel\": {");
-                                    sb.AppendLine("      \"period\": \"" + (perPanel["period"]?.ToString() ?? "") + "\",");
-                                    sb.AppendLine("      \"totalSystemKWh\": " + (perPanel["totalSystemKWh"]?.ToString() ?? "0") + ",");
-                                    sb.AppendLine("      \"rankings\": [");
-                                    
-                                    var rankings = perPanel["rankings"] as JArray;
-                                    if (rankings != null)
-                                    {
-                                        int rankCount = Math.Min(rankings.Count, 15); // Tampilkan top 15
-                                        for (int i = 0; i < rankCount; i++)
-                                        {
-                                            var r = rankings[i];
-                                            var today = r["today"];
-                                            var thisMonth = r["thisMonth"];
-                                            var thisYear = r["thisYear"];
-                                            
-                                            string line = "        { " +
-                                                $"\"rank\": {i + 1}, " +
-                                                $"\"deviceKey\": \"{r["deviceKey"]}\", " +
-                                                $"\"groupName\": \"{r["groupName"]}\", " +
-                                                $"\"todayKWh\": {(today?["energyKWh"]?.ToString() ?? "0")}, " +
-                                                $"\"todayCost\": {(today?["estimatedCost"]?.ToString() ?? "0")}, " +
-                                                $"\"monthKWh\": {(thisMonth?["energyKWh"]?.ToString() ?? "0")}, " +
-                                                $"\"monthCost\": {(thisMonth?["estimatedCost"]?.ToString() ?? "0")}, " +
-                                                $"\"yearKWh\": {(thisYear?["energyKWh"]?.ToString() ?? "0")}, " +
-                                                $"\"yearCost\": {(thisYear?["estimatedCost"]?.ToString() ?? "0")} " +
-                                                "}";
-                                            if (i < rankCount - 1) line += ",";
-                                            sb.AppendLine(line);
-                                        }
-                                    }
-                                    
-                                    sb.AppendLine("      ]");
-                                    sb.AppendLine("    }");
-                                    sb.AppendLine("  }");
-                                }
-                                else
-                                {
-                                    sb.AppendLine("  \"usageStatistics\": " + usageToken.ToString() + ",");
-                                }
-                            }
-
-                            // Anomalies (deteksi masalah)
-                            if (anomaliesToken != null)
-                            {
-                                sb.AppendLine("  \"anomaliDeteksi\": " + anomaliesToken.ToString());
-                            }
-
-                            // Panels (data per device - tegangan, arus, cosPhi, dll)
-                            if (panelsToken != null)
-                            {
-                                sb.AppendLine("  \"panel\": [");
-                                var panelArray = panelsToken as JArray;
-                                int totalPanels = panelArray != null ? panelArray.Count : 0;
-                                int panelCount = Math.Min(totalPanels, 20); // Batasi 20 panel pertama
-                                for (int i = 0; i < panelCount; i++)
-                                {
-                                    var p = panelArray[i];
-                                    string line = "    { ";
-
-                                    var dk = p["deviceKey"];
-                                    if (dk != null) line += "\"deviceKey\": \"" + dk.ToString() + "\"";
-
-                                    var gn = p["groupName"];
-                                    if (gn != null) line += ", \"groupName\": \"" + gn.ToString() + "\"";
-
-                                    var dw = p["dayaWatt"];
-                                    if (dw != null) line += ", \"dayaWatt\": " + dw.ToString();
-
-                                    var cp = p["cosPhi"];
-                                    if (cp != null) line += ", \"cosPhi\": " + cp.ToString();
-
-                                    var vr = p["r"];
-                                    if (vr != null) line += ", \"teganganR\": " + vr.ToString();
-
-                                    var ar = p["ampR"];
-                                    if (ar != null) line += ", \"arusR\": " + ar.ToString();
-
-                                    var st = p["status"];
-                                    if (st != null) line += ", \"status\": \"" + st.ToString() + "\"";
-
-                                    line += " }";
-                                    if (i < panelCount - 1) line += ",";
-                                    sb.AppendLine(line);
-                                }
-                                sb.AppendLine("  ]");
-                            }
-
-                            // Chart History (time-series untuk trend analysis)
-                            var chartToken = request.RealTimeData["chartHistory"];
-                            if (chartToken != null)
-                            {
-                                var chartArray = chartToken as JArray;
-                                if (chartArray != null && chartArray.Count > 0)
-                                {
-                                    sb.AppendLine("  \"chartHistory\": [");
-                                    int chartCount = Math.Min(chartArray.Count, 10);
-                                    for (int i = 0; i < chartCount; i++)
-                                    {
-                                        var c = chartArray[i];
-                                        var dk = c["deviceKey"]?.ToString() ?? "";
-                                        var gn = c["groupName"]?.ToString() ?? "";
-                                        var pts = c["pointCount"]?.ToString() ?? "0";
-                                        var powerArr = c["power"]?.ToString() ?? "[]";
-                                        var labelsArr = c["labels"]?.ToString() ?? "[]";
-                                        string line = "    { \"deviceKey\": \"" + dk + "\", \"groupName\": \"" + gn + "\", \"dataPoints\": " + pts + ", \"labels\": " + labelsArr + ", \"powerWatt\": " + powerArr + " }";
-                                        if (i < chartCount - 1) line += ",";
-                                        sb.AppendLine(line);
-                                    }
-                                    sb.AppendLine("  ]");
-                                }
-                            }
-
-                            sb.AppendLine("}");
-                            formattedData = sb.ToString();
-                        }
-                        else
-                        {
-                            // Fallback: format biasa untuk string atau data lain
-                            formattedData = JsonConvert.SerializeObject(request.RealTimeData, Formatting.Indented);
-                        }
-                    }
-                    catch
-                    {
-                        // Fallback terakhir: string mentah
-                        formattedData = request.RealTimeData.ToString();
-                    }
+                    // Kirim seluruh snapshot database tanpa membuang panel, ranking, atau tren.
+                    string formattedData = JsonConvert.SerializeObject(request.RealTimeData, Formatting.None);
 
                     systemPrompt += "\n\n" +
                                     "═══════════════════════════════════════════════════════════════════════════════\n" +
                                     "📊 DATA REALTIME DASHBOARD KWH MONITORING\n" +
                                     "═══════════════════════════════════════════════════════════════════════════════\n" +
                                     "Kamu adalah Voltra, asisten AI KWH Monitoring. Data di bawah ini adalah snapshot LANGSUNG dari database sistem.\n" +
-                                    "Kamu WAJIB menggunakan data ini untuk menjawab. JANGAN menebak, JANGAN menggunakan placeholder, JANGAN bilang 'kurang data'.\n\n" +
+                                    "Gunakan snapshot ini sebagai sumber utama jawaban. Jangan menebak atau membuat angka. Jika ada bagian yang gagal dimuat, nyatakan bagian tersebut dengan jelas dan jangan perlakukan sebagai nol. Pertimbangkan timestamp dan systemFindings.\n\n" +
                                     "⚠️ ATURAN MUTLAK:\n" +
                                     "1. Jika data di bawah ini menunjukkan angka > 0, kamu HARUS menyebutkan angka tersebut.\n" +
                                     "2. Jika data = 0, katakan 'Data menunjukkan 0 kWh' atau 'Tidak ada konsumsi'.\n" +
@@ -510,6 +358,55 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        [HttpGet("activity-log")]
+        public async Task<IActionResult> GetActivityLog()
+        {
+            try
+            {
+                var auditLogs = await _context.SecurityAuditLogs
+                    .AsNoTracking()
+                    .OrderByDescending(x => x.Timestamp)
+                    .Take(100)
+                    .ToListAsync();
+
+                var anomalyLogs = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .OrderByDescending(x => x.DetectedTime)
+                    .Take(100)
+                    .ToListAsync();
+
+                var items = auditLogs.Select(x => new ActivityLogItem
+                {
+                    Id = "audit-" + x.Id,
+                    Category = x.Action == SecurityAction.Register ? "Registrasi" :
+                        "Aktivitas akun",
+                    Title = x.Action == SecurityAction.Register ? "Registrasi pengguna" :
+                        x.Action.ToString(),
+                    Message = string.IsNullOrWhiteSpace(x.Details) ? x.Email : x.Details,
+                    Severity = x.Success ? "info" : "warning",
+                    Timestamp = x.Timestamp
+                }).Concat(anomalyLogs.Select(x => new ActivityLogItem
+                {
+                    Id = "anomaly-" + x.Id,
+                    Category = "Anomali",
+                    Title = "Anomali " + (x.AnomalyType ?? "sistem"),
+                    Message = string.Format("Panel {0}: {1:N1} W (deviasi {2:N1}%). {3}", x.DeviceKey, x.PowerValue, x.Deviation, string.IsNullOrWhiteSpace(x.Notes) ? "" : x.Notes),
+                    Severity = string.IsNullOrWhiteSpace(x.Severity) ? "warning" : x.Severity,
+                    Timestamp = x.DetectedTime
+                }))
+                .OrderByDescending(x => x.Timestamp)
+                .Take(100)
+                .ToList();
+
+                return Ok(new { success = true, items, count = items.Count, updatedAt = DateTime.UtcNow });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Gagal mengambil log aktivitas notifikasi");
+                return StatusCode(500, new { success = false, message = "Log aktivitas tidak dapat dimuat." });
+            }
+        }
+
         [HttpGet("current-dashboard-data")]
         public async Task<IActionResult> GetCurrentDashboardData()
         {
@@ -571,6 +468,20 @@ namespace KWHMonitoring.Controllers
                 }).ToList();
 
                 // ==========================================
+                var systemFindings = new List<object>();
+                var freshnessCutoff = DateTime.Now.AddMinutes(-15);
+                foreach (var panel in validPanels)
+                {
+                    var label = string.IsNullOrWhiteSpace(panel.GroupName) ? panel.DeviceKey : panel.GroupName;
+                    if (panel.Waktu_Server < freshnessCutoff)
+                        systemFindings.Add(new { severity = "warning", code = "STALE_PANEL", deviceKey = panel.DeviceKey, message = "Data panel " + label + " tidak diperbarui lebih dari 15 menit.", detectedAt = DateTime.Now });
+                    if ((panel.Daya_Watt ?? 0m) < 0 || (panel.Total_Energy_Wh ?? 0m) < 0 || (panel.Energi_Aktif_Wh ?? 0m) < 0)
+                        systemFindings.Add(new { severity = "critical", code = "NEGATIVE_READING", deviceKey = panel.DeviceKey, message = "Pembacaan daya atau energi bernilai negatif pada " + label + ".", detectedAt = DateTime.Now });
+                    if (panel.Cos_Phi.HasValue && (panel.Cos_Phi.Value < 0 || panel.Cos_Phi.Value > 1))
+                        systemFindings.Add(new { severity = "warning", code = "INVALID_POWER_FACTOR", deviceKey = panel.DeviceKey, message = "Power factor di luar rentang 0–1 pada " + label + ".", detectedAt = DateTime.Now });
+                    if ((panel.Volt_R ?? 0m) > 0 && (panel.Volt_R < 180 || panel.Volt_R > 260))
+                        systemFindings.Add(new { severity = "warning", code = "VOLTAGE_OUT_OF_RANGE", deviceKey = panel.DeviceKey, message = "Tegangan fasa R di luar rentang acuan 180–260 V pada " + label + ".", detectedAt = DateTime.Now });
+                }
                 // 2. TARIFF PER KWH (dari AppSettingsRecords)
                 // ==========================================
                 _logger.LogInformation("Mengambil tariff dari AppSettingsRecords...");
@@ -930,6 +841,7 @@ namespace KWHMonitoring.Controllers
                     systemStatistics = systemStats,
                     usageStatistics = usageStatistics,
                     anomalies = anomaliesSummary,
+                    systemFindings = systemFindings,
                     panels = panelsJson,
                     chartHistory = chartData,
                     deviceCategories = categorySettings
@@ -954,6 +866,7 @@ namespace KWHMonitoring.Controllers
                         perPanel = new { rankings = new List<object>() }
                     },
                     anomalies = new { totalCount = 0, unacknowledged = 0, last24Hours = 0, recentLogs = new List<object>() },
+                    systemFindings = new List<object> { new { severity = "critical", code = "SNAPSHOT_ERROR", message = "Snapshot database gagal diambil; data tidak tersedia untuk analisis.", detectedAt = DateTime.Now } },
                     panels = new List<object>(),
                     chartHistory = new List<object>(),
                     deviceCategories = new Dictionary<string, string>()

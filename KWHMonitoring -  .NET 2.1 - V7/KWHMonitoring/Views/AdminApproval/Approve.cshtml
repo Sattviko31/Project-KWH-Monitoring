@@ -5,7 +5,7 @@
 }
 
 <div class="auth-page">
-    <div class="auth-card" data-card-help="Persetujuan Admin|Halaman khusus master admin untuk menyetujui pendaftaran user baru.|Memilih role (Viewer/Operator) bagi user yang disetujui.|Dilindungi tautan token dari email + anti-forgery; akun Admin tidak bisa disetujui di sini.">
+    <div class="auth-card" data-card-help="Persetujuan Administrator|Halaman khusus administrator utama untuk menyetujui pendaftaran pengguna baru.|Pilih peran (Pengamat atau Operator) bagi pengguna yang disetujui.|Halaman ini dilindungi oleh token dari email dan token anti-pemalsuan permintaan; akun administrator tidak dapat disetujui melalui halaman ini.">
         <div class="card-body">
             @if (ViewBag.Approved == true)
             {
@@ -17,8 +17,8 @@
                     <p class="auth-subtitle">Persetujuan berhasil diproses</p>
 
                     <div class="auth-message">
-                        Pengguna <strong>@ViewBag.UserEmail</strong> telah diberikan role <strong>@ViewBag.Role</strong>.<br>
-                        Email konfirmasi telah dikirim ke user.
+                        Peran <strong>@ViewBag.Role</strong> telah diberikan kepada pengguna <strong>@ViewBag.UserEmail</strong>.<br>
+                        Email konfirmasi telah dikirim kepada pengguna tersebut.
                     </div>
 
                     <a href="/" class="auth-btn auth-btn-primary">
@@ -47,13 +47,13 @@
                     <input type="hidden" name="token" value="@ViewBag.Token" />
 
                     <div class="auth-input-group text-start">
-                        <label for="role" class="auth-input-label">Pilih Role</label>
+                        <label for="role" class="auth-input-label">Pilih Peran</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
                             <select name="role" id="role" class="form-control" required>
-                                <option value="">Pilih role...</option>
+                                <option value="">Pilih peran...</option>
                                 <option value="Viewer">Viewer (Hanya melihat)</option>
-                                <option value="Operator">Operator (Dapat mengontrol device)</option>
+                                <option value="Operator">Operator (dapat mengendalikan perangkat)</option>
                             </select>
                         </div>
                     </div>

@@ -10,7 +10,7 @@
 <!-- Content: Panel Monitoring -->
 <div class="stats-row mb-3 mb-md-4">
     <div>
-        <div class="stat-card bg-primary h-100" data-card-help="Total Daya|Jumlah daya aktif semua panel yang sedang berjalan saat ini. Diperbarui otomatis tiap 10 detik.|Rumus: Total Daya = Σ Daya_Watt (semua panel) — satuan Watt|Sumber: nilai daya terakhir tiap device dari database monitoring.">
+        <div class="stat-card bg-primary h-100" data-card-help="Total Daya|Jumlah daya aktif semua panel yang sedang berjalan saat ini. Diperbarui otomatis tiap 10 detik.|Rumus: Total Daya = Σ Daya_Watt (semua panel) — satuan Watt|Sumber: nilai daya terakhir tiap perangkat dari database monitoring.">
             <div class="stat-label">Total Daya</div>
             <div class="stat-value">@Model.TotalStats.TotalDaya.ToString("N0") W</div>
             <i class="fas fa-bolt stat-icon"></i>
@@ -31,14 +31,14 @@
         </div>
     </div>
     <div>
-        <div class="stat-card bg-secondary h-100" data-card-help="Active Panels|Jumlah panel/device yang aktif mengirim data ke sistem.|Rumus: Active Panels = jumlah device yang memiliki data pengukuran terakhir|Device tanpa data terbaru tidak dihitung sebagai aktif.">
+        <div class="stat-card bg-secondary h-100" data-card-help="Active Panels|Jumlah panel/perangkat yang aktif mengirim data ke sistem.|Rumus: Active Panels = jumlah perangkat yang memiliki data pengukuran terakhir|Perangkat tanpa data terbaru tidak dihitung sebagai aktif.">
             <div class="stat-label">Active Panels</div>
             <div class="stat-value">@Model.TotalStats.ActivePanels</div>
             <i class="fas fa-th stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card bg-dark h-100" data-card-help="Avg Power Factor|Rata-rata faktor daya semua panel — indikator efisiensi pemakaian listrik (0 s/d 1).|Rumus: Avg PF = Σ Cos_Phi ÷ jumlah panel|Mendekati 1.0 = efisien; di bawah 0.85 menandakan pemborosan daya reaktif.">
+        <div class="stat-card bg-dark h-100" data-card-help="Avg Faktor daya|Rata-rata faktor daya semua panel — indikator efisiensi pemakaian listrik (0 s/d 1).|Rumus: Avg PF = Σ Cos_Phi ÷ jumlah panel|Mendekati 1.0 = efisien; di bawah 0.85 menandakan pemborosan daya reaktif.">
             <div class="stat-label">Avg Power Factor</div>
             <div class="stat-value">@Model.TotalStats.AvgPowerFactor.ToString("N3")</div>
             <i class="fas fa-wave-square stat-icon"></i>
@@ -559,12 +559,12 @@
                             systemSettings.gridLineWidth = parseFloat(data.settings['Chart.GridLineWidth']) || 1;
                             systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
 
-                            console.log('System settings loaded:', systemSettings);
+                            @* console.log('System settings loaded:', systemSettings); *@
                         }
                         resolve();
                     },
                     error: function() {
-                        console.log('Using default system settings');
+                        @* console.log('Using default system settings'); *@
                         resolve();
                     }
                 });
@@ -580,11 +580,11 @@
                     timeout: 5000,
                     success: function(data) {
                         anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
-                        console.log('Index anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations);
+                        @* console.log('Index anomaly maxConfirmations loaded:', anomalyConfirmation.maxConfirmations); *@
                         resolve();
                     },
                     error: function() {
-                        console.log('Using default anomalyMaxConfirmations on Index:', anomalyConfirmation.maxConfirmations);
+                        @* console.log('Using default anomalyMaxConfirmations on Index:', anomalyConfirmation.maxConfirmations); *@
                         resolve();
                     }
                 });
@@ -773,9 +773,9 @@
                     populateCategoryFilter();
                     // Populate all category selectors
                     populateAllCategoryIcons();
-                    console.log('Categories meta loaded:', categoryMetaMap);
+                    @* console.log('Categories meta loaded:', categoryMetaMap); *@
                 },
-                error: function() { console.warn('Failed to load categories meta'); }
+                 error: function() { @* console.warn('Failed to load categories meta'); *@ }
             });
         }
 
@@ -819,9 +819,9 @@
                     populateAllCategoryIcons();
                     // Re-apply filter after categories are loaded
                     applyPanelFilter();
-                    console.log('Device categories loaded:', deviceCategoryMap);
+                    @* console.log('Device cate gories loaded:', deviceCategoryMap); *@
                 },
-                error: function() { console.warn('Failed to load device categories'); }
+                 error: function() { @* console.warn('Failed to load device categories'); *@ }
             });
         }
 
@@ -851,7 +851,7 @@
                         updateCategoryIconUI(safeKey, category);
                     }
                 },
-                error: function() { alert('Gagal menyimpan kategori device'); }
+                error: function() { alert('Gagal menyimpan kategori perangkat.'); }
             });
         }
 
@@ -938,7 +938,7 @@
 
             // Real-time update saat cooldown state berubah (dari anomaly service)
             window.addEventListener('anomalyCooldownChanged', function(e) {
-                console.log('🔄 Anomaly cooldown changed:', e.detail);
+                @* console.log('🔄 Anomaly  cooldown changed:', e.detail); *@
                 updatePanelHeadersByAnomaly();
             });
 
@@ -983,7 +983,7 @@
             if (!emaSettings.enableAlerts) return;
 
             if (anomalyConfirmation.maxConfirmations <= 0) {
-                console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')');
+                @* console.log('Anomaly detection disabled (maxConfirmations=' + anomalyConfirmation.maxConfirmations + ')'); *@
                 return;
             }
 
@@ -1019,10 +1019,10 @@
             confirmedCount++;
             anomalyConfirmation.counts[confirmationKey] = confirmedCount;
 
-            console.log(`⚠️ ANOMALY CHECK: ${anomalyType} for ${deviceKey} - Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`);
+            @* console.log(`⚠️ ANOMALY CHECK: ${anomalyType} for ${deviceKey} - Count: ${confirmedCount}/${anomalyConfirmation.maxConfirmations}`); *@
 
             if (confirmedCount < anomalyConfirmation.maxConfirmations) {
-                console.log(`⏳ Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`);
+                @* console.log(`⏳ Waiting for more samples... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} needed)`); *@
                 return;
             }
 
@@ -1060,11 +1060,11 @@
                     thresholdMode: emaSettings.mode
                 }),
                 success: function(response) {
-                    console.log(`Anomaly logged: ${anomalyType} for ${deviceKey}`);
+                    @* console.log(`Anomaly logged: ${anomalyType} for ${deviceKey}`); *@
                     anomalyConfirmation.counts[confirmationKey] = 0;
                 },
                 error: function(xhr, status, error) {
-                    console.error('Error logging anomaly:', error);
+                    @* console.error('Error logging anomaly:', error); *@
                     anomalyConfirmation.counts[confirmationKey] = 0;
                 }
             });
@@ -1075,15 +1075,20 @@
 
         function showAnomalyAlert(deviceKey, type, power, threshold, deviation) {
             const isOverload = type === 'OVERLOAD';
+            var isEnglish = false;
+            try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (_) { }
+            var anomalyName = isEnglish
+                ? (isOverload ? 'EXCESSIVE LOAD' : 'DEVICE OUTAGE')
+                : (isOverload ? 'BEBAN BERLEBIH' : 'GANGGUAN PERANGKAT');
             const content = `
                 <div class="alert alert-${isOverload ? 'danger' : 'warning'}">
-                    <h5><i class="fas ${isOverload ? 'fa-bolt' : 'fa-power-off'}"></i> ${isOverload ? 'OVERLOAD' : 'DEVICE DROP'} DETECTED</h5>
+                    <h5><i class="fas ${isOverload ? 'fa-bolt' : 'fa-power-off'}"></i> ${anomalyName} ${isEnglish ? 'DETECTED' : 'TERDETEKSI'}</h5>
                     <hr>
-                    <p><strong>Device:</strong> ${deviceKey}</p>
-                    <p><strong>Power:</strong> ${formatNumber(power)} W</p>
-                    <p><strong>Threshold:</strong> ${formatNumber(threshold)} W</p>
-                    <p><strong>Deviation:</strong> ${deviation.toFixed(1)}%</p>
-                    <p><strong>Time:</strong> ${new Date().toLocaleString('id-ID')}</p>
+                    <p><strong>${isEnglish ? 'Device' : 'Perangkat'}:</strong> ${deviceKey}</p>
+                    <p><strong>${isEnglish ? 'Power' : 'Daya'}:</strong> ${formatNumber(power)} W</p>
+                    <p><strong>${isEnglish ? 'Threshold' : 'Ambang Batas'}:</strong> ${formatNumber(threshold)} W</p>
+                    <p><strong>${isEnglish ? 'Deviation' : 'Deviasi'}:</strong> ${deviation.toFixed(1)}%</p>
+                    <p><strong>${isEnglish ? 'Time' : 'Waktu'}:</strong> ${new Date().toLocaleString(isEnglish ? 'en-US' : 'id-ID')}</p>
                 </div>
             `;
             $('#anomalyContent').html(content);
@@ -1157,7 +1162,7 @@
         // SYNC PROGRESS BARS (Initial Load)
         // ============================================
         function syncProgressBars() {
-            console.log('Syncing progress bars with settings:', systemSettings);
+            @* console.log('Syncing progress bars with settings:', systemSettings); *@
 
             panelList.forEach(function(panel) {
                 const safeKey = panel.deviceKey.replace(/-/g, '_');
@@ -1305,11 +1310,11 @@
                 cache: false,
                 success: function(response) {
                     if (!response.success || !response.states) {
-                        console.warn('Relay states response invalid:', response);
+                        @* console.warn('Relay states  response invalid:', response); *@
                         return;
                     }
                     if (response.error) {
-                        console.error('Relay states server error:', response.error);
+                        @* console.error('Relay states server error:', response.error); *@
                     }
                     var states = response.states;
                     $('.device-control-wrapper').each(function() {
@@ -1323,11 +1328,11 @@
                         var rci = (info && info.rciRaw != null && info.rciRaw !== '') ? String(info.rciRaw).trim() : '';
                         var state = getRelayStateFromRci(mode, relay, rci);
                         updateRelayIndicator($wrapper, state);
-                        console.log('Relay state:', { deviceKey: deviceKey, deviceId: deviceId, groupName: groupName, rci: rci, rciRaw: info ? info.rciRaw : null, rcRaw: info ? info.rcRaw : null, state: state, mode: mode, relay: relay });
+                        @* console.log('Relay state:', { deviceKey: deviceKey, deviceId: deviceId, groupName: groupName, rci: rci, rciRaw: info ? info.rciRaw : null, rcRaw: info ? info.rcRaw : null, state: state , mode: mode, relay: relay }); *@
                     });
                 },
                 error: function() {
-                    console.error('Failed to update relay states');
+                    @* console.error('Fa iled to update relay states'); *@
                 }
             });
         }
@@ -1511,8 +1516,8 @@
                     // Update relay state indicator behind On/Off buttons
                     updateRelayStates();
                 },
-                error: function() {
-                    console.error('Error updating panel cards');
+                error : function() {
+                    @* console. error('Error updating panel cards'); *@
                 }
             });
         }

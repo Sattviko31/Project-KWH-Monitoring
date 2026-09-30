@@ -1,4 +1,4 @@
-﻿@using KWHMonitoring.Models
+@using KWHMonitoring.Models
 @using Microsoft.Extensions.Caching.Memory
 @inject IMemoryCache MemoryCache
 @inject KWHMonitoring.Services.AppSettingsCache SettingsCache
@@ -21,7 +21,7 @@
     var isAuthPage = ViewData["AuthPage"] != null || controllerName == "Account" || controllerName == "AdminApproval";
 }
 <!DOCTYPE html>
-<html lang="en" class="@(isAuthPage ? "auth-page" : "")">
+<html lang="id" class="@(isAuthPage ? "auth-page" : "")">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
@@ -34,6 +34,39 @@
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <style>
+        .activity-modal-content { color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
+        .activity-modal-content .modal-header, .activity-modal-content .modal-footer { color: var(--text-primary); background: var(--bg-surface-hover); border-color: var(--border-color); }
+        .activity-modal-content .modal-title { color: var(--text-primary); }
+        .activity-modal-content .text-muted { color: var(--text-muted) !important; }
+        .activity-modal-content .close { color: var(--text-primary); text-shadow: none; opacity: .75; }
+        .activity-modal-content .close:hover { color: var(--text-primary); opacity: 1; }
+        .activity-log-list { display: flex; flex-direction: column; gap: 10px; }
+        .activity-log-item { display: flex; gap: 12px; padding: 13px 14px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-surface); color: var(--text-primary); }
+        .activity-log-icon { flex: 0 0 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--badge-bg); color: var(--badge-text); }
+        .activity-log-item.severity-warning .activity-log-icon { background: rgba(245, 158, 11, .16); color: #a36500; }
+        .activity-log-item.severity-critical .activity-log-icon { background: rgba(220, 53, 69, .15); color: #bd2635; }
+        [data-theme="dark"] .activity-log-item.severity-warning .activity-log-icon { color: #ffd166; }
+        [data-theme="dark"] .activity-log-item.severity-critical .activity-log-icon { color: #ff8d99; }
+        .activity-log-copy { min-width: 0; flex: 1; }
+        .activity-log-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; }
+        .activity-log-message { margin: 5px 0 0; color: var(--text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
+        .activity-log-meta { color: var(--text-muted); font-size: 12px; }
+        .activity-log-empty { padding: 36px 12px; color: var(--text-muted); text-align: center; }
+        #notificationActivityList { max-height: min(65vh, 620px); overflow-y: auto; }
+        .help-modal-body { max-height: min(70vh, 720px); overflow-y: auto; }
+        .help-section { padding: 14px 2px 16px; border-bottom: 1px solid var(--border-subtle); }
+        .help-section:last-child { border-bottom: 0; }
+        .help-section h6 { margin: 0 0 10px; color: var(--text-primary); font-size: 15px; font-weight: 700; }
+        .help-section p, .help-section li { color: var(--text-secondary); line-height: 1.6; }
+        .help-section ul, .help-section ol { padding-left: 22px; margin-bottom: 8px; }
+        .help-note { padding: 10px 12px; border-left: 3px solid var(--primary-color); background: var(--badge-bg); color: var(--text-secondary); border-radius: 4px; }
+        .help-release { display: grid; grid-template-columns: 155px 1fr; gap: 3px 12px; padding: 12px 0; border-top: 1px solid var(--border-subtle); }
+        .help-release time { grid-row: span 2; color: var(--text-muted); font-size: 13px; }
+        .help-release strong { color: var(--text-primary); }
+        .help-release span { color: var(--text-secondary); line-height: 1.5; }
+        @@media (max-width: 575px) { .help-release { grid-template-columns: 1fr; } .help-release time { grid-row: auto; } }
+    </style>
     <link rel="stylesheet" href="~/css/card-help.css" asp-append-version="true" />
     <script>(function(){var t;try{t=localStorage.getItem('kwh_theme')}catch(e){}if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.backgroundColor='#0b0f1a'}document.documentElement.classList.add('no-transition');function s(){document.documentElement.setAttribute('data-theme-ready','')}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',s)}else{s()}setTimeout(s,800)})();</script>
     <!-- Status login user (server-rendered oleh Razor). Dipakai agar pengunjung
@@ -44,7 +77,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
 </head>
 <body>
-    <script>console.log('[LayoutDebug] controller=@controllerName, isAuthPage=@isAuthPage.ToString().ToLowerInvariant()');</script>
+    <script>/* console.log('[LayoutDebug] controller=@controllerName, isAuthPage=@isAuthPage.ToString().ToLowerInvariant()') */;</script>
     <!-- MAIN WRAPPER (no sidebar) -->
     <div class="erp-main-wrapper @(isAuthPage ? "auth-layout" : "")" id="erpMainWrapper">
         <!-- AUTH BACKGROUND CANVAS -->
@@ -76,6 +109,7 @@
                 </nav> *@
             </div>
             <div class="topbar-right">
+                <button class="btn btn-sm btn-outline-secondary language-toggle-btn" id="languageToggle" type="button" aria-label="Ganti bahasa" title="Ganti bahasa">EN</button>
                 <span class="topbar-clock d-none d-md-inline">
                     <i class="fas fa-clock"></i> @DateTime.Now.ToString("dd MMM yyyy HH:mm")
                 </span>
@@ -90,6 +124,9 @@
                 <button class="btn btn-link topbar-icon-btn" id="topbarNotifications" title="Notifications">
                     <i class="fas fa-bell"></i>
                     <span class="topbar-badge bg-danger" id="topbarAnomalyBadge">0</span>
+                </button>
+                <button class="btn btn-link topbar-icon-btn" id="topbarHelp" type="button" title="Panduan dan catatan pembaruan" aria-label="Buka panduan aplikasi">
+                    <i class="fas fa-question-circle"></i>
                 </button>
                 <span id="anomalyBadge" style="display:none">0</span>
                 <!-- Mobile nav toggle -->
@@ -123,6 +160,109 @@
                 }
             </div>
         </header>
+
+        <div class="modal fade" id="notificationActivityModal" tabindex="-1" role="dialog" aria-labelledby="notificationActivityTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content activity-modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="notificationActivityTitle"><i class="fas fa-bell text-warning mr-2"></i>Log Aktivitas Sistem</h5>
+                            <small class="text-muted" id="activityLogUpdatedAt">Memuat aktivitas terbaru...</small>
+                        </div>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                    <div class="modal-body" id="notificationActivityList" aria-live="polite">
+                        <div class="activity-log-empty">Memuat log aktivitas...</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-danger mr-auto" id="resetActivityLog"><i class="fas fa-trash-alt mr-1"></i>Reset log</button>
+                        <button type="button" class="btn btn-outline-secondary" id="refreshActivityLog"><i class="fas fa-sync-alt mr-1"></i>Perbarui</button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="applicationHelpModal" tabindex="-1" role="dialog" aria-labelledby="applicationHelpTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content activity-modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="applicationHelpTitle"><i class="fas fa-life-ring text-primary mr-2"></i>Panduan KWH Monitoring</h5>
+                            <small class="text-muted">Cara kerja aplikasi dan catatan pembaruan sistem</small>
+                        </div>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                    <div class="modal-body help-modal-body">
+                        <section class="help-section">
+                            <h6><i class="fas fa-project-diagram mr-2"></i>1. Alur kerja aplikasi</h6>
+                            <ol>
+                                <li>Meter atau perangkat mengirim data listrik ke layanan penerima perangkat.</li>
+                                <li>Data masuk disimpan sebagai pembacaan bertanda waktu. Sistem menggunakan pembacaan terbaru dari setiap panel untuk menampilkan kondisi terkini.</li>
+                                <li>Data energi dihimpun per jam, hari, bulan, dan tahun untuk menyajikan statistik konsumsi.</li>
+                                <li>Dasbor, grafik, statistik, dan Voltra mengambil data melalui layanan aplikasi. Setiap pertanyaan kepada Voltra memicu pengambilan cuplikan data terbaru.</li>
+                                <li>Pemeriksaan anomali membandingkan hasil pembacaan dengan ambang batas sistem. Aktivitas penting dicatat dan ditampilkan pada ikon lonceng notifikasi.</li>
+                            </ol>
+                            <p class="help-note">Waktu pembaruan mengikuti waktu penerimaan data oleh server. Jika data terakhir sudah lama, periksa koneksi perangkat dan status panel sebelum menyimpulkan bahwa konsumsi bernilai nol.</p>
+                        </section>
+
+                        <section class="help-section">
+                            <h6><i class="fas fa-tachometer-alt mr-2"></i>2. Dasbor dan kondisi panel</h6>
+                            <p>Dasbor merangkum panel, daya aktif, tegangan, arus, faktor daya, frekuensi, dan energi. Pilih panel untuk membuka rinciannya. Nilai setiap fasa R/S/T tersedia pada perangkat tiga fasa; beberapa perangkat hanya mengirim satu fasa.</p>
+                            <ul>
+                                <li><strong>Watt (W):</strong> daya pada saat pembacaan diterima.</li>
+                                <li><strong>kWh:</strong> akumulasi energi selama periode; gunakan statistik energi untuk membandingkan periode.</li>
+                                <li><strong>Faktor daya:</strong> nilai faktor daya yang dilaporkan perangkat; nilainya umumnya berada pada rentang 0 hingga 1.</li>
+                                <li><strong>Waktu terakhir:</strong> periksa cap waktu untuk memastikan data panel masih baru.</li>
+                            </ul>
+                        </section>
+
+                        <section class="help-section">
+                            <h6><i class="fas fa-chart-line mr-2"></i>3. Grafik, riwayat, dan statistik biaya</h6>
+                            <ul>
+                                <li><strong>Grafik:</strong> menampilkan perubahan daya, tegangan, dan arus berdasarkan data historis.</li>
+                                <li><strong>Riwayat:</strong> menelusuri hasil pembacaan berdasarkan panel dan rentang tanggal.</li>
+                                <li><strong>Statistik Penggunaan:</strong> membandingkan konsumsi setiap panel per hari, bulan, dan tahun serta melihat peringkat konsumsi.</li>
+                                <li><strong>Perkiraan biaya:</strong> konsumsi energi dalam kWh dikalikan dengan tarif per kWh yang dikonfigurasi. Nilai ini merupakan perkiraan aplikasi, bukan tagihan resmi penyedia listrik.</li>
+                            </ul>
+                        </section>
+
+                        <section class="help-section">
+                            <h6><i class="fas fa-exclamation-triangle mr-2"></i>4. Anomali dan lonceng aktivitas</h6>
+                            <p>Halaman <strong>Log Anomali</strong> memuat kejadian yang direkam sistem, status penanganan, dan rincian panel. Ikon lonceng menampilkan riwayat anomali, aktivitas akun dan pendaftaran, respons AI, serta temuan kondisi panel yang masih aktif. Pilih <strong>Perbarui</strong> pada dialog notifikasi untuk memuat ulang data.</p>
+                            <p>Temuan langsung mencakup data panel yang tidak diperbarui selama lebih dari 15 menit, nilai daya atau energi negatif, faktor daya di luar rentang 0–1, dan tegangan fasa R di luar acuan 180–260 V. Rentang tegangan tersebut hanya digunakan untuk pemeriksaan awal; bandingkan dengan standar instalasi dan konfigurasi lokasi.</p>
+                        </section>
+
+                        <section class="help-section">
+                            <h6><i class="fas fa-robot mr-2"></i>5. Menggunakan Voltra AI</h6>
+                            <p>Pilih tombol Voltra untuk bertanya tentang kondisi panel, konsumsi, perkiraan biaya, peringkat konsumsi, tren, dan anomali. Jawaban menggunakan cuplikan terbaru dari basis data saat pesan dikirim. Voltra tidak menggantikan pemeriksaan teknisi; mintalah petugas berwenang memvalidasi tindakan kelistrikan.</p>
+                            <p>Jika pengambilan cuplikan data gagal, chatbot meminta Anda mencoba kembali agar data lama tidak dianggap sebagai kondisi terkini. Riwayat percakapan disimpan di peramban, sedangkan respons yang berhasil juga dicatat dalam catatan aktivitas sistem.</p>
+                        </section>
+
+                        <section class="help-section">
+                            <h6><i class="fas fa-sliders-h mr-2"></i>6. Pengaturan, akun, dan akses</h6>
+                            <ul>
+                                <li><strong>Pengaturan:</strong> atur tarif, ambang batas dan mode deteksi, preferensi notifikasi, serta konfigurasi chatbot sesuai dengan hak akses akun.</li>
+                                <li><strong>Pendaftaran:</strong> pengguna baru mendaftar dengan alamat email, menyelesaikan verifikasi, lalu menunggu persetujuan akses atau penetapan peran jika diwajibkan administrator.</li>
+                                <li><strong>Manajemen Pengguna:</strong> administrator dapat mengubah peran atau status akun. Aktivitas akun utama dicatat dalam catatan audit.</li>
+                                <li>Jika halaman atau API menolak akses, masuklah menggunakan akun dengan peran yang sesuai dengan kebijakan sistem.</li>
+                            </ul>
+                        </section>
+
+                        <section class="help-section help-changelog">
+                            <h6><i class="fas fa-clipboard-list mr-2"></i>Catatan pembaruan sistem</h6>
+                            <p class="text-muted">Daftar ini ditulis langsung pada tata letak aplikasi. Tambahkan catatan baru di bagian teratas setiap kali pembaruan dirilis.</p>
+                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Pusat bantuan dan log aktivitas</strong><span>Menambahkan panduan penggunaan terintegrasi, modal aktivitas notifikasi, pencatatan respons Voltra, dan tampilan temuan sistem aktif.</span></div>
+                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Pembaruan chatbot dan pemeriksaan kondisi panel</strong><span>Cuplikan data chatbot kini memuat seluruh panel dan peringkat tanpa pemotongan, serta memeriksa kebaruan data, nilai negatif, faktor daya, dan tegangan.</span></div>
+                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Perbaikan konsistensi snapshot Voltra</strong><span>Chatbot mengambil snapshot database terbaru setiap pertanyaan dan tidak memakai fallback teks halaman jika pengambilan snapshot gagal.</span></div>
+                        </section>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup panduan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Mobile nav dropdown -->
         <div class="topbar-mobile-nav d-lg-none" id="mobileNavDropdown">
@@ -229,9 +369,10 @@
                                             <i class="fas fa-comments"></i>
                                         </div>
                                         <div class="qwen-welcome-title">Selamat Datang!</div>
-                                        <div class="qwen-welcome-text" id="qwen-welcome-message">
-                                            Saya <strong>Voltra</strong>, asisten AI khusus KWH Monitoring. 
-                                            Tanyakan apa saja seputar data listrik, panel, tagihan, atau anomali.
+                                        <div class="qwen-welcome-text" id="qwen-welcome-message"
+                                             data-i18n-id="Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali."
+                                             data-i18n-en="I am Voltra, the KWH Monitoring AI assistant. Ask me about electricity data, panels, bills, or anomalies.">
+                                            Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.
                                         </div>
                                     </div>
                                 </div>
@@ -278,7 +419,7 @@
                                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                             }
 
-                            /* Toggle Button — Round floating button */
+                             /* Toggle Button Round floating button */
                             #qwen-toggle-btn {
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                 color: white;
@@ -853,7 +994,7 @@
                                 gap: 4px;
                             }
 
-                            /* Responsive — fullscreen on mobile (handled by site.css) */
+                             /* Responsive — fullscreen on mobile (handled by site.css) */
                             @@media (max-width: 480px) {
                                 .qwen-quick-actions {
                                     padding: 10px 15px;
@@ -992,10 +1133,10 @@
                                 const savedHistory = localStorage.getItem('qwen_chat_history');
                                 if (savedHistory) {
                                     chatHistory = JSON.parse(savedHistory);
-                                    console.log('[QwenChat] ? History loaded from localStorage:', chatHistory.length, 'messages');
+                                    @* console.log('[QwenChat] ? History loaded from localStorage:', chatHistory.length, 'messages'); *@
                                 }
                             } catch (e) {
-                                console.warn('[QwenChat] ?? Failed to load history from localStorage:', e);
+                                @* console.warn('[QwenChat] ?? Failed to load history from localStorage:', e); *@
                             }
 
                             let cachedRealTimeData = null;
@@ -1025,9 +1166,9 @@
                             function saveChatHistory() {
                                 try {
                                     localStorage.setItem('qwen_chat_history', JSON.stringify(chatHistory));
-                                    console.log('[QwenChat] ?? History saved to localStorage:', chatHistory.length, 'messages');
+                                    @* console.log('[QwenChat] ?? History saved to localStorage:', chatHistory.length, 'messages'); *@
                                 } catch (e) {
-                                    console.warn('[QwenChat] ?? Failed to save history to localStorage:', e);
+                                    @* console.warn('[QwenChat] ?? Failed to save history to localStorage:', e); *@
                                 }
                             }
 
@@ -1035,20 +1176,20 @@
                             function clearChatHistory() {
                                 chatHistory = [];
                                 saveChatHistory();
-                                console.log('[QwenChat] Chat history cleared');
+                                @* console.log('[QwenChat] Chat history cleared'); *@
                                 // Clear chat body and restore default welcome container
                                 const chatBody = document.getElementById('qwen-chat-body');
                                 chatBody.innerHTML = '<div class="qwen-welcome-container">' +
                                     '<div class="qwen-welcome-icon"><i class="fas fa-comments"></i></div>' +
                                     '<div class="qwen-welcome-title">Selamat Datang!</div>' +
-                                    '<div class="qwen-welcome-text" id="qwen-welcome-message">Saya <strong>Voltra</strong>, asisten AI khusus KWH Monitoring. Tanyakan apa saja seputar data listrik, panel, tagihan, atau anomali.</div>' +
+                                    '<div class="qwen-welcome-text" id="qwen-welcome-message">Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.</div>' +
                                     '</div>';
                             }
 
                             // Render chat history from localStorage on page load
                             function renderChatHistory() {
                                 if (chatHistory.length === 0) {
-                                    console.log('[QwenChat] ?? No chat history to render');
+                                    @* console.log('[QwenChat] ?? No chat history to render'); *@
                                     return;
                                 }
 
@@ -1084,7 +1225,7 @@
 
                                 // Scroll to bottom
                                 scrollToBottom();
-                                console.log('[QwenChat] ? Rendered', chatHistory.length, 'messages from localStorage');
+                                @* console.log('[QwenChat] ? Rendered', chatHistory.length, 'messages from localStorage'); *@
                             }
 
                             // Helper function to escape HTML
@@ -1108,19 +1249,20 @@
                             async function refreshRealTimeData() {
                                 if (isFetchingData) return;
                                 isFetchingData = true;
+                                cachedRealTimeData = null;
                                 
-                                try {
-                                    console.log('[QwenChat] ?? Memuat data realtime...');
+                                 try {
+                                    @* console.log('[QwenChat] Memuat data realtime...'); *@
                                     const data = await getRealTimeDashboardData();
                                     if (data && !data.error) {
-                                        cachedRealTimeData = data;
-                                        console.log('[QwenChat] ? Data realtime tersimpan di cache:', {
+                                        cachedRealTimeData =  data;
+                                        @* console.log('[QwenChat] ? Data realtime tersimpan di cache:', {
                                             panels: data.panels?.length || 0,
                                             timestamp: data.timestamp
-                                        });
+                                        }); *@
                                     }
-                                } catch (err) {
-                                    console.error('[QwenChat] ? Gagal memuat data realtime:', err);
+                                 } catch (err) {
+                                    @* console.error('[QwenChat] Gagal memuat data realtime:', err); *@
                                 } finally {
                                     isFetchingData = false;
                                 }
@@ -1130,19 +1272,19 @@
                             // Mengambil data langsung dari API internal � bukan scrape DOM
                             // Agar chatbot mendapat data terstruktur, akurat, dan per-panel
                             async function getRealTimeDashboardData() {
-                                try {
-                                    console.log('[QwenChat] ?? Fetch dari /api/qwenchat/current-dashboard-data...');
-                                    const apiResponse = await fetch('/api/qwenchat/current-dashboard-data', {
+                                 try {
+                                    @* console.log('[QwenCh at] ?? Fetch dari /api/qwenchat/current-dashboard-data...'); *@
+                                    const apiResponse = await fetch('/api/qwenchat/current-dashboard-data?t=' + Date.now(), {
                                         method: 'GET',
                                         credentials: 'same-origin'
-                                    });
+                                     });
 
-                                    console.log('[QwenChat] ?? Response status:', apiResponse.status);
+                                    @* console.log('[Qwen Chat] ?? Response status:', apiResponse.status); *@
                                     
                                     if (apiResponse.ok) {
                                         const jsonData = await apiResponse.json();
-                                        console.log('[QwenChat] ? JSON berhasil di-parse!');
-                                        console.log('[QwenChat] ?? Data detail:', {
+                                        @* console.log('[QwenChat] JSON berhasil di-parse!'); *@
+                                        @* console.log('[QwenChat] ?? Data detail:', {
                                             panels: jsonData.panels?.length || 0,
                                             hasUsageStats: !!jsonData.usageStatistics,
                                             hasSystemStats: !!jsonData.systemStatistics,
@@ -1151,60 +1293,27 @@
                                             hasTariff: !!jsonData.tariff,
                                             databaseTables: jsonData.databaseTables,
                                             source: jsonData.source,
-                                            error: jsonData.error
-                                        });
+                                            error:  jsonData.error
+                                        }); *@
                                         
                                         // Cek apakah data valid
                                         if (jsonData.error) {
-                                            console.error('[QwenChat] ? API mengembalikan error:', jsonData.error);
+                                            @* console.error('[QwenChat] API mengembalikan error:', jsonData.error); *@
                                         }
                                         
                                         if (jsonData.panels?.length === 0) {
-                                            console.warn('[QwenChat] ?? PANELS KOSONG! Database mungkin belum ada data.');
+                                            @* console.warn('[QwenChat] ?? PANELS KOSONG! Database mungkin belum ada data.'); *@
                                         }
                                         
                                         return jsonData; // Kirim sebagai objek JSON (bukan string)
                                     } else {
-                                        console.warn('[QwenChat] API data realtime gagal (status:', apiResponse.status, ') � fallback ke scrape DOM');
-                                    }
-                                } catch (e) {
-                                    console.error('[QwenChat] ? EXCEPTION saat fetch:', e);
-                                    console.warn('[QwenChat] � fallback ke scrape DOM');
+                                    throw new Error('Snapshot database gagal: HTTP ' + apiResponse.status);
                                 }
-
-                                // FALLBACK: Scrape DOM (jika API tidak tersedia)
-                                console.log('[QwenChat] ?? FALLBACK ke scrape DOM...');
-                                return scrapeDashboardData();
+                            } catch (e) {
+                                @* console.error('[QwenChat] Gagal mengambil snapshot database:', e); *@
+                                return null;
                             }
-
-                            // Fallback scraping DOM (tetap tersedia sebagai backup)
-                            function scrapeDashboardData() {
-                                let dashboardData = "";
-                                try {
-                                    let wattEl = document.getElementById('id-elemen-watt');
-                                    let pfEl = document.getElementById('id-elemen-pf');
-                                    let whEl = document.getElementById('id-elemen-wh');
-
-                                    let bodyText = document.body.innerText;
-
-                                    let wattVal = wattEl ? wattEl.innerText.trim() : (bodyText.includes("WATT") ? "Ada data WATT di layar" : "Tidak terbaca");
-                                    let pfVal = pfEl ? pfEl.innerText.trim() : (bodyText.includes("Power Factor") ? "Ada data PF di layar" : "Tidak terbaca");
-                                    let whVal = whEl ? whEl.innerText.trim() : (bodyText.includes("WH") ? "Ada data WH di layar" : "Tidak terbaca");
-
-                                    if (wattEl || pfEl || whEl) {
-                                        dashboardData = `- Daya Aktif (Power): ${wattVal} WATT\n` +
-                                                        `- Power Factor: ${pfVal}\n` +
-                                                        `- Konsumsi Energi (WH): ${whVal}`;
-                                    } else {
-                                        let rawText = document.body.innerText.replace(/\s+/g, ' ').substring(0, 500);
-                                        dashboardData = `(Elemen spesifik tidak ditemukan. Berikut ringkasan teks di layar user saat ini: ${rawText}...)`;
-                                    }
-                                } catch (e) {
-                                    console.error("Gagal membaca layar:", e);
-                                }
-                                return dashboardData;
-                            }
-
+                        }
                             async function sendQwenMessage() {
                                 if (isSending) return; // Prevent double-send (e.g. quick action while previous message still processing)
 
@@ -1223,7 +1332,7 @@
                                 const loadingId = appendLoading();
 
                                 // Selalu ambil data realtime terbaru sebelum mengirim pesan
-                                console.log('[QwenChat] ?? Refresh data realtime sebelum kirim pesan...');
+                                @* console.log('[QwenChat] ?? Refresh data realtime sebelum kirim pesan...'); *@
                                 await refreshRealTimeData();
 
                                 // Gunakan data dari cache
@@ -1231,15 +1340,15 @@
 
                                 // Jika cache masih kosong, coba ambil sekali lagi
                                 if (!currentScreenData) {
-                                    console.warn('[QwenChat] Cache kosong, mencoba ambil ulang...');
+                                    /* console.warn('[QwenChat] Cache kosong, mencoba ambil ulang...') */;
                                     currentScreenData = await getRealTimeDashboardData();
                                     cachedRealTimeData = currentScreenData;
                                 }
 
                                 // VALIDASI: Cek apakah data valid
-                                const isRealObject = typeof currentScreenData === 'object' && currentScreenData !== null && !Array.isArray(currentScreenData);
+                                const isRealObject = typeof currentScreenData === 'object' && currentScreenData !== null && !Array.isArray(currentScreenData) && !currentScreenData.error && currentScreenData.databaseTables;
 
-                                console.log('[QwenChat] ?? Validasi Data:', {
+                                @* console.log('[QwenChat] ?? Validasi Data:', {
                                     type: isRealObject ? 'OBJECT (VALID)' : typeof currentScreenData,
                                     panels: isRealObject ? (currentScreenData.panels?.length || 0) : 'NOT_FOUND',
                                     usageStatistics: isRealObject ? (currentScreenData.usageStatistics ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
@@ -1248,12 +1357,13 @@
                                     chartHistory: isRealObject ? (currentScreenData.chartHistory?.length || 0) : 'NOT_FOUND',
                                     tariff: isRealObject ? (currentScreenData.tariff ? 'ADA' : 'TIDAK ADA') : 'NOT_FOUND',
                                     source: isRealObject ? currentScreenData.source : 'NOT_FOUND'
-                                });
+                                }); *@
 
                                 if (!isRealObject) {
-                                    console.error('[QwenChat] ? ERROR: RealTimeData bukan object!');
+                                    @* console.error('[QwenChat] ? ERROR: RealTimeData bukan object!'); *@
                                     removeElement(loadingId);
-                                    appendMessage("?? **ERROR**: Tidak dapat mengambil data realtime dari sistem. Silakan refresh halaman dan coba lagi.", 'bot', false);
+                                    var isEnglish = (function () { try { return localStorage.getItem('kwh_language') === 'en'; } catch (e) { return false; } })();
+                                    appendMessage(isEnglish ? 'The database snapshot is unavailable. Check the system connection and try again.' : 'Data terbaru dari basis data tidak tersedia. Periksa koneksi sistem, lalu coba lagi.', 'bot', false);
                                     inputElement.disabled = false;
                                     sendBtn.disabled = false;
                                     isSending = false;
@@ -1261,9 +1371,10 @@
                                 }
 
                                 if (currentScreenData.panels?.length === 0) {
-                                    console.warn('[QwenChat] ?? WARNING: Tidak ada panel aktif di database!');
+                                    @* console.warn('[QwenChat] ?? WARNING: Tidak ada panel aktif di database!'); *@
                                     removeElement(loadingId);
-                                    appendMessage("?? **PERHATIAN**: Database menampilkan tidak ada panel aktif. Pastikan device sudah mengirim data.", 'bot', false);
+                                    var isEnglish = (function () { try { return localStorage.getItem('kwh_language') === 'en'; } catch (e) { return false; } })();
+                                    appendMessage(isEnglish ? 'No active panels were found. Make sure a device has sent data, then try again.' : 'Tidak ditemukan panel aktif. Pastikan perangkat telah mengirimkan data, lalu coba lagi.', 'bot', false);
                                     inputElement.disabled = false;
                                     sendBtn.disabled = false;
                                     isSending = false;
@@ -1273,7 +1384,8 @@
                                 const payload = {
                                     Message: messageText,
                                     History: chatHistory,
-                                    RealTimeData: currentScreenData
+                                    RealTimeData: currentScreenData,
+                                    Language: (function () { try { return localStorage.getItem('kwh_language') === 'en' ? 'en' : 'id'; } catch (e) { return 'id'; } })()
                                 };
 
                                 try {
@@ -1288,15 +1400,27 @@
 
                                     if (data.success) {
                                         appendMessage(data.reply, 'bot', true);
+                                        if (typeof window.queueActivityNotification === 'function') {
+                                            window.queueActivityNotification({
+                                                id: 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                                                category: 'AI Chatbot',
+                                                title: 'Respons Voltra',
+                                                message: String(data.reply || '').slice(0, 500),
+                                                severity: 'info',
+                                                timestamp: new Date().toISOString()
+                                            });
+                                        }
                                         chatHistory.push({ Role: 'user', Content: messageText });
                                         chatHistory.push({ Role: 'assistant', Content: data.reply });
                                         saveChatHistory();
                                     } else {
-                                        appendMessage("? Maaf, terjadi kesalahan: " + data.message, 'bot', false);
+                                        var isEnglish = (function () { try { return localStorage.getItem('kwh_language') === 'en'; } catch (e) { return false; } })();
+                                        appendMessage(isEnglish ? 'Sorry, I could not prepare a response. Please try again.' : 'Maaf, jawaban tidak dapat disiapkan. Silakan coba lagi.', 'bot', false);
                                     }
                                 } catch (error) {
                                     removeElement(loadingId);
-                                    appendMessage("? Gagal menghubungi server. Periksa koneksi Anda.", 'bot', false);
+                                    var isEnglish = (function () { try { return localStorage.getItem('kwh_language') === 'en'; } catch (e) { return false; } })();
+                                    appendMessage(isEnglish ? 'Could not connect to the server. Check your connection and try again.' : 'Tidak dapat terhubung ke server. Periksa koneksi Anda, lalu coba lagi.', 'bot', false);
                                 } finally {
                                     inputElement.disabled = false;
                                     sendBtn.disabled = false;
@@ -1520,10 +1644,10 @@
                 $(document).ajaxError(function(e, xhr, options) {
                     if (xhr.status === 401 && !options._authRedirecting) {
                         if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
-                            console.warn('🔒 Fitur ini memerlukan login (akses ditolak).');
+                            /* console.warn('🔒 Fitur ini memerlukan login (akses ditolak).') */;
                             return;
                         }
-                        console.warn('🔒 Session expired — redirecting to login');
+                        /* console.warn('🔒 Session expired — redirecting to login') */;
                         window.location.href = '/Account/Login?ReturnUrl=' + encodeURIComponent(window.location.pathname + window.location.search);
                     }
                 });
@@ -1619,12 +1743,12 @@
                         window._deviceSettingsLoaded = true;
                         var keys = Object.keys(resp.settings);
                         var sample = keys.length > 0 ? resp.settings[keys[0]] : null;
-                        console.log('DeviceSettings loaded:', keys.length, 'devices. Keys:', keys.join(','), 'Sample:', JSON.stringify(sample));
-                    } else {
-                        console.warn('DeviceSettings: API returned no settings', resp);
+                        @* console.log('DeviceSettings loaded:', keys.length, 'devices. Keys:', keys.join(','), 'Sample:', JSON.stringify(sample)); *@
+                     } else {
+                        @* console.warn('DeviceSettings: API returned no settings', resp); *@
                     }
-                }).fail(function(xhr, status, error) {
-                    console.error('DeviceSettings: Failed to load:', error || status);
+                 }).fail(function(xhr, status, error) {
+                    @* console.error('DeviceSettings: Failed to load:', error || status); *@
                 });
             }
 
@@ -1636,9 +1760,9 @@
             }, 60000);
 
             window.getDeviceSettings = function(deviceKey) {
-                var s = (window._deviceSettings || {})[deviceKey];
+                var s = (window._deviceSettings || {})[ deviceKey];
                 if (!s) {
-                    console.warn('getDeviceSettings: no settings for deviceKey="' + deviceKey + '"');
+                    /* console.warn('getDevi ceSettings: no settings for deviceKey="' + deviceKey + '"') */;
                     return null;
                 }
                 return {
@@ -1682,16 +1806,249 @@
                 });
             }
 
-            // Sync anomaly badge
-            function syncAnomalyBadges() {
-                var badge = document.getElementById('anomalyBadge');
-                var topBadge = document.getElementById('topbarAnomalyBadge');
-                if (badge && topBadge) {
-                    topBadge.textContent = badge.textContent;
-                    topBadge.style.display = badge.textContent === '0' ? 'none' : 'inline-block';
+            var latestActivityItems = [];
+            var activityRefreshInProgress = false;
+            var activityModalIsOpen = false;
+            var notificationFeedStorageKey = 'kwh_notification_feed';
+            var observedSourceStorageKey = 'kwh_notification_observed_sources';
+            var activityInitializedStorageKey = 'kwh_notification_sources_initialized_v2';
+            var activeFindingsStorageKey = 'kwh_active_system_findings';
+
+            function readActivityStorage(key, fallback) {
+                try {
+                    var value = localStorage.getItem(key);
+                    return value ? JSON.parse(value) : fallback;
+                } catch (e) { return fallback; }
+            }
+
+            function saveNotificationFeed(items) {
+                try {
+                    localStorage.setItem(notificationFeedStorageKey, JSON.stringify(items .slice(0, 100)));
+                } catch (e) { /* console.warn(' Log notifikasi lokal tidak dapat disimpan:', e) */; }
+            }
+
+            function updateActivityBadge(count) {
+                var badge = document.getElementById('topbarAnomalyBadge');
+                var legacyBadge = document.getElementById('anomalyBadge');
+                if (badge) {
+                    badge.textContent = count > 99 ? '99+' : String(count);
+                    badge.style.display = count ? 'inline-block' : 'none';
+                    badge.title = count ? count + ' notifikasi tersimpan' : 'Tidak ada notifikasi tersimpan';
+                }
+                if (legacyBadge) legacyBadge.textContent = String(count);
+            }
+
+            function clearNotificationFeed() {
+                saveNotificationFeed([]);
+                updateActivityBadge(0);
+            }
+
+            window.queueActivityNotification = function(item) {
+                var feed = readActivityStorage(notificationFeedStorageKey, []);
+                var displayIds = new Set((activityModalIsOpen ? latestActivityItems : feed).map(function(existing) { return existing.id; }));
+                if (!displayIds.has(item.id)) {
+                    feed.unshift(item);
+                    saveNotificationFeed(feed);
+                }
+                if (activityModalIsOpen) {
+                    latestActivityItems = latestActivityItems.concat(item).filter(function(entry, index, all) {
+                        return all.findIndex(function(candidate) { return candidate.id === entry.id; }) === index;
+                    });
+                    clearNotificationFeed();
+                } else {
+                    latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
+                    updateActivityBadge(latestActivityItems.length);
+                }
+                renderActivityLog(latestActivityItems);
+            };
+
+            function markSourceItemsObserved(items) {
+                try {
+                    var observed = readActivityStorage(observedSourceStorageKey, []);
+                    var ids = items.map(function(item) { return item.id; }).filter(Boolean);
+                    localStorage.setItem(observedSourceStorageKey, JSON.stringify(Array.from(new Set(observed.concat(ids)) ).slice(-2000)));
+                } catch (e) { /* console.warn('Status sumber log tidak dapat disimpan:', e) */; }
+            }
+
+            function renderActivityLog(items) {
+                var list = document.getElementById('notificationActivityList');
+                list.innerHTML = '';
+                if (!items.length) {
+                    list.innerHTML = '<div class="activity-log-empty"><i class="far fa-check-circle fa-2x d-block mb-2"></i>Belum ada aktivitas yang tercatat.</div>';
+                    return;
+                }
+
+                var container = document.createElement('div');
+                container.className = 'activity-log-list';
+                items.forEach(function(item) {
+                    var row = document.createElement('article');
+                    var severity = String(item.severity || 'info').toLowerCase();
+                    row.className = 'activity-log-item severity-' + (severity === 'high' || severity === 'critical' ? 'critical' : severity === 'warning' || severity === 'medium' ? 'warning' : 'info');
+
+                    var icon = document.createElement('div');
+                    icon.className = 'activity-log-icon';
+                    var iconElement = document.createElement('i');
+                    iconElement.className = item.category === 'Anomali' ? 'fas fa-exclamation-triangle' : item.category === 'AI Chatbot' ? 'fas fa-robot' : item.category === 'Registrasi' ? 'fas fa-user-plus' : 'fas fa-clipboard-list';
+                    icon.appendChild(iconElement);
+
+                    var copy = document.createElement('div');
+                    copy.className = 'activity-log-copy';
+                    var heading = document.createElement('div');
+                    heading.className = 'activity-log-heading';
+                    var title = document.createElement('strong');
+                    title.textContent = item.title || item.category || 'Aktivitas sistem';
+                    var time = document.createElement('span');
+                    time.className = 'activity-log-meta';
+                    var timestamp = new Date(item.timestamp);
+                    time.textContent = isNaN(timestamp.getTime()) ? '' : timestamp.toLocaleString('id-ID');
+                    heading.appendChild(title);
+                    heading.appendChild(time);
+                    var message = document.createElement('p');
+                    message.className = 'activity-log-message';
+                    message.textContent = item.message || '';
+                    copy.appendChild(heading);
+                    copy.appendChild(message);
+                    row.appendChild(icon);
+                    row.appendChild(copy);
+                    container.appendChild(row);
+                });
+                list.appendChild(container);
+            }
+
+            async function refreshActivityLog() {
+                if (activityRefreshInProgress) return;
+                if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
+                    latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
+                    renderActivityLog(latestActivityItems);
+                    updateActivityBadge(latestActivityItems.length);
+                    return;
+                }
+                activityRefreshInProgress = true;
+                try {
+                    var response = await fetch('/api/qwenchat/activity-log?t=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' });
+                    var contentType = response.headers.get('content-type') || '';
+                    if (!contentType.toLowerCase().includes('application/json')) {
+                        latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
+                        renderActivityLog(latestActivityItems);
+                        updateActivityBadge(latestActivityItems.length);
+                        return;
+                    }
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    var result = await response.json();
+                    var sourceItems = (result.items || []).slice();
+                    var liveItems = [];
+
+                    // Gabungkan temuan live saat ini dengan aktivitas historis dari database.
+                    try {
+                        var snapshotResponse = await fetch('/api/qwenchat/current-dashboard-data?t=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' });
+                        if (snapshotResponse.ok) {
+                            var snapshot = await snapshotResponse.json();
+                            var activeFindings = readActivityStorage(activeFindingsStorageKey, {});
+                            var currentFindingKeys = {};
+                            (snapshot.systemFindings || []).forEach(function(finding, index) {
+                                var findingKey = (finding.code || 'finding') + '|' + (finding.deviceKey || index);
+                                currentFindingKeys[findingKey] = true;
+                                if (!activeFindings[findingKey]) {
+                                    activeFindings[findingKey] = {
+                                        id: 'live-' + encodeURIComponent(findingKey) + '-' + Date.now(),
+                                        firstSeen: new Date().toISOString()
+                                    };
+                                }
+                                liveItems.push({
+                                    id: activeFindings[findingKey].id,
+                                    category: 'Anomali',
+                                    title: finding.code === 'STALE_PANEL' ? 'Panel tidak mengirim data' : 'Temuan sistem',
+                                    message: finding.message,
+                                    severity: finding.severity,
+                                    timestamp: activeFindings[findingKey].firstSeen
+                                });
+                            });
+                            Object.keys(activeFindings).forEach(function(key) {
+                                if (!currentFindingKeys[key]) delete activeFindings[key];
+                            });
+                            try { localStorage.setItem(activeFindingsStorageKey, JSON.stringify(activeFindings)); } catch (e) { }
+                         }
+                    } catch (snapshotError) {  /* console.warn('Temuan live tidak tersedia:', snapshotError) */; }
+
+                    var observed = readActivityStorage(observedSourceStorageKey, []);
+                    var observedIds = new Set(observed);
+                    var newlyObserved = [];
+                    if (localStorage.getItem(activityInitializedStorageKey) !== 'true') {
+                        // Existing server history is a baseline, not a burst of new notifications.
+                        markSourceItemsObserved(sourceItems.concat(liveItems));
+                        newlyObserved = liveItems;
+                        localStorage.setItem(activityInitializedStorageKey, 'true');
+                    } else {
+                        newlyObserved = sourceItems.concat(liveItems).filter(function(item) {
+                            return item.id && !observedIds.has(item.id);
+                        });
+                        markSourceItemsObserved(sourceItems.concat(liveItems));
+                    }
+
+                    var feed = readActivityStorage(notificationFeedStorageKey, []);
+                    var feedIds = new Set(feed.map(function(item) { return item.id; }));
+                    newlyObserved.forEach(function(item) {
+                        if (item.id && !feedIds.has(item.id)) {
+                            feed.unshift(item);
+                            feedIds.add(item.id);
+                        }
+                    });
+                    feed.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+                    feed = feed.slice(0, 100);
+                    saveNotificationFeed(feed);
+                    if (activityModalIsOpen) {
+                        var visibleById = {};
+                        latestActivityItems.concat(feed).forEach(function(item) { if (item.id) visibleById[item.id] = item; });
+                        latestActivityItems = Object.keys(visibleById).map(function(id) { return visibleById[id]; })
+                            .sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); }).slice(0, 100);
+                    } else {
+                        latestActivityItems = feed;
+                    }
+                    var updatedAt = document.getElementById('activityLogUpdatedAt');
+                    if (updatedAt) updatedAt.textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID');
+                    renderActivityLog(latestActivityItems);
+                    if (activityModalIsOpen) {
+                        if (feed.length) clearNotificationFeed();
+                        else updateActivityBadge(0);
+            } else updateActivityBadge(feed.length);
+                } catch (e) {
+                     /* console.warn('Gagal memuat log aktivitas:', e) */;
+                    var list = document.getElementById('notificationActivityList');
+                    if (list) list.innerHTML = '<div class="activity-log-empty">Log aktivitas gagal dimuat. Coba perbarui kembali.</div>';
+                } finally {
+                    activityRefreshInProgress = false;
                 }
             }
-            setInterval(syncAnomalyBadges, 5000);
+
+            var notificationButton = document.getElementById('topbarNotifications');
+            if (notificationButton) notificationButton.addEventListener('click', function() {
+                activityModalIsOpen = true;
+                latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
+                renderActivityLog(latestActivityItems);
+                clearNotificationFeed();
+                if (window.jQuery && typeof jQuery.fn.modal === 'function') jQuery('#notificationActivityModal').modal('show');
+                refreshActivityLog();
+            });
+            if (window.jQuery) jQuery('#notificationActivityModal').on('hidden.bs.modal', function() {
+                activityModalIsOpen = false;
+                latestActivityItems = [];
+                renderActivityLog([]);
+            });
+            var helpButton = document.getElementById('topbarHelp');
+            if (helpButton) helpButton.addEventListener('click', function() {
+                if (window.jQuery && typeof jQuery.fn.modal === 'function') jQuery('#applicationHelpModal').modal('show');
+            });
+            var refreshActivityButton = document.getElementById('refreshActivityLog');
+            if (refreshActivityButton) refreshActivityButton.addEventListener('click', refreshActivityLog);
+            var resetActivityButton = document.getElementById('resetActivityLog');
+            if (resetActivityButton) resetActivityButton.addEventListener('click', async function() {
+                await refreshActivityLog();
+                clearNotificationFeed();
+                latestActivityItems = [];
+                renderActivityLog([]);
+            });
+            refreshActivityLog();
+            setInterval(refreshActivityLog, 60000);
         })();
     </script>
 
@@ -1699,6 +2056,7 @@
     @await Html.PartialAsync("_AnomalyService")
 
     @await RenderSectionAsync("Scripts", required: false)
+    <script src="~/js/language.js" asp-append-version="true"></script>
 </body>
 </html>
 
