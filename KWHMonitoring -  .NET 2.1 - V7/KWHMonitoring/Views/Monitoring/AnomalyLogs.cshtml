@@ -491,6 +491,42 @@
 </div>
 
 <style>
+    /* Keep anomaly dashboard layouts independent from global card/grid rules. */
+    .charts-row {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+    .charts-col {
+        min-width: 0;
+    }
+    .charts-col .card {
+        min-width: 0;
+    }
+    #monthlyReportContainer .report-stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+    #monthlyReportContainer .report-stat-card,
+    #monthlyReportContainer .report-stat-card > .border {
+        min-width: 0;
+        height: 100%;
+    }
+    #monthlyReportContainer .report-stat-card .text-muted {
+        overflow-wrap: anywhere;
+    }
+    @@media (max-width: 767.98px) {
+        .charts-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        #monthlyReportContainer .report-stats-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
      ============================================
        KPI STAT CARDS — consistent with main theme
        ============================================
@@ -851,19 +887,40 @@
 
         function setupAutoRefresh() {
             stopAutoRefresh();
-            if (autoRefreshEnabled) {
-                autoRefreshTimer = setInterval(function() {
-                    if (dataGrid) dataGrid.refresh();
-                    loadDashboard();
-                }, 30000);
+            if (!autoRefreshEnabled) return;
+
+            var refreshAnomalyData = function() {
+                // Hormati toggle "Auto Refresh" di UI.
+                if (!autoRefreshEnabled) return;
+                if (dataGrid) dataGrid.refresh();
+                loadDashboard();
+            };
+
+            // Utama: refresh grid + dashboard BEGITU ADA perubahan log anomali
+            // (deteksi baru, acknowledge, resolve, delete/clear) - realtime,
+            // bukan menunggu tick interval 30 detik.
+            if (window.RealtimeRefresh) {
+                autoRefreshTimer = window.RealtimeRefresh.watch(
+                    ['anomaly'],
+                    refreshAnomalyData,
+                    { throttleMs: 3000 }
+                );
+                return;
             }
+
+            // Fallback: skema interval lama bila script realtime tidak termuat.
+            autoRefreshTimer = setInterval(refreshAnomalyData, 30000);
         }
 
         function stopAutoRefresh() {
-            if (autoRefreshTimer) {
+            if (!autoRefreshTimer) return;
+            // Watcher realtime memakai id string ("rw-1"); id interval selalu number.
+            if (typeof autoRefreshTimer === 'string' && window.RealtimeRefresh) {
+                window.RealtimeRefresh.unwatch(autoRefreshTimer);
+            } else {
                 clearInterval(autoRefreshTimer);
-                autoRefreshTimer = null;
             }
+            autoRefreshTimer = null;
         }
 
         function formatDateTime(isoStr) {

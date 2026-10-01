@@ -2055,6 +2055,9 @@
     <!-- ANOMALY BACKGROUND SERVICE -->
     @await Html.PartialAsync("_AnomalyService")
 
+    <!-- REALTIME REFRESH: update halaman ketika ada perubahan data (bukan interval tetap) -->
+    <script src="~/js/realtime-refresh.js" asp-append-version="true"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
     <script src="~/js/language.js" asp-append-version="true"></script>
 </body>

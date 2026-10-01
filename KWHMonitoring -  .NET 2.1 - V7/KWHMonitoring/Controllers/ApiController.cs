@@ -318,6 +318,101 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
+        // DATA VERSION (deteksi perubahan data realtime)
+        // ============================================
+        // Endpoint ringan: hanya mengembalikan "token perubahan", BUKAN payload data.
+        // Halaman Panel Monitoring, Charts, Usage Statistics, Anomaly Logs dan Details
+        // memanggil endpoint ini secara berkala; UI hanya melakukan refresh ketika
+        // token berubah, sehingga tampilan benar-benar mengikuti data realtime dan
+        // tidak lagi bergantung pada interval tetap 5/10 detik.
+        [HttpGet("data-version")]
+        [AllowAnonymous] // Token perubahan saja (read-only), dipakai juga halaman publik
+        public async Task<IActionResult> GetDataVersion()
+        {
+            const string cacheKey = "DataVersion_Latest";
+            try
+            {
+                // Diparse per detik agar banyak tab/polling tetap murah.
+                if (_cache.TryGetValue(cacheKey, out object cachedVersion))
+                {
+                    return Ok(cachedVersion);
+                }
+
+                // Data pengukuran terbaru.
+                // max(Id)  -> PK seek, naik setiap ada baris baru (termasuk bulk insert
+                //             yang ReceivedTime-nya bisa sama/lebih tua).
+                // max(ReceivedTime) -> memakai index IX_KWHData_ReceivedTime.
+                var kwhMaxId = await _context.KWH_Monitoring.AsNoTracking()
+                    .MaxAsync(x => (long?)x.Id) ?? 0;
+                var kwhLatest = await _context.KWH_Monitoring.AsNoTracking()
+                    .MaxAsync(x => (DateTime?)x.Waktu_Server);
+                var kwhVersion = string.Format(CultureInfo.InvariantCulture,
+                    "{0}|{1}", kwhMaxId, kwhLatest?.Ticks ?? 0);
+
+                // Status relay terakhir (perubahan ON/OFF dari device maupun user).
+                var relayMaxId = await _context.RelayControls.AsNoTracking()
+                    .MaxAsync(x => (long?)x.Id) ?? 0;
+                var relayLatest = await _context.RelayControls.AsNoTracking()
+                    .OrderByDescending(x => x.ReceivedTime)
+                    .Select(x => (DateTime?)x.ReceivedTime)
+                    .FirstOrDefaultAsync();
+                var relayVersion = string.Format(CultureInfo.InvariantCulture,
+                    "{0}|{1}", relayMaxId, relayLatest?.Ticks ?? 0);
+
+                // Agregasi energi. Daily/Hourly relatif kecil sehingga MAX aman.
+                // Token juga memuat token KWH karena agregasi dihitung ulang dari data
+                // pengukuran - halaman Usage Statistics ikut ter-update begitu ada data
+                // pengukuran baru, walau agregator eksternal belum memperbarui CalculatedAt.
+                string energyVersion;
+                try
+                {
+                    var daily = await _context.DailyEnergy.AsNoTracking()
+                        .MaxAsync(x => (DateTime?)x.CalculatedAt);
+                    var hourly = await _context.HourlyEnergy.AsNoTracking()
+                        .MaxAsync(x => (DateTime?)x.CalculatedAt);
+                    energyVersion = string.Format(CultureInfo.InvariantCulture,
+                        "{0}|{1}|{2}", daily?.Ticks ?? 0, hourly?.Ticks ?? 0, kwhVersion);
+                }
+                catch
+                {
+                    // Tabel agregat belum ada/sementara bermasalah - pakai token KWH.
+                    energyVersion = kwhVersion;
+                }
+
+                // Log anomali:
+                //  - count + max(Id)  -> insert / delete / clear-all
+                //  - event terbaru    -> deteksi baru (DetectedTime), acknowledge,
+                //                        maupun resolve (nilai terbesar dari ketiganya)
+                var anomalyCount = await _context.AnomalyLogs.AsNoTracking().CountAsync();
+                var anomalyMaxId = await _context.AnomalyLogs.AsNoTracking().MaxAsync(x => (long?)x.Id) ?? 0;
+                var anomalyLastEvent = await _context.AnomalyLogs.AsNoTracking()
+                    .MaxAsync(x => (DateTime?)(x.AcknowledgedTime ?? x.ResolvedTime ?? x.DetectedTime));
+                var anomalyVersion = string.Format(CultureInfo.InvariantCulture,
+                    "{0}|{1}|{2}", anomalyCount, anomalyMaxId, anomalyLastEvent?.Ticks ?? 0);
+
+                var payload = new
+                {
+                    success = true,
+                    versions = new
+                    {
+                        kwh = kwhVersion,
+                        relay = relayVersion,
+                        energy = energyVersion,
+                        anomaly = anomalyVersion
+                    },
+                    serverTime = DateTime.Now.ToString("HH:mm:ss")
+                };
+
+                _cache.Set(cacheKey, payload, TimeSpan.FromSeconds(1));
+                return Ok(payload);
+            }
+            catch (Exception ex)
+            {
+                return SafeError(ex, "DataVersion");
+            }
+        }
+
+        // ============================================
         // GET USAGE STATISTICS (from aggregated tables)
         // ============================================
         [HttpPost("usage-statistics")]

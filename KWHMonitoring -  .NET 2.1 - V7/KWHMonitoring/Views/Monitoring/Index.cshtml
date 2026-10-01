@@ -593,6 +593,7 @@
 
 
         let refreshTimer = null;
+        let refreshWatcherId = null; // watcher realtime (refresh saat data berubah)
         let panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new { deviceKey = p.DeviceKey, safeKey = p.DeviceKey.Replace("-", "_") }).ToList()));
         let allPanelData = []; // Cached panel data for client-side filtering
 
@@ -1338,13 +1339,34 @@
         }
 
         function startAutoRefresh() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(function() {
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            if (refreshWatcherId && window.RealtimeRefresh) {
+                window.RealtimeRefresh.unwatch(refreshWatcherId);
+                refreshWatcherId = null;
+            }
+
+            var refreshDashboard = function() {
                 updatePanelCards();
                 updateStatistics();
                 updatePanelHeadersByAnomaly();
                 updateRelayStates();
-            }, 10000);
+            };
+
+            // Utama: refresh HANYA ketika ada perubahan data (KWH/relay/anomali),
+            // sehingga dashboard benar-benar realtime tanpa jeda interval 10 detik.
+            if (window.RealtimeRefresh) {
+                refreshWatcherId = window.RealtimeRefresh.watch(
+                    ['kwh', 'relay', 'anomaly'],
+                    refreshDashboard,
+                    // Minimal 5 detik antar refresh (seperti interval lama) tetapi
+                    // dipicu tepat setelah data berubah, bukan menunggu tick kosong.
+                    { throttleMs: 5000 }
+                );
+                return;
+            }
+
+            // Fallback: skema interval lama bila script realtime tidak termuat.
+            refreshTimer = setInterval(refreshDashboard, 10000);
         }
 
         function updateStatistics() {

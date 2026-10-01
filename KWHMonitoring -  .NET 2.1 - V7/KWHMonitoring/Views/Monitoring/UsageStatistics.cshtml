@@ -414,15 +414,27 @@
             });
             $(function () {
                 loadUsageRanking(rankingPeriod);
-                window.setInterval(function () {
-                    if (!document.hidden) loadUsageRanking(rankingPeriod);
-                }, 10000);
+                if (window.RealtimeRefresh) {
+                    // Peringkat ikut diperbarui ketika data KWH/agregasi berubah.
+                    window.RealtimeRefresh.watch(
+                        ['kwh', 'energy'],
+                        function () {
+                            if (!document.hidden) loadUsageRanking(rankingPeriod);
+                        },
+                        { throttleMs: 10000 }
+                    );
+                } else {
+                    window.setInterval(function () {
+                        if (!document.hidden) loadUsageRanking(rankingPeriod);
+                    }, 10000);
+                }
             });
         })();
 
         let charts = {};
         let selectedDate = new Date();
         let refreshTimer = null;
+        let refreshWatcherId = null; // watcher realtime (refresh saat data berubah)
         let lastFinancialRefreshTime = 0;
         let usageLoadSequence = 0;
         let usageDataRequest = null;
@@ -795,11 +807,29 @@
         }
 
         function startAutoRefresh() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(function() {
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            if (refreshWatcherId && window.RealtimeRefresh) {
+                window.RealtimeRefresh.unwatch(refreshWatcherId);
+                refreshWatcherId = null;
+            }
+
+            var refreshUsage = function() {
                 loadData();
                 $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
-            }, 10000);
+            };
+
+            // Utama: muat ulang statistik begitu ada data KWH / agregasi energi baru.
+            if (window.RealtimeRefresh) {
+                refreshWatcherId = window.RealtimeRefresh.watch(
+                    ['kwh', 'energy'],
+                    refreshUsage,
+                    { throttleMs: 5000 }
+                );
+                return;
+            }
+
+            // Fallback: skema interval lama bila script realtime tidak termuat.
+            refreshTimer = setInterval(refreshUsage, 10000);
         }
 
         function loadData() {

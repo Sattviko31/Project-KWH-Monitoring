@@ -166,6 +166,7 @@
         // ============================================
         var charts = {};
         var refreshTimer = null;
+        var refreshWatcherId = null; // watcher realtime (refresh chart saat data berubah)
         var deviceCategoryMap = {};
         var categoryDowntimeMap = {};
         var categoryMetaMap = {};
@@ -1028,17 +1029,32 @@
         // AUTO REFRESH
         // ============================================
         function startAutoRefresh() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(function() {
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            if (refreshWatcherId && window.RealtimeRefresh) {
+                window.RealtimeRefresh.unwatch(refreshWatcherId);
+                refreshWatcherId = null;
+            }
+
+            var refreshCharts = function() {
                 panelList.forEach(function(panel) {
                     loadChartData(panel.deviceKey, panel.safeKey);
                 });
-                
+
                 // Trigger event untuk anomaly service setelah chart update
                 setTimeout(function() {
                     window.dispatchEvent(new CustomEvent('chartDataUpdated'));
                 }, 500); // Delay 500ms untuk memastikan chart selesai update
-            }, systemSettings.refreshInterval * 1000);
+            };
+
+            // Utama: reload chart begitu ada data pengukuran baru (realtime),
+            // bukan menunggu tick interval systemSettings.refreshInterval.
+            if (window.RealtimeRefresh) {
+                refreshWatcherId = window.RealtimeRefresh.watch(['kwh'], refreshCharts, { throttleMs: 5000 });
+                return;
+            }
+
+            // Fallback: skema interval lama bila script realtime tidak termuat.
+            refreshTimer = setInterval(refreshCharts, systemSettings.refreshInterval * 1000);
         }
 
         // ============================================

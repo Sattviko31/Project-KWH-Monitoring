@@ -836,6 +836,8 @@
         var anomalyPageSize = 10;
         var refreshTimer = null;
         var anomalyTimer = null;
+        var refreshWatcherId = null;  // watcher realtime (chart/detail saat data berubah)
+        var anomalyWatcherId = null;  // watcher realtime (log anomali saat berubah)
         var anomalyCooldown = {};
         
         // Konfirmasi anomali: jumlah sampling bisa di-set melalui Settings
@@ -3810,16 +3812,28 @@
         function startAutoRefresh() {
             /* console.log('Starting auto-refresh...') */;
 
-            if (refreshTimer) clearInterval(refreshTimer);
- 
-            if (anomalyTimer) clearInterval(anomalyTimer);
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+            if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
+            if (window.RealtimeRefresh) {
+                if (refreshWatcherId) { window.RealtimeRefresh.unwatch(refreshWatcherId); refreshWatcherId = null; }
+                if (anomalyWatcherId) { window.RealtimeRefresh.unwatch(anomalyWatcherId); anomalyWatcherId = null; }
+            }
 
-            refreshTimer = setInterval(function() {
-                /* console.log('=== Auto-refresh triggered at', new Date().toLocaleTimeString(), '===') */;
+            var refreshDetail = function() {
                 loadDetailChartData();
                 updatePanelMonitoring();
-            }, systemSettings.refreshInterval *  1000);
+            };
 
+            // Utama: refresh detail begitu ada data pengukuran baru, dan refresh
+            // tabel anomali begitu ada perubahan log anomali (realtime, bukan interval).
+            if (window.RealtimeRefresh) {
+                refreshWatcherId = window.RealtimeRefresh.watch(['kwh'], refreshDetail, { throttleMs: 5000 });
+                anomalyWatcherId = window.RealtimeRefresh.watch(['anomaly'], loadAnomalyLogs, { throttleMs: 3000 });
+                return;
+            }
+
+            // Fallback: skema interval lama bila script realtime tidak termuat.
+            refreshTimer = setInterval(refreshDetail, systemSettings.refreshInterval * 1000);
             anomalyTimer = setInterval(function() {
                 loadAnomalyLogs();
             }, 30000);
