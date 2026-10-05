@@ -117,12 +117,13 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Kapasitas Maksimum (W)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)" min="0" step="100">
-                                            </div>
-                                            <div class="device-form-row">
+                                                <input type="hidden" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)">
                                                 <label class="device-label">Tarif (Rp)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@FormatNoTrailingZeros(settings.TariffPerKWh)" min="0" step="50">
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Tarif efektif per kWh</label>
+                                                <small class="text-muted">Kapasitas maksimum diatur dari data konfigurasi perangkat.</small>
                                             </div>
                                         </div>
                                         <div class="device-form-group">

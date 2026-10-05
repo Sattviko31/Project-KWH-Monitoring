@@ -19,6 +19,14 @@ namespace KWHMonitoring.Models
         [Column("MaxCapacity", TypeName = "decimal(18,2)")]
         public decimal MaxCapacity { get; set; } = 0m;
 
+        // Kapasitas efektif untuk tampilan berasal dari WWMERP2019.
+        // Properti ini hanya dipakai pada response API dan tidak disimpan di database aplikasi.
+        [NotMapped]
+        public decimal InstalledCapacityVA { get; set; } = 0m;
+
+        [NotMapped]
+        public decimal EffectiveMaxCapacityWatt { get; set; } = 0m;
+
         [Column("DeviceCategory", TypeName = "nvarchar(100)")]
         [MaxLength(100)]
         public string DeviceCategory { get; set; } = "Billboard";

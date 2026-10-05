@@ -66,6 +66,8 @@ namespace KWHMonitoring.Controllers
                     .FirstOrDefaultAsync() ?? "OnOff";
 
                 var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                    validData.Select(x => x.DeviceKey));
 
                 foreach (var data in validData)
                 {
@@ -73,7 +75,12 @@ namespace KWHMonitoring.Controllers
 
                     var settings = deviceSettings.ContainsKey(data.DeviceKey) ? deviceSettings[data.DeviceKey] : null;
                     var controlMode = settings?.ControlMode ?? globalControlMode;
-                    var maxCapacity = settings?.MaxCapacity ?? 0m;
+                    var installedCapacityVA = erpCapacityMap.TryGetValue(data.DeviceKey, out var erpCapacity)
+                        ? erpCapacity.DayaVA
+                        : 0m;
+                    var maxCapacity = PanelViewModel.CalculateMaxCapacityWatt(
+                        installedCapacityVA,
+                        data.Cos_Phi ?? 0m);
                     var normalThreshold = settings?.LoadNormalThreshold ?? 30;
                     var mediumThreshold = settings?.LoadMediumThreshold ?? 70;
 
@@ -84,6 +91,7 @@ namespace KWHMonitoring.Controllers
                         GroupName = data.GroupName,
                         ControlMode = controlMode,
                         MaxCapacity = maxCapacity,
+                        InstalledCapacityVA = installedCapacityVA,
                         LoadNormalThreshold = normalThreshold,
                         LoadMediumThreshold = mediumThreshold,
                         Waktu_Server = data.Waktu_Server,
@@ -121,6 +129,10 @@ namespace KWHMonitoring.Controllers
                             panel.KodeLokasi = lokasi.KodeLokasi;
                             panel.Alamat = lokasi.Address;
                             panel.KotaProvinsi = lokasi.KotaProvinsi;
+                            panel.IDPelanggan = lokasi.IDPelanggan;
+                            panel.Catatan = lokasi.Catatan;
+                            panel.InstalledCapacityVA = lokasi.DayaVA;
+                            panel.MaxCapacity = PanelViewModel.CalculateMaxCapacityWatt(lokasi.DayaVA, panel.Cos_Phi);
                         }
                     }
                 }
@@ -181,6 +193,8 @@ namespace KWHMonitoring.Controllers
                     .FirstOrDefaultAsync() ?? "OnOff";
 
                 var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                    validData.Select(x => x.DeviceKey));
 
                 foreach (var data in validData)
                 {
@@ -188,7 +202,12 @@ namespace KWHMonitoring.Controllers
 
                     var settings = deviceSettings.ContainsKey(data.DeviceKey) ? deviceSettings[data.DeviceKey] : null;
                     var controlMode = settings?.ControlMode ?? globalControlMode;
-                    var maxCapacity = settings?.MaxCapacity ?? 0m;
+                    var installedCapacityVA = erpCapacityMap.TryGetValue(data.DeviceKey, out var erpCapacity)
+                        ? erpCapacity.DayaVA
+                        : 0m;
+                    var maxCapacity = PanelViewModel.CalculateMaxCapacityWatt(
+                        installedCapacityVA,
+                        data.Cos_Phi ?? 0m);
                     var normalThreshold = settings?.LoadNormalThreshold ?? 30;
                     var mediumThreshold = settings?.LoadMediumThreshold ?? 70;
 
@@ -199,6 +218,7 @@ namespace KWHMonitoring.Controllers
                         GroupName = data.GroupName,
                         ControlMode = controlMode,
                         MaxCapacity = maxCapacity,
+                        InstalledCapacityVA = installedCapacityVA,
                         LoadNormalThreshold = normalThreshold,
                         LoadMediumThreshold = mediumThreshold,
                         Waktu_Server = data.Waktu_Server,
@@ -452,6 +472,13 @@ namespace KWHMonitoring.Controllers
 
                 var deviceSettings = await _deviceSettingsService.GetAllEffectiveAsync();
                 var settings = deviceSettings.ContainsKey(latestData.DeviceKey) ? deviceSettings[latestData.DeviceKey] : null;
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(new[] { latestData.DeviceKey });
+                var installedCapacityVA = erpCapacityMap.TryGetValue(latestData.DeviceKey, out var erpCapacity)
+                    ? erpCapacity.DayaVA
+                    : 0m;
+                var maxCapacityWatt = PanelViewModel.CalculateMaxCapacityWatt(
+                    installedCapacityVA,
+                    latestData.Cos_Phi ?? 0m);
 
                 var viewModel = new PanelViewModel
                 {
@@ -459,7 +486,10 @@ namespace KWHMonitoring.Controllers
                     DeviceId = latestData.DeviceId,
                     GroupName = latestData.GroupName,
                     ControlMode = settings?.ControlMode ?? "OnOff",
-                    MaxCapacity = settings?.MaxCapacity ?? 0m,
+                    MaxCapacity = maxCapacityWatt,
+                    InstalledCapacityVA = installedCapacityVA,
+                    IDPelanggan = erpCapacity?.IDPelanggan ?? string.Empty,
+                    Catatan = erpCapacity?.Catatan ?? string.Empty,
                     LoadNormalThreshold = settings?.LoadNormalThreshold ?? 30,
                     LoadMediumThreshold = settings?.LoadMediumThreshold ?? 70,
                     Waktu_Server = latestData.Waktu_Server,

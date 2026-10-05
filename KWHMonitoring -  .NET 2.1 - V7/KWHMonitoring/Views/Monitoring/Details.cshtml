@@ -4,7 +4,7 @@
     var deviceKey = Model.DeviceKey;
     var safeKey = deviceKey.Replace("-", "_");
     var isThreePhase = Model.IsThreePhase;
-    // Define maximum capacity for load calculations (in Watts)
+    // MaxCapacity is the ERP installed capacity converted from VA to Watt using CosPhi.
     var maxCapacity = Model.MaxCapacity;
 }
 

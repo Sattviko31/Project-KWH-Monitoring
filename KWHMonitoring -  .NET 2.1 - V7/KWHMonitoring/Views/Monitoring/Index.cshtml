@@ -1525,9 +1525,10 @@
                             else pfBar.addClass('bg-danger');
                         }
 
-                        // Update Load Gauge MENGGUNAKAN per-device settings
+                        // Update Load Gauge menggunakan kapasitas ERP dinamis (Watt).
+                        // Fallback ke cache settings hanya untuk kompatibilitas response lama.
                         const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
-                        const maxCap = ds.maxCapacity || 0;
+                        const maxCap = panel.maxCapacity || ds.maxCapacity || 0;
                         const normalThresh = ds.loadNormalThreshold || 30;
                         const mediumThresh = ds.loadMediumThreshold || 70;
 
@@ -1553,7 +1554,9 @@
                         }
 
                         // Update Labels
-                        panelCard.find('[data-label="load-value"]').text(formatNumber(dayaWatt) + ' W');
+                        panelCard.find('[data-label="load-value"]').text(maxCap > 0
+                            ? formatNumber(dayaWatt) + ' W / ' + formatNumber(maxCap) + ' W'
+                            : formatNumber(dayaWatt) + ' W');
                         panelCard.find('[data-label="pf-percent"]').text(pfPercent.replace('.', ',') + '%');
                     });
 

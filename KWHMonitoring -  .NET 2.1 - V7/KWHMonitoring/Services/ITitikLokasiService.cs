@@ -5,9 +5,8 @@ using KWHMonitoring.Models;
 namespace KWHMonitoring.Services
 {
     /// <summary>
-    /// Pembaca data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi).
-    /// Dipakai untuk melengkapi tooltip header kartu panel monitoring
-    /// (Kode Lokasi, Alamat, Kota) berdasarkan DeviceKey masing-masing device.
+    /// Pembaca data master titik lokasi dan daya terpasang dari database ERP.
+    /// DeviceKey dipasangkan dengan TitikLokasiID.
     /// </summary>
     public interface ITitikLokasiService
     {

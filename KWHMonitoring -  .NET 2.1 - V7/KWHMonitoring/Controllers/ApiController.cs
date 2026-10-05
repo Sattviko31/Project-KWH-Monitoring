@@ -42,8 +42,9 @@ namespace KWHMonitoring.Controllers
         private readonly IEmailService _emailService;
         private readonly IAnomalyAnalysisService _analysisService;
         private readonly IDeviceSettingsService _deviceSettingsService;
+        private readonly ITitikLokasiService _titikLokasiService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IDeviceSettingsService deviceSettingsService)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
         {
             _context = context;
             _cache = cache;
@@ -55,6 +56,7 @@ namespace KWHMonitoring.Controllers
             _emailService = emailService;
             _analysisService = analysisService;
             _deviceSettingsService = deviceSettingsService;
+            _titikLokasiService = titikLokasiService;
         }
 
         // Revenue loss is an estimate based on configured hourly revenue and the
@@ -166,6 +168,8 @@ namespace KWHMonitoring.Controllers
 
                 // Load per-device settings for status calculation
                 var deviceSettingsDict = await _deviceSettingsService.GetAllEffectiveAsync();
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                    latestData.Where(x => x != null).Select(x => x.DeviceKey));
 
                 var validData = latestData.Where(x => x != null);
 
@@ -200,34 +204,45 @@ namespace KWHMonitoring.Controllers
                         validData = validData.Where(x => !x.IsThreePhase);
                 }
 
-                var panels = validData.Select(data => new
+                var panels = validData.Select(data =>
                 {
-                    deviceKey = data.DeviceKey,
-                    deviceId = data.DeviceId,
-                    groupName = data.GroupName,
-                    deviceCategory = categorySettings.ContainsKey("DeviceCategory." + data.DeviceKey)
-                        ? categorySettings["DeviceCategory." + data.DeviceKey]
-                        : "Billboard",
-                    isThreePhase = data.IsThreePhase,
-                    r = data.Volt_R ?? 0m,
-                    s = data.Volt_S ?? 0m,
-                    t = data.Volt_T ?? 0m,
-                    ampR = data.Amp_R ?? 0m,
-                    ampS = data.Amp_S ?? 0m,
-                    ampT = data.Amp_T ?? 0m,
-                    cosPhi = data.Cos_Phi ?? 0m,
-                    dayaWatt = data.Daya_Watt ?? 0m,
-                    totalW1M = data.TotalW1M_Wh ?? 0m,
-                    energiAktif = data.Energi_Aktif_Wh ?? 0m,
-                    totalEnergy = data.Total_Energy_Wh ?? 0m,
-                    frekuensi = data.Frekuensi_Hz ?? 0m,
-                    avgVoltage = data.AvgVoltage,
-                    avgAmpere = data.AvgAmpere,
-                    phaseRColor = data.PhaseRColor,
-                    phaseSColor = data.PhaseSColor,
-                    phaseTColor = data.PhaseTColor,
-                    // Calculate status from per-device settings
-                    status = GetDeviceStatus(data, deviceSettingsDict)
+                    var installedCapacityVA = erpCapacityMap.TryGetValue(data.DeviceKey, out var erp)
+                        ? erp.DayaVA
+                        : 0m;
+                    var maxCapacity = PanelViewModel.CalculateMaxCapacityWatt(
+                        installedCapacityVA,
+                        data.Cos_Phi ?? 0m);
+
+                    return new
+                    {
+                        deviceKey = data.DeviceKey,
+                        deviceId = data.DeviceId,
+                        groupName = data.GroupName,
+                        deviceCategory = categorySettings.ContainsKey("DeviceCategory." + data.DeviceKey)
+                            ? categorySettings["DeviceCategory." + data.DeviceKey]
+                            : "Billboard",
+                        isThreePhase = data.IsThreePhase,
+                        r = data.Volt_R ?? 0m,
+                        s = data.Volt_S ?? 0m,
+                        t = data.Volt_T ?? 0m,
+                        ampR = data.Amp_R ?? 0m,
+                        ampS = data.Amp_S ?? 0m,
+                        ampT = data.Amp_T ?? 0m,
+                        cosPhi = data.Cos_Phi ?? 0m,
+                        dayaWatt = data.Daya_Watt ?? 0m,
+                        totalW1M = data.TotalW1M_Wh ?? 0m,
+                        energiAktif = data.Energi_Aktif_Wh ?? 0m,
+                        totalEnergy = data.Total_Energy_Wh ?? 0m,
+                        frekuensi = data.Frekuensi_Hz ?? 0m,
+                        avgVoltage = data.AvgVoltage,
+                        avgAmpere = data.AvgAmpere,
+                        phaseRColor = data.PhaseRColor,
+                        phaseSColor = data.PhaseSColor,
+                        phaseTColor = data.PhaseTColor,
+                        installedCapacityVA,
+                        maxCapacity,
+                        status = GetDeviceStatus(data, deviceSettingsDict, erpCapacityMap)
+                    };
                 }).ToList();
 
                 return Ok(panels);
@@ -265,6 +280,13 @@ namespace KWHMonitoring.Controllers
                 var powerValid = data.Select(x => x.Daya_Watt.HasValue).ToList();
 
                 var isThreePhase = data.Any(x => x.IsThreePhase);
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(new[] { deviceKey });
+                var installedCapacityVA = erpCapacityMap.TryGetValue(deviceKey, out var erpCapacity)
+                    ? erpCapacity.DayaVA
+                    : 0m;
+                var maxCapacity = PanelViewModel.CalculateMaxCapacityWatt(
+                    installedCapacityVA,
+                    data.LastOrDefault()?.Cos_Phi ?? 0m);
 
                 return Ok(new
                 {
@@ -275,7 +297,9 @@ namespace KWHMonitoring.Controllers
                     isThreePhase = isThreePhase,
                     voltage = new { r = voltageR, s = voltageS, t = voltageT },
                     current = new { r = ampR, s = ampS, t = ampT },
-                    power = power
+                    power = power,
+                    installedCapacityVA,
+                    maxCapacity
                 });
             }
             catch (Exception ex)
@@ -6986,11 +7010,18 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // HELPER METHODS
         // ============================================
-        private string GetDeviceStatus(KWHData data, Dictionary<string, DeviceSettings> deviceSettingsDict)
+        private string GetDeviceStatus(
+            KWHData data,
+            Dictionary<string, DeviceSettings> deviceSettingsDict,
+            Dictionary<string, TitikLokasi> erpCapacityMap)
         {
             DeviceSettings ds;
             var hasSettings = deviceSettingsDict.TryGetValue(data.DeviceKey, out ds);
-            var maxCap = hasSettings && ds.MaxCapacity > 0 ? ds.MaxCapacity : 0m;
+            TitikLokasi erp = null;
+            var hasErpCapacity = erpCapacityMap != null && erpCapacityMap.TryGetValue(data.DeviceKey, out erp);
+            var maxCap = hasErpCapacity
+                ? PanelViewModel.CalculateMaxCapacityWatt(erp.DayaVA, data.Cos_Phi ?? 0m)
+                : 0m;
             var normalThresh = hasSettings && ds.LoadNormalThreshold > 0 ? ds.LoadNormalThreshold : 30;
             var mediumThresh = hasSettings && ds.LoadMediumThreshold > 0 ? ds.LoadMediumThreshold : 70;
 
@@ -7546,6 +7577,31 @@ namespace KWHMonitoring.Controllers
             try
             {
                 var allSettings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(allSettings.Keys);
+                foreach (var item in allSettings)
+                {
+                    if (erpCapacityMap.TryGetValue(item.Key, out var erpCapacity))
+                    {
+                        item.Value.InstalledCapacityVA = erpCapacity.DayaVA;
+
+                        var latest = await _context.KWH_Monitoring
+                            .Where(x => x.DeviceKey == item.Key)
+                            .OrderByDescending(x => x.Waktu_Server)
+                            .Select(x => new { x.Cos_Phi })
+                            .FirstOrDefaultAsync();
+
+                        item.Value.EffectiveMaxCapacityWatt = PanelViewModel.CalculateMaxCapacityWatt(
+                            erpCapacity.DayaVA,
+                            latest?.Cos_Phi ?? 0m);
+                        item.Value.MaxCapacity = item.Value.EffectiveMaxCapacityWatt;
+                    }
+                    else
+                    {
+                        item.Value.InstalledCapacityVA = 0m;
+                        item.Value.EffectiveMaxCapacityWatt = 0m;
+                        item.Value.MaxCapacity = 0m;
+                    }
+                }
                 return Ok(new { success = true, settings = allSettings });
             }
             catch (Exception ex)
@@ -7563,6 +7619,26 @@ namespace KWHMonitoring.Controllers
                     return BadRequest(new { success = false, message = "DeviceKey is required" });
 
                 var settings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+                var erpCapacityMap = await _titikLokasiService.GetByDeviceKeysAsync(new[] { deviceKey });
+                if (erpCapacityMap.TryGetValue(deviceKey, out var erpCapacity))
+                {
+                    settings.InstalledCapacityVA = erpCapacity.DayaVA;
+                    var latest = await _context.KWH_Monitoring
+                        .Where(x => x.DeviceKey == deviceKey)
+                        .OrderByDescending(x => x.Waktu_Server)
+                        .Select(x => new { x.Cos_Phi })
+                        .FirstOrDefaultAsync();
+                    settings.EffectiveMaxCapacityWatt = PanelViewModel.CalculateMaxCapacityWatt(
+                        erpCapacity.DayaVA,
+                        latest?.Cos_Phi ?? 0m);
+                    settings.MaxCapacity = settings.EffectiveMaxCapacityWatt;
+                }
+                else
+                {
+                    settings.InstalledCapacityVA = 0m;
+                    settings.EffectiveMaxCapacityWatt = 0m;
+                    settings.MaxCapacity = 0m;
+                }
                 return Ok(new { success = true, deviceKey, settings });
             }
             catch (Exception ex)

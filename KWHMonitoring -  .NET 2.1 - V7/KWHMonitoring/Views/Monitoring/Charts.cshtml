@@ -949,7 +949,7 @@
                             // Update max capacity line (per-device, only if enabled)
                             if (emaSettings.showMaxCapacity) {
                                 var mcDs = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
-                                var mcValue = mcDs.maxCapacity || 0;
+                                var mcValue = data.maxCapacity || mcDs.maxCapacity || 0;
                                 // Find Max Capacity dataset by label
                                 for (var i = 0; i < charts['power_' + safeKey].data.datasets.length; i++) {
                                     if (charts['power_' + safeKey].data.datasets[i].label.indexOf('Max Capacity') === 0) {

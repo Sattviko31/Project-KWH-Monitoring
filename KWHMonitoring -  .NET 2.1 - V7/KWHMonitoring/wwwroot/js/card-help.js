@@ -22,7 +22,9 @@
    data-card-help-lokasi-kode   -> Kode Lokasi  (ERP: TitikLokasi.KodeLokasi)
    data-card-help-lokasi-alamat -> Alamat       (ERP: TitikLokasi.Address)
    data-card-help-lokasi-kota   -> Kota         (ERP: TitikLokasi.City + Province)
-   Ketiga atribut diisi server dari database ERP lewat pencocokan
+   data-card-help-lokasi-id-pelanggan -> ID Pelanggan (ERP: RekListrik.IDPelanggan)
+   data-card-help-lokasi-catatan -> Catatan      (ERP: TagihanListrik.Catatan)
+   Atribut tersebut diisi server dari database ERP lewat pencocokan
    DeviceKey = TitikLokasiID. Kartu yang tidak memiliki atribut ini
    (semua kartu non-panel) tampil persis seperti sebelumnya.
    ============================================================ */
@@ -60,8 +62,11 @@
         var kode = card.getAttribute('data-card-help-lokasi-kode');
         var alamat = card.getAttribute('data-card-help-lokasi-alamat');
         var kota = card.getAttribute('data-card-help-lokasi-kota');
+        var idPelanggan = card.getAttribute('data-card-help-lokasi-id-pelanggan');
+        var catatan = card.getAttribute('data-card-help-lokasi-catatan');
+        var dayaTerpasang = card.getAttribute('data-card-help-lokasi-daya-terpasang');
 
-        if (!kode && !alamat && !kota) return '';
+        if (!kode && !alamat && !kota && !idPelanggan && !catatan && !dayaTerpasang) return '';
 
         var html = '<div class="ch-lokasi">';
         if (kode) {
@@ -69,12 +74,24 @@
                     escapeHtml(kode) + '</div>';
         }
         if (alamat) {
-            html += '<div class="ch-lokasi-row"><span class="ch-lokasi-label">Alamat</span>' +
+            html += '<div class="ch-lokasi-row is-alamat"><span class="ch-lokasi-label">Alamat</span>' +
                     '<span class="ch-lokasi-value">' + escapeHtml(alamat) + '</span></div>';
         }
         if (kota) {
-            html += '<div class="ch-lokasi-row"><span class="ch-lokasi-label">Kota</span>' +
+            html += '<div class="ch-lokasi-row is-kota"><span class="ch-lokasi-label">Kota</span>' +
                     '<span class="ch-lokasi-value">' + escapeHtml(kota) + '</span></div>';
+        }
+        if (idPelanggan) {
+            html += '<div class="ch-lokasi-row is-id-pelanggan"><span class="ch-lokasi-label">ID Pelanggan</span>' +
+                    '<span class="ch-lokasi-value">' + escapeHtml(idPelanggan) + '</span></div>';
+        }
+        if (catatan) {
+            html += '<div class="ch-lokasi-row is-catatan"><span class="ch-lokasi-label">Catatan</span>' +
+                    '<span class="ch-lokasi-value">' + withBreaks(catatan) + '</span></div>';
+        }
+        if (dayaTerpasang) {
+            html += '<div class="ch-lokasi-row is-daya"><span class="ch-lokasi-label">Daya Terpasang</span>' +
+                    '<span class="ch-lokasi-value">' + escapeHtml(dayaTerpasang) + '</span></div>';
         }
 
         return html + '</div>';

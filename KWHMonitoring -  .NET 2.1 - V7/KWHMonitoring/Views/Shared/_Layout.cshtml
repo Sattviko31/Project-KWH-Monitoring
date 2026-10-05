@@ -1766,7 +1766,8 @@
                     return null;
                 }
                 return {
-                    maxCapacity: s.maxCapacity || s.MaxCapacity || 0,
+                    installedCapacityVA: s.installedCapacityVA || s.InstalledCapacityVA || 0,
+                    maxCapacity: s.effectiveMaxCapacityWatt || s.EffectiveMaxCapacityWatt || s.maxCapacity || s.MaxCapacity || 0,
                     loadNormalThreshold: (s.loadNormalThreshold != null && s.loadNormalThreshold > 0) ? s.loadNormalThreshold : (s.LoadNormalThreshold != null && s.LoadNormalThreshold > 0 ? s.LoadNormalThreshold : 30),
                     loadMediumThreshold: (s.loadMediumThreshold != null && s.loadMediumThreshold > 0) ? s.loadMediumThreshold : (s.LoadMediumThreshold != null && s.LoadMediumThreshold > 0 ? s.LoadMediumThreshold : 70),
                     emaUpperThreshold: s.emaUpperThreshold || s.EmaUpperThreshold || 0,

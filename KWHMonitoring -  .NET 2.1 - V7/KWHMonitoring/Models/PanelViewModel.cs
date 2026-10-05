@@ -11,6 +11,7 @@ namespace KWHMonitoring.Models
         public string DeviceCategory { get; set; } = "Billboard";
         public string ControlMode { get; set; } = "OnOff";
         public decimal MaxCapacity { get; set; } = 0m;
+        public decimal InstalledCapacityVA { get; set; } = 0m;
         public int LoadNormalThreshold { get; set; } = 30;
         public int LoadMediumThreshold { get; set; } = 70;
         public DateTime Waktu_Server { get; set; }
@@ -35,10 +36,14 @@ namespace KWHMonitoring.Models
         public string KodeLokasi { get; set; } = string.Empty;
         public string Alamat { get; set; } = string.Empty;
         public string KotaProvinsi { get; set; } = string.Empty;
+        public string IDPelanggan { get; set; } = string.Empty;
+        public string Catatan { get; set; } = string.Empty;
 
         public bool HasTitikLokasi => !string.IsNullOrWhiteSpace(KodeLokasi)
                                       || !string.IsNullOrWhiteSpace(Alamat)
-                                      || !string.IsNullOrWhiteSpace(KotaProvinsi);
+                                      || !string.IsNullOrWhiteSpace(KotaProvinsi)
+                                      || !string.IsNullOrWhiteSpace(IDPelanggan)
+                                      || !string.IsNullOrWhiteSpace(Catatan);
 
         // 1-phase devices report 0.0 (not null) for S/T, so require > 0
         public bool IsThreePhase => Volt_S.HasValue && Volt_S.Value > 0
@@ -63,6 +68,12 @@ namespace KWHMonitoring.Models
         // LoadPercent dihitung di frontend berdasarkan systemSettings.maxCapacity
         public string LoadColor => GetLoadColor();
         public string CosPhiColor => GetCosPhiColor();
+
+        public static decimal CalculateMaxCapacityWatt(decimal installedCapacityVA, decimal cosPhi)
+        {
+            if (installedCapacityVA <= 0m || cosPhi <= 0m) return 0m;
+            return Math.Round(installedCapacityVA * cosPhi, 2);
+        }
 
         private string GetStatus()
         {

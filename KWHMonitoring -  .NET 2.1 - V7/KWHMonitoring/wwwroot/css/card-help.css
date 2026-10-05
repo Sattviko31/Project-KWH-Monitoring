@@ -65,28 +65,33 @@
 }
 
 /* ============================================================
-   Info lokasi (KodeLokasi / Address / City) dari database ERP
+   Info lokasi (KodeLokasi / Address / City / IDPelanggan) dari database ERP
    WWMERP2019.dbo.TitikLokasi — hanya muncul pada tooltip kartu
    panel monitoring (_PanelCard) saat kursor berada di header.
    ============================================================ */
 .ch-help .ch-lokasi {
-    margin: 4px 0 6px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px dashed rgba(56, 189, 248, 0.45);
+    width: min(100%, 360px);
+    margin: 6px 0 8px;
+    padding: 8px 9px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(15, 23, 42, 0.18));
+    border: 1px solid rgba(56, 189, 248, 0.42);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .ch-help .ch-lokasi-kode {
-    display: inline-block;
+    display: flex;
+    align-items: center;
+    width: 100%;
     font-weight: 700;
-    font-size: 0.78rem;
-    letter-spacing: 0.4px;
+    font-size: 0.76rem;
+    letter-spacing: 0.35px;
     color: #0b1220;
     background: linear-gradient(180deg, #a5f3fc, #38bdf8);
-    border-radius: 4px;
-    padding: 1px 7px;
-    margin-bottom: 3px;
+    border-radius: 5px;
+    padding: 3px 7px;
+    margin-bottom: 7px;
+    box-sizing: border-box;
 }
 
 .ch-help .ch-lokasi-kode i {
@@ -95,24 +100,48 @@
 }
 
 .ch-help .ch-lokasi-row {
-    display: flex;
-    gap: 6px;
-    line-height: 1.4;
+    display: grid;
+    grid-template-columns: minmax(72px, 86px) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 3px 0;
+    line-height: 1.35;
+    border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.ch-help .ch-lokasi-row:first-of-type {
+    border-top: 0;
 }
 
 .ch-help .ch-lokasi-label {
-    flex: 0 0 44px;
+    min-width: 0;
     color: #7dd3fc;
-    font-size: 0.66rem;
+    font-size: 0.62rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     padding-top: 1px;
 }
 
 .ch-help .ch-lokasi-value {
-    flex: 1 1 auto;
+    min-width: 0;
     color: rgba(255, 255, 255, 0.92);
+    overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+.ch-help .ch-lokasi-row.is-catatan {
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.ch-help .ch-lokasi-row.is-catatan .ch-lokasi-value {
+    white-space: pre-line;
+}
+
+.ch-help .ch-lokasi-row.is-daya .ch-lokasi-value {
+    color: #fef08a;
+    font-weight: 700;
 }
 
 @media (prefers-reduced-motion: reduce) {

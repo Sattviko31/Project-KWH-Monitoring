@@ -4,8 +4,9 @@ namespace KWHMonitoring.Models
 {
     /// <summary>
     /// Data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi).
-    /// Hanya kolom yang dipakai tooltip panel monitoring yang dipetakan:
-    /// TitikLokasiID (dipasangkan dengan DeviceKey), KodeLokasi, Address, City, Province.
+    /// Kolom yang dipakai panel monitoring dipetakan dari query master ERP:
+    /// TitikLokasiID (dipasangkan dengan DeviceKey), KodeLokasi, Address, City,
+    /// Province, serta Daya (VA) dari rekening listrik.
     /// TitikLokasiID dibaca sebagai string agar aman baik untuk kolom numerik maupun teks.
     /// </summary>
     public class TitikLokasi
@@ -15,6 +16,9 @@ namespace KWHMonitoring.Models
         public string Address { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
         public string Province { get; set; } = string.Empty;
+        public string IDPelanggan { get; set; } = string.Empty;
+        public string Catatan { get; set; } = string.Empty;
+        public decimal DayaVA { get; set; }
 
         /// <summary>Kota = City + Province (tanpa pengulangan bila salah satu kosong atau sama).</summary>
         public string KotaProvinsi => Compose(City, Province);
