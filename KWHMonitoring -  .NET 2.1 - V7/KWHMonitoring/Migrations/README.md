@@ -55,7 +55,7 @@ Menyimpan log anomali/penyimpangan yang terdeteksi.
 
 **Indexes:**
 - `PK_AnomalyLogs` (Id) - Primary Key
-- `IX_AnomalyLogs_DeviceKey_DetectedTime` - Query anomalies per device
+- `IX_AnomalyLogs_DeviceKey` and `IX_AnomalyLogs_DetectedTime` - Separate indexes used by device and time filters; no composite index is defined here
 - `IX_AnomalyLogs_Acknowledged` - Filter acknowledged status
 
 ### 3. AppSettings

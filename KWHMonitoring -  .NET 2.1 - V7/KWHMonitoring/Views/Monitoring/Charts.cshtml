@@ -300,8 +300,10 @@
         var chartFilterDebounce = null;
         var activeChartChipDeviceKey = null;
         var chartAnomalyStatusMap = {};
+        var chartDeviceConnectivityMap = {};
 
         function getChartChipClass(deviceKey) {
+            if (chartDeviceConnectivityMap[deviceKey] === false) return 'chip-offline';
             var anomaly = chartAnomalyStatusMap[deviceKey];
             if (anomaly === 'OVERLOAD') return 'chip-high';
             if (anomaly === 'DROP') return 'chip-medium';
@@ -317,9 +319,9 @@
             var sorted = panelList.slice().sort(function(a, b) {
                 var aAnomaly = chartAnomalyStatusMap[a.deviceKey] || '';
                 var bAnomaly = chartAnomalyStatusMap[b.deviceKey] || '';
-                var order = { 'OVERLOAD': 0, 'DROP': 1, '': 2 };
-                var aOrder = order[aAnomaly] !== undefined ? order[aAnomaly] : 2;
-                var bOrder = order[bAnomaly] !== undefined ? order[bAnomaly] : 2;
+                var order = { 'DEVICE_OFFLINE': 0, 'OVERLOAD': 1, 'DROP': 2, '': 3 };
+                var aOrder = order[aAnomaly] !== undefined ? order[aAnomaly] : 3;
+                var bOrder = order[bAnomaly] !== undefined ? order[bAnomaly] : 3;
                 if (aOrder !== bOrder) return aOrder - bOrder;
                 var nameA = (a.groupName || a.deviceKey).toLowerCase();
                 var nameB = (b.groupName || b.deviceKey).toLowerCase();
@@ -432,11 +434,16 @@
                     deviceStatus[deviceKey] = cooldownState[deviceKey].type; // 'OVERLOAD' or 'DROP'
                 }
             });
+            panelList.forEach(function(panel) {
+                if (chartDeviceConnectivityMap[panel.deviceKey] === false) {
+                    deviceStatus[panel.deviceKey] = 'DEVICE_OFFLINE';
+                }
+            });
 
             chartAnomalyStatusMap = {};
             panelList.forEach(function(panel) {
                 var status = deviceStatus[panel.deviceKey];
-                if (status === 'OVERLOAD' || status === 'DROP') {
+                if (status === 'OVERLOAD' || status === 'DROP' || status === 'DEVICE_OFFLINE') {
                     chartAnomalyStatusMap[panel.deviceKey] = status;
                 }
             });
@@ -451,8 +458,10 @@
                 var $header = $card.find('.card-header');
                 var status = deviceStatus[panel.deviceKey];
 
-                $header.removeClass('bg-danger bg-warning bg-primary');
-                if (status === 'OVERLOAD') {
+                $header.removeClass('bg-danger bg-warning bg-primary bg-secondary text-white');
+                if (status === 'DEVICE_OFFLINE') {
+                    $header.addClass('bg-secondary text-white');
+                } else if (status === 'OVERLOAD') {
                     $header.addClass('bg-danger');
                 } else if (status === 'DROP') {
                     $header.addClass('bg-warning');
@@ -1300,6 +1309,12 @@
             // Real-time update saat cooldown state berubah (dari anomaly service)
             window.addEventListener('anomalyCooldownChanged', function(e) {
                 /* console.log('🔄 Anoma ly cooldown changed (charts):', e.detail) */;
+                updateChartAnomalyStatus();
+            });
+
+            window.addEventListener('deviceConnectivityChanged', function(e) {
+                if (!e.detail || !e.detail.deviceKey) return;
+                chartDeviceConnectivityMap[e.detail.deviceKey] = e.detail.online === true;
                 updateChartAnomalyStatus();
             });
 

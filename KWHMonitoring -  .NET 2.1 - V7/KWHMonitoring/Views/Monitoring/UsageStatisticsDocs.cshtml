@@ -62,9 +62,8 @@
                     <tr><td><code>/api/Api/panels</code></td><td>GET</td><td>Daftar panel dan perangkat, termasuk kunci, grup, ID, dan kategori perangkat.</td></tr>
                     <tr><td><code>/api/Api/device-categories</code></td><td>GET</td><td>Daftar kategori yang valid dan pemetaan kunci perangkat ke kategori.</td></tr>
                     <tr><td><code>/api/Api/usage-statistics</code></td><td>POST</td><td>Data agregat seluruh perangkat untuk tanggal yang dipilih.</td></tr>
+                    <tr><td><code>/api/Api/usage-statistics/batch</code></td><td>POST</td><td>Ringkasan grafik dan analisis finansial seluruh perangkat dalam satu respons, termasuk timestamp agregasi terbaru.</td></tr>
                     <tr><td><code>/api/Api/usage-statistics/{deviceKey}</code></td><td>POST</td><td>Data untuk satu perangkat.</td></tr>
-                    <tr><td><code>/api/Api/device-financial/{deviceKey}</code></td><td>GET</td><td>Data keuangan satu perangkat untuk rentang tanggal tertentu.</td></tr>
-                    <tr><td><code>/api/Api/device-financial/batch</code></td><td>POST</td><td>Data keuangan beberapa perangkat sekaligus.</td></tr>
                     <tr><td><code>/api/Api/categories</code></td><td>GET</td><td>Metadata kategori, seperti ikon, warna, dan deskripsi.</td></tr>
                 </tbody>
             </table>
@@ -87,6 +86,7 @@
                     <tr><td><code>tariffPerKWh</code></td><td>Tarif tetap bawaan per kWh. Jika tarif belum dikonfigurasi, aplikasi menggunakan Rp1.500.</td></tr>
                     <tr><td><code>estimatedCost</code></td><td>Estimasi biaya bulan ini = <code>month.total * tariffPerKWh</code>.</td></tr>
                     <tr><td><code>realtimeKWh</code>, <code>currentHourLabel</code>, <code>secondsToNextHour</code>, <code>isToday</code></td><td>Data jam berjalan jika memilih hari ini.</td></tr>
+                    <tr><td><code>latestAggregateAt</code>, <code>dataVersion</code></td><td>Waktu kalkulasi agregat terakhir pada cakupan query dan token versi untuk mengetahui perubahan data.</td></tr>
                     <tr><td><code>wbpLwbp</code></td><td>Konfigurasi &amp; hasil split WBP/LWBP.</td></tr>
                     <tr><td><code>waste</code></td><td>Konsumsi energi selama waktu henti.</td></tr>
                     <tr><td><code>budget</code></td><td>Perbandingan anggaran energi dengan realisasi.</td></tr>
@@ -101,7 +101,7 @@
     </div>
 
     <!-- 3. Pengolahan Data -->
-    <div class="card shadow-sm mb-3" data-card-help="3. Pengolahan Data|Cara data diagregasi di server dan dalam mode Semua Panel di sisi klien, termasuk penghitungan WBP/LWBP, anggaran, dan biaya.|Mode Semua Panel mengagregasi data setiap perangkat secara paralel, lalu menjumlahkan hasilnya.|Menjelaskan alasan sebagian angka dihitung ulang di peramban.">
+    <div class="card shadow-sm mb-3" data-card-help="3. Pengolahan Data|Cara data diagregasi di server dan dalam mode Semua Panel di sisi klien, termasuk penghitungan WBP/LWBP, anggaran, dan biaya.|Mode Semua Panel memakai satu endpoint batch dan menggabungkan metrik finansial per perangkat.|Menjelaskan alasan sebagian angka dihitung ulang di peramban.">
         <div class="card-header bg-dark text-white">
             <i class="fas fa-cogs"></i> 3. Pengolahan Data
         </div>
@@ -116,9 +116,17 @@
 
             <h6>B. Mode "Semua Panel"</h6>
             <ol>
-                <li>Panggil <code>/api/Api/usage-statistics</code> untuk mengagregasi data energi dan grafik.</li>
-                <li>Panggil setiap <code>/api/Api/usage-statistics/{deviceKey}</code> secara paralel.</li>
-                <li>Jalankan <code>aggregateFinancialData()</code> di sisi klien untuk menjumlahkan data dan menghitung ulang metrik.</li>
+                <li>Kirim tanggal terpilih dan daftar <code>deviceKeys</code> ke <code>/api/Api/usage-statistics/batch</code>.</li>
+                <li>Respons batch berisi ringkasan grafik, data finansial per perangkat, serta <code>latestAggregateAt</code> dan <code>dataVersion</code>.</li>
+                <li>Jalankan <code>aggregateFinancialData()</code> di sisi klien untuk menjumlahkan metrik finansial yang telah dihitung dengan pengaturan masing-masing perangkat.</li>
+                <li>Jika endpoint batch gagal, aplikasi memulihkan ringkasan energi dari endpoint lama lalu mengambil metrik per perangkat dengan maksimum enam request bersamaan. Hasil pemulihan dapat parsial jika sebagian perangkat gagal.</li>
+            </ol>
+
+            <h6>B2. Mode "Satu Perangkat"</h6>
+            <ol>
+                <li>Kirim tanggal dan <code>deviceKey</code> terpilih ke endpoint batch agar server hanya membaca agregat perangkat tersebut.</li>
+                <li>Respons memakai ringkasan grafik dan metrik finansial perangkat yang sama dengan mode Semua Panel.</li>
+                <li>Jika batch gagal atau sakelar <code>UsageStatistics:UseBatchEndpoint</code> dimatikan, halaman memakai endpoint lama untuk perangkat tersebut.</li>
             </ol>
 
             <h6>C. Penanganan WBP/LWBP, Anggaran, dan Biaya</h6>

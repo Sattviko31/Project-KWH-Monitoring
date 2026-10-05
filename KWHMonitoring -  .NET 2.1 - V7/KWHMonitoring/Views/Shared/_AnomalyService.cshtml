@@ -35,7 +35,9 @@
         let anomalyTimerInterval = 0;    // Track current interval value (ms) - setInterval returns primitive, can't hold properties
         let settingsReloadTimer = null;  // Timer untuk reload settings secara berkala
         let anomalyChecksInFlight = {};  // Hindari pemrosesan bersamaan untuk device yang sama
+        let silenceChecksInFlight = {};  // Satu pemeriksaan keterlambatan telemetry per device
         let lastProcessedSampleByDevice = {}; // Satu sampel hanya boleh dihitung sekali
+        let lastConfirmationSampleTimeByDevice = {}; // Track gaps between distinct telemetry samples
 
         // Konfirmasi anomali - AKAN DI-LOAD DARI DATABASE
         let anomalyConfirmation = {
@@ -94,6 +96,12 @@
                 });
             }
             return null;
+        }
+
+        function formatServerLocalTimestamp(date) {
+            function pad(value, width) { return String(value).padStart(width || 2, '0'); }
+            return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T'
+                + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) + '.' + pad(date.getMilliseconds(), 3);
         }
 
         const CHART_SNAPSHOT_SEND_INTERVAL = 1; // Send each sampled point so open detail charts stay current
@@ -175,6 +183,17 @@
 
         // Debounce timer untuk save anomaly state ke database
         let anomalyStateSaveTimer = null;
+        let anomalyStateScopeId;
+        try {
+            anomalyStateScopeId = sessionStorage.getItem('kwhAnomalyStateScopeId');
+            if (!/^[0-9a-f-]{36}$/i.test(anomalyStateScopeId || '')) {
+                anomalyStateScopeId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() :
+                    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+                sessionStorage.setItem('kwhAnomalyStateScopeId', anomalyStateScopeId);
+            }
+        } catch (e) {
+            anomalyStateScopeId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+        }
 
         // ============================================
         // PERSIST ANOMALY STATE KE DATABASE
@@ -184,7 +203,7 @@
 
         function loadAnomalyState() {
             return $.ajax({
-                url: '/api/Api/get-anomaly-state',
+                url: '/api/Api/get-anomaly-state?scopeId=' + encodeURIComponent(anomalyStateScopeId),
                 method: 'GET',
                 dataType: 'json',
                 timeout: 5000,
@@ -253,7 +272,8 @@
                     contentType: 'application/json',
                     data: JSON.stringify({
                         confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
-                        cooldownState: JSON.stringify(anomalyCooldownState)
+                        cooldownState: JSON.stringify(anomalyCooldownState),
+                        scopeId: anomalyStateScopeId
                     }),
                     success: function() {
                         @* console.log('Anomaly state saved to DB'); *@
@@ -282,7 +302,8 @@
                 contentType: 'application/json',
                 data: JSON.stringify({
                     confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
-                    cooldownState: JSON.stringify(anomalyCooldownState)
+                    cooldownState: JSON.stringify(anomalyCooldownState),
+                    scopeId: anomalyStateScopeId
                 }),
                 success: function() {
                     @* console.log('ðŸ’¾ Anomaly state saved to DB (immediate)'); *@
@@ -302,7 +323,6 @@
         // Ini memungkinkan alert baru dikirim lagi untuk device yang sama
         function resetServerAnomalyAlert(deviceKey) {
             // Tamu (belum login): lewati â€” endpoint reset-anomaly-alert membutuhkan role Operator/Admin.
-            if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             $.ajax({
                 url: '/api/Api/reset-anomaly-alert',
                 method: 'POST',
@@ -509,7 +529,10 @@
 
         function isDowntimeForDevice(deviceKey) {
             var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || { downtimeEnabled: false };
-            if (!ds.downtimeEnabled) return false;
+            if (!ds.downtimeEnabled) {
+                var category = deviceCategoryMap[deviceKey];
+                return categoryDowntimeCache[category] === true;
+            }
 
             var startParts = (ds.downtimeStart || '22:00:00').toString().split(':');
             var endParts = (ds.downtimeEnd || '06:00:00').toString().split(':');
@@ -662,6 +685,79 @@
             });
         }
 
+        function checkDeviceSilence(deviceKey) {
+            if (silenceChecksInFlight[deviceKey]) return;
+            silenceChecksInFlight[deviceKey] = true;
+
+            $.ajax({
+                url: '/api/Api/anomaly-device-health/' + encodeURIComponent(deviceKey),
+                method: 'GET',
+                dataType: 'json',
+                timeout: 10000
+            }).done(function(health) {
+                if (!health || !health.success || !health.hasTelemetry) {
+                    if (health && health.success && !health.hasTelemetry) {
+                        window.dispatchEvent(new CustomEvent('deviceConnectivityChanged', {
+                            detail: { deviceKey: deviceKey, online: false }
+                        }));
+                    }
+                    delete silenceChecksInFlight[deviceKey];
+                    return;
+                }
+
+                window.dispatchEvent(new CustomEvent('deviceConnectivityChanged', {
+                    detail: { deviceKey: deviceKey, online: !health.isSilent }
+                }));
+
+                var localState = anomalyCooldownState[deviceKey];
+                if (!health.isSilent) {
+                    if (localState && localState.type === 'DEVICE_OFFLINE') {
+                        anomalyCooldownState[deviceKey] = null;
+                        notifyCooldownChanged(deviceKey, false, 'DEVICE_OFFLINE');
+                        saveAnomalyStateImmediate();
+                        resetServerAnomalyAlert(deviceKey);
+                    }
+                    delete silenceChecksInFlight[deviceKey];
+                    return;
+                }
+
+                if (localState && localState.type === 'DEVICE_OFFLINE' && localState.waitingForNormal) {
+                    delete silenceChecksInFlight[deviceKey];
+                    return;
+                }
+
+                $.ajax({
+                    url: '/api/Api/log-anomaly',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        deviceKey: deviceKey,
+                        deviceId: deviceKey,
+                        anomalyType: 'DEVICE_OFFLINE',
+                        powerValue: health.lastPowerValue || 0,
+                        thresholdValue: 0,
+                        deviation: 0,
+                        emaValue: null,
+                        thresholdMode: 'telemetry-silence',
+                        sampleTime: health.sampleTime
+                    })
+                }).done(function(response) {
+                    if (!response || !response.success) return;
+                    anomalyCooldownState[deviceKey] = {
+                        type: 'DEVICE_OFFLINE',
+                        loggedAt: Date.now(),
+                        waitingForNormal: true
+                    };
+                    notifyCooldownChanged(deviceKey, true, 'DEVICE_OFFLINE');
+                    saveAnomalyStateImmediate();
+                }).always(function() {
+                    delete silenceChecksInFlight[deviceKey];
+                });
+            }).fail(function() {
+                delete silenceChecksInFlight[deviceKey];
+            });
+        }
+
         // Fungsi helper untuk melakukan pengecekan anomali setelah EMA/baseline didapat
         function processAnomalyCheck(deviceKey, powerData, ema, baselineValue, timestamps) {
             var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
@@ -690,8 +786,8 @@
             const upper = thresholds.upper[lastIndex];  // â† Upper dari EMA (sama dengan chart!)
             const lower = thresholds.lower[lastIndex];  // â† Lower dari EMA (sama dengan chart!)
 
-            if (currentPower === null || currentPower === undefined) return;
-            if (upper === undefined || lower === undefined) return;
+            if (!Number.isFinite(Number(currentPower)) || !Number.isFinite(Number(emaValue))) return;
+            if (!Number.isFinite(Number(upper)) || !Number.isFinite(Number(lower)) || emaValue <= 0) return;
 
             // ============================================
             // CHART SNAPSHOT: Collect AFTER data if buffer active
@@ -766,27 +862,37 @@
                 if (currentPower > emaValue) {
                     anomalyType = 'OVERLOAD';
                     thresholdValue = emaValue;
-                    deviation = ((currentPower - emaValue ) / emaValue * 100);
+                    deviation = ((currentPower - emaValue) / emaValue * 100);
                     @* console.log(`DOWNTIME OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > EMA ${emaValue.toFixed(1)}W`); *@
                 }   
                 // DROP tidak dideteksi saat downtime karena lower threshold disembunyikan
             } else {
                 // NORMAL OPERATION LOGIC
                 // OVERLOAD: Power > Upper Threshold (dari EMA, sama dengan chart!)
-                if (currentPower > upper) {
+                if (currentPower > upper && upper > 0) {
                     anomalyType = 'OVERLOAD';
                     thresholdValue = upper;
                     deviation = ((currentPower - upper) / upper * 100);
                     @* console.log(`âš¡ NORMAL OVERLOAD: ${deviceKey} - Power ${currentPower.toFixed(1)}W > Upper ${upper.toFixed(1)}W`); *@
                 }
                 // DROP: Power < Lower Threshold (dari EMA, sama dengan chart!)
-                else if (currentPower < lower) {
+                else if (currentPower < lower && lower > 0) {
                     anomalyType = 'DROP';
                     thresholdValue = lower;
                     deviation = ((lower - currentPower) / lower * 100);
                     @* console.log(`âš¡ NORMAL DROP: ${deviceKey} - Power ${currentPower.toFixed(1)}W < Lower ${lower.toFixed(1)}W`); *@
                 }
             }
+
+            var sampleTimestamp = timestamps && timestamps[lastIndex] ? new Date(timestamps[lastIndex]).getTime() : NaN;
+            if (!Number.isFinite(sampleTimestamp)) return;
+            var previousSampleTimestamp = lastConfirmationSampleTimeByDevice[deviceKey];
+            var allowedGapMs = Math.max(120000, (anomalyServiceConfig.checkInterval || 30) * 3000);
+            if (!previousSampleTimestamp || sampleTimestamp - previousSampleTimestamp > allowedGapMs) {
+                anomalyConfirmation.counts[deviceKey + '_OVERLOAD'] = 0;
+                anomalyConfirmation.counts[deviceKey + '_DROP'] = 0;
+            }
+            lastConfirmationSampleTimeByDevice[deviceKey] = sampleTimestamp;
 
             if (!anomalyType) {
                 // Tidak ada anomali - RESET semua counter untuk device ini
@@ -934,20 +1040,6 @@
 
                 /* console.log('ðŸ“Š Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey) */;
 
-                // Tamu (belum login): jangan POST ke log-anomaly (butuh role Operator/Admin)
-                // agar tidak memicu respons 401 -> redirect ke halaman Login.
-                // State anomali & notifikasi UI tetap diproses secara lokal di memori.
-                if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
-                    anomalyCooldownState[deviceKey] = {
-                        type: anomalyType,
-                        loggedAt: Date.now(),
-                        waitingForNormal: true
-                    };
-                    notifyCooldownChanged(deviceKey, true, anomalyType);
-                    anomalyConfirmation.counts[confirmationKey] = 0;
-                    return;
-                }
-
                 $.ajax({
                     url: '/api/Api/log-anomaly',
                     method: 'POST',
@@ -961,6 +1053,7 @@
                         deviation: Math.round(deviation * 10) / 10,
                         emaValue: emaValue,
                         thresholdMode: anomalyServiceConfig. mode,
+                        sampleTime: formatServerLocalTimestamp(new Date(sampleTimestamp)),
                         chartSnapshot: chartSnapshotPayload
                     }),
                     success: function(response) {
@@ -969,7 +1062,7 @@
                         // ============================================
                         // CHART SNAPSHOT: Initialize AFTER buffer
                         // ============================================
-                        if (response.success && response.logId) {
+                        if (response.success && response.logId && IS_USER_AUTHENTICATED) {
                             anomalyChartBuffers[deviceKey] = {
                                 logId: response.logId,
                                 beforeData: beforeData,
@@ -1028,6 +1121,7 @@
                     if (!panels || !Array.isArray(panels)) return;
                     const deviceKeys = [...new Set(panels.map(p => p.deviceKey))];
                     deviceKeys.forEach(function(deviceKey) {
+                        checkDeviceSilence(deviceKey);
                         checkDeviceAnomaly( deviceKey);
                     });
                 },
@@ -1078,7 +1172,8 @@
             try {
                 var payload = JSON.stringify({
                     confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
-                    cooldownState: JSON.stringify(anomalyCooldownState)
+                    cooldownState: JSON.stringify(anomalyCooldownState),
+                    scopeId: anomalyStateScopeId
                 });
                 var blob = new Blob([payload], { type: 'application/json' });
                 navigator.sendBeacon('/api/Api/save-anomaly-state', blob);

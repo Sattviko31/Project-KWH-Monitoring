@@ -36,7 +36,7 @@
                 }
             </span>
             <span class="ms-2" id="detailCategoryBadge" style="font-size: 1.1rem;"></span>
-            <span class="ms-2"><i class="fas fa-circle text-success" style="font-size:0.5rem"></i> <span id="statusText">Online</span></span>
+            <span class="ms-2"><i id="detailOnlineIndicator" class="fas fa-circle text-secondary" style="font-size:0.5rem"></i> <span id="statusText">Memeriksa...</span></span>
         </div>
     </div>
     <div class="actions">
@@ -110,7 +110,7 @@
         <!-- TAB 1: MONITORING -->
         <div class="tab-pane fade in active" id="tabMonitoring" role="tabpanel">
             <div class="card shadow-sm mb-3 mb-md-4">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2 py-md-3">
+                <div id="detailMainCardHeader" class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2 py-md-3">
                     <h5 class="mb-0">
                         <i class="fas fa-plug"></i> <span id="panelGroupName">@Model.GroupName</span>
                     </h5>
@@ -3048,8 +3048,32 @@
         // ============================================
         // UPDATE PANEL MONITORING
         // ============================================
+        function setDetailConnectivityStatus(isOnline) {
+            $('#statusText').text(isOnline ? 'Online' : 'Offline');
+            $('#detailOnlineIndicator').removeClass('text-success text-secondary').addClass(isOnline ? 'text-success' : 'text-secondary');
+            var $header = $('#detailMainCardHeader');
+            $header.removeClass('bg-dark bg-secondary text-white');
+            $header.addClass(isOnline ? 'bg-dark text-white' : 'bg-secondary text-white');
+        }
+
+        function checkDetailDeviceConnectivity() {
+            var now = Date.now();
+            if (window._detailHealthCheckAt && now - window._detailHealthCheckAt < 10000) return;
+            window._detailHealthCheckAt = now;
+            $.ajax({
+                url: '/api/Api/anomaly-device-health/' + encodeURIComponent(deviceKey),
+                method: 'GET',
+                dataType: 'json',
+                timeout: 5000
+            }).done(function(health) {
+                if (!health || !health.success) return;
+                setDetailConnectivityStatus(health.hasTelemetry === true && health.isSilent !== true);
+            });
+        }
+
         function updatePanelMonitoring() {
             /* console.log('Updatin g panel monitoring...') */;
+            checkDetailDeviceConnectivity();
 
             $.ajax({
                 url: '/api/Api/panels',
@@ -3157,12 +3181,10 @@
                     $('#loadGauge').css('width', loadPercent + '%').text(maxCap > 0 ? loadPercent.toFixed(0) + '%' : '-');
                     $('#loadGauge').removeClass('bg-info bg-warning bg-danger bg-secondary').addClass(loadColor);
 
-                    $('#statusText').text('Online');
                     /* console.log('Panel monitoring updated') */;
                 },
                 error: function(xhr, status, error) {
                     /* console.error('Error updating monitoring:', error) */;
-                    $('#statusText').text('Offline');
                 }
             });
         }
@@ -3591,7 +3613,7 @@
                     if (e.rowType !== 'data') return;
                     var t = e.data.anomalyType;
                     if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
-                    else if (t === 'DROP' || t === 'DEVICE_DROP') e.rowElement.css('border-left', '3px solid #ffc107');
+                    else if (t === 'DROP' || t === 'DEVICE_OFFLINE' || t === 'DEVICE_DROP') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
 
@@ -3645,14 +3667,16 @@
                             dataSource: [
                                 { text: 'OVERLOAD', value: 'OVERLOAD' },
                                 { text: 'DEVICE DROP', value: 'DROP' },
-                                { text: 'DEVICE DROP', value: 'DEVICE_DROP' }
+                                { text: 'DEVICE OFFLINE', value: 'DEVICE_OFFLINE' },
+                                { text: 'DEVICE OFFLINE (legacy)', value: 'DEVICE_DROP' }
                             ]
                         },
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls, icon, text;
                             if (v === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD'; }
-                            else if (v === 'DROP' || v === 'DEVICE_DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else if (v === 'DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else if (v === 'DEVICE_OFFLINE' || v === 'DEVICE_DROP') { cls = 'bg-secondary text-white'; icon = 'fa-plug'; text = 'DEVICE OFFLINE'; }
                             else { cls = 'bg-info'; icon = 'fa-question'; text = v; }
                             $('<span>').addClass('badge ' + cls).html('<i class="fas ' + icon + '"></i> ' + text).appendTo(container);
                         }
@@ -3736,7 +3760,7 @@
                             var v = options.value || 0;
                             var data = options.row.data;
                             var isResolved = data.isResolved;
-                            if (data.anomalyType !== 'DROP' && data.anomalyType !== 'DEVICE_DROP') { $('<span>').text('-').appendTo(container); return; }
+                            if (data.anomalyType !== 'DROP' && data.anomalyType !== 'DEVICE_OFFLINE' && data.anomalyType !== 'DEVICE_DROP') { $('<span>').text('-').appendTo(container); return; }
                             var cls = 'text-danger fw-bold';
                             if (!isResolved) cls += ' fst-italic';
                             $('<span>').addClass(cls).text('Rp ' + formatNumber(v) + (!isResolved ? ' *' : '')).appendTo(container);
@@ -3933,8 +3957,6 @@
                     }, 60000);
                 });
             });
-
-            $('#statusText').text('Online') ;
 
             // Load usage statistics  when tab is shown
             $('#usage-tab').on('shown.bs.tab', function() {

@@ -1297,7 +1297,7 @@
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    @* console.log('[LOAD-NOTIF] API returned:', data);
+                    @* console.log('[LOAD-NOTIF] API returned:', data); *@
                     $('#smtpServer').val(data.smtpServer || 'smtp.gmail.com');
                     $('#smtpPort').val(data.smtpPort || 587);
                     $('#senderEmail').val(data.senderEmail || '');
@@ -1313,9 +1313,9 @@
                     $('#dailyReportTime').val(data.dailyReportTime || '08:00');
                     $('#monthlyReportDay').val(data.monthlyReportDay || 1);
                     $('#monthlyReportTime').val(data.monthlyReportTime || '08:00');
-                }, *@
+                },
                 error: function() {
-                    @* console.log('Using default notification settings'); *@
+                    console.log('Using default notification settings');
                 }
             });
 

@@ -1,5 +1,7 @@
-﻿@{
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
     ViewData["Title"] = "Usage Statistics";
+    var usageBatchEndpointEnabled = !string.Equals(Configuration["UsageStatistics:UseBatchEndpoint"], "false", StringComparison.OrdinalIgnoreCase);
 }
 
 @await Html.PartialAsync("_DashboardHeader")
@@ -438,6 +440,12 @@
         let lastFinancialRefreshTime = 0;
         let usageLoadSequence = 0;
         let usageDataRequest = null;
+        let usageFallbackRequests = [];
+        const usageStatisticsBatchEnabled = @Html.Raw(usageBatchEndpointEnabled.ToString().ToLowerInvariant());
+        let usageCycleInProgress = false;
+        let usageRefreshPending = false;
+        let lastSuccessfulUsageUpdate = '';
+        let lastSuccessfulFinancialUpdate = '';
         var FINANCIAL_REFRESH_INTERVAL = 60000; // Aggregate financial data at most every 60s
         let usageFilterDebounce = null;
         let lastEnergyData = null;   // For daily report
@@ -543,7 +551,7 @@
                     $(this).addClass('active');
                     updateDeviceFilterLabel();
                     lastFinancialRefreshTime = 0;
-                    loadData();
+                    loadData(true);
                 });
             $list.append($allChip);
 
@@ -567,7 +575,7 @@
                         $(this).addClass('active');
                         updateDeviceFilterLabel();
                         lastFinancialRefreshTime = 0;
-                        loadData();
+                        loadData(true);
                     });
 
                 if (!visibleByCategory) {
@@ -625,7 +633,7 @@
                         activeUsageChipDeviceKey = null;
                         lastFinancialRefreshTime = 0;
                         updateDeviceFilterLabel();
-                        loadData();
+                        loadData(true);
                     }
                 }
                 renderUsageChips();
@@ -640,7 +648,7 @@
                 $('#usageChipList').find('.panel-chip').show();
                 updateDeviceFilterLabel();
                 lastFinancialRefreshTime = 0;
-                loadData();
+                loadData(true);
             });
         }
 
@@ -651,6 +659,7 @@
                 dataType: 'json',
                 timeout: 10000,
                 success: function(panels) {
+                    var panelListWasEmpty = usagePanelList.length === 0;
                     usagePanelList = panels.map(function(p) {
                         return {
                             deviceKey: p.deviceKey,
@@ -661,6 +670,10 @@
                     });
                     // Load device categories to ensure accurate filtering
                     loadUsageDeviceCategories();
+                    if (panelListWasEmpty && activeUsageChipDeviceKey === null) {
+                        if (usageCycleInProgress) usageRefreshPending = true;
+                        else if (lastEnergyData) loadData(false);
+                    }
                 },
                 error: function() {
                     @* console.error('Error fetching panel list for usage filter'); *@
@@ -742,12 +755,12 @@
 
             updateDateInput();
             updateDayName();
-            loadData();
+            loadData(true);
             startAutoRefresh();
 
             $('#btnRefresh').click(function() {
                 lastFinancialRefreshTime = 0;
-                loadData();
+                loadData(true);
             });
 
             $('#btnPrevDay').click(function() {
@@ -755,7 +768,7 @@
                 updateDateInput();
                 updateDayName();
                 lastFinancialRefreshTime = 0;
-                loadData();
+                loadData(true);
             });
 
             $('#btnNextDay').click(function() {
@@ -763,7 +776,7 @@
                 updateDateInput();
                 updateDayName();
                 lastFinancialRefreshTime = 0;
-                loadData();
+                loadData(true);
             });
 
             $('#btnToday').click(function() {
@@ -771,7 +784,7 @@
                 updateDateInput();
                 updateDayName();
                 lastFinancialRefreshTime = 0;
-                loadData();
+                loadData(true);
             });
 
             $('#filterDate').change(function() {
@@ -781,7 +794,7 @@
                     selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
                     updateDayName();
                     lastFinancialRefreshTime = 0;
-                    loadData();
+                    loadData(true);
                 }
             });
         });
@@ -814,14 +827,13 @@
             }
 
             var refreshUsage = function() {
-                loadData();
-                $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
+                loadData(false);
             };
 
             // Utama: muat ulang statistik begitu ada data KWH / agregasi energi baru.
             if (window.RealtimeRefresh) {
                 refreshWatcherId = window.RealtimeRefresh.watch(
-                    ['kwh', 'energy'],
+                    ['kwh', 'energy', 'anomaly'],
                     refreshUsage,
                     { throttleMs: 5000 }
                 );
@@ -832,69 +844,113 @@
             refreshTimer = setInterval(refreshUsage, 10000);
         }
 
-        function loadData() {
-            // Jangan mulai request utama baru selama request sebelumnya masih berjalan.
-            // Endpoint agregat dapat memerlukan waktu lebih dari interval auto-refresh.
-            if (usageDataRequest && usageDataRequest.readyState !== 4) return;
-
+        function loadData(forceRestart) {
+            forceRestart = forceRestart !== false;
+            // Coalesce realtime events while the base response and financial requests are active.
+            // Explicit filter changes take priority and cancel work for the previous filter.
+            if (!forceRestart && usageCycleInProgress) {
+                usageRefreshPending = true;
+                return;
+            }
             var requestSequence = ++usageLoadSequence;
-            var startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-            var endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59);
+            if (forceRestart) {
+                usageRefreshPending = false;
+                if (usageDataRequest && usageDataRequest.readyState !== 4) usageDataRequest.abort();
+                var requestsToAbort = usageFallbackRequests.slice();
+                usageFallbackRequests = [];
+                requestsToAbort.forEach(function(request) {
+                    if (request && request.readyState !== 4) request.abort();
+                });
+            }
+            usageCycleInProgress = true;
+            $('#statusText').text('Memperbarui...');
+            $('#lastUpdate').text('Memperbarui data...');
             var selectedDateText = selectedDate.getFullYear() + '-' + String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' + String(selectedDate.getDate()).padStart(2, '0');
 
-            var baseUrl = '/api/Api/usage-statistics';
-            if (activeUsageChipDeviceKey) {
-                baseUrl += '/' + encodeURIComponent(activeUsageChipDeviceKey);
+            var isAllDevicesRequest = !activeUsageChipDeviceKey;
+            var useBatchEndpoint = usageStatisticsBatchEnabled;
+            var baseUrl = useBatchEndpoint
+                ? '/api/Api/usage-statistics/batch'
+                : (isAllDevicesRequest
+                    ? '/api/Api/usage-statistics'
+                    : '/api/Api/usage-statistics/' + encodeURIComponent(activeUsageChipDeviceKey));
+            var requestData = { startDate: selectedDateText, endDate: selectedDateText };
+            if (useBatchEndpoint) {
+                if (isAllDevicesRequest) requestData.deviceKeys = usagePanelList.map(function(panel) { return panel.deviceKey; });
+                else requestData.deviceKey = activeUsageChipDeviceKey;
             }
 
             var request = $.ajax({
                 url: baseUrl,
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
+                data: JSON.stringify(requestData),
                 dataType: 'json',
                 timeout: 60000,
                 success: function(data) {
                     if (requestSequence !== usageLoadSequence) return;
+                    if (useBatchEndpoint) {
+                        if (!data || data.success === false || !data.summary) {
+                            if (isAllDevicesRequest) loadLegacyUsageSummary(requestSequence, selectedDateText);
+                            else loadLegacySingleDeviceUsage(requestSequence, selectedDateText, activeUsageChipDeviceKey);
+                            return;
+                        }
+                        updateUI(data.summary);
+                        var batchAggregateAt = data.latestAggregateAt
+                            ? new Date(data.latestAggregateAt).toLocaleString('id-ID')
+                            : null;
+                        lastSuccessfulUsageUpdate = batchAggregateAt || '';
+                        $('#lastUpdate').text(batchAggregateAt ? 'Agregat terakhir ' + batchAggregateAt : 'Belum ada waktu agregasi');
+                        $('#statusText').text('Online');
+                        var batchDeviceResults = Array.isArray(data.devices)
+                            ? data.devices.filter(function(device) { return device && device.success !== false; })
+                            : [];
+                        if (batchDeviceResults.length > 0) {
+                            var financialData = isAllDevicesRequest
+                                ? aggregateFinancialData(batchDeviceResults)
+                                : buildSingleDeviceFinancialData(batchDeviceResults[0]);
+                            updateFinancialUI(financialData, requestSequence, batchAggregateAt || 'Waktu agregasi tidak tersedia');
+                            if (batchAggregateAt) {
+                                lastSuccessfulFinancialUpdate = batchAggregateAt;
+                                $('#lastUpdate').text('Data agregat terakhir ' + batchAggregateAt);
+                            }
+                            var expectedDeviceCount = isAllDevicesRequest ? (usagePanelList || []).length : 1;
+                            if (batchDeviceResults.length < expectedDeviceCount) {
+                                $('#lastUpdate').text('Analisis finansial parsial (' + batchDeviceResults.length + '/' + expectedDeviceCount + ' perangkat)');
+                            } else if (Array.isArray(data.noAggregateDeviceKeys) && data.noAggregateDeviceKeys.length > 0) {
+                                $('#lastUpdate').text((batchAggregateAt ? 'Data agregat terakhir ' + batchAggregateAt : 'Waktu agregasi tidak tersedia') +
+                                    ' · belum ada agregat untuk ' + data.noAggregateDeviceKeys.length + ' perangkat');
+                            }
+                        } else {
+                            showUsageCostUnavailable();
+                            $('#statusText').text('Grafik dimuat; analisis finansial perangkat gagal dihitung');
+                        }
+                        finishUsageCycle(requestSequence);
+                        return;
+                    }
+                    if (isAllDevicesRequest) {
+                        if (!data || data.success === false || data.totalToday == null || !Array.isArray(data.hourlyData)) {
+                            showUsageCostUnavailable();
+                            $('#statusText').text('Pembaruan gagal');
+                            finishUsageCycle(requestSequence);
+                            return;
+                        }
+                        updateUI(data);
+                        lastSuccessfulUsageUpdate = data.latestAggregateAt
+                            ? new Date(data.latestAggregateAt).toLocaleString('id-ID')
+                            : (data.serverTime ? new Date(data.serverTime).toLocaleString('id-ID') : new Date().toLocaleString('id-ID'));
+                        $('#statusText').text('Grafik diperbarui; analisis finansial memuat dari perangkat');
+                        $('#lastUpdate').text(data.latestAggregateAt
+                            ? 'Agregat energi mode lama · ' + lastSuccessfulUsageUpdate
+                            : 'Mode endpoint lama · waktu sumber tidak tersedia');
+                        loadLegacyDeviceFinancial(requestSequence, selectedDateText);
+                        return;
+                    }
                     // Save per-device financial data before normalization
+                    var perDeviceDataUpdatedAt = data.dataUpdatedAt;
                     var deviceFinancialData = null;
                     if (activeUsageChipDeviceKey && data.today) {
-                        var devTariff = data.tariffPerKWh || 1500;
-                        if (data.wbpLwbp && data.wbpLwbp.configured && data.wbpLwbp.tariffWBP > 0 && data.wbpLwbp.tariffLWBP > 0) {
-                            var _wbpKwh = data.wbpLwbp.wbpKWh || 0;
-                            var _lwbpKwh = data.wbpLwbp.lwbpKWh || 0;
-                            var _wbpT = data.wbpLwbp.tariffWBP || 0;
-                            var _lwbpT = data.wbpLwbp.tariffLWBP || 0;
-                            var _totalDev = _wbpKwh + _lwbpKwh;
-                            if (_totalDev > 0) {
-                                devTariff = Math.round((_wbpKwh * _wbpT + _lwbpKwh * _lwbpT) / _totalDev);
-                            } else {
-                                devTariff = Math.round((_wbpT + _lwbpT) / 2);
-                            }
-                        }
-                        var devEstCost = (data.budget && data.budget.actualCost) || 0;
-                        if (devEstCost === 0 && data.month) {
-                            devEstCost = Math.round((data.month.total || 0) * devTariff);
-                        }
-                        deviceFinancialData = {
-                            wbpLwbp: data.wbpLwbp || {},
-                            waste: data.waste || {},
-                            budget: data.budget || {},
-                            periodComparison: data.periodComparison || {},
-                            billProjection: data.billProjection || {},
-                            anomalyCostImpact: data.anomalyCostImpact || {},
-                            loadFactorInfo: data.loadFactorInfo || {},
-                            unitEconomics: data.unitEconomics || {},
-                            tariffTypeInfo: {
-                                wbpDeviceCount: (data.wbpLwbp && data.wbpLwbp.configured) ? 1 : 0,
-                                flatDeviceCount: (data.wbpLwbp && !data.wbpLwbp.configured) ? 1 : 0,
-                                flatKWh: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.month && data.month.total) || 0) : 0,
-                                flatCost: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.budget && data.budget.actualCost) || 0) : 0,
-                                totalDeviceCount: 1
-                            },
-                            avgTariffPerKWh: devTariff,
-                            totalEstimatedCost: devEstCost
-                        };
+                        deviceFinancialData = buildSingleDeviceFinancialData(data);
                         // Normalize per-device response to match aggregate format
                         data = {
                             totalToday: data.today.total,
@@ -921,20 +977,30 @@
                         };
                     }
                     updateUI(data);
-                    $('#lastUpdate').text(new Date().toLocaleString('id-ID'));
+                    var perDeviceUpdatedAt = perDeviceDataUpdatedAt ? new Date(perDeviceDataUpdatedAt) : null;
+                    lastSuccessfulUsageUpdate = perDeviceUpdatedAt && !isNaN(perDeviceUpdatedAt.getTime())
+                        ? perDeviceUpdatedAt.toLocaleString('id-ID')
+                        : new Date().toLocaleString('id-ID');
+                    $('#lastUpdate').text(lastSuccessfulUsageUpdate);
                     $('#statusText').text('Online');
 
                     // Update financial analysis — derived from per-device data
                     if (deviceFinancialData) {
                         // Single device selected: use its financial data directly
-                        updateFinancialUI(deviceFinancialData, requestSequence);
+                        updateFinancialUI(deviceFinancialData, requestSequence, lastSuccessfulUsageUpdate);
+                        finishUsageCycle(requestSequence);
                     } else {
-                        // All devices: aggregate financial data from each device dynamically
-                        fetchAndAggregateDeviceFinancialData(startDate, endDate, requestSequence);
+                        showUsageCostUnavailable();
+                        finishUsageCycle(requestSequence);
                     }
                 },
                 error: function(xhr, textStatus, errorThrown) {
                     if (requestSequence !== usageLoadSequence || textStatus === 'abort') return;
+                    if (useBatchEndpoint && textStatus !== 'timeout') {
+                        if (isAllDevicesRequest) loadLegacyUsageSummary(requestSequence, selectedDateText);
+                        else loadLegacySingleDeviceUsage(requestSequence, selectedDateText, activeUsageChipDeviceKey);
+                        return;
+                    }
                     @* console.error('Usage statistics request failed:', {
                         httpStatus: xhr.status,
                         status: textStatus,
@@ -942,12 +1008,242 @@
                         response: xhr.responseText || null
                     }); *@
                     $('#statusText').text('Offline');
+                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    finishUsageCycle(requestSequence);
                 },
                 complete: function() {
                     if (usageDataRequest === request) usageDataRequest = null;
                 }
             });
             usageDataRequest = request;
+        }
+
+        function finishUsageCycle(requestSequence) {
+            if (requestSequence !== usageLoadSequence) return;
+            usageCycleInProgress = false;
+            if (usageRefreshPending) {
+                usageRefreshPending = false;
+                loadData(false);
+            }
+        }
+
+        function loadLegacySingleDeviceUsage(requestSequence, selectedDateText, deviceKey) {
+            var fallbackRequest = $.ajax({
+                url: '/api/Api/usage-statistics/' + encodeURIComponent(deviceKey),
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
+                dataType: 'json',
+                timeout: 15000,
+                success: function(deviceData) {
+                    if (requestSequence !== usageLoadSequence) return;
+                    if (!deviceData || deviceData.success === false || !deviceData.today || !deviceData.month || !deviceData.year) {
+                        showUsageCostUnavailable();
+                        $('#statusText').text('Pembaruan perangkat gagal');
+                        finishUsageCycle(requestSequence);
+                        return;
+                    }
+
+                    var aggregateAt = deviceData.dataUpdatedAt
+                        ? new Date(deviceData.dataUpdatedAt).toLocaleString('id-ID')
+                        : null;
+                    var summary = {
+                        totalToday: deviceData.today.total,
+                        avgPerHour: deviceData.today.avgPerHour,
+                        peakHour: deviceData.today.peakHour,
+                        peakHourTime: deviceData.today.peakHourTime,
+                        totalThisMonth: deviceData.month.total,
+                        avgPerDay: deviceData.month.avgPerDay,
+                        peakDay: deviceData.month.peakDay,
+                        peakDayDate: deviceData.month.peakDayDate,
+                        totalThisYear: deviceData.year.total,
+                        avgPerMonth: deviceData.year.avgPerMonth,
+                        peakMonth: deviceData.year.peakMonth,
+                        peakMonthName: deviceData.year.peakMonthName,
+                        hourlyData: deviceData.today.hourlyData || [],
+                        dailyData: deviceData.month.dailyData || [],
+                        monthlyData: deviceData.year.monthlyData || [],
+                        realtimeKWh: deviceData.realtimeKWh,
+                        currentHourLabel: deviceData.currentHourLabel,
+                        secondsToNextHour: deviceData.secondsToNextHour,
+                        isToday: deviceData.isToday,
+                        serverDate: deviceData.serverDate,
+                        serverHour: deviceData.serverHour,
+                        serverDay: deviceData.serverDay,
+                        serverMonth: deviceData.serverMonth
+                    };
+                    updateUI(summary);
+                    lastSuccessfulUsageUpdate = aggregateAt || '';
+                    updateFinancialUI(
+                        buildSingleDeviceFinancialData(deviceData),
+                        requestSequence,
+                        aggregateAt || 'Waktu agregasi tidak tersedia'
+                    );
+                    $('#statusText').text('Mode pemulihan perangkat aktif');
+                    $('#lastUpdate').text(aggregateAt
+                        ? 'Agregat perangkat ' + aggregateAt
+                        : 'Data perangkat tampil; waktu agregasi tidak tersedia');
+                    finishUsageCycle(requestSequence);
+                },
+                error: function(xhr, textStatus) {
+                    if (requestSequence !== usageLoadSequence || textStatus === 'abort') return;
+                    showUsageCostUnavailable();
+                    $('#statusText').text('Pembaruan perangkat gagal');
+                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    finishUsageCycle(requestSequence);
+                },
+                complete: function() {
+                    if (usageDataRequest === fallbackRequest) usageDataRequest = null;
+                }
+            });
+            usageDataRequest = fallbackRequest;
+        }
+
+        function buildSingleDeviceFinancialData(data) {
+            var devTariff = data.tariffPerKWh || 1500;
+            if (data.wbpLwbp && data.wbpLwbp.configured && data.wbpLwbp.tariffWBP > 0 && data.wbpLwbp.tariffLWBP > 0) {
+                var wbpKwh = data.wbpLwbp.wbpKWh || 0;
+                var lwbpKwh = data.wbpLwbp.lwbpKWh || 0;
+                var wbpTariff = data.wbpLwbp.tariffWBP || 0;
+                var lwbpTariff = data.wbpLwbp.tariffLWBP || 0;
+                var totalKwh = wbpKwh + lwbpKwh;
+                devTariff = totalKwh > 0
+                    ? Math.round((wbpKwh * wbpTariff + lwbpKwh * lwbpTariff) / totalKwh)
+                    : Math.round((wbpTariff + lwbpTariff) / 2);
+            }
+            var devEstimatedCost = (data.budget && data.budget.actualCost) || 0;
+            if (devEstimatedCost === 0 && data.month) {
+                devEstimatedCost = Math.round((data.month.total || 0) * devTariff);
+            }
+            return {
+                wbpLwbp: data.wbpLwbp || {},
+                waste: data.waste || {},
+                budget: data.budget || {},
+                periodComparison: data.periodComparison || {},
+                billProjection: data.billProjection || {},
+                anomalyCostImpact: data.anomalyCostImpact || {},
+                loadFactorInfo: data.loadFactorInfo || {},
+                unitEconomics: data.unitEconomics || {},
+                tariffTypeInfo: {
+                    wbpDeviceCount: (data.wbpLwbp && data.wbpLwbp.configured) ? 1 : 0,
+                    flatDeviceCount: (data.wbpLwbp && !data.wbpLwbp.configured) ? 1 : 0,
+                    flatKWh: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.month && data.month.total) || 0) : 0,
+                    flatCost: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.budget && data.budget.actualCost) || 0) : 0,
+                    totalDeviceCount: 1
+                },
+                avgTariffPerKWh: devTariff,
+                totalEstimatedCost: devEstimatedCost
+            };
+        }
+
+        function loadLegacyUsageSummary(requestSequence, selectedDateText) {
+            var fallbackRequest = $.ajax({
+                url: '/api/Api/usage-statistics',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
+                dataType: 'json',
+                timeout: 60000,
+                success: function(data) {
+                    if (requestSequence !== usageLoadSequence) return;
+                    updateUI(data);
+                    lastSuccessfulUsageUpdate = data.latestAggregateAt
+                        ? new Date(data.latestAggregateAt).toLocaleString('id-ID')
+                        : (data.serverTime ? new Date(data.serverTime).toLocaleString('id-ID') : new Date().toLocaleString('id-ID'));
+                    $('#statusText').text('Grafik diperbarui; memulihkan analisis finansial');
+                    $('#lastUpdate').text(data.latestAggregateAt
+                        ? 'Agregat energi mode pemulihan · ' + lastSuccessfulUsageUpdate
+                        : 'Ringkasan energi mode pemulihan · waktu sumber tidak tersedia');
+                    loadLegacyDeviceFinancial(requestSequence, selectedDateText);
+                },
+                error: function(xhr, textStatus) {
+                    if (requestSequence !== usageLoadSequence || textStatus === 'abort') return;
+                    $('#statusText').text('Offline');
+                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    showUsageCostUnavailable();
+                    finishUsageCycle(requestSequence);
+                },
+                complete: function() {
+                    if (usageDataRequest === fallbackRequest) usageDataRequest = null;
+                }
+            });
+            usageDataRequest = fallbackRequest;
+        }
+
+        function loadLegacyDeviceFinancial(requestSequence, selectedDateText) {
+            var panels = (usagePanelList || []).slice();
+            if (panels.length === 0) {
+                showUsageCostUnavailable();
+                $('#statusText').text('Grafik diperbarui; perangkat finansial belum tersedia');
+                finishUsageCycle(requestSequence);
+                return;
+            }
+
+            var pendingPanels = panels.slice();
+            var deviceResults = [];
+            var completedCount = 0;
+            var activeCount = 0;
+            var maxConcurrentRequests = 6;
+
+            function finishFallback() {
+                if (requestSequence !== usageLoadSequence) return;
+                if (deviceResults.length > 0) {
+                    var aggregated = aggregateFinancialData(deviceResults);
+                    var sourceTimes = deviceResults.map(function(device) {
+                        var value = device.dataUpdatedAt ? new Date(device.dataUpdatedAt) : null;
+                        return value && !isNaN(value.getTime()) ? value.getTime() : null;
+                    }).filter(function(value) { return value != null; });
+                    var sourceUpdatedAt = sourceTimes.length > 0
+                        ? new Date(Math.min.apply(null, sourceTimes)).toLocaleString('id-ID')
+                        : new Date().toLocaleString('id-ID');
+                    updateFinancialUI(aggregated, requestSequence, sourceUpdatedAt);
+                    lastSuccessfulFinancialUpdate = sourceUpdatedAt;
+                    var hasFailures = deviceResults.length < panels.length;
+                    $('#statusText').text(hasFailures
+                        ? 'Mode pemulihan aktif; analisis finansial parsial'
+                        : 'Mode pemulihan aktif; analisis finansial diperbarui');
+                    $('#lastUpdate').text('Data finansial fallback · ' + sourceUpdatedAt +
+                        (hasFailures ? ' · ' + deviceResults.length + '/' + panels.length + ' perangkat' : ''));
+                } else {
+                    showUsageCostUnavailable();
+                    $('#statusText').text('Grafik diperbarui; analisis finansial gagal dipulihkan');
+                }
+                finishUsageCycle(requestSequence);
+            }
+
+            function pumpFallbackRequests() {
+                if (requestSequence !== usageLoadSequence) return;
+                while (activeCount < maxConcurrentRequests && pendingPanels.length > 0) {
+                    let panel = pendingPanels.shift();
+                    activeCount++;
+                    let deviceRequest;
+                    deviceRequest = $.ajax({
+                        url: '/api/Api/usage-statistics/' + encodeURIComponent(panel.deviceKey),
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
+                        dataType: 'json',
+                        timeout: 15000,
+                        success: function(data) {
+                            if (requestSequence === usageLoadSequence && data && data.success !== false) {
+                                deviceResults.push(data);
+                            }
+                        },
+                        complete: function() {
+                            var requestIndex = usageFallbackRequests.indexOf(deviceRequest);
+                            if (requestIndex >= 0) usageFallbackRequests.splice(requestIndex, 1);
+                            activeCount--;
+                            completedCount++;
+                            if (requestSequence !== usageLoadSequence) return;
+                            if (completedCount === panels.length) finishFallback();
+                            else pumpFallbackRequests();
+                        }
+                    });
+                    usageFallbackRequests.push(deviceRequest);
+                }
+            }
+
+            pumpFallbackRequests();
         }
 
         function updateUI(data) {
@@ -1214,64 +1510,6 @@
             $('#wbpLwbpChart, #budgetChart').hide();
             $('#wbpLwbpFooter, #budgetFooter').hide();
             $('#anomalyCostBody').html('<div class="text-center text-muted py-2" style="font-size:0.8rem"><i class="fas fa-spinner fa-spin"></i> Memuat data perangkat...</div>');
-        }
-
-        function fetchAndAggregateDeviceFinancialData(startDate, endDate, requestSequence) {
-            showFinancialLoading();
-
-            var panels = usagePanelList || [];
-            if (panels.length === 0) {
-                // No devices loaded yet — retry after a short delay
-                setTimeout(function() {
-                    if (requestSequence !== usageLoadSequence) return;
-                    if (usagePanelList.length > 0) {
-                        fetchAndAggregateDeviceFinancialData(startDate, endDate, requestSequence);
-                    } else {
-                        updateFinancialUI({ wbpLwbp: { configured: false }, waste: { configured: false }, budget: { configured: false }, periodComparison: {}, billProjection: {}, anomalyCostImpact: { totalAnomalies: 0, topAnomalies: [] }, loadFactorInfo: { configured: false }, unitEconomics: { configured: false } }, requestSequence);
-                        showUsageCostUnavailable();
-                    }
-                }, 1500);
-                return;
-            }
-
-            var selectedDateText = startDate.getFullYear() + '-' + String(startDate.getMonth() + 1).padStart(2, '0') + '-' + String(startDate.getDate()).padStart(2, '0');
-            var requestBody = JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText });
-            var completed = 0;
-            var deviceResults = [];
-            var totalPanels = panels.length;
-
-            panels.forEach(function(panel) {
-                $.ajax({
-                    url: '/api/Api/usage-statistics/' + encodeURIComponent(panel.deviceKey),
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: requestBody,
-                    dataType: 'json',
-                    timeout: 15000,
-                    success: function(data) {
-                        if (data && data.success !== false) {
-                            deviceResults.push(data);
-                        }
-                    },
-                    error: function() {
-                        // Skip failed devices
-                    },
-                    complete: function() {
-                        completed++;
-                        if (completed === totalPanels) {
-                            if (requestSequence !== usageLoadSequence) return;
-                            // All requests finished — aggregate and update
-                            if (deviceResults.length !== totalPanels) {
-                                updateFinancialUI({ wbpLwbp: { configured: false }, waste: { configured: false }, budget: { configured: false }, periodComparison: {}, billProjection: {}, anomalyCostImpact: { totalAnomalies: 0, topAnomalies: [] }, loadFactorInfo: { configured: false }, unitEconomics: { configured: false } }, requestSequence);
-                                showUsageCostUnavailable();
-                                return;
-                            }
-                            var aggregated = aggregateFinancialData(deviceResults);
-                            updateFinancialUI(aggregated, requestSequence);
-                        }
-                    }
-                });
-            });
         }
 
         function aggregateFinancialData(deviceResults) {
@@ -1547,9 +1785,10 @@
             Chart.register(centerTextPlugin);
         }
 
-        function updateFinancialUI(data, requestSequence) {
+        function updateFinancialUI(data, requestSequence, sourceUpdatedAt) {
             if (requestSequence != null && requestSequence !== usageLoadSequence) return;
             lastFinancialData = data;
+            lastSuccessfulFinancialUpdate = sourceUpdatedAt || new Date().toLocaleString('id-ID');
 
             // Always refresh the card, including zero, so it cannot retain an old period's value.
             var estimatedCost = data.totalEstimatedCost != null
@@ -1569,6 +1808,13 @@
         }
 
         function showUsageCostUnavailable() {
+            if (lastFinancialData) {
+                $('#statusText').text('Data finansial belum diperbarui');
+                $('#lastUpdate').text(lastSuccessfulFinancialUpdate === 'Waktu agregasi tidak tersedia'
+                    ? 'Data finansial sebelumnya · waktu agregasi tidak tersedia'
+                    : 'Analisis finansial terakhir berhasil diperbarui ' + lastSuccessfulFinancialUpdate);
+                return;
+            }
             $('#usageCost').text('Gagal dimuat');
             $('#tariffDisplay').text('—');
         }

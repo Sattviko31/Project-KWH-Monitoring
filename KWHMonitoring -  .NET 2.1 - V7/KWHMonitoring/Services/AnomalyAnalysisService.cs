@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using KWHMonitoring.Models;
 
 namespace KWHMonitoring.Services
@@ -10,7 +11,8 @@ namespace KWHMonitoring.Services
         public AnomalyAnalysisResult Analyze(AnomalyLog log, IEnumerable<AnomalyLog> recentHistory)
         {
             var historyList = recentHistory as IList<AnomalyLog> ?? recentHistory?.ToList() ?? new List<AnomalyLog>();
-            var isDowntime = !string.IsNullOrEmpty(log.Notes) && log.Notes.Contains("downtime period");
+            var isDowntime = !string.IsNullOrEmpty(log.Notes)
+                && log.Notes.IndexOf("downtime period", StringComparison.OrdinalIgnoreCase) >= 0;
             var hasRepeatedPattern = DetectRepeatedPattern(log, historyList);
 
             var severity = AssessSeverity(log, isDowntime, hasRepeatedPattern);
@@ -39,6 +41,9 @@ namespace KWHMonitoring.Services
             if (log.AnomalyType == "DROP" && !isDowntime)
                 return "high";
 
+            if (log.AnomalyType == "DEVICE_OFFLINE" || log.AnomalyType == "DEVICE_DROP")
+                return "high";
+
             if (log.AnomalyType == "OVERLOAD")
             {
                 if (log.Deviation > 50)
@@ -63,10 +68,13 @@ namespace KWHMonitoring.Services
         public string BuildRootCause(AnomalyLog log, bool isDowntime)
         {
             if (isDowntime && log.AnomalyType == "OVERLOAD")
+            {
+                var period = Regex.Match(log.Notes ?? string.Empty, @"\((\d{1,2}):00-(\d{1,2}):00\)");
+                var periodText = period.Success ? period.Value : "periode terjadwal";
                 return string.Format(
-                    "Daya masih terdeteksi selama periode jam mati ({0:00}:00-{1:00}:00). " +
-                    "Kemungkinan relay tidak berfungsi atau beban tetap aktif saat seharusnya mati.",
-                    log.Notes.Contains("22") ? 22 : 0, log.Notes.Contains("6") ? 6 : 0);
+                    "Daya masih terdeteksi selama {0}. Kemungkinan relay tidak berfungsi atau beban tetap aktif saat seharusnya mati.",
+                    periodText);
+            }
 
             switch (log.AnomalyType)
             {
@@ -78,10 +86,13 @@ namespace KWHMonitoring.Services
                             : "Beban daya sedikit melebihi threshold. Peningkatan beban ringan.";
 
                 case "DROP":
-                case "DEVICE_DROP":
                     return isDowntime
                         ? "DROP terjadi saat periode jam mati. Ini adalah kondisi normal karena listrik sengaja dimatikan."
                         : "Daya turun drastis di bawah threshold. Kemungkinan device offline, mati listrik, atau gangguan komunikasi.";
+
+                case "DEVICE_OFFLINE":
+                case "DEVICE_DROP":
+                    return "Tidak ada telemetry baru melewati batas interval normal. Device, catu daya, jaringan, broker MQTT, atau jalur ingest mungkin terputus.";
 
                 default:
                     return "Jenis anomali tidak dikenali. Perlu investigasi manual.";
@@ -103,10 +114,13 @@ namespace KWHMonitoring.Services
                     return "Pantau tren beban beberapa saat. Jika terus meningkat, lakukan audit perangkat.";
 
                 case "DROP":
-                case "DEVICE_DROP":
                     return isDowntime
                         ? "Tidak perlu tindakan. DROP ini terjadi saat periode jam mati dan merupakan kondisi normal."
                         : "Periksa koneksi MQTT, power supply, dan status MCB panel. Verifikasi apakah device benar-benar offline.";
+
+                case "DEVICE_OFFLINE":
+                case "DEVICE_DROP":
+                    return "Periksa daya device, koneksi jaringan dan broker MQTT. Pastikan jalur ingest dan database menerima pesan kembali sebelum menyelesaikan alert.";
 
                 default:
                     return "Lakukan investigasi manual untuk menentukan tindakan yang tepat.";
@@ -128,6 +142,9 @@ namespace KWHMonitoring.Services
 
             if (log.AnomalyType == "DROP" && !isDowntime)
                 parts.Add("Device mungkin tidak terpantau. Data monitoring bisa tidak akurat.");
+
+            if (log.AnomalyType == "DEVICE_OFFLINE" || log.AnomalyType == "DEVICE_DROP")
+                parts.Add("Pembacaan perangkat tidak diperbarui; nilai energi dan status realtime setelah waktu terakhir terlihat tidak dapat dipastikan.");
 
             return string.Join(" ", parts).Trim();
         }

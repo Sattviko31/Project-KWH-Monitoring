@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -214,7 +214,7 @@ namespace KWHMonitoring.Services
         // ============================================
         // REALTIME INSTANT ALERT (styled like other reports)
         // ============================================
-        public async Task SendRealtimeInstantAlertAsync(string deviceKey, string anomalyType, decimal powerValue, decimal thresholdValue, decimal deviation, bool isTest = true)
+        public async Task SendRealtimeInstantAlertAsync(string deviceKey, string anomalyType, decimal powerValue, decimal thresholdValue, decimal deviation, bool isTest = true, string anomalyContext = null)
         {
             EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
@@ -242,15 +242,22 @@ namespace KWHMonitoring.Services
 
             // Anomaly type styling
             var isOverload = anomalyType == "OVERLOAD";
+            var isDeviceOffline = anomalyType == "DEVICE_OFFLINE" || anomalyType == "DEVICE_DROP";
             var alertColor = isOverload ? "#dc3545" : "#ffc107";
             var alertGradient = isOverload
                 ? "linear-gradient(135deg, #dc3545 0%, #c82333 100%)"
                 : "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)";
             var alertIcon = isOverload ? "🔴" : "🟡";
-            var alertLabel = isOverload ? "OVERLOAD" : "DEVICE DROP";
+            var alertLabel = isOverload ? "OVERLOAD" : isDeviceOffline ? "DEVICE OFFLINE" : "DEVICE DROP";
             var severityPct = Math.Abs(deviation);
-            var severityLevel = severityPct > 50 ? "CRITICAL" : severityPct > 20 ? "HIGH" : severityPct > 10 ? "MEDIUM" : "LOW";
-            var severityColor = severityPct > 50 ? "#dc3545" : severityPct > 20 ? "#fd7e14" : severityPct > 10 ? "#ffc107" : "#198754";
+            var severityLevel = isDeviceOffline ? "HIGH" : severityPct > 50 ? "CRITICAL" : severityPct > 20 ? "HIGH" : severityPct > 10 ? "MEDIUM" : "LOW";
+            var severityColor = isDeviceOffline ? "#fd7e14" : severityPct > 50 ? "#dc3545" : severityPct > 20 ? "#fd7e14" : severityPct > 10 ? "#ffc107" : "#198754";
+            var powerLabel = isDeviceOffline ? "Last Known Power" : "Current Power";
+            var thresholdDisplay = isDeviceOffline ? "Not applicable" : string.Format("{0:N0} W", thresholdValue);
+            var deviationDisplay = isDeviceOffline ? "Not applicable" : string.Format("{0:N1}%", deviation);
+            var contextSection = isDeviceOffline && !string.IsNullOrWhiteSpace(anomalyContext)
+                ? "<p style='margin: 8px 0 0 0;'><strong>Telemetry:</strong> " + System.Net.WebUtility.HtmlEncode(anomalyContext) + "</p>"
+                : string.Empty;
 
             // Panel info
             var groupName = panelData?.GroupName ?? deviceKey;
@@ -283,20 +290,20 @@ namespace KWHMonitoring.Services
                             <tr>
                                 <td style='padding: 10px;'>
                                     <div style='background: {alertGradient}; color: white; padding: 20px; border-radius: 10px; text-align: center;'>
-                                        <div style='font-size: 12px; opacity: 0.8;'>Current Power</div>
+                                        <div style='font-size: 12px; opacity: 0.8;'>{powerLabel}</div>
                                         <div style='font-size: 28px; font-weight: bold;'>{powerValue:N0} W</div>
                                     </div>
                                 </td>
                                 <td style='padding: 10px;'>
                                     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;'>
                                         <div style='font-size: 12px; opacity: 0.8;'>Threshold</div>
-                                        <div style='font-size: 28px; font-weight: bold;'>{thresholdValue:N0} W</div>
+                                        <div style='font-size: 28px; font-weight: bold;'>{thresholdDisplay}</div>
                                     </div>
                                 </td>
                                 <td style='padding: 10px;'>
                                     <div style='background: linear-gradient(135deg, {severityColor} 0%, {alertColor} 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;'>
                                         <div style='font-size: 12px; opacity: 0.8;'>Deviation</div>
-                                        <div style='font-size: 28px; font-weight: bold;'>{deviation:N1}%</div>
+                                        <div style='font-size: 28px; font-weight: bold;'>{deviationDisplay}</div>
                                     </div>
                                 </td>
                             </tr>
@@ -348,6 +355,7 @@ namespace KWHMonitoring.Services
                             </table>
                         </div>
                     </div>
+                    {contextSection}
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
@@ -367,9 +375,10 @@ namespace KWHMonitoring.Services
                     "{0} *{1}INSTANT ALERT*\n\n" +
                     "🖥️ Device: *{2}*\n" +
                     "📊 Type: *{3}*\n" +
-                    "⚡ Power: *{4:N0} W*\n" +
-                    "📏 Threshold: *{5:N0} W*\n" +
-                    "📈 Deviation: *{6:N1}%*\n" +
+                    "⚡ {17}: *{4:N0} W*\n" +
+                    "📏 Threshold: *{18}*\n" +
+                    "📈 Deviation: *{19}*\n" +
+                    "{20}" +
                     "🏷️ Severity: *{7}*\n" +
                     "🕐 Time: *{8:dd/MM/yyyy HH:mm:ss}*\n\n" +
                     "━━━━━━━━━━━━━━━━━━\n" +
@@ -390,7 +399,9 @@ namespace KWHMonitoring.Services
                     alertIcon, isTest ? "[TEST] " : "", groupName, alertLabel,
                     powerValue, thresholdValue, deviation, severityLevel,
                     now, panelVoltage, panelCurrent, panelPF, panelFreq, panelEnergy,
-                    recentAnomalies.Count, recentOverloadCount, recentDropCount);
+                    recentAnomalies.Count, recentOverloadCount, recentDropCount,
+                    powerLabel, thresholdDisplay, deviationDisplay,
+                    isDeviceOffline && !string.IsNullOrWhiteSpace(anomalyContext) ? "📡 " + anomalyContext + "\n" : string.Empty);
                 await SendWablasAsync(whatsappMessage);
             }
 

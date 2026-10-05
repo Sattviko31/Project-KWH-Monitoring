@@ -9,7 +9,7 @@
 
 <!-- Content: Panel Monitoring -->
 <div class="stats-row mb-3 mb-md-4">
-    <div>
+    @* <div>
         <div class="stat-card bg-primary h-100" data-card-help="Total Daya|Jumlah daya aktif semua panel yang sedang berjalan saat ini. Diperbarui otomatis tiap 10 detik.|Rumus: Total Daya = Σ Daya_Watt (semua panel) — satuan Watt|Sumber: nilai daya terakhir tiap perangkat dari database monitoring.">
             <div class="stat-label">Total Daya</div>
             <div class="stat-value">@Model.TotalStats.TotalDaya.ToString("N0") W</div>
@@ -43,11 +43,11 @@
             <div class="stat-value">@Model.TotalStats.AvgPowerFactor.ToString("N3")</div>
             <i class="fas fa-wave-square stat-icon"></i>
         </div>
-    </div>
+    </div> *@
 </div>
 
     <div class="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
-        <h5 class="mb-0"><i class="fas fa-th"></i> Panel Monitoring</h5>
+        @* <h5 class="mb-0"><i class="fas fa-th"></i> Panel Monitoring</h5> *@
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <small class="text-muted" id="filterInfo">Menampilkan <strong id="filteredCount">@Model.Panels.Count</strong>/<strong id="totalCount">@Model.Panels.Count</strong> panel</small>
             <button class="btn btn-sm btn-outline-primary" type="button" data-toggle="collapse" data-target="#panelFilterCollapse" aria-expanded="false" title="Toggle filter">
@@ -68,6 +68,7 @@
                     <option value="all">📊 Semua Status</option>
                     <option value="HIGH">🔴 High</option>
                     <option value="MEDIUM">🟡 Medium</option>
+                    <option value="OFFLINE">⚫ Offline</option>
                     <option value="NORMAL">🟢 Normal</option>
                 </select>
                 <select id="panelPhaseFilter" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
@@ -602,9 +603,11 @@
         // ============================================
         let filterDebounce = null;
         let activeChipDeviceKey = null; // Currently selected chip
-        let anomalyStatusMap = {}; // deviceKey -> anomaly type (OVERLOAD/DROP/undefined)
+        let anomalyStatusMap = {}; // deviceKey -> anomaly type or offline status
+        let deviceConnectivityMap = {}; // deviceKey -> true (online) / false (offline)
 
         function getChipClass(deviceKey) {
+            if (deviceConnectivityMap[deviceKey] === false) return 'chip-offline';
             const anomaly = anomalyStatusMap[deviceKey];
             if (anomaly === 'OVERLOAD') return 'chip-high';
             if (anomaly === 'DROP') return 'chip-medium';
@@ -617,11 +620,11 @@
 
             if (allPanelData.length === 0) return;
 
-            // Sort: anomaly panels first (OVERLOAD > DROP), then normal by name
+            // Sort offline and anomaly panels first, then normal by name
             const sorted = [...allPanelData].sort((a, b) => {
                 const aAnomaly = anomalyStatusMap[a.deviceKey] || '';
                 const bAnomaly = anomalyStatusMap[b.deviceKey] || '';
-                const order = { 'OVERLOAD': 0, 'DROP': 1, '': 2 };
+                const order = { 'DEVICE_OFFLINE': 0, 'OVERLOAD': 1, 'DROP': 2, '': 3 };
                 const aOrder = order[aAnomaly] !== undefined ? order[aAnomaly] : 2;
                 const bOrder = order[bAnomaly] !== undefined ? order[bAnomaly] : 2;
                 if (aOrder !== bOrder) return aOrder - bOrder;
@@ -688,6 +691,13 @@
 
                 // Status filter
                 if (show && status && status !== 'all') {
+                    if (status === 'OFFLINE') {
+                        if (deviceConnectivityMap[panel.deviceKey] !== false) show = false;
+                    } else if (deviceConnectivityMap[panel.deviceKey] === false) {
+                        show = false;
+                    }
+                }
+                if (show && status && status !== 'all' && status !== 'OFFLINE') {
                     const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
                     const daya = data ? data.dayaWatt : 0;
                     const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
@@ -942,6 +952,12 @@
                 @* console.log('🔄 Anomaly  cooldown changed:', e.detail); *@
                 updatePanelHeadersByAnomaly();
             });
+            window.addEventListener('deviceConnectivityChanged', function(e) {
+                if (!e.detail || !e.detail.deviceKey) return;
+                deviceConnectivityMap[e.detail.deviceKey] = e.detail.online === true;
+                updatePanelHeadersByAnomaly();
+                applyPanelFilter();
+            });
 
             setTimeout(function() {
                 updatePanelCards();
@@ -1110,12 +1126,17 @@
                     deviceStatus[deviceKey] = cooldownState[deviceKey].type; // 'OVERLOAD' or 'DROP'
                 }
             });
+            panelList.forEach(function(panel) {
+                if (deviceConnectivityMap[panel.deviceKey] === false) {
+                    deviceStatus[panel.deviceKey] = 'DEVICE_OFFLINE';
+                }
+            });
 
             // Update anomalyStatusMap for chip coloring
             anomalyStatusMap = {};
             panelList.forEach(function(panel) {
                 const status = deviceStatus[panel.deviceKey];
-                if (status === 'OVERLOAD' || status === 'DROP') {
+                if (status === 'OVERLOAD' || status === 'DROP' || status === 'DEVICE_OFFLINE') {
                     anomalyStatusMap[panel.deviceKey] = status;
                 }
             });
@@ -1137,9 +1158,13 @@
                 const status = deviceStatus[panel.deviceKey];
 
                 // Reset color-related classes only, keep layout classes intact
-                header.classList.remove('bg-danger', 'bg-warning', 'bg-dark', 'text-white', 'text-dark');
+                header.classList.remove('bg-danger', 'bg-warning', 'bg-dark', 'bg-secondary', 'text-white', 'text-dark');
 
-                if (status === 'OVERLOAD') {
+                if (status === 'DEVICE_OFFLINE') {
+                    header.classList.add('bg-secondary', 'text-white');
+                    badge.className = 'badge me-2 bg-secondary';
+                    badge.textContent = 'OFFLINE';
+                } else if (status === 'OVERLOAD') {
                     header.classList.add('bg-danger', 'text-white');
                     badge.className = 'badge me-2 bg-danger';
                     badge.textContent = 'OVERLOAD';
@@ -1534,6 +1559,7 @@
 
                     // Re-apply active filter after data refresh
                     applyPanelFilter();
+                    updatePanelHeadersByAnomaly();
 
                     // Update relay state indicator behind On/Off buttons
                     updateRelayStates();

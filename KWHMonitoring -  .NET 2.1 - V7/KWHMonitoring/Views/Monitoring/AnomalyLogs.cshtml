@@ -360,6 +360,8 @@
                         <p class="small text-muted" id="detailRootCause">-</p>
                         <p class="mb-1 font-weight-bold small">Tindakan yang Disarankan</p>
                         <p class="small text-muted" id="detailRecommendedAction">-</p>
+                        <p class="mb-1 font-weight-bold small">Catatan Deteksi</p>
+                        <p class="small text-muted" id="detailDetectionNotes">-</p>
                         <p class="mb-1 font-weight-bold small">Catatan Operator</p>
                         <p class="small text-muted" id="detailOperatorNotes">-</p>
                     </section>
@@ -1232,7 +1234,7 @@
                     if (e.rowType !== 'data') return;
                     var t = e.data.anomalyType;
                     if (t === 'OVERLOAD') e.rowElement.css('border-left', '3px solid #dc3545');
-                    else if (t === 'DROP' || t === 'DEVICE_DROP' || t === 'DEVICE DROP') e.rowElement.css('border-left', '3px solid #ffc107');
+                    else if (t === 'DROP' || t === 'DEVICE_OFFLINE' || t === 'DEVICE_DROP' || t === 'DEVICE OFFLINE') e.rowElement.css('border-left', '3px solid #ffc107');
                     else e.rowElement.css('border-left', '3px solid #0d6efd');
                 },
                 columns: [
@@ -1288,12 +1290,13 @@
                     { dataField: 'location', caption: 'Lokasi', alignment: 'center', visible: false },
                     {
                         dataField: 'anomalyType', caption: 'Type', alignment: 'center',
-                        headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE DROP', value: 'DEVICE_DROP' }] },
+                        headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE OFFLINE', value: 'DEVICE_OFFLINE' }, { text: 'DEVICE OFFLINE (legacy)', value: 'DEVICE_DROP' }] },
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var cls, icon, text;
                             if (v === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = 'OVERLOAD'; }
-                            else if (v === 'DROP' || v === 'DEVICE_DROP' || v === 'DEVICE DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else if (v === 'DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+                            else if (v === 'DEVICE_OFFLINE' || v === 'DEVICE_DROP' || v === 'DEVICE OFFLINE') { cls = 'bg-secondary text-white'; icon = 'fa-plug'; text = 'DEVICE OFFLINE'; }
                             else { cls = 'bg-info'; icon = 'fa-question'; text = v; }
                             $('<span>').addClass('badge ' + cls).html('<i class="fas ' + icon + '"></i> ' + text).appendTo(container);
                         }
@@ -1310,15 +1313,22 @@
                         dataField: 'powerValue', caption: 'Power (W)', dataType: 'number', alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
-                            var cls = v > 20000 ? 'text-danger' : v > 10000 ? 'text-warning' : 'text-dark';
-                            $('<span>').addClass('anomaly-power ' + cls).text(formatNumber(v) + ' W').appendTo(container);
+                            var isDeviceDrop = options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP';
+                            var cls = isDeviceDrop ? 'text-muted' : v > 20000 ? 'text-danger' : v > 10000 ? 'text-warning' : 'text-dark';
+                            $('<span>').addClass('anomaly-power ' + cls).text(formatNumber(v) + ' W' + (isDeviceDrop ? ' (terakhir)' : '')).appendTo(container);
                         }
                     },
-                    { dataField: 'thresholdValue', caption: 'Threshold (W)', dataType: 'number', alignment: 'center', format: { type: 'fixedPoint', precision: 0 } },
+                    {
+                        dataField: 'thresholdValue', caption: 'Threshold (W)', dataType: 'number', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            $('<span>').text(options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP' ? '—' : formatNumber(options.value) + ' W').appendTo(container);
+                        }
+                    },
                     {
                         dataField: 'deviation', caption: 'Deviation', dataType: 'number', alignment: 'center',
                         cellTemplate: function(container, options) {
                             var v = options.value;
+                            if (options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP') { $('<span>').text('—').appendTo(container); return; }
                             var cls = v > 100 ? 'text-danger' : v > 50 ? 'text-warning' : 'text-success';
                             $('<span>').addClass('anomaly-deviation ' + cls).text(fmt(v, 1) + '%').appendTo(container);
                         }
@@ -1366,7 +1376,7 @@
                             var v = options.value || 0;
                             var data = options.row.data;
                             var isResolved = data.isResolved;
-                            if (data.anomalyType !== 'DROP' && data.anomalyType !== 'DEVICE_DROP') { $('<span>').text('-').appendTo(container); return; }
+                            if (data.anomalyType !== 'DROP' && data.anomalyType !== 'DEVICE_OFFLINE' && data.anomalyType !== 'DEVICE_DROP') { $('<span>').text('-').appendTo(container); return; }
                             var cls = 'text-danger fw-bold';
                             if (!isResolved) cls += ' fst-italic';
                             $('<span>').addClass(cls).text('Rp ' + formatNumber(v) + (!isResolved ? ' *' : '')).appendTo(container);
@@ -1518,9 +1528,10 @@
             $('#detailDeviceCategory').text(data.deviceCategory || (detailEnglish ? 'Unknown' : 'Tidak diketahui'));
             $('#detailType').html(renderTypeBadge(data.anomalyType));
             $('#detailSeverity').html('<span class="severity-badge ' + severityClass(data.severity) + '">' + severityLabel(data.severity || 'medium') + '</span>');
-            $('#detailPower').text(formatNumber(data.powerValue) + ' W');
-            $('#detailThreshold').text(formatNumber(data.thresholdValue) + ' W');
-            $('#detailDeviation').text(fmt(data.deviation, 1) + '%');
+            var isDeviceDrop = data.anomalyType === 'DEVICE_OFFLINE' || data.anomalyType === 'DEVICE_DROP';
+            $('#detailPower').text(formatNumber(data.powerValue) + ' W' + (isDeviceDrop ? (detailEnglish ? ' (last seen)' : ' (terakhir)') : ''));
+            $('#detailThreshold').text(isDeviceDrop ? '—' : formatNumber(data.thresholdValue) + ' W');
+            $('#detailDeviation').text(isDeviceDrop ? '—' : fmt(data.deviation, 1) + '%');
             $('#detailTime').text(formatDateTime(data.detectedTime) || '-');
 
             var dur = data.durationMinutes;
@@ -1549,10 +1560,11 @@
 
             $('#detailRootCause').text(data.rootCause || '-');
             $('#detailRecommendedAction').text(data.recommendedAction || '-');
+            $('#detailDetectionNotes').text(data.notes || '-');
             $('#detailOperatorNotes').text(data.operatorNotes || '-');
 
             // Financial impact
-            var isDrop = data.anomalyType === 'DROP' || data.anomalyType === 'DEVICE_DROP';
+            var isDrop = data.anomalyType === 'DROP' || data.anomalyType === 'DEVICE_OFFLINE' || data.anomalyType === 'DEVICE_DROP';
             var isOverload = data.anomalyType === 'OVERLOAD';
             var cost = data.anomalyCostImpact || 0;
             var revenue = data.revenueLoss || 0;
@@ -1580,7 +1592,8 @@
         function renderTypeBadge(type) {
             var cls, icon, text;
             if (type === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = isEnglishUi() ? 'OVERLOAD' : 'BEBAN BERLEBIH'; }
-            else if (type === 'DROP' || type === 'DEVICE_DROP' || type === 'DEVICE DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = isEnglishUi() ? 'DEVICE DROP' : 'GANGGUAN PERANGKAT'; }
+            else if (type === 'DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
+            else if (type === 'DEVICE_OFFLINE' || type === 'DEVICE_DROP' || type === 'DEVICE OFFLINE') { cls = 'bg-secondary text-white'; icon = 'fa-plug'; text = isEnglishUi() ? 'DEVICE OFFLINE' : 'PERANGKAT OFFLINE'; }
             else { cls = 'bg-info'; icon = 'fa-question'; text = type; }
             return '<span class="badge ' + cls + '"><i class="fas ' + icon + '"></i> ' + text + '</span>';
         }

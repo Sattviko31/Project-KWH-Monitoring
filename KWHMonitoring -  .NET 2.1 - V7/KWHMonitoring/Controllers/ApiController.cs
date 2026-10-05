@@ -23,6 +23,8 @@ using KWHMonitoring.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data.SqlClient;
+using System.Security.Cryptography;
+using System.Diagnostics;
 
 namespace KWHMonitoring.Controllers
 {
@@ -59,7 +61,7 @@ namespace KWHMonitoring.Controllers
         // duration of a DROP. Keep this calculation shared by list, detail and summaries.
         private static decimal EstimateRevenueLoss(string anomalyType, DateTime detectedTime, bool isResolved, DateTime? resolvedTime, decimal revenuePerHour, DateTime now)
         {
-            if ((anomalyType != "DROP" && anomalyType != "DEVICE_DROP") || revenuePerHour <= 0m)
+            if (anomalyType != "DROP" || revenuePerHour <= 0m)
                 return 0m;
 
             // A resolved record without a resolution timestamp has no defensible
@@ -446,7 +448,7 @@ namespace KWHMonitoring.Controllers
                 var hourlyRecords = await _context.HourlyEnergy
                     .Where(x => x.Hour >= dayStart && x.Hour < dayEnd)
                     .GroupBy(x => x.Hour.Hour)
-                    .Select(g => new { Hour = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh) })
+                    .Select(g => new { Hour = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
                     .ToListAsync();
 
                 var hourlyData = Enumerable.Range(0, 24).Select(h => new
@@ -460,7 +462,7 @@ namespace KWHMonitoring.Controllers
                 var dailyRecords = await _context.DailyEnergy
                     .Where(x => x.Date >= monthStart && x.Date < monthEnd)
                     .GroupBy(x => x.Date.Day)
-                    .Select(g => new { Day = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh) })
+                    .Select(g => new { Day = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
                     .ToListAsync();
 
                 var daysInMonth = DateTime.DaysInMonth(startDate.Year, startDate.Month);
@@ -475,8 +477,13 @@ namespace KWHMonitoring.Controllers
                 var monthlyRecords = await _context.MonthlyEnergy
                     .Where(x => x.Year == startDate.Year)
                     .GroupBy(x => x.Month)
-                    .Select(g => new { Month = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh) })
+                    .Select(g => new { Month = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
                     .ToListAsync();
+
+                var latestAggregateAt = hourlyRecords.Select(x => (DateTime?)x.UpdatedAt)
+                    .Concat(dailyRecords.Select(x => (DateTime?)x.UpdatedAt))
+                    .Concat(monthlyRecords.Select(x => (DateTime?)x.UpdatedAt))
+                    .Max();
 
                 var monthlyData = Enumerable.Range(1, 12).Select(m => new
                 {
@@ -657,6 +664,9 @@ namespace KWHMonitoring.Controllers
                     currentHourLabel = currentHourLabel,
                     secondsToNextHour = secondsToNextHour,
                     isToday = isToday,
+                    latestAggregateAt,
+                    dataVersion = latestAggregateAt.HasValue ? latestAggregateAt.Value.Ticks.ToString(CultureInfo.InvariantCulture) : "0",
+                    serverTime = serverNow,
                     serverDate = serverToday.ToString("yyyy-MM-dd"),
                     serverHour = serverNow.Hour,
                     serverDay = serverNow.Day,
@@ -723,6 +733,417 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
+        // USAGE STATISTICS BATCH (ALL DEVICES)
+        // ============================================
+        [HttpPost("usage-statistics/batch")]
+        public async Task<IActionResult> GetUsageStatisticsBatch([FromBody] UsageStatisticsBatchRequest filter)
+        {
+            var batchTimer = Stopwatch.StartNew();
+            long settingsQueryMilliseconds = 0;
+            long hourlyQueryMilliseconds = 0;
+            long dailyQueryMilliseconds = 0;
+            long monthlyQueryMilliseconds = 0;
+            long anomalyQueryMilliseconds = 0;
+            var hourlyGroupCount = 0;
+            var dailyGroupCount = 0;
+            var monthlyGroupCount = 0;
+            var anomalyRowCount = 0;
+            try
+            {
+                var serverNow = DateTime.Now;
+                var serverToday = DateTime.Today;
+                DateTime startDate;
+                if (!string.IsNullOrWhiteSpace(filter?.StartDate) &&
+                    DateTime.TryParse(filter.StartDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+                    startDate = parsedDate.Date;
+                else
+                    startDate = serverToday;
+
+                var singleDeviceKey = string.IsNullOrWhiteSpace(filter?.DeviceKey) ? null : filter.DeviceKey.Trim();
+                var requestedDeviceKeys = filter?.DeviceKeys ?? new List<string>();
+                if (singleDeviceKey != null) requestedDeviceKeys = new List<string> { singleDeviceKey };
+                var deviceKeys = requestedDeviceKeys
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                if (deviceKeys.Any(x => x.Length > 20))
+                    return BadRequest(new { success = false, error = "Daftar perangkat tidak valid." });
+
+                var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
+                var monthEnd = monthStart.AddMonths(1);
+                var isToday = startDate.Date == serverToday;
+                var settingsQueryTimer = Stopwatch.StartNew();
+                var settings = singleDeviceKey == null
+                    ? await _deviceSettingsService.GetAllEffectiveAsync()
+                    : new Dictionary<string, DeviceSettings>(StringComparer.Ordinal)
+                    {
+                        { singleDeviceKey, await _deviceSettingsService.GetEffectiveAsync(singleDeviceKey) }
+                    };
+                settingsQueryTimer.Stop();
+                settingsQueryMilliseconds = settingsQueryTimer.ElapsedMilliseconds;
+
+                // Cache hits are permitted only against the short-lived data-version token
+                // produced by /data-version and the latest effective settings timestamp.
+                string energyVersionToken = null;
+                string anomalyVersionToken = null;
+                if (_cache.TryGetValue("DataVersion_Latest", out object latestVersionPayload) && latestVersionPayload != null)
+                {
+                    var versionObject = JObject.FromObject(latestVersionPayload)["versions"];
+                    energyVersionToken = versionObject?["energy"]?.ToString();
+                    anomalyVersionToken = versionObject?["anomaly"]?.ToString();
+                }
+                // Include every effective setting version. A single max timestamp can stay
+                // unchanged when a device with an older timestamp is edited.
+                var settingsVersion = string.Join(",", settings
+                    .OrderBy(x => x.Key, StringComparer.Ordinal)
+                    .Select(x => x.Key + ":" + x.Value.UpdatedAt.Ticks.ToString(CultureInfo.InvariantCulture)));
+                string batchCacheKey = null;
+                if (!string.IsNullOrWhiteSpace(energyVersionToken) && !string.IsNullOrWhiteSpace(anomalyVersionToken))
+                {
+                    var cacheIdentity = string.Join("|", new[]
+                    {
+                        startDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
+                        string.Join(",", deviceKeys),
+                        energyVersionToken,
+                        anomalyVersionToken,
+                        settingsVersion
+                    });
+                    using (var sha256 = SHA256.Create())
+                    {
+                        batchCacheKey = "UsageStatisticsBatch:" + Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(cacheIdentity)))
+                            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                    }
+                    if (_cache.TryGetValue(batchCacheKey, out object cachedBatch))
+                    {
+                        _logger.LogInformation("Usage statistics batch cache hit for {DeviceCount} devices in {ElapsedMilliseconds} ms (settings query {SettingsQueryMilliseconds} ms).",
+                            deviceKeys.Count, batchTimer.ElapsedMilliseconds, settingsQueryMilliseconds);
+                        return Ok(cachedBatch);
+                    }
+                }
+
+                // Each query returns grouped, narrow projections. Query count stays bounded as
+                // device count grows; the browser no longer starts one HTTP request per device.
+                var hourlyQuery = _context.HourlyEnergy.AsNoTracking()
+                    .Where(x => x.Hour >= startDate && x.Hour < startDate.AddDays(1));
+                if (singleDeviceKey != null) hourlyQuery = hourlyQuery.Where(x => x.DeviceKey == singleDeviceKey);
+                var hourlyQueryTimer = Stopwatch.StartNew();
+                var hourlyRecords = await hourlyQuery
+                    .GroupBy(x => new { x.DeviceKey, Hour = x.Hour.Hour })
+                    .Select(g => new { g.Key.DeviceKey, g.Key.Hour, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
+                    .ToListAsync();
+                hourlyQueryTimer.Stop();
+                hourlyQueryMilliseconds = hourlyQueryTimer.ElapsedMilliseconds;
+                hourlyGroupCount = hourlyRecords.Count;
+
+                var dailyQuery = _context.DailyEnergy.AsNoTracking()
+                    .Where(x => x.Date >= monthStart && x.Date < monthEnd);
+                if (singleDeviceKey != null) dailyQuery = dailyQuery.Where(x => x.DeviceKey == singleDeviceKey);
+                var dailyQueryTimer = Stopwatch.StartNew();
+                var dailyRecords = await dailyQuery
+                    .GroupBy(x => new { x.DeviceKey, Day = x.Date.Day })
+                    .Select(g => new { g.Key.DeviceKey, g.Key.Day, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
+                    .ToListAsync();
+                dailyQueryTimer.Stop();
+                dailyQueryMilliseconds = dailyQueryTimer.ElapsedMilliseconds;
+                dailyGroupCount = dailyRecords.Count;
+
+                var comparisonYear = startDate.Year - 1;
+                var lastMonth = startDate.AddMonths(-1);
+                var monthlyQuery = _context.MonthlyEnergy.AsNoTracking()
+                    .Where(x => x.Year == startDate.Year ||
+                        (x.Year == lastMonth.Year && x.Month == lastMonth.Month) ||
+                        (x.Year == comparisonYear && x.Month == startDate.Month));
+                if (singleDeviceKey != null) monthlyQuery = monthlyQuery.Where(x => x.DeviceKey == singleDeviceKey);
+                var monthlyQueryTimer = Stopwatch.StartNew();
+                var monthlyRecords = await monthlyQuery
+                    .GroupBy(x => new { x.DeviceKey, x.Year, x.Month })
+                    .Select(g => new { g.Key.DeviceKey, g.Key.Year, g.Key.Month, EnergyKWh = g.Sum(x => x.EnergyKWh), UpdatedAt = g.Max(x => x.CalculatedAt) })
+                    .ToListAsync();
+                monthlyQueryTimer.Stop();
+                monthlyQueryMilliseconds = monthlyQueryTimer.ElapsedMilliseconds;
+                monthlyGroupCount = monthlyRecords.Count;
+
+                var anomalyStart = new DateTime(startDate.Year, startDate.Month, 1);
+                var anomalySql = @"SELECT * FROM (
+                        SELECT *, ROW_NUMBER() OVER (PARTITION BY [DeviceKey] ORDER BY [Deviation] DESC) AS [BatchRowNumber]
+                        FROM [dbo].[AnomalyLogs]
+                        WHERE [DetectedTime] >= {0} AND [DetectedTime] < {1} AND [AnomalyType] = N'OVERLOAD'
+                    ) AS [RankedAnomalies]
+                    WHERE [BatchRowNumber] <= 20";
+                var anomalyQuery = singleDeviceKey == null
+                    ? _context.AnomalyLogs.FromSql(anomalySql, anomalyStart, startDate.AddMonths(1))
+                    : _context.AnomalyLogs.FromSql(
+                        @"SELECT * FROM (
+                            SELECT *, ROW_NUMBER() OVER (PARTITION BY [DeviceKey] ORDER BY [Deviation] DESC) AS [BatchRowNumber]
+                            FROM [dbo].[AnomalyLogs]
+                            WHERE [DetectedTime] >= {0} AND [DetectedTime] < {1} AND [AnomalyType] = N'OVERLOAD' AND [DeviceKey] = {2}
+                        ) AS [RankedAnomalies]
+                        WHERE [BatchRowNumber] <= 20",
+                        anomalyStart, startDate.AddMonths(1), singleDeviceKey);
+                var anomalyQueryTimer = Stopwatch.StartNew();
+                var anomalyRecords = await anomalyQuery
+                    .AsNoTracking()
+                    .Select(x => new UsageStatisticsBatchAnomaly
+                    {
+                        DeviceKey = x.DeviceKey,
+                        AnomalyType = x.AnomalyType,
+                        PowerValue = x.PowerValue,
+                        ThresholdValue = x.ThresholdValue,
+                        Deviation = x.Deviation,
+                        Severity = x.Severity,
+                        DetectedTime = x.DetectedTime
+                    })
+                    .ToListAsync();
+                anomalyQueryTimer.Stop();
+                anomalyQueryMilliseconds = anomalyQueryTimer.ElapsedMilliseconds;
+                anomalyRowCount = anomalyRecords.Count;
+
+                var allKeys = new HashSet<string>(deviceKeys, StringComparer.Ordinal);
+                if (allKeys.Count == 0)
+                {
+                    foreach (var key in hourlyRecords.Select(x => x.DeviceKey)
+                        .Concat(dailyRecords.Select(x => x.DeviceKey))
+                        .Concat(monthlyRecords.Select(x => x.DeviceKey))
+                        .Concat(anomalyRecords.Select(x => x.DeviceKey))
+                        .Concat(settings.Keys))
+                    {
+                        if (!string.IsNullOrWhiteSpace(key)) allKeys.Add(key);
+                    }
+                }
+
+                var hourlyByDevice = hourlyRecords.GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Hour, x => x.EnergyKWh), StringComparer.Ordinal);
+                var dailyByDevice = dailyRecords.GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Day, x => x.EnergyKWh), StringComparer.Ordinal);
+                var monthlyByDevice = monthlyRecords.GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.ToDictionary(x => Tuple.Create(x.Year, x.Month), x => x.EnergyKWh), StringComparer.Ordinal);
+                var anomaliesByDevice = anomalyRecords.GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Deviation).Take(20).ToList(), StringComparer.Ordinal);
+                var updatedAtByDevice = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+                Action<string, DateTime> recordUpdatedAt = (key, value) =>
+                {
+                    if (string.IsNullOrWhiteSpace(key)) return;
+                    if (!updatedAtByDevice.ContainsKey(key) || value > updatedAtByDevice[key]) updatedAtByDevice[key] = value;
+                };
+                foreach (var row in hourlyRecords) recordUpdatedAt(row.DeviceKey, row.UpdatedAt);
+                foreach (var row in dailyRecords) recordUpdatedAt(row.DeviceKey, row.UpdatedAt);
+                foreach (var row in monthlyRecords) recordUpdatedAt(row.DeviceKey, row.UpdatedAt);
+
+                var daysInMonth = DateTime.DaysInMonth(startDate.Year, startDate.Month);
+                var result = new List<object>();
+                var noAggregateDeviceKeys = new List<string>();
+                var orderedDeviceKeys = deviceKeys.Count > 0
+                    ? deviceKeys.Concat(allKeys.Where(key => !deviceKeys.Contains(key, StringComparer.Ordinal))).Distinct(StringComparer.Ordinal).ToList()
+                    : allKeys.OrderBy(key => key, StringComparer.Ordinal).ToList();
+                foreach (var deviceKey in orderedDeviceKeys)
+                {
+                    try
+                    {
+                    DeviceSettings deviceSettings;
+                    if (!settings.TryGetValue(deviceKey, out deviceSettings))
+                        deviceSettings = new DeviceSettings { DeviceKey = deviceKey };
+                    var hourlyMap = hourlyByDevice.ContainsKey(deviceKey) ? hourlyByDevice[deviceKey] : new Dictionary<int, decimal>();
+                    var dailyMap = dailyByDevice.ContainsKey(deviceKey) ? dailyByDevice[deviceKey] : new Dictionary<int, decimal>();
+                    var monthlyMap = monthlyByDevice.ContainsKey(deviceKey) ? monthlyByDevice[deviceKey] : new Dictionary<Tuple<int, int>, decimal>();
+
+                    var hourlyData = Enumerable.Range(0, 24).Select(h => new
+                    {
+                        timeLabel = string.Format("{0:D2}:00", h), energy = Math.Round(hourlyMap.ContainsKey(h) ? hourlyMap[h] : 0m, 2), sortKey = h
+                    }).ToList();
+                    var todayKWh = Math.Round(hourlyData.Sum(x => x.energy), 2);
+                    var monthKWh = Math.Round(dailyMap.Values.Sum(x => Math.Round(x, 2)), 2);
+                    var yearKWh = Math.Round(monthlyMap.Where(x => x.Key.Item1 == startDate.Year).Sum(x => Math.Round(x.Value, 2)), 2);
+                    decimal realtimeKWh = 0m;
+                    var currentHourLabel = "";
+                    var secondsToNextHour = 0;
+                    if (isToday)
+                    {
+                        currentHourLabel = string.Format("{0:D2}:00", serverNow.Hour);
+                        secondsToNextHour = (int)(new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0).AddHours(1) - serverNow).TotalSeconds;
+                        realtimeKWh = hourlyData[serverNow.Hour].energy;
+                        var previousDaysTotal = dailyMap.Where(x => x.Key < serverToday.Day).Sum(x => x.Value);
+                        monthKWh = Math.Round(todayKWh + previousDaysTotal, 2);
+                        var previousMonthsTotal = monthlyMap.Where(x => x.Key.Item1 == startDate.Year && x.Key.Item2 < startDate.Month).Sum(x => x.Value);
+                        yearKWh = Math.Round(todayKWh + previousDaysTotal + previousMonthsTotal, 2);
+                    }
+
+                    var tariff = deviceSettings.TariffPerKWh > 0m ? deviceSettings.TariffPerKWh : 1500m;
+                    var estimatedCost = Math.Round(monthKWh * tariff, 2);
+
+                    var hourlyKwhByHour = hourlyData.Select(x => x.energy).ToArray();
+                    var wbp = CalculateWbpLwbp(hourlyKwhByHour, deviceSettings);
+                    var waste = CalculateWaste(hourlyKwhByHour, deviceSettings);
+                    var budgetKWh = deviceSettings.BudgetKWh;
+                    var budgetVariance = budgetKWh > 0 ? Math.Round(monthKWh - budgetKWh, 2) : 0m;
+                    var budgetVariancePct = budgetKWh > 0 ? Math.Round((monthKWh - budgetKWh) / budgetKWh * 100, 1) : 0m;
+                    var budgetCost = budgetKWh > 0 ? Math.Round(budgetKWh * tariff, 0) : 0m;
+                    var actualCost = Math.Round(monthKWh * tariff, 0);
+                    var lastMonthKWh = monthlyMap.ContainsKey(Tuple.Create(lastMonth.Year, lastMonth.Month)) ? monthlyMap[Tuple.Create(lastMonth.Year, lastMonth.Month)] : 0m;
+                    var lastYearSameMonthKWh = monthlyMap.ContainsKey(Tuple.Create(comparisonYear, startDate.Month)) ? monthlyMap[Tuple.Create(comparisonYear, startDate.Month)] : 0m;
+                    var momChange = Math.Round(monthKWh - lastMonthKWh, 2);
+                    var momChangePercent = lastMonthKWh > 0 ? Math.Round((monthKWh - lastMonthKWh) / lastMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+                    var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
+                    var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
+                    var dayOfMonth = serverNow.Day;
+                    var daysInCurrentMonth = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
+                    var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInCurrentMonth, 2) : monthKWh;
+                    var projectedCost = Math.Round(projectedMonthKWh * tariff, 0);
+                    var deviceAnomalies = anomaliesByDevice.ContainsKey(deviceKey) ? anomaliesByDevice[deviceKey] : new List<UsageStatisticsBatchAnomaly>();
+                    decimal anomalyExcessKWh = 0m;
+                    foreach (var anomaly in deviceAnomalies) anomalyExcessKWh += Math.Max(anomaly.PowerValue - anomaly.ThresholdValue, 0m) * 0.25m / 1000m;
+                    anomalyExcessKWh = Math.Round(anomalyExcessKWh, 2);
+                    var anomalyCostImpact = Math.Round(anomalyExcessKWh * tariff, 0);
+                    var topAnomalies = deviceAnomalies.Take(5).Select(a => new { a.DeviceKey, a.AnomalyType, a.PowerValue, a.ThresholdValue, a.Deviation, a.Severity, a.DetectedTime, estimatedCost = Math.Round(Math.Max(a.PowerValue - a.ThresholdValue, 0m) * 0.25m / 1000m * tariff, 0) }).ToList();
+                    var maxCapacity = deviceSettings.MaxCapacity;
+                    decimal loadFactor = 0m;
+                    var loadFactorStatus = "N/A";
+                    if (maxCapacity > 0m && dayOfMonth > 0)
+                    {
+                        loadFactor = Math.Min(Math.Round(monthKWh / (maxCapacity / 1000m * dayOfMonth * 24) * 100, 1), 100m);
+                        loadFactorStatus = loadFactor < 30 ? "Under-utilized" : loadFactor <= 80 ? "Optimal" : "High Risk";
+                    }
+                    var surfaceArea = deviceSettings.SurfaceArea;
+                    var costPerM2 = surfaceArea > 0m ? Math.Round(actualCost / surfaceArea, 0) : 0m;
+                    var costPerHour = dayOfMonth > 0 ? Math.Round(actualCost / (dayOfMonth * 24), 0) : 0m;
+                    var deviceUpdatedAt = updatedAtByDevice.ContainsKey(deviceKey) ? (DateTime?)updatedAtByDevice[deviceKey] : null;
+                    var hasPeriodData = hourlyMap.Count > 0 || dailyMap.Count > 0 || monthlyMap.Keys.Any(key => key.Item1 == startDate.Year);
+                    if (!hasPeriodData) noAggregateDeviceKeys.Add(deviceKey);
+                    result.Add(new
+                    {
+                        success = true, deviceKey, dataStatus = hasPeriodData ? "available" : "no-aggregate",
+                        today = new { total = todayKWh },
+                        month = new { total = monthKWh },
+                        year = new { total = yearKWh },
+                        tariffPerKWh = tariff, estimatedCost, realtimeKWh = Math.Round(realtimeKWh, 4), currentHourLabel, secondsToNextHour,
+                        isToday, dataUpdatedAt = deviceUpdatedAt,
+                        wbpLwbp = new { configured = wbp.configured, wbpKWh = wbp.wbpKWh, lwbpKWh = wbp.lwbpKWh, wbpCost = wbp.wbpCost, lwbpCost = wbp.lwbpCost, totalCostWBP = wbp.totalCostWBP, wbpRatio = wbp.wbpRatio, tariffWBP = wbp.tariffWBP, tariffLWBP = wbp.tariffLWBP, wbpStart = deviceSettings.WbpStartHour, wbpEnd = deviceSettings.WbpEndHour },
+                        waste = new { configured = waste.configured, wasteKWh = waste.wasteKWh, wasteCost = waste.wasteCost, wastePercent = waste.wastePercent, downtimeStart = waste.dtStart, downtimeEnd = waste.dtEnd },
+                        budget = new { configured = budgetKWh > 0m, budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct, budgetCost, actualCost },
+                        periodComparison = new { lastMonthKWh, momChange, momChangePercent, lastYearSameMonthKWh, yoyChange, yoyChangePercent },
+                        billProjection = new { projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining = daysInCurrentMonth - dayOfMonth },
+                        anomalyCostImpact = new { totalAnomalies = deviceAnomalies.Count, estimatedExcessKWh = anomalyExcessKWh, estimatedCostImpact = anomalyCostImpact, topAnomalies },
+                        loadFactorInfo = new { configured = maxCapacity > 0m, loadFactor, maxCapacity, status = loadFactorStatus },
+                        unitEconomics = new { configured = surfaceArea > 0m, costPerM2, costPerHour, surfaceArea }
+                    });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Keep valid device results when one device's settings or calculations
+                        // are invalid. Shared database query failures are handled by the outer catch.
+                        _logger.LogWarning("Usage statistics calculation failed for one device ({ExceptionType}).", ex.GetType().Name);
+                        result.Add(new
+                        {
+                            success = false,
+                            deviceKey,
+                            dataStatus = "calculation-error"
+                        });
+                    }
+                }
+
+                var summaryHourlyTotals = hourlyRecords.GroupBy(x => x.Hour)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.EnergyKWh));
+                var summaryDailyTotals = dailyRecords.GroupBy(x => x.Day)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.EnergyKWh));
+                var summaryMonthlyTotals = monthlyRecords.Where(x => x.Year == startDate.Year).GroupBy(x => x.Month)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.EnergyKWh));
+                var summaryHourlyData = Enumerable.Range(0, 24).Select(hour =>
+                {
+                    var energy = summaryHourlyTotals.ContainsKey(hour) ? summaryHourlyTotals[hour] : 0m;
+                    return new { timeLabel = string.Format("{0:D2}:00", hour), energy = Math.Round(energy, 2), sortKey = hour };
+                }).ToList();
+                var summaryDailyData = Enumerable.Range(1, daysInMonth).Select(day =>
+                {
+                    var energy = summaryDailyTotals.ContainsKey(day) ? summaryDailyTotals[day] : 0m;
+                    return new { dateLabel = string.Format("{0}/{1}/{2}", day, startDate.Month, startDate.Year), energy = Math.Round(energy, 2), sortKey = day };
+                }).ToList();
+                var summaryMonthlyData = Enumerable.Range(1, 12).Select(month =>
+                {
+                    var energy = summaryMonthlyTotals.ContainsKey(month) ? summaryMonthlyTotals[month] : 0m;
+                    return new { monthName = GetMonthName(month), energy = Math.Round(energy, 2), sortKey = month };
+                }).ToList();
+                var summaryTodayKWh = Math.Round(summaryHourlyData.Sum(x => x.energy), 2);
+                var summaryMonthKWh = Math.Round(summaryDailyData.Sum(x => x.energy), 2);
+                var summaryYearKWh = Math.Round(summaryMonthlyData.Sum(x => x.energy), 2);
+                var summaryRealtimeKWh = 0m;
+                var summaryCurrentHour = "";
+                var summarySecondsToNextHour = 0;
+                if (isToday)
+                {
+                    summaryRealtimeKWh = summaryHourlyData[serverNow.Hour].energy;
+                    summaryCurrentHour = string.Format("{0:D2}:00", serverNow.Hour);
+                    summarySecondsToNextHour = (int)(new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0).AddHours(1) - serverNow).TotalSeconds;
+                    var previousDaysTotal = summaryDailyTotals.Where(x => x.Key < serverToday.Day).Sum(x => x.Value);
+                    summaryMonthKWh = Math.Round(summaryTodayKWh + previousDaysTotal, 2);
+                    var previousMonthsTotal = summaryMonthlyTotals.Where(x => x.Key < startDate.Month).Sum(x => x.Value);
+                    summaryYearKWh = Math.Round(summaryTodayKWh + previousDaysTotal + previousMonthsTotal, 2);
+                    var todayIndex = summaryDailyData.FindIndex(x => x.sortKey == serverToday.Day);
+                    if (todayIndex >= 0) summaryDailyData[todayIndex] = new { dateLabel = string.Format("{0}/{1}/{2}", serverToday.Day, startDate.Month, startDate.Year), energy = summaryTodayKWh, sortKey = serverToday.Day };
+                    var monthIndex = summaryMonthlyData.FindIndex(x => x.sortKey == serverNow.Month);
+                    if (monthIndex >= 0) summaryMonthlyData[monthIndex] = new { monthName = GetMonthName(serverNow.Month), energy = summaryMonthKWh, sortKey = serverNow.Month };
+                }
+                var summaryPeakHour = summaryHourlyData.Max(x => x.energy);
+                var summaryPeakDay = summaryDailyData.Max(x => x.energy);
+                var summaryPeakMonth = summaryMonthlyData.Max(x => x.energy);
+                var summary = new
+                {
+                    totalToday = summaryTodayKWh,
+                    totalThisMonth = summaryMonthKWh,
+                    totalThisYear = summaryYearKWh,
+                    peakHour = summaryPeakHour,
+                    peakHourTime = string.Format("{0:D2}:00", summaryHourlyData.First(x => x.energy == summaryPeakHour).sortKey),
+                    peakDay = summaryPeakDay,
+                    peakDayDate = string.Format("{0}/{1}", summaryDailyData.First(x => x.energy == summaryPeakDay).sortKey, startDate.Month),
+                    peakMonth = summaryPeakMonth,
+                    peakMonthName = summaryMonthlyData.First(x => x.energy == summaryPeakMonth).monthName,
+                    hourlyData = summaryHourlyData,
+                    dailyData = summaryDailyData,
+                    monthlyData = summaryMonthlyData,
+                    realtimeKWh = Math.Round(summaryRealtimeKWh, 4),
+                    currentHourLabel = summaryCurrentHour,
+                    secondsToNextHour = summarySecondsToNextHour,
+                    isToday,
+                    serverDate = serverToday.ToString("yyyy-MM-dd"),
+                    serverHour = serverNow.Hour,
+                    serverDay = serverNow.Day,
+                    serverMonth = serverNow.Month
+                };
+
+                var latestAggregateAt = updatedAtByDevice.Count == 0 ? (DateTime?)null : updatedAtByDevice.Values.Max();
+                var response = new
+                {
+                    success = true,
+                    devices = result,
+                    noAggregateDeviceKeys,
+                    summary,
+                    serverTime = serverNow,
+                    serverDate = serverToday.ToString("yyyy-MM-dd"),
+                    latestAggregateAt,
+                    dataVersion = batchCacheKey != null
+                        ? energyVersionToken + "|" + anomalyVersionToken + "|" + settingsVersion
+                        : (latestAggregateAt.HasValue ? latestAggregateAt.Value.Ticks.ToString(CultureInfo.InvariantCulture) : "0"),
+                    deviceCount = result.Count
+                };
+                if (batchCacheKey != null) _cache.Set(batchCacheKey, response, TimeSpan.FromSeconds(1));
+                _logger.LogInformation(
+                    "Usage statistics batch completed for {DeviceCount} devices in {ElapsedMilliseconds} ms (settings {SettingsQueryMilliseconds} ms; hourly {HourlyQueryMilliseconds} ms/{HourlyGroupCount} groups; daily {DailyQueryMilliseconds} ms/{DailyGroupCount} groups; monthly {MonthlyQueryMilliseconds} ms/{MonthlyGroupCount} groups; anomalies {AnomalyQueryMilliseconds} ms/{AnomalyRowCount} rows; cache eligible: {CacheEligible}).",
+                    result.Count, batchTimer.ElapsedMilliseconds, settingsQueryMilliseconds,
+                    hourlyQueryMilliseconds, hourlyGroupCount, dailyQueryMilliseconds, dailyGroupCount,
+                    monthlyQueryMilliseconds, monthlyGroupCount, anomalyQueryMilliseconds, anomalyRowCount,
+                    batchCacheKey != null);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    "Usage statistics batch failed after {ElapsedMilliseconds} ms ({ExceptionType}); partial query timings: settings {SettingsQueryMilliseconds} ms, hourly {HourlyQueryMilliseconds} ms, daily {DailyQueryMilliseconds} ms, monthly {MonthlyQueryMilliseconds} ms, anomalies {AnomalyQueryMilliseconds} ms.",
+                    batchTimer.ElapsedMilliseconds, ex.GetType().Name, settingsQueryMilliseconds,
+                    hourlyQueryMilliseconds, dailyQueryMilliseconds, monthlyQueryMilliseconds, anomalyQueryMilliseconds);
+                return SafeError(ex, "UsageStatisticsBatch");
+            }
+        }
+
+        // ============================================
         // USAGE STATISTICS PER DEVICE
         // ============================================
         [HttpPost("usage-statistics/{deviceKey}")]
@@ -750,39 +1171,48 @@ namespace KWHMonitoring.Controllers
                 var monthEnd = monthStart.AddMonths(1);
 
                 // Hourly
-                var hourlyRecords = await _context.HourlyEnergy
+                var hourlyRows = await _context.HourlyEnergy
+                    .AsNoTracking()
                     .Where(x => x.DeviceKey == deviceKey && x.Hour >= dayStart && x.Hour < dayEnd)
+                    .Select(x => new { x.Hour, x.EnergyKWh, x.CalculatedAt })
                     .ToListAsync();
+                var hourlyRecords = hourlyRows.ToDictionary(x => x.Hour.Hour, x => x.EnergyKWh);
 
                 var hourlyData = Enumerable.Range(0, 24).Select(h => new
                 {
                     timeLabel = string.Format("{0:D2}:00", h),
-                    energy = Math.Round(hourlyRecords.FirstOrDefault(x => x.Hour.Hour == h)?.EnergyKWh ?? 0, 2),
+                    energy = Math.Round(hourlyRecords.GetValueOrDefault(h), 2),
                     sortKey = h
                 }).ToList();
 
                 // Daily
-                var dailyRecords = await _context.DailyEnergy
+                var dailyRows = await _context.DailyEnergy
+                    .AsNoTracking()
                     .Where(x => x.DeviceKey == deviceKey && x.Date >= monthStart && x.Date < monthEnd)
+                    .Select(x => new { x.Date, x.EnergyKWh, x.CalculatedAt })
                     .ToListAsync();
+                var dailyRecords = dailyRows.ToDictionary(x => x.Date.Day, x => x.EnergyKWh);
 
                 var daysInMonth = DateTime.DaysInMonth(startDate.Year, startDate.Month);
                 var dailyData = Enumerable.Range(1, daysInMonth).Select(d => new
                 {
                     dateLabel = string.Format("{0}/{1}/{2}", d, startDate.Month, startDate.Year),
-                    energy = Math.Round(dailyRecords.FirstOrDefault(x => x.Date.Day == d)?.EnergyKWh ?? 0, 2),
+                    energy = Math.Round(dailyRecords.GetValueOrDefault(d), 2),
                     sortKey = d
                 }).ToList();
 
                 // Monthly
-                var monthlyRecords = await _context.MonthlyEnergy
+                var monthlyRows = await _context.MonthlyEnergy
+                    .AsNoTracking()
                     .Where(x => x.DeviceKey == deviceKey && x.Year == startDate.Year)
+                    .Select(x => new { x.Month, x.EnergyKWh, x.CalculatedAt })
                     .ToListAsync();
+                var monthlyRecords = monthlyRows.ToDictionary(x => x.Month, x => x.EnergyKWh);
 
                 var monthlyData = Enumerable.Range(1, 12).Select(m => new
                 {
                     monthName = GetMonthName(m),
-                    energy = Math.Round(monthlyRecords.FirstOrDefault(x => x.Month == m)?.EnergyKWh ?? 0, 2),
+                    energy = Math.Round(monthlyRecords.GetValueOrDefault(m), 2),
                     sortKey = m
                 }).ToList();
 
@@ -793,6 +1223,7 @@ namespace KWHMonitoring.Controllers
 
                 // All-time total
                 var allTimeKWh = Math.Round(await _context.YearlyEnergy
+                    .AsNoTracking()
                     .Where(x => x.DeviceKey == deviceKey)
                     .SumAsync(x => x.EnergyKWh), 2);
 
@@ -811,6 +1242,11 @@ namespace KWHMonitoring.Controllers
 
                 var tariffPerKWh = await GetTariffPerKWh(deviceKey);
                 var estimatedCost = Math.Round(monthKWh * tariffPerKWh, 2);
+                var updateTimes = hourlyRows.Select(x => x.CalculatedAt)
+                    .Concat(dailyRows.Select(x => x.CalculatedAt))
+                    .Concat(monthlyRows.Select(x => x.CalculatedAt))
+                    .ToList();
+                DateTime? dataUpdatedAt = updateTimes.Count > 0 ? (DateTime?)updateTimes.Max() : null;
 
                 var isTodayDevice = startDate.Date == serverToday.Date;
                 decimal realtimeKWh = 0;
@@ -834,14 +1270,14 @@ namespace KWHMonitoring.Controllers
 
                     // Bulan ini = hari ini dari HourlyEnergy + hari sebelumnya dari DailyEnergy
                     var previousDaysTotal = await _context.DailyEnergy
+                        .AsNoTracking()
                         .Where(x => x.DeviceKey == deviceKey && x.Date >= monthStart && x.Date < serverToday)
                         .SumAsync(x => x.EnergyKWh);
                     monthKWh = Math.Round(todayKWh + previousDaysTotal, 2);
 
                     // Tahun ini = hari ini + hari sebelumnya di bulan ini + bulan-bulan sebelumnya dari MonthlyEnergy
-                    var currentMonthUpToYesterday = await _context.DailyEnergy
-                        .Where(x => x.DeviceKey == deviceKey && x.Date >= monthStart && x.Date < serverToday)
-                        .SumAsync(x => x.EnergyKWh);
+                    // Gunakan hasil query bulan yang sama agar tidak mengirim query identik dua kali.
+                    var currentMonthUpToYesterday = previousDaysTotal;
                     var previousMonthsTotal = await _context.MonthlyEnergy
                         .Where(x => x.DeviceKey == deviceKey && x.Year == startDate.Year && x.Month < startDate.Month)
                         .SumAsync(x => x.EnergyKWh);
@@ -961,6 +1397,8 @@ namespace KWHMonitoring.Controllers
                     currentHourLabel = currentHourLabel,
                     secondsToNextHour = secondsToNextHour,
                     isToday = isTodayDevice,
+                    dataUpdatedAt,
+                    dataVersion = dataUpdatedAt.HasValue ? dataUpdatedAt.Value.Ticks.ToString(CultureInfo.InvariantCulture) : "0",
                     serverDate = serverToday.ToString("yyyy-MM-dd"),
                     serverHour = serverNow.Hour,
 
@@ -3099,7 +3537,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ANOMALY LOGS - GET (Server-Side Pagination)
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-logs/summary")]
         public async Task<IActionResult> GetAnomalyLogsSummary()
         {
@@ -3109,7 +3547,7 @@ namespace KWHMonitoring.Controllers
 
                 var totalCount = await query.CountAsync();
                 var overloadCount = await query.CountAsync(x => x.AnomalyType == "OVERLOAD");
-                var dropCount = await query.CountAsync(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
+                var dropCount = await query.CountAsync(x => x.AnomalyType == "DROP");
                 var activeDeviceCount = await query.Select(x => x.DeviceKey).Distinct().CountAsync();
                 var unresolvedCount = await query.CountAsync(x => !x.IsResolved);
                 var criticalCount = await query.CountAsync(x => x.Severity == "critical");
@@ -3131,7 +3569,7 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-logs/{deviceKey}")]
         public async Task<IActionResult> GetAnomalyLogs(
             string deviceKey,
@@ -3142,6 +3580,7 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
+                var canViewOperationalMetadata = User.IsInRole("Viewer") || User.IsInRole("Operator") || User.IsInRole("Admin");
                 if (skip < 0) skip = 0;
                 if (take < 1) take = 10;
                 if (take > 1000) take = 1000;
@@ -3270,17 +3709,17 @@ namespace KWHMonitoring.Controllers
                         { "rootCause", x.rootCause },
                         { "recommendedAction", x.recommendedAction },
                         { "acknowledged", x.acknowledged },
-                        { "acknowledgedBy", x.acknowledgedBy },
+                        { "acknowledgedBy", canViewOperationalMetadata ? x.acknowledgedBy : null },
                         { "acknowledgedTime", x.acknowledgedTime },
                         { "isResolved", x.isResolved },
-                        { "resolvedBy", x.resolvedBy },
+                        { "resolvedBy", canViewOperationalMetadata ? x.resolvedBy : null },
                         { "resolvedTime", x.resolvedTime },
                         { "durationMinutes", durationMinutes },
                         { "responseTimeMinutes", responseTimeMinutes },
                         { "revenueLoss", revenueLoss },
                         { "anomalyCostImpact", anomalyCostImpact },
-                        { "operatorAction", x.operatorAction },
-                        { "operatorNotes", x.operatorNotes },
+                        { "operatorAction", canViewOperationalMetadata ? x.operatorAction : null },
+                        { "operatorNotes", canViewOperationalMetadata ? x.operatorNotes : null },
                         { "notes", x.notes }
                     };
                     return dict;
@@ -3387,11 +3826,117 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        [HttpGet("anomaly-device-health/{deviceKey}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAnomalyDeviceHealth(string deviceKey)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(deviceKey) || deviceKey.Length > 20)
+                    return BadRequest(new { success = false, error = "Invalid device key" });
+
+                var assessment = await AssessDeviceSilenceAsync(deviceKey);
+                if (assessment == null)
+                    return Ok(new { success = true, hasTelemetry = false, isSilent = false });
+
+                // Clear a DEVICE_OFFLINE episode only after telemetry has resumed after its alert time.
+                if (!assessment.IsSilent)
+                {
+                    var activeKey = "AnomalyAlert.Active." + deviceKey;
+                    var active = await _context.AppSettingsRecords.FirstOrDefaultAsync(x => x.SettingKey == activeKey);
+                    if (active != null && (active.SettingValue.StartsWith("DEVICE_OFFLINE|", StringComparison.Ordinal)
+                        || active.SettingValue.StartsWith("DEVICE_DROP|", StringComparison.Ordinal)))
+                    {
+                        var parts = active.SettingValue.Split('|');
+                        DateTime alertTime;
+                        if (parts.Length > 1 && DateTime.TryParseExact(parts[1], "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
+                            DateTimeStyles.None, out alertTime) && assessment.LastSampleTime > alertTime)
+                        {
+                            _context.AppSettingsRecords.Remove(active);
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    hasTelemetry = true,
+                    isSilent = assessment.IsSilent,
+                    deviceKey = deviceKey,
+                    sampleTime = assessment.LastSampleTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff", CultureInfo.InvariantCulture),
+                    secondsSinceLastSample = assessment.SecondsSinceLastSample,
+                    expectedIntervalSeconds = assessment.ExpectedIntervalSeconds,
+                    silenceThresholdSeconds = assessment.SilenceThresholdSeconds,
+                    lastPowerValue = assessment.LastPowerValue
+                });
+            }
+            catch (Exception ex)
+            {
+                return SafeError(ex);
+            }
+        }
+
+        private async Task<DeviceSilenceAssessment> AssessDeviceSilenceAsync(string deviceKey)
+        {
+            var recentTimes = await _context.KWH_Monitoring.AsNoTracking()
+                .Where(x => x.DeviceKey == deviceKey)
+                .OrderByDescending(x => x.Waktu_Server)
+                .Select(x => x.Waktu_Server)
+                .Take(31)
+                .ToListAsync();
+            if (recentTimes.Count == 0) return null;
+
+            var latest = await _context.KWH_Monitoring.AsNoTracking()
+                .Where(x => x.DeviceKey == deviceKey && x.Waktu_Server == recentTimes[0])
+                .Select(x => new { x.Daya_Watt })
+                .FirstOrDefaultAsync();
+            var intervals = new List<double>();
+            var configuredCheckInterval = await _context.AppSettingsRecords.AsNoTracking()
+                .Where(x => x.SettingKey == "Anomaly.CheckInterval")
+                .Select(x => x.SettingValue).FirstOrDefaultAsync();
+            var checkSeconds = int.TryParse(configuredCheckInterval, out var parsedCheck) && parsedCheck > 0
+                ? parsedCheck : 30;
+            for (var i = 0; i + 1 < recentTimes.Count; i++)
+            {
+                var seconds = (recentTimes[i] - recentTimes[i + 1]).TotalSeconds;
+                if (seconds > 0) intervals.Add(seconds);
+            }
+
+            double expectedInterval;
+            if (intervals.Count > 0)
+            {
+                intervals.Sort();
+                var middle = intervals.Count / 2;
+                expectedInterval = intervals.Count % 2 == 0
+                    ? (intervals[middle - 1] + intervals[middle]) / 2d
+                    : intervals[middle];
+            }
+            else
+            {
+                expectedInterval = checkSeconds;
+            }
+
+            var silenceThreshold = Math.Max(120d, Math.Max(expectedInterval * 3d, checkSeconds * 2d));
+            var latestTime = recentTimes[0];
+            var age = Math.Max(0d, (DateTime.Now - latestTime).TotalSeconds);
+
+            return new DeviceSilenceAssessment
+            {
+                LastSampleTime = latestTime,
+                LastPowerValue = latest?.Daya_Watt ?? 0m,
+                ExpectedIntervalSeconds = expectedInterval,
+                SilenceThresholdSeconds = silenceThreshold,
+                SecondsSinceLastSample = age,
+                IsSilent = age >= silenceThreshold
+            };
+        }
+
         // ============================================
         // DOWNTIME PERIOD CHECK
         // Cek apakah sekarang berada dalam periode jam mati (listrik sengaja dimatikan)
         // ============================================
-        private async Task<DowntimeCheckResult> CheckDowntimePeriodAsync(string category = null, string deviceKey = null)
+        private async Task<DowntimeCheckResult> CheckDowntimePeriodAsync(string category = null, string deviceKey = null, DateTime? referenceTime = null)
         {
             var result = new DowntimeCheckResult { IsDowntime = false, StartHour = 0, EndHour = 0 };
 
@@ -3406,7 +3951,7 @@ namespace KWHMonitoring.Controllers
 
                     if (deviceSettings != null && deviceSettings.DowntimeEnabled)
                     {
-                        return EvaluateDowntimeTimeSpan(deviceSettings.DowntimeStart, deviceSettings.DowntimeEnd);
+                        return EvaluateDowntimeTimeSpan(deviceSettings.DowntimeStart, deviceSettings.DowntimeEnd, referenceTime);
                     }
                 }
 
@@ -3426,7 +3971,7 @@ namespace KWHMonitoring.Controllers
                         result.StartHour = GetInt(catSettings, prefix + "StartHour", 22);
                         result.EndHour = GetInt(catSettings, prefix + "EndHour", 6);
 
-                        var now = DateTime.Now;
+                        var now = referenceTime ?? DateTime.Now;
                         var currentHour = now.Hour;
 
                         if (result.StartHour < result.EndHour)
@@ -3456,7 +4001,7 @@ namespace KWHMonitoring.Controllers
                 result.StartHour = GetInt(settings, "Downtime.StartHour", 22);
                 result.EndHour = GetInt(settings, "Downtime.EndHour", 6);
 
-                var now2 = DateTime.Now;
+                var now2 = referenceTime ?? DateTime.Now;
                 var currentHour2 = now2.Hour;
 
                 if (result.StartHour < result.EndHour)
@@ -3472,9 +4017,9 @@ namespace KWHMonitoring.Controllers
             return result;
         }
 
-        private DowntimeCheckResult EvaluateDowntimeTimeSpan(TimeSpan start, TimeSpan end)
+        private DowntimeCheckResult EvaluateDowntimeTimeSpan(TimeSpan start, TimeSpan end, DateTime? referenceTime = null)
         {
-            var now = DateTime.Now;
+            var now = referenceTime ?? DateTime.Now;
             var currentTime = now.TimeOfDay;
             var result = new DowntimeCheckResult
             {
@@ -3494,11 +4039,25 @@ namespace KWHMonitoring.Controllers
         // LOG ANOMALY (dengan downtime logic & server-side deduplication)
         // ============================================
         [HttpPost("log-anomaly")]
-        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> LogAnomaly([FromBody] AnomalyLogRequest data)
         {
             try
             {
+                if (data == null || string.IsNullOrWhiteSpace(data.DeviceKey) || data.DeviceKey.Length > 20)
+                    return BadRequest(new { success = false, error = "DeviceKey is required and must match a configured device" });
+
+                var verified = await VerifyAnomalySampleAsync(data);
+                if (!verified.IsValid)
+                    return BadRequest(new { success = false, error = verified.Error });
+
+                // The server is the source of truth for measurement, threshold and anomaly type.
+                data.AnomalyType = verified.AnomalyType;
+                data.PowerValue = verified.PowerValue;
+                data.ThresholdValue = verified.ThresholdValue;
+                data.Deviation = verified.Deviation;
+                data.EMAValue = verified.EmaValue;
+                data.ThresholdMode = verified.ThresholdMode;
+
                 // ============================================
                 // SERVER-SIDE DEDUPLICATION:
                 // Cek apakah device ini sudah punya anomali aktif (belum di-reset)
@@ -3518,7 +4077,7 @@ namespace KWHMonitoring.Controllers
                         // Auto-expire: if alert is older than 30 minutes, clear it and continue
                         if (DateTime.TryParseExact(parts[1], "yyyy-MM-dd HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var alertTime))
                         {
-                            if (DateTime.Now - alertTime > TimeSpan.FromMinutes(30))
+                            if (!IsDeviceOfflineType(data.AnomalyType) && DateTime.Now - alertTime > TimeSpan.FromMinutes(30))
                             {
                                 _logger.LogInformation("Anomaly alert for {DeviceKey} ({AnomalyType}) expired (older than 30 min), auto-clearing", data.DeviceKey, data.AnomalyType);
                                 _context.AppSettingsRecords.Remove(activeAlertSetting);
@@ -3550,7 +4109,7 @@ namespace KWHMonitoring.Controllers
                     .FirstOrDefaultAsync(x => x.SettingKey == "DeviceCategory." + data.DeviceKey);
                 var deviceCategory = categorySetting?.SettingValue ?? "Billboard";
 
-                var downtime = await CheckDowntimePeriodAsync(deviceCategory, data.DeviceKey);
+                var downtime = await CheckDowntimePeriodAsync(deviceCategory, data.DeviceKey, verified.SampleTime);
 
                 // ============================================
                 // DOWNTIME LOGIC:
@@ -3581,10 +4140,11 @@ namespace KWHMonitoring.Controllers
                     PowerValue = data.PowerValue,
                     ThresholdValue = data.ThresholdValue,
                     Deviation = data.Deviation,
-                    DetectedTime = DateTime.Now,
+                    DetectedTime = verified.DetectedTime,
                     EMAValue = data.EMAValue,
                     ThresholdMode = data.ThresholdMode ?? "manual",
-                    Acknowledged = false
+                    Acknowledged = false,
+                    Notes = verified.Notes ?? string.Empty
                 };
 
                 // Jika downtime & OVERLOAD ? tandai sebagai anomali pada jam mati
@@ -3671,7 +4231,8 @@ namespace KWHMonitoring.Controllers
                             data.PowerValue,
                             data.ThresholdValue,
                             data.Deviation,
-                            isTest: false
+                            isTest: false,
+                            anomalyContext: verified.Notes
                         );
                     }
                 }
@@ -3713,18 +4274,175 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        private static bool IsDeviceOfflineType(string anomalyType)
+        {
+            return string.Equals(anomalyType, "DEVICE_OFFLINE", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(anomalyType, "DEVICE_DROP", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<VerifiedAnomalySample> VerifyAnomalySampleAsync(AnomalyLogRequest request)
+        {
+            if (!request.SampleTime.HasValue)
+                return VerifiedAnomalySample.Invalid("SampleTime is required");
+
+            if (IsDeviceOfflineType(request.AnomalyType))
+            {
+                var silence = await AssessDeviceSilenceAsync(request.DeviceKey);
+                if (silence == null || Math.Abs((silence.LastSampleTime - request.SampleTime.Value).TotalSeconds) > 1.1)
+                    return VerifiedAnomalySample.Invalid("The submitted last-seen time does not match telemetry");
+                if (!silence.IsSilent)
+                    return VerifiedAnomalySample.Invalid("Telemetry is still arriving within the expected interval");
+
+                return new VerifiedAnomalySample
+                {
+                    IsValid = true,
+                    SampleTime = silence.LastSampleTime,
+                    DetectedTime = DateTime.Now,
+                    PowerValue = silence.LastPowerValue,
+                    ThresholdValue = 0m,
+                    Deviation = 0m,
+                    EmaValue = null,
+                    AnomalyType = "DEVICE_OFFLINE",
+                    ThresholdMode = "telemetry-silence",
+                    Notes = string.Format(CultureInfo.InvariantCulture,
+                        "DEVICE_OFFLINE: no telemetry for {0:N0}s; expected interval {1:N0}s; silence threshold {2:N0}s.",
+                        silence.SecondsSinceLastSample, silence.ExpectedIntervalSeconds, silence.SilenceThresholdSeconds)
+                };
+            }
+
+            if (!string.Equals(request.AnomalyType, "OVERLOAD", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(request.AnomalyType, "DROP", StringComparison.OrdinalIgnoreCase))
+                return VerifiedAnomalySample.Invalid("Unsupported anomaly type");
+
+            var latest = await _context.KWH_Monitoring.AsNoTracking()
+                .Where(x => x.DeviceKey == request.DeviceKey)
+                .OrderByDescending(x => x.Waktu_Server)
+                .FirstOrDefaultAsync();
+            if (latest == null || !latest.Daya_Watt.HasValue)
+                return VerifiedAnomalySample.Invalid("No valid telemetry sample is available");
+
+            // Browser Date objects have millisecond precision; SQL datetime2 can retain finer precision.
+            if (Math.Abs((latest.Waktu_Server - request.SampleTime.Value).TotalSeconds) > 1.1)
+                return VerifiedAnomalySample.Invalid("The submitted sample is not the latest telemetry sample");
+
+            var settingsRows = await _context.AppSettingsRecords.AsNoTracking()
+                .Where(x => x.SettingKey.StartsWith("Anomaly.") || x.SettingKey.StartsWith("ema")
+                    || x.SettingKey == "chartDataPoints" || x.SettingKey == "useInitial100ForEma")
+                .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+            var intervalSeconds = GetInt(settingsRows, "Anomaly.CheckInterval", 30);
+            if (intervalSeconds <= 0) intervalSeconds = 30;
+            var maxAgeSeconds = Math.Max(120, intervalSeconds * 3);
+            if ((DateTime.Now - latest.Waktu_Server).TotalSeconds > maxAgeSeconds || latest.Waktu_Server > DateTime.Now.AddSeconds(10))
+                return VerifiedAnomalySample.Invalid("The latest telemetry sample is stale");
+
+            var pointCount = Math.Max(50, GetInt(settingsRows, "chartDataPoints", 20));
+            pointCount = Math.Min(pointCount, 1000);
+            var samples = await _context.KWH_Monitoring.AsNoTracking()
+                .Where(x => x.DeviceKey == request.DeviceKey)
+                .OrderByDescending(x => x.Waktu_Server)
+                .Take(pointCount)
+                .OrderBy(x => x.Waktu_Server)
+                .ToListAsync();
+            if (samples.Count == 0 || samples[samples.Count - 1].Waktu_Server != latest.Waktu_Server)
+                return VerifiedAnomalySample.Invalid("Telemetry changed while the anomaly was being verified");
+
+            var deviceSettings = await _deviceSettingsService.GetEffectiveAsync(request.DeviceKey);
+            var upperValue = deviceSettings == null ? 0d : deviceSettings.EmaUpperThreshold;
+            var lowerValue = deviceSettings == null ? 0d : deviceSettings.EmaLowerThreshold;
+            if (upperValue <= 0 && lowerValue <= 0)
+                return VerifiedAnomalySample.Invalid("Anomaly thresholds are not configured for this device");
+
+            var period = Math.Max(1, GetInt(settingsRows, "emaPeriod", 20));
+            var ema = new double[samples.Count];
+            var useInitialBaseline = GetBool(settingsRows, "useInitial100ForEma", false);
+            if (useInitialBaseline)
+            {
+                var firstSamples = await _context.KWH_Monitoring.AsNoTracking()
+                    .Where(x => x.DeviceKey == request.DeviceKey)
+                    .OrderBy(x => x.Waktu_Server)
+                    .Take(100)
+                    .ToListAsync();
+                var baseline = firstSamples.Count == 0 ? 0d : firstSamples.Average(x => (double)(x.Daya_Watt ?? 0m));
+                for (var i = 0; i < ema.Length; i++) ema[i] = baseline;
+            }
+            else
+            {
+                var k = 2d / (period + 1d);
+                ema[0] = (double)(samples[0].Daya_Watt ?? 0m);
+                for (var i = 1; i < samples.Count; i++)
+                {
+                    var value = (double)(samples[i].Daya_Watt ?? 0m);
+                    ema[i] = value * k + ema[i - 1] * (1d - k);
+                }
+            }
+
+            var mode = GetString(settingsRows, "emaMode", "manual");
+            var currentPower = (double)latest.Daya_Watt.Value;
+            var currentEma = ema[ema.Length - 1];
+            var upper = string.Equals(mode, "fibonacci", StringComparison.OrdinalIgnoreCase)
+                ? currentEma * upperValue
+                : currentEma * (1d + upperValue / 100d);
+            var lower = string.Equals(mode, "fibonacci", StringComparison.OrdinalIgnoreCase)
+                ? currentEma * lowerValue
+                : currentEma * (1d - lowerValue / 100d);
+            var category = await _context.AppSettingsRecords.AsNoTracking()
+                .Where(x => x.SettingKey == "DeviceCategory." + request.DeviceKey)
+                .Select(x => x.SettingValue).FirstOrDefaultAsync() ?? deviceSettings?.DeviceCategory;
+            var downtime = await CheckDowntimePeriodAsync(category, request.DeviceKey, latest.Waktu_Server);
+
+            string anomalyType = null;
+            double threshold = 0d;
+            double deviation = 0d;
+            if (downtime.IsDowntime)
+            {
+                if (currentPower > currentEma && currentEma > 0d)
+                {
+                    anomalyType = "OVERLOAD";
+                    threshold = currentEma;
+                    deviation = (currentPower - currentEma) / currentEma * 100d;
+                }
+            }
+            else if (currentPower > upper && upper > 0d)
+            {
+                anomalyType = "OVERLOAD";
+                threshold = upper;
+                deviation = (currentPower - upper) / upper * 100d;
+            }
+            else if (currentPower < lower && lower > 0d)
+            {
+                anomalyType = "DROP";
+                threshold = lower;
+                deviation = (lower - currentPower) / lower * 100d;
+            }
+
+            if (anomalyType == null || !string.Equals(anomalyType, request.AnomalyType, StringComparison.OrdinalIgnoreCase))
+                return VerifiedAnomalySample.Invalid("The submitted anomaly does not match the current server-side thresholds");
+
+            return new VerifiedAnomalySample
+            {
+                IsValid = true,
+                SampleTime = latest.Waktu_Server,
+                DetectedTime = latest.Waktu_Server,
+                PowerValue = (decimal)currentPower,
+                EmaValue = (decimal)currentEma,
+                ThresholdValue = (decimal)threshold,
+                Deviation = (decimal)Math.Round(deviation, 1),
+                AnomalyType = anomalyType,
+                ThresholdMode = mode
+            };
+        }
+
         // ============================================
         // RESET ANOMALY ALERT
         // Dipanggil saat power kembali normal untuk meng-clear active alert state
         // Setelah reset, anomali baru bisa dikirim lagi untuk device tersebut
         // ============================================
         [HttpPost("reset-anomaly-alert")]
-        [Authorize(Policy = "RequireOperator")]
         public async Task<IActionResult> ResetAnomalyAlert([FromBody] ResetAnomalyAlertRequest data)
         {
             try
             {
-                if (string.IsNullOrEmpty(data.DeviceKey))
+                if (data == null || string.IsNullOrEmpty(data.DeviceKey) || data.DeviceKey.Length > 20)
                     return BadRequest(new { error = "DeviceKey is required" });
 
                 var activeAlertKey = "AnomalyAlert.Active." + data.DeviceKey;
@@ -3733,6 +4451,28 @@ namespace KWHMonitoring.Controllers
 
                 if (activeAlert != null)
                 {
+                    var activeType = activeAlert.SettingValue?.Split('|').FirstOrDefault();
+                    if (activeType == "DEVICE_OFFLINE" || activeType == "DEVICE_DROP")
+                        return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
+
+                    var latest = await _context.KWH_Monitoring.AsNoTracking()
+                        .Where(x => x.DeviceKey == data.DeviceKey)
+                        .OrderByDescending(x => x.Waktu_Server)
+                        .FirstOrDefaultAsync();
+                    if (latest == null || !latest.Daya_Watt.HasValue
+                        || (DateTime.Now - latest.Waktu_Server).TotalSeconds > 120
+                        || latest.Waktu_Server > DateTime.Now.AddSeconds(10))
+                        return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
+
+                    var currentAssessment = await VerifyAnomalySampleAsync(new AnomalyLogRequest
+                    {
+                        DeviceKey = data.DeviceKey,
+                        SampleTime = latest.Waktu_Server,
+                        AnomalyType = activeType
+                    });
+                    if (currentAssessment.IsValid && currentAssessment.AnomalyType == activeType)
+                        return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
+
                     _context.AppSettingsRecords.Remove(activeAlert);
                     await _context.SaveChangesAsync();
                     _logger.LogInformation("Anomaly alert reset for {DeviceKey}", data.DeviceKey);
@@ -3750,12 +4490,13 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // GET SINGLE ANOMALY WITH ANALYSIS & SNAPSHOT
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-logs/detail/{id}")]
         public async Task<IActionResult> GetAnomalyLog(long id)
         {
             try
             {
+                var canViewOperationalMetadata = User.IsInRole("Viewer") || User.IsInRole("Operator") || User.IsInRole("Admin");
                 var log = await _context.AnomalyLogs
                     .AsNoTracking()
                     .FirstOrDefaultAsync(x => x.Id == id);
@@ -3827,17 +4568,17 @@ namespace KWHMonitoring.Controllers
                         recommendedAction = log.RecommendedAction,
                         notes = log.Notes,
                         acknowledged = log.Acknowledged ?? false,
-                        acknowledgedBy = log.AcknowledgedBy,
+                        acknowledgedBy = canViewOperationalMetadata ? log.AcknowledgedBy : null,
                         acknowledgedTime = log.AcknowledgedTime,
                         isResolved = log.IsResolved,
-                        resolvedBy = log.ResolvedBy,
+                        resolvedBy = canViewOperationalMetadata ? log.ResolvedBy : null,
                         resolvedTime = log.ResolvedTime,
                         durationMinutes = durationMinutes,
                         responseTimeMinutes = responseTimeMinutes,
                         revenueLoss = revenueLoss,
                         anomalyCostImpact = anomalyCostImpact,
-                        operatorAction = log.OperatorAction,
-                        operatorNotes = log.OperatorNotes,
+                        operatorAction = canViewOperationalMetadata ? log.OperatorAction : null,
+                        operatorNotes = canViewOperationalMetadata ? log.OperatorNotes : null,
                         chartSnapshot = snapshot == null ? null : new
                         {
                             detectedTime = snapshot.DetectedTime,
@@ -4024,7 +4765,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ANOMALY DASHBOARD SUMMARY
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-dashboard")]
         public async Task<IActionResult> GetAnomalyDashboard()
         {
@@ -4096,7 +4837,7 @@ namespace KWHMonitoring.Controllers
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
                     var tariff = settings?.TariffPerKWh ?? 1500m;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
-                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
 
                     if (isOverload)
@@ -4145,7 +4886,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ANOMALY TRENDS (7 atau 30 hari terakhir)
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-trends")]
         public async Task<IActionResult> GetAnomalyTrends([FromQuery] int days = 7)
         {
@@ -4169,7 +4910,7 @@ namespace KWHMonitoring.Controllers
                         date = date.ToString("yyyy-MM-dd"),
                         total = logs.Count(x => x.DetectedTime.Date == date),
                         overload = logs.Count(x => x.DetectedTime.Date == date && x.AnomalyType == "OVERLOAD"),
-                        drop = logs.Count(x => x.DetectedTime.Date == date && (x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP")),
+                        drop = logs.Count(x => x.DetectedTime.Date == date && x.AnomalyType == "DROP"),
                         critical = logs.Count(x => x.DetectedTime.Date == date && x.Severity == "critical")
                     })
                     .ToList();
@@ -4185,7 +4926,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ANOMALY DEVICE DISTRIBUTION (pie chart data)
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-device-distribution")]
         public async Task<IActionResult> GetAnomalyDeviceDistribution()
         {
@@ -4245,7 +4986,7 @@ namespace KWHMonitoring.Controllers
 
                 var total = logs.Count;
                 var overload = logs.Count(x => x.AnomalyType == "OVERLOAD");
-                var drop = logs.Count(x => x.AnomalyType == "DROP" || x.AnomalyType == "DEVICE_DROP");
+                var drop = logs.Count(x => x.AnomalyType == "DROP");
                 var affectedDevices = logs.Select(x => x.DeviceKey).Distinct().Count();
                 var avgDeviation = total > 0 ? logs.Average(x => (double)x.Deviation) : 0;
                 var criticalCount = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
@@ -4283,7 +5024,7 @@ namespace KWHMonitoring.Controllers
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
                     var tariff = settings?.TariffPerKWh ?? 1500m;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
-                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
 
                     if (isOverload)
@@ -4381,7 +5122,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // GET MONTHLY ANOMALY REPORT
         // ============================================
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         [HttpGet("anomaly-monthly-report")]
         public async Task<IActionResult> GetMonthlyReport([FromQuery] int year, [FromQuery] int month)
         {
@@ -4425,7 +5166,7 @@ namespace KWHMonitoring.Controllers
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
                     var tariff = settings?.TariffPerKWh ?? 1500m;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
-                    var isDrop = log.AnomalyType == "DROP" || log.AnomalyType == "DEVICE_DROP";
+                    var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
 
                     if (isOverload)
@@ -4715,7 +5456,7 @@ namespace KWHMonitoring.Controllers
         }
 
         [HttpGet("anomaly-logs/{id}/chart-snapshot")]
-        [Authorize(Policy = "RequireViewer")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAnomalyChartSnapshot(long id)
         {
             try
@@ -5563,25 +6304,53 @@ namespace KWHMonitoring.Controllers
         // ANOMALY STATE - GET (persist confirmation counts & cooldown state)
         // ============================================
         [HttpGet("get-anomaly-state")]
-        public async Task<IActionResult> GetAnomalyState()
+        public async Task<IActionResult> GetAnomalyState([FromQuery] string scopeId)
         {
             try
             {
-                var confirmationCountsStr = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "AnomalyState.ConfirmationCounts")
-                    .Select(x => x.SettingValue)
-                    .FirstOrDefaultAsync() ?? "{}";
-
-                var cooldownStateStr = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey == "AnomalyState.CooldownState")
-                    .Select(x => x.SettingValue)
-                    .FirstOrDefaultAsync() ?? "{}";
+                if (!Guid.TryParse(scopeId, out var parsedScopeId))
+                    return BadRequest(new { success = false, error = "A valid state scope is required" });
+                var statePrefix = "AnomalyState." + parsedScopeId.ToString("N") + ".";
+                var expiredState = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("AnomalyState.") && x.UpdatedAt.HasValue
+                        && x.UpdatedAt.Value < DateTime.Now.AddDays(-30))
+                    .ToListAsync();
+                if (expiredState.Count > 0)
+                {
+                    _context.AppSettingsRecords.RemoveRange(expiredState);
+                    await _context.SaveChangesAsync();
+                }
+                var perDeviceState = await _context.AppSettingsRecords.AsNoTracking()
+                    .Where(x => x.SettingKey.StartsWith(statePrefix + "Counts.") || x.SettingKey.StartsWith(statePrefix + "Cooldown."))
+                    .ToListAsync();
+                var counts = new JObject();
+                var cooldown = new JObject();
+                foreach (var state in perDeviceState)
+                {
+                    var countPrefix = statePrefix + "Counts.";
+                    var isCount = state.SettingKey.StartsWith(countPrefix, StringComparison.Ordinal);
+                    var prefix = isCount ? countPrefix : statePrefix + "Cooldown.";
+                    var deviceKey = state.SettingKey.Substring(prefix.Length);
+                    try
+                    {
+                        var parsed = JObject.Parse(state.SettingValue ?? "{}");
+                        if (isCount)
+                        {
+                            foreach (var property in parsed.Properties()) counts[property.Name] = property.Value.DeepClone();
+                        }
+                        else if (parsed.HasValues)
+                        {
+                            cooldown[deviceKey] = parsed.DeepClone();
+                        }
+                    }
+                    catch (JsonException) { /* Ignore malformed per-device state and continue loading other devices. */ }
+                }
 
                 return Ok(new
                 {
                     success = true,
-                    confirmationCounts = confirmationCountsStr,
-                    cooldownState = cooldownStateStr
+                    confirmationCounts = counts.ToString(Formatting.None),
+                    cooldownState = cooldown.ToString(Formatting.None)
                 });
             }
             catch (Exception ex)
@@ -5600,40 +6369,28 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                // Save confirmation counts
-                var existingCounts = await _context.AppSettingsRecords
-                    .FirstOrDefaultAsync(x => x.SettingKey == "AnomalyState.ConfirmationCounts");
-                if (existingCounts != null)
-                {
-                    existingCounts.SettingValue = data.confirmationCounts ?? "{}";
-                    existingCounts.UpdatedAt = DateTime.Now;
-                }
-                else
-                {
-                    _context.AppSettingsRecords.Add(new AppSettingsRecord
-                    {
-                        SettingKey = "AnomalyState.ConfirmationCounts",
-                        SettingValue = data.confirmationCounts ?? "{}",
-                        UpdatedAt = DateTime.Now
-                    });
-                }
+                if (data == null) return BadRequest(new { success = false, error = "State payload is required" });
+                if (!Guid.TryParse(data.scopeId, out var parsedScopeId))
+                    return BadRequest(new { success = false, error = "A valid state scope is required" });
+                var statePrefix = "AnomalyState." + parsedScopeId.ToString("N") + ".";
+                var counts = JObject.Parse(string.IsNullOrWhiteSpace(data.confirmationCounts) ? "{}" : data.confirmationCounts);
+                var cooldown = JObject.Parse(string.IsNullOrWhiteSpace(data.cooldownState) ? "{}" : data.cooldownState);
+                var deviceKeys = counts.Properties().Select(x =>
+                    x.Name.EndsWith("_OVERLOAD", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 9) :
+                    x.Name.EndsWith("_DROP", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 5) : string.Empty)
+                    .Concat(cooldown.Properties().Select(x => x.Name))
+                    .Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 20)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
 
-                // Save cooldown state
-                var existingCooldown = await _context.AppSettingsRecords
-                    .FirstOrDefaultAsync(x => x.SettingKey == "AnomalyState.CooldownState");
-                if (existingCooldown != null)
+                foreach (var deviceKey in deviceKeys)
                 {
-                    existingCooldown.SettingValue = data.cooldownState ?? "{}";
-                    existingCooldown.UpdatedAt = DateTime.Now;
-                }
-                else
-                {
-                    _context.AppSettingsRecords.Add(new AppSettingsRecord
-                    {
-                        SettingKey = "AnomalyState.CooldownState",
-                        SettingValue = data.cooldownState ?? "{}",
-                        UpdatedAt = DateTime.Now
-                    });
+                    var deviceCounts = new JObject();
+                    foreach (var property in counts.Properties().Where(x => x.Name.StartsWith(deviceKey + "_", StringComparison.Ordinal)))
+                        deviceCounts[property.Name] = property.Value.DeepClone();
+                    var deviceCooldown = cooldown[deviceKey] as JObject ?? new JObject();
+                    await UpsertAnomalyStateRecordAsync(statePrefix + "Counts." + deviceKey, deviceCounts.ToString(Formatting.None));
+                    await UpsertAnomalyStateRecordAsync(statePrefix + "Cooldown." + deviceKey, deviceCooldown.ToString(Formatting.None));
                 }
 
                 await _context.SaveChangesAsync();
@@ -5643,6 +6400,26 @@ namespace KWHMonitoring.Controllers
             {
                 _logger.LogError("[SAVE-ANOMALY-STATE] Error: {0}", ex.Message);
                 return SafeError(ex);
+            }
+        }
+
+        private async Task UpsertAnomalyStateRecordAsync(string key, string value)
+        {
+            if (value.Length > 500) throw new InvalidOperationException("Per-device anomaly state exceeds the AppSettings value limit");
+            var record = await _context.AppSettingsRecords.FirstOrDefaultAsync(x => x.SettingKey == key);
+            if (record == null)
+            {
+                _context.AppSettingsRecords.Add(new AppSettingsRecord
+                {
+                    SettingKey = key,
+                    SettingValue = value,
+                    UpdatedAt = DateTime.Now
+                });
+            }
+            else
+            {
+                record.SettingValue = value;
+                record.UpdatedAt = DateTime.Now;
             }
         }
 
@@ -5725,6 +6502,13 @@ namespace KWHMonitoring.Controllers
                     .FirstOrDefaultAsync(x => x.SettingKey == activeAlertKey);
                 if (activeAlert != null)
                     _context.AppSettingsRecords.Remove(activeAlert);
+
+                var perDeviceAnomalyState = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("AnomalyState.")
+                        && (x.SettingKey.EndsWith(".Counts." + deviceKey) || x.SettingKey.EndsWith(".Cooldown." + deviceKey)))
+                    .ToListAsync();
+                if (perDeviceAnomalyState.Count > 0)
+                    _context.AppSettingsRecords.RemoveRange(perDeviceAnomalyState);
 
                 // Remove this device from anomaly confirmation counts & cooldown state
                 var countsRecord = await _context.AppSettingsRecords
@@ -7005,11 +7789,13 @@ namespace KWHMonitoring.Controllers
     {
         public string confirmationCounts { get; set; } = "{}";
         public string cooldownState { get; set; } = "{}";
+        public string scopeId { get; set; }
     }
 
     public class AnomalyLogRequest
     {
         public string DeviceKey { get; set; } = string.Empty;
+        public DateTime? SampleTime { get; set; }
         public string DeviceId { get; set; }
         public string AnomalyType { get; set; } = string.Empty;
         public decimal PowerValue { get; set; }
@@ -7018,6 +7804,36 @@ namespace KWHMonitoring.Controllers
         public decimal? EMAValue { get; set; }
         public string ThresholdMode { get; set; }
         public ChartSnapshotRequest ChartSnapshot { get; set; }
+    }
+
+    internal class VerifiedAnomalySample
+    {
+        public bool IsValid { get; set; }
+        public string Error { get; set; }
+        public DateTime SampleTime { get; set; }
+        public DateTime DetectedTime { get; set; }
+        public decimal PowerValue { get; set; }
+        public decimal ThresholdValue { get; set; }
+        public decimal Deviation { get; set; }
+        public decimal? EmaValue { get; set; }
+        public string AnomalyType { get; set; }
+        public string ThresholdMode { get; set; }
+        public string Notes { get; set; }
+
+        public static VerifiedAnomalySample Invalid(string error)
+        {
+            return new VerifiedAnomalySample { IsValid = false, Error = error };
+        }
+    }
+
+    internal class DeviceSilenceAssessment
+    {
+        public DateTime LastSampleTime { get; set; }
+        public decimal LastPowerValue { get; set; }
+        public double ExpectedIntervalSeconds { get; set; }
+        public double SilenceThresholdSeconds { get; set; }
+        public double SecondsSinceLastSample { get; set; }
+        public bool IsSilent { get; set; }
     }
 
     public class ChartSnapshotRequest
@@ -7043,6 +7859,23 @@ namespace KWHMonitoring.Controllers
     {
         public string StartDate { get; set; }
         public string EndDate { get; set; }
+    }
+
+    public class UsageStatisticsBatchRequest : DateFilterRequest
+    {
+        public List<string> DeviceKeys { get; set; } = new List<string>();
+        public string DeviceKey { get; set; }
+    }
+
+    internal class UsageStatisticsBatchAnomaly
+    {
+        public string DeviceKey { get; set; }
+        public string AnomalyType { get; set; }
+        public decimal PowerValue { get; set; }
+        public decimal ThresholdValue { get; set; }
+        public decimal Deviation { get; set; }
+        public string Severity { get; set; }
+        public DateTime DetectedTime { get; set; }
     }
 
     public class DowntimeCheckResult
