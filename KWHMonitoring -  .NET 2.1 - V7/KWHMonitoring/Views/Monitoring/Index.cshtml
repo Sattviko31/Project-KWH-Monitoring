@@ -1216,7 +1216,7 @@
 
                 // Update Load gauge MENGGUNAKAN per-device settings
                 const ds = (window.getDeviceSettings && window.getDeviceSettings(panel.deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
-                const maxCap = ds.maxCapacity || 0;
+                const maxCap = panel.maxCapacity || ds.maxCapacity || 0;
                 const normalThresh = ds.loadNormalThreshold || 30;
                 const mediumThresh = ds.loadMediumThreshold || 70;
 
@@ -1226,6 +1226,7 @@
                 if (loadBar.length > 0) {
                     if (maxCap > 0) {
                         loadBar.css('width', loadPercent.toFixed(1) + '%');
+                        loadBar.text(Math.round(loadPercent).toLocaleString('id-ID') + '%');
                         loadBar.removeClass('bg-info bg-warning bg-danger bg-secondary');
                         if (loadPercent > mediumThresh) {
                             loadBar.addClass('bg-danger');
@@ -1538,6 +1539,7 @@
                         if (loadBar.length > 0) {
                             if (maxCap > 0) {
                                 loadBar.css('width', loadPercent.toFixed(1) + '%');
+                                loadBar.text(Math.round(loadPercent).toLocaleString('id-ID') + '%');
                                 loadBar.removeClass('bg-info bg-warning bg-danger bg-secondary');
                                 if (loadPercent > mediumThresh) {
                                     loadBar.addClass('bg-danger');
