@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using KWHMonitoring.Models;
@@ -17,5 +18,12 @@ namespace KWHMonitoring.Services
         /// hasilnya dictionary kosong/parsial sehingga halaman monitoring tetap normal.
         /// </summary>
         Task<Dictionary<string, TitikLokasi>> GetByDeviceKeysAsync(IEnumerable<string> deviceKeys);
+
+        /// <summary>
+        /// Mengambil tagihan ERP terbaru untuk setiap lokasi dan bulan pada rentang periode.
+        /// DeviceKey dipasangkan dengan TitikLokasiID.
+        /// </summary>
+        Task<Dictionary<string, List<ErpBillingRecord>>> GetBillingHistoryAsync(
+            IEnumerable<string> deviceKeys, DateTime fromPeriod, DateTime toPeriodExclusive);
     }
 }

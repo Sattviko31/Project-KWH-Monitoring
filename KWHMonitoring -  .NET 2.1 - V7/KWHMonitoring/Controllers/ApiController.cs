@@ -1168,6 +1168,174 @@ namespace KWHMonitoring.Controllers
         }
 
         // ============================================
+        // USAGE COST COMPARISON: KWH ESTIMATE VS ERP BILLING
+        // ============================================
+        [HttpPost("usage-cost-comparison")]
+        public async Task<IActionResult> GetUsageCostComparison([FromBody] UsageCostComparisonRequest request)
+        {
+            try
+            {
+                var selectedDate = DateTime.Today;
+                if (!string.IsNullOrWhiteSpace(request?.StartDate) &&
+                    DateTime.TryParse(request.StartDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+                {
+                    selectedDate = parsedDate.Date;
+                }
+
+                var currentMonth = new DateTime(selectedDate.Year, selectedDate.Month, 1);
+                var historyStart = currentMonth.AddMonths(-3);
+                var historyEnd = currentMonth.AddMonths(1);
+                var requestedKeys = new List<string>();
+
+                if (!string.IsNullOrWhiteSpace(request?.DeviceKey))
+                    requestedKeys.Add(request.DeviceKey.Trim());
+                if (request?.DeviceKeys != null)
+                    requestedKeys.AddRange(request.DeviceKeys.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()));
+
+                requestedKeys = requestedKeys
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (requestedKeys.Count == 0)
+                {
+                    requestedKeys = await _context.MonthlyEnergy
+                        .AsNoTracking()
+                        .Where(x => x.Year > historyStart.Year || (x.Year == historyStart.Year && x.Month >= historyStart.Month))
+                        .Select(x => x.DeviceKey)
+                        .Distinct()
+                        .ToListAsync();
+                }
+
+                if (requestedKeys.Count == 0)
+                    return Ok(new { success = true, currentMonth = currentMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture), rows = new List<object>() });
+
+                var monthlyRows = await _context.MonthlyEnergy
+                    .AsNoTracking()
+                    .Where(x => requestedKeys.Contains(x.DeviceKey) &&
+                        (x.Year > historyStart.Year || (x.Year == historyStart.Year && x.Month >= historyStart.Month)) &&
+                        (x.Year < historyEnd.Year || (x.Year == historyEnd.Year && x.Month < historyEnd.Month)))
+                    .Select(x => new { x.DeviceKey, x.Year, x.Month, x.EnergyKWh })
+                    .ToListAsync();
+
+                // Untuk periode berjalan pada hari ini, MonthlyEnergy dapat tertinggal dari
+                // agregat jam/hari terbaru. Ambil sumber yang sama dengan endpoint realtime
+                // agar energi terukur dan estimasi biaya pada tabel perbandingan selalu mutakhir.
+                var realtimeDailyRows = await _context.DailyEnergy
+                    .AsNoTracking()
+                    .Where(x => requestedKeys.Contains(x.DeviceKey) &&
+                        x.Date >= currentMonth && x.Date < historyEnd)
+                    .Select(x => new { x.DeviceKey, x.Date, x.EnergyKWh })
+                    .ToListAsync();
+                var realtimeHourlyRows = await _context.HourlyEnergy
+                    .AsNoTracking()
+                    .Where(x => requestedKeys.Contains(x.DeviceKey) &&
+                        x.Hour >= selectedDate.Date && x.Hour < selectedDate.Date.AddDays(1))
+                    .Select(x => new { x.DeviceKey, x.Hour, x.EnergyKWh })
+                    .ToListAsync();
+
+                var settings = await _deviceSettingsService.GetAllEffectiveAsync();
+                var erpHistory = await _titikLokasiService.GetBillingHistoryAsync(requestedKeys, historyStart, historyEnd);
+                var periods = Enumerable.Range(0, 4)
+                    .Select(offset => historyStart.AddMonths(offset))
+                    .ToList();
+                var resultRows = new List<object>();
+                var useRealtimeCurrentMonth = selectedDate.Date == DateTime.Today;
+
+                foreach (var deviceKey in requestedKeys)
+                {
+                    var tariff = settings.TryGetValue(deviceKey, out var deviceSettings) && deviceSettings.TariffPerKWh > 0m
+                        ? deviceSettings.TariffPerKWh
+                        : 1500m;
+                    var deviceErpRows = erpHistory.TryGetValue(deviceKey, out var erpRows)
+                        ? erpRows
+                        : new List<ErpBillingRecord>();
+
+                    var realtimeMonthEnergy = useRealtimeCurrentMonth
+                        ? realtimeDailyRows
+                            .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) && x.Date.Date < selectedDate.Date)
+                            .Sum(x => x.EnergyKWh)
+                            + realtimeHourlyRows
+                                .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase))
+                                .Sum(x => x.EnergyKWh)
+                        : 0m;
+
+                    var periodRows = periods.Select(period =>
+                    {
+                        var energy = monthlyRows
+                            .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) && x.Year == period.Year && x.Month == period.Month)
+                            .Sum(x => x.EnergyKWh);
+                        if (useRealtimeCurrentMonth && period.Year == currentMonth.Year && period.Month == currentMonth.Month)
+                            energy = realtimeMonthEnergy;
+                        var estimatedCost = Math.Round(energy * tariff, 0, MidpointRounding.AwayFromZero);
+                        var erp = deviceErpRows
+                            .OrderByDescending(x => x.Periode)
+                            .ThenByDescending(x => x.TagihanListrikID)
+                            .FirstOrDefault(x => x.Periode.Year == period.Year && x.Periode.Month == period.Month);
+                        var hasActual = erp != null;
+                        var actualCost = hasActual ? erp.JumlahTagihan : (decimal?)null;
+                        var comparisonCost = actualCost ?? estimatedCost;
+
+                        return new
+                        {
+                            year = period.Year,
+                            month = period.Month,
+                            period = period.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                            label = GetMonthName(period.Month) + " " + period.Year,
+                            energyKWh = Math.Round(energy, 2),
+                            tariffPerKWh = tariff,
+                            estimatedCost,
+                            actualCost,
+                            comparisonCost,
+                            status = hasActual ? "Aktual ERP" : "Estimasi",
+                            paymentPeriod = hasActual ? erp.Periode.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : null,
+                            kodeLokasi = hasActual ? erp.KodeLokasi : null,
+                            tagihanListrikID = hasActual ? (long?)erp.TagihanListrikID : null
+                        };
+                    }).ToList();
+
+                    var previousRows = periodRows.Where(x => x.year != currentMonth.Year || x.month != currentMonth.Month).ToList();
+                    var previousActual = previousRows.Where(x => x.actualCost.HasValue).Select(x => x.actualCost.Value).ToList();
+                    var previousComparison = previousRows.Select(x => x.comparisonCost).ToList();
+                    var currentRow = periodRows.First(x => x.year == currentMonth.Year && x.month == currentMonth.Month);
+                    var previousRow = periodRows.FirstOrDefault(x => x.year == currentMonth.AddMonths(-1).Year && x.month == currentMonth.AddMonths(-1).Month);
+                    var previousValue = previousRow == null ? 0m : previousRow.comparisonCost;
+                    var difference = currentRow.comparisonCost - previousValue;
+                    var differencePercent = previousValue == 0m ? 0m : Math.Round(difference / previousValue * 100m, 1);
+
+                    resultRows.Add(new
+                    {
+                        deviceKey,
+                        currentMonth = currentRow,
+                        previousMonth = previousRow,
+                        monthDifference = Math.Round(difference, 0),
+                        monthDifferencePercent = differencePercent,
+                        averagePreviousThree = new
+                        {
+                            estimatedCost = Math.Round(previousRows.Average(x => x.estimatedCost), 0),
+                            actualCost = previousActual.Count == 0 ? (decimal?)null : Math.Round(previousActual.Average(), 0),
+                            comparisonCost = Math.Round(previousComparison.Average(), 0),
+                            actualMonthCount = previousActual.Count
+                        },
+                        periods = periodRows
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    currentMonth = currentMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                    historyStart = historyStart.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                    rows = resultRows
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Usage cost comparison failed; existing usage statistics remain unaffected.");
+                return Ok(new { success = false, rows = new List<object>(), message = "Perbandingan biaya belum tersedia." });
+            }
+        }
+
+        // ============================================
         // USAGE STATISTICS PER DEVICE
         // ============================================
         [HttpPost("usage-statistics/{deviceKey}")]

@@ -36,6 +36,7 @@ namespace KWHMonitoring.Services
         private const int MaxParametersPerBatch = 500;
 
         private const string CachePrefix = "titiklokasi:key:";
+        private const string SnapshotCachePrefix = "titiklokasi:snapshot:";
         private const string FailCooldownCacheKey = "titiklokasi:failcooldown";
 
         // Penanda "sudah dicari tapi tidak ada" agar device tanpa data tidak di-query ulang.
@@ -73,8 +74,7 @@ namespace KWHMonitoring.Services
             if (requested.Count == 0) return result;
 
             // Cache ERP dapat dinonaktifkan dengan CacheMinutes = 0.
-            // Saat nonaktif, jangan membaca cache lama yang mungkin masih hidup
-            // di memory dari konfigurasi/proses sebelumnya.
+            // Snapshot fallback tetap dibaca hanya ketika ERP gagal/cooldown.
             var cacheMinutes = GetNonNegativeIntSetting("WwmErp:CacheMinutes", 0);
             var useCache = cacheMinutes > 0;
             var missing = new List<string>();
@@ -93,10 +93,15 @@ namespace KWHMonitoring.Services
             if (missing.Count == 0) return result;
 
             // Sumber ERP sedang bermasalah: jangan dicoba lagi agar halaman monitoring tetap cepat.
-            if (_cache.TryGetValue(FailCooldownCacheKey, out _)) return result;
+            // Gunakan snapshot terakhir agar info panel tidak hilang saat koneksi terputus.
+            if (_cache.TryGetValue(FailCooldownCacheKey, out _))
+            {
+                AddSnapshots(result, missing);
+                return result;
+            }
 
             // Cache ERP sengaja dapat dinonaktifkan dengan CacheMinutes = 0.
-            // Untuk data ID pelanggan, Catatan, dan daya terpasang, dashboard harus
+            // Untuk data ID pelanggan, Catatan, dan daya terpasang, dashboard tetap
             // membaca hasil terbaru dari ERP pada setiap pemuatan bila cache = 0.
             var cacheOptions = cacheMinutes > 0
                 ? new MemoryCacheEntryOptions
@@ -114,6 +119,9 @@ namespace KWHMonitoring.Services
                     if (rows.TryGetValue(key, out var row))
                     {
                         result[key] = row;
+                        // Snapshot tanpa expiration dipakai sebagai fallback bila ERP
+                        // terputus pada pemuatan berikutnya.
+                        _cache.Set(SnapshotCachePrefix + key, row);
                         if (cacheOptions != null)
                         {
                             _cache.Set(CachePrefix + key, row, cacheOptions);
@@ -132,8 +140,120 @@ namespace KWHMonitoring.Services
             {
                 var cooldown = GetIntSetting("WwmErp:FailCooldownSeconds", 60);
                 _cache.Set(FailCooldownCacheKey, true, TimeSpan.FromSeconds(cooldown));
+                AddSnapshots(result, missing);
                 _logger.LogWarning(ex,
-                    "Data TitikLokasi (WWMERP) tidak dapat dibaca. Tooltip panel tampil tanpa info lokasi.");
+                    "Data TitikLokasi (WWMERP) tidak dapat dibaca. Snapshot terakhir dipakai untuk panel monitoring bila tersedia.");
+            }
+
+            return result;
+        }
+
+        private void AddSnapshots(Dictionary<string, TitikLokasi> result, IEnumerable<string> keys)
+        {
+            foreach (var key in keys)
+            {
+                if (result.ContainsKey(key)) continue;
+
+                if (_cache.TryGetValue(SnapshotCachePrefix + key, out var cached) &&
+                    cached is TitikLokasi lokasi)
+                {
+                    result[key] = lokasi;
+                }
+            }
+        }
+
+        public async Task<Dictionary<string, List<ErpBillingRecord>>> GetBillingHistoryAsync(
+            IEnumerable<string> deviceKeys, DateTime fromPeriod, DateTime toPeriodExclusive)
+        {
+            var result = new Dictionary<string, List<ErpBillingRecord>>(StringComparer.OrdinalIgnoreCase);
+            var requested = (deviceKeys ?? Enumerable.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (requested.Count == 0 || fromPeriod >= toPeriodExclusive) return result;
+
+            var target = ResolveTarget();
+            if (string.IsNullOrWhiteSpace(target.ConnectionString)) return result;
+
+            try
+            {
+                var builder = new SqlConnectionStringBuilder(target.ConnectionString)
+                {
+                    ConnectTimeout = GetIntSetting("WwmErp:ConnectTimeoutSeconds", 5),
+                    ConnectRetryCount = 0,
+                    ApplicationName = "KWHMonitoring"
+                };
+
+                using (var connection = new SqlConnection(builder.ConnectionString))
+                {
+                    await connection.OpenAsync();
+                    for (var offset = 0; offset < requested.Count; offset += MaxParametersPerBatch)
+                    {
+                        var batch = requested.Skip(offset).Take(MaxParametersPerBatch).ToList();
+                        using (var command = connection.CreateCommand())
+                        {
+                            command.CommandTimeout = GetIntSetting("WwmErp:CommandTimeoutSeconds", 8);
+                            var parameterNames = new List<string>();
+                            for (var i = 0; i < batch.Count; i++)
+                            {
+                                var name = "@device" + i;
+                                parameterNames.Add(name);
+                                command.Parameters.AddWithValue(name, batch[i]);
+                            }
+                            command.Parameters.AddWithValue("@fromPeriod", fromPeriod);
+                            command.Parameters.AddWithValue("@toPeriod", toPeriodExclusive);
+
+                            command.CommandText =
+                                "WITH LatestErp AS (" +
+                                "SELECT CONVERT(nvarchar(50), l.[TitikLokasiID]) AS [DeviceKey], " +
+                                "l.[KodeLokasi], t.[Periode], t.[JumlahTagihan], t.[TagihanListrikID], " +
+                                "ROW_NUMBER() OVER (" +
+                                "PARTITION BY l.[TitikLokasiID], YEAR(t.[Periode]), MONTH(t.[Periode]) " +
+                                "ORDER BY t.[Periode] DESC, t.[TagihanListrikID] DESC) AS [RowNumber] " +
+                                "FROM " + target.BillingTableReference + " t " +
+                                "INNER JOIN " + target.ElectricityAccountTableReference + " r " +
+                                "ON t.[RekListrikID] = r.[RekListrikID] " +
+                                "INNER JOIN " + target.TableReference + " l " +
+                                "ON r.[TitikLokasiID] = l.[TitikLokasiID] " +
+                                "INNER JOIN " + target.LocationDetailTableReference + " ld " +
+                                "ON l.[TitikLokasiID] = ld.[TitikLokasiID] " +
+                                "LEFT JOIN " + target.ClientTableReference + " c " +
+                                "ON t.[ClientID] = c.[ClientID] " +
+                                "WHERE CONVERT(nvarchar(50), l.[TitikLokasiID]) IN (" + string.Join(", ", parameterNames) + ") " +
+                                "AND t.[Periode] >= @fromPeriod AND t.[Periode] < @toPeriod" +
+                                ") SELECT [DeviceKey], [KodeLokasi], [Periode], [JumlahTagihan], [TagihanListrikID] " +
+                                "FROM LatestErp WHERE [RowNumber] = 1";
+
+                            using (var reader = await command.ExecuteReaderAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    var key = Normalize(Convert.ToString(reader["DeviceKey"]));
+                                    if (string.IsNullOrWhiteSpace(key)) continue;
+                                    if (!result.TryGetValue(key, out var rows))
+                                    {
+                                        rows = new List<ErpBillingRecord>();
+                                        result[key] = rows;
+                                    }
+                                    rows.Add(new ErpBillingRecord
+                                    {
+                                        DeviceKey = key,
+                                        KodeLokasi = Normalize(Convert.ToString(reader["KodeLokasi"])),
+                                        Periode = reader["Periode"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(reader["Periode"]),
+                                        JumlahTagihan = ReadDecimalAllowZero(reader["JumlahTagihan"]),
+                                        TagihanListrikID = reader["TagihanListrikID"] == DBNull.Value ? 0L : Convert.ToInt64(reader["TagihanListrikID"])
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Riwayat tagihan ERP tidak dapat dibaca. Perbandingan tetap menampilkan estimasi.");
             }
 
             return result;
@@ -184,9 +304,8 @@ namespace KWHMonitoring.Services
             var target = ResolveTarget();
             if (string.IsNullOrWhiteSpace(target.ConnectionString))
             {
-                _logger.LogWarning("Connection string database ERP belum dikonfigurasi " +
-                                   "(WWMERPConnection / DefaultConnection). Info TitikLokasi dilewati.");
-                return found;
+                throw new InvalidOperationException("Connection string database ERP belum dikonfigurasi " +
+                    "(WWMERPConnection / DefaultConnection).");
             }
 
             var connectTimeout = GetIntSetting("WwmErp:ConnectTimeoutSeconds", 5);
@@ -342,6 +461,12 @@ namespace KWHMonitoring.Services
         {
             if (value == null || value == DBNull.Value) return 0m;
             return decimal.TryParse(Convert.ToString(value), out var result) && result > 0m ? result : 0m;
+        }
+
+        private static decimal ReadDecimalAllowZero(object value)
+        {
+            if (value == null || value == DBNull.Value) return 0m;
+            return decimal.TryParse(Convert.ToString(value), out var result) ? result : 0m;
         }
 
         private static string SafeName(string name)
