@@ -85,6 +85,23 @@ namespace KWHMonitoring.Controllers
             return record != null ? record.SettingValue : defaultValue;
         }
 
+        private async Task<string> ApplyRelayCommandInversionAsync(string deviceId, string rcValue)
+        {
+            if (rcValue != "0" && rcValue != "1")
+                return rcValue;
+
+            var device = await _context.DeviceRegistry
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.DeviceId == deviceId);
+            if (device == null || string.IsNullOrWhiteSpace(device.DeviceKey))
+                return rcValue;
+
+            var settings = await _deviceSettingsService.GetEffectiveAsync(device.DeviceKey);
+            return settings.InvertRelayCommand
+                ? (rcValue == "1" ? "0" : "1")
+                : rcValue;
+        }
+
         private async Task LogSecurityActionAsync(SecurityAction action, string targetDevice, string details, bool success)
         {
             try
@@ -3347,6 +3364,8 @@ namespace KWHMonitoring.Controllers
                     return StatusCode(429, new { success = false, error = "Terlalu banyak perintah relay. Silakan tunggu 60 detik." });
                 }
 
+                var effectiveRcValue = await ApplyRelayCommandInversionAsync(request.DeviceId, request.RCValue);
+
                 var action = request.Pulse
                     ? SecurityAction.RelayPulse
                     : request.RCValue == "0"
@@ -3356,23 +3375,23 @@ namespace KWHMonitoring.Controllers
                 bool result;
                 if (request.Pulse)
                 {
-                    result = await _mqttService.PublishRelayPulseAsync(request.DeviceId, request.RCValue);
+                    result = await _mqttService.PublishRelayPulseAsync(request.DeviceId, effectiveRcValue);
                 }
                 else
                 {
-                    result = await _mqttService.PublishRelayControlAsync(request.DeviceId, request.RCValue);
+                    result = await _mqttService.PublishRelayControlAsync(request.DeviceId, effectiveRcValue);
                 }
 
                 if (result)
                 {
-                    var details = $"Device {request.DeviceId}, RC={request.RCValue}, Pulse={request.Pulse}";
+                    var details = $"Device {request.DeviceId}, RC={request.RCValue}, EffectiveRC={effectiveRcValue}, Pulse={request.Pulse}";
                     await LogSecurityActionAsync(action, request.DeviceId, details, true);
                     await _emailService.SendCriticalActionNotificationAsync(
                         User.Identity.Name,
                         request.Pulse ? "Relay Pulse" : (request.RCValue == "0" ? "Relay OFF" : "Relay ON"),
                         details);
 
-                    return Ok(new { success = true, message = $"Command RC={request.RCValue} published to {request.DeviceId}" });
+                    return Ok(new { success = true, message = $"Command RC={effectiveRcValue} published to {request.DeviceId}" });
                 }
 
                 await LogSecurityActionAsync(action, request.DeviceId, "Failed to publish MQTT command", false);
@@ -7849,6 +7868,7 @@ namespace KWHMonitoring.Controllers
                     EmaFibUpper = data.EmaFibUpper,
                     EmaFibLower = data.EmaFibLower,
                     ControlMode = data.ControlMode,
+                    InvertRelayCommand = data.InvertRelayCommand,
                     TariffWBP = data.TariffWBP,
                     TariffLWBP = data.TariffLWBP,
                     WbpStartHour = data.WbpStartHour,
@@ -7906,6 +7926,7 @@ namespace KWHMonitoring.Controllers
                                     EmaFibUpper = item.EmaFibUpper,
                                     EmaFibLower = item.EmaFibLower,
                                     ControlMode = item.ControlMode,
+                                    InvertRelayCommand = item.InvertRelayCommand,
                                     TariffWBP = item.TariffWBP,
                                     TariffLWBP = item.TariffLWBP,
                                     WbpStartHour = item.WbpStartHour,
@@ -8271,6 +8292,7 @@ namespace KWHMonitoring.Controllers
         public double EmaFibUpper { get; set; }
         public double EmaFibLower { get; set; }
         public string ControlMode { get; set; }
+        public bool InvertRelayCommand { get; set; }
         public decimal TariffWBP { get; set; }
         public decimal TariffLWBP { get; set; }
         public int WbpStartHour { get; set; } = 18;

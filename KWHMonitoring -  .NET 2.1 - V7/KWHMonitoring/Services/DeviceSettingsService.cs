@@ -39,25 +39,11 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(deviceSettings.DeviceCategory))
                 deviceSettings.DeviceCategory = "Billboard";
 
-            if (deviceSettings.TariffPerKWh <= 0)
-                deviceSettings.TariffPerKWh = 1500m;
-
-            if (deviceSettings.LoadNormalThreshold <= 0)
-                deviceSettings.LoadNormalThreshold = 30;
-
-            if (deviceSettings.LoadMediumThreshold <= 0)
-                deviceSettings.LoadMediumThreshold = 70;
-
             if (string.IsNullOrWhiteSpace(deviceSettings.ControlMode))
                 deviceSettings.ControlMode = "OnOff";
 
             // WBP/LWBP: if both 0, not configured — keep 0 to signal "use flat tariff"
             // WbpStartHour/WbpEndHour default to 18/22 from model, only override if clearly invalid
-            if (deviceSettings.WbpStartHour < 0 || deviceSettings.WbpStartHour > 23)
-                deviceSettings.WbpStartHour = 18;
-            if (deviceSettings.WbpEndHour < 0 || deviceSettings.WbpEndHour > 23)
-                deviceSettings.WbpEndHour = 22;
-
             return deviceSettings;
         }
 
@@ -74,15 +60,6 @@ namespace KWHMonitoring.Services
                 // MaxCapacity, EMA thresholds, BudgetKWh, SurfaceArea: 0 means not configured — do NOT override
                 if (string.IsNullOrWhiteSpace(setting.DeviceCategory))
                     setting.DeviceCategory = "Billboard";
-
-                if (setting.TariffPerKWh <= 0)
-                    setting.TariffPerKWh = 1500m;
-
-                if (setting.LoadNormalThreshold <= 0)
-                    setting.LoadNormalThreshold = 30;
-
-                if (setting.LoadMediumThreshold <= 0)
-                    setting.LoadMediumThreshold = 70;
 
                 if (string.IsNullOrWhiteSpace(setting.ControlMode))
                     setting.ControlMode = "OnOff";
@@ -126,6 +103,7 @@ namespace KWHMonitoring.Services
                 EmaFibUpper = effective.EmaFibUpper,
                 EmaFibLower = effective.EmaFibLower,
                 ControlMode = effective.ControlMode,
+                InvertRelayCommand = effective.InvertRelayCommand,
                 TariffWBP = effective.TariffWBP,
                 TariffLWBP = effective.TariffLWBP,
                 WbpStartHour = effective.WbpStartHour,
@@ -166,6 +144,7 @@ namespace KWHMonitoring.Services
                 existing.EmaFibUpper = settings.EmaFibUpper;
                 existing.EmaFibLower = settings.EmaFibLower;
                 existing.ControlMode = settings.ControlMode;
+                existing.InvertRelayCommand = settings.InvertRelayCommand;
                 existing.TariffWBP = settings.TariffWBP;
                 existing.TariffLWBP = settings.TariffLWBP;
                 existing.WbpStartHour = settings.WbpStartHour;

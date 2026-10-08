@@ -65,6 +65,9 @@ namespace KWHMonitoring.Models
         [MaxLength(50)]
         public string ControlMode { get; set; } = "OnOff";
 
+        [Column("InvertRelayCommand")]
+        public bool InvertRelayCommand { get; set; } = false;
+
         // Financial fields — WBP/LWBP tariff split
         [Column("TariffWBP", TypeName = "decimal(18,2)")]
         public decimal TariffWBP { get; set; } = 0m;

@@ -221,6 +221,15 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row align-self-center">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" data-field="InvertRelayCommand" @(settings.InvertRelayCommand ? "checked" : "")>
+                                                    <label class="form-check-label device-label">Invers Perintah</label>
+                                                </div>
+                                                <small class="text-muted">ON/OFF dibalik untuk relay Normally Close.</small>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="card-footer bg-light py-2 d-flex justify-content-between align-items-center">
@@ -245,29 +254,40 @@
 
 <script>
     (function() {
+        function numberValue($card, field, fallback) {
+            var value = parseFloat($card.find('[data-field="' + field + '"]').val());
+            return isNaN(value) ? fallback : value;
+        }
+
+        function integerValue($card, field, fallback) {
+            var value = parseInt($card.find('[data-field="' + field + '"]').val(), 10);
+            return isNaN(value) ? fallback : value;
+        }
+
         function collectDeviceSettings($card) {
             return {
                 deviceKey: $card.data('device-key'),
-                maxCapacity: parseFloat($card.find('[data-field="MaxCapacity"]').val()) || 0,
+                maxCapacity: numberValue($card, 'MaxCapacity', 0),
                 deviceCategory: $card.find('[data-field="DeviceCategory"]').val() || 'Billboard',
                 downtimeEnabled: $card.find('[data-field="DowntimeEnabled"]').is(':checked'),
                 downtimeStart: $card.find('[data-field="DowntimeStart"]').val() || '00:00',
                 downtimeEnd: $card.find('[data-field="DowntimeEnd"]').val() || '06:00',
-                tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
-                tariffWBP: parseFloat($card.find('[data-field="TariffWBP"]').val()) || 0,
-                tariffLWBP: parseFloat($card.find('[data-field="TariffLWBP"]').val()) || 0,
-                wbpStartHour: parseInt($card.find('[data-field="WbpStartHour"]').val()) || 18,
-                wbpEndHour: parseInt($card.find('[data-field="WbpEndHour"]').val()) || 22,
-                budgetKWh: (parseFloat($card.find('[data-field="BudgetRupiah"]').val()) || 0) / (parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500),
-                surfaceArea: parseFloat($card.find('[data-field="SurfaceArea"]').val()) || 0,
-                revenuePerHour: parseFloat($card.find('[data-field="RevenuePerHour"]').val()) || 0,
-                loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
-                loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
-                emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,
-                emaLowerThreshold: parseInt($card.find('[data-field="EmaLowerThreshold"]').val()) || 0,
+                tariffPerKWh: numberValue($card, 'TariffPerKWh', 0),
+                tariffWBP: numberValue($card, 'TariffWBP', 0),
+                tariffLWBP: numberValue($card, 'TariffLWBP', 0),
+                wbpStartHour: integerValue($card, 'WbpStartHour', 0),
+                wbpEndHour: integerValue($card, 'WbpEndHour', 0),
+                budgetKWh: numberValue($card, 'BudgetRupiah', 0) / Math.max(numberValue($card, 'TariffPerKWh', 0), 1),
+                surfaceArea: numberValue($card, 'SurfaceArea', 0),
+                revenuePerHour: numberValue($card, 'RevenuePerHour', 0),
+                loadNormalThreshold: integerValue($card, 'LoadNormalThreshold', 0),
+                loadMediumThreshold: integerValue($card, 'LoadMediumThreshold', 0),
+                emaUpperThreshold: integerValue($card, 'EmaUpperThreshold', 0),
+                emaLowerThreshold: integerValue($card, 'EmaLowerThreshold', 0),
                 emaFibUpper: 0,
                 emaFibLower: 0,
-                controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff'
+                controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff',
+                invertRelayCommand: $card.find('[data-field="InvertRelayCommand"]').is(':checked')
             };
         }
 
@@ -301,7 +321,9 @@
                 emaLowerThreshold: settings.emaLowerThreshold,
                 emaFibUpper: settings.emaFibUpper,
                 emaFibLower: settings.emaFibLower,
-                controlMode: settings.controlMode
+                revenuePerHour: settings.revenuePerHour,
+                controlMode: settings.controlMode,
+                invertRelayCommand: settings.invertRelayCommand
             };
 
             $.ajax({
@@ -338,29 +360,10 @@
             var allSettings = [];
             $('.device-settings-card').each(function() {
                 var $card = $(this);
-                allSettings.push({
-                    deviceKey: $card.data('device-key'),
-                    maxCapacity: parseFloat($card.find('[data-field="MaxCapacity"]').val()) || 0,
-                    deviceCategory: $card.find('[data-field="DeviceCategory"]').val() || 'Billboard',
-                    downtimeEnabled: $card.find('[data-field="DowntimeEnabled"]').is(':checked'),
-                    downtimeStart: timeSpanFromString($card.find('[data-field="DowntimeStart"]').val() || '22:00'),
-                    downtimeEnd: timeSpanFromString($card.find('[data-field="DowntimeEnd"]').val() || '06:00'),
-                    tariffPerKWh: parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500,
-                    tariffWBP: parseFloat($card.find('[data-field="TariffWBP"]').val()) || 0,
-                    tariffLWBP: parseFloat($card.find('[data-field="TariffLWBP"]').val()) || 0,
-                    wbpStartHour: parseInt($card.find('[data-field="WbpStartHour"]').val()) || 18,
-                    wbpEndHour: parseInt($card.find('[data-field="WbpEndHour"]').val()) || 22,
-                    budgetKWh: (parseFloat($card.find('[data-field="BudgetRupiah"]').val()) || 0) / (parseFloat($card.find('[data-field="TariffPerKWh"]').val()) || 1500),
-                    surfaceArea: parseFloat($card.find('[data-field="SurfaceArea"]').val()) || 0,
-                    revenuePerHour: parseFloat($card.find('[data-field="RevenuePerHour"]').val()) || 0,
-                    loadNormalThreshold: parseInt($card.find('[data-field="LoadNormalThreshold"]').val()) || 30,
-                    loadMediumThreshold: parseInt($card.find('[data-field="LoadMediumThreshold"]').val()) || 70,
-                    emaUpperThreshold: parseInt($card.find('[data-field="EmaUpperThreshold"]').val()) || 0,
-                    emaLowerThreshold: parseInt($card.find('[data-field="EmaLowerThreshold"]').val()) || 0,
-                    emaFibUpper: 0,
-                    emaFibLower: 0,
-                    controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff'
-                });
+                var settings = collectDeviceSettings($card);
+                settings.downtimeStart = timeSpanFromString(settings.downtimeStart || '22:00');
+                settings.downtimeEnd = timeSpanFromString(settings.downtimeEnd || '06:00');
+                allSettings.push(settings);
             });
 
             $.ajax({
