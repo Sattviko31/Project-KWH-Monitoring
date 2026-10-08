@@ -116,8 +116,8 @@ namespace KWHMonitoring.Models
         {
             var v = volt ?? 0;
             var a = amp ?? 0;
-            if (v < 200 || a > 80) return "danger";
-            if (v < 220 || a > 70) return "warning";
+            if (v < 200 || v > 240 || a > 80) return "danger";
+            if (v < 210 || v > 230 || a > 70) return "warning";
             return "success";
         }
     }

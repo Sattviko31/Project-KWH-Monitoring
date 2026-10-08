@@ -241,7 +241,7 @@
                 </div>
                 <div class="usage-ranking-comparison-switch btn-group btn-group-sm" role="group" aria-label="Tampilan ranking dan perbandingan">
                     <button type="button" class="btn btn-primary usage-panel-view" data-view="ranking"><i class="fas fa-trophy"></i> Peringkat</button>
-                    <button type="button" class="btn btn-outline-primary usage-panel-view" data-view="comparison"><i class="fas fa-file-invoice-dollar"></i> Perbandingan ERP</button>
+                    <button type="button" class="btn btn-outline-primary usage-panel-view" data-view="comparison"><i class="fas fa-file-invoice-dollar"></i> Perbandingan Tagihan</button>
                 </div>
             </div>
             <div class="usage-ranking-comparison-header-controls">
@@ -263,7 +263,7 @@
             <div class="table-responsive">
                 <table class="table table-hover table-sm mb-0 align-middle">
                     <thead class="thead-light"><tr><th>#</th><th>Perangkat</th><th>Grup</th><th class="text-right">Energi (kWh)</th><th class="text-right">Estimasi Biaya</th><th class="text-right">Daya (W)</th><th class="text-right">Faktor Daya</th><th>Pembaruan</th></tr></thead>
-                    <tbody id="usageRankingRows"><tr><td colspan="8" class="text-center text-muted py-3">Memuat peringkat...</td></tr></tbody>
+                    <tbody id="usageRankingRows"><tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i>Memuat peringkat...</td></tr></tbody>
                 </table>
             </div>
             <div class="card-footer py-2"><small class="text-muted">Pilih baris untuk membuka detail perangkat. Estimasi biaya dihitung menggunakan tarif untuk setiap perangkat.</small></div>
@@ -277,10 +277,10 @@
                             <th>Periode</th>
                             <th class="text-right">Energi Terukur</th>
                             <th class="text-right">Perkiraan Tagihan</th>
-                            <th class="text-right">Tagihan ERP</th>
+                            <th class="text-right">Tagihan Aktual</th>
                             <th>Keterangan</th>
-                            <th>Bukti Periode ERP</th>
-                            <th class="text-right">Perubahan Biaya</th>
+                            <th>Tanggal Pembayaran</th>
+                            <th class="text-right">Selisih Tagihan</th>
                         </tr>
                     </thead>
                     <tbody id="usageErpComparisonRows">
@@ -288,7 +288,6 @@
                     </tbody>
                 </table>
             </div>
-            <div class="px-3 py-2 border-top text-muted small" id="usageErpComparisonAverage"></div>
         </div>
     </div>
 
@@ -1021,7 +1020,7 @@
 
         function getUsageComparisonCacheKey(keys) {
             var dateKey = getUsageComparisonDateText();
-            return 'comparison.' + dateKey + '.' + keys.slice().sort().join('|');
+            return 'comparison.v2.' + dateKey + '.' + keys.slice().sort().join('|');
         }
 
         function getUsageComparisonDateText() {
@@ -1091,7 +1090,6 @@
             comparisonResponse = response;
             comparisonPeriod = period || comparisonPeriod;
             var html = '';
-            var averageText = [];
             var periodLabels = { current: 'Bulan ini', previous: 'Bulan lalu', twoMonthsAgo: '2 bulan lalu', threeMonthsAgo: '3 bulan lalu', average: 'Rata-rata 3 bulan' };
             response.rows.forEach(function (item) {
                 var selected = getComparisonPeriodRow(item, comparisonPeriod);
@@ -1128,16 +1126,8 @@
                     '<td>' + escapeHtml(paymentText) + '</td>' +
                     '<td class="text-right ' + differenceClass + '">' + differenceText + '</td>' +
                     '</tr>';
-                if (isAverage) {
-                    averageText.push('<strong>' + escapeHtml(label) + '</strong>: estimasi ' + formatComparisonCurrency(selected.estimatedCost) +
-                        ', tagihan ERP tersedia ' + (selected.actualCost === null || selected.actualCost === undefined ? 'belum ada' : formatComparisonCurrency(selected.actualCost)) +
-                        ' dari ' + (selected.actualMonthCount || 0) + '/3 bulan');
-                }
             });
             $('#usageErpComparisonRows').html(html || '<tr><td colspan="8" class="text-center text-muted py-3">Belum ada data energi.</td></tr>');
-            $('#usageErpComparisonAverage').html(comparisonPeriod === 'average'
-                ? averageText.join('<br>')
-                : 'Perkiraan tagihan dihitung dari kWh × tarif perangkat. Perbandingan pada setiap filter menggunakan estimasi periode tersebut dibandingkan tagihan aktual ERP pada periode yang sama.');
             $('#usageRankingCaption').text('Periode: ' + periodLabels[comparisonPeriod] + (fromCache ? ' · cache terakhir (offline)' : ' · diperbarui ' + new Date().toLocaleTimeString('id-ID')));
             $('.usage-comparison-period').removeClass('btn-primary').addClass('btn-outline-primary');
             $('.usage-comparison-period[data-period="' + comparisonPeriod + '"]').removeClass('btn-outline-primary').addClass('btn-primary');

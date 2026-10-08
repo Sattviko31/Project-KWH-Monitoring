@@ -431,7 +431,7 @@
             </div>
 
             <!-- ERP Billing Comparison -->
-            <div class="card shadow-sm mb-3" data-card-help="Perbandingan Estimasi dan ERP (Perangkat)|Membandingkan estimasi biaya perangkat dari sistem KWH dengan tagihan aktual WWERP2019.|Bulan berjalan tetap memakai estimasi sampai tagihan ERP tersedia. Periode pembayaran diambil dari kolom Periode ERP.">
+            <div class="card shadow-sm mb-3" data-card-help="Perbandingan Estimasi dan ERP (Perangkat)|Membandingkan estimasi biaya perangkat dari sistem KWH dengan tagihan aktual WWERP2019.|Tagihan dicocokkan ke bulan pemakaian. Periode pembayaran ERP biasanya jatuh pada bulan berikutnya, misalnya pembayaran September untuk pemakaian Agustus.">
                 <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
                     <h6 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Perbandingan Estimasi KWH vs WWERP2019</h6>
                     <small id="deviceErpComparisonCaption">Memuat...</small>
@@ -446,7 +446,7 @@
                                 <th class="text-right">Aktual ERP</th>
                                 <th>Status</th>
                                 <th>Periode Pembayaran</th>
-                                <th class="text-right">Selisih vs Bulan Lalu</th>
+                                <th class="text-right">Selisih Aktual vs Estimasi</th>
                             </tr>
                         </thead>
                         <tbody id="deviceErpComparisonRows">
@@ -1271,6 +1271,12 @@
             return 'Rp ' + Number(value || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
 
+        function getDeviceUsageDateText() {
+            return deviceUsageDate.getFullYear() + '-' +
+                String(deviceUsageDate.getMonth() + 1).padStart(2, '0') + '-' +
+                String(deviceUsageDate.getDate()).padStart(2, '0');
+        }
+
         function loadDeviceErpComparison() {
             $.ajax({
                 url: '/api/Api/usage-cost-comparison',
@@ -1278,7 +1284,7 @@
                 contentType: 'application/json',
                 dataType: 'json',
                 timeout: 15000,
-                data: JSON.stringify({ deviceKey: deviceKey, startDate: deviceUsageDate.toISOString() }),
+                data: JSON.stringify({ deviceKey: deviceKey, startDate: getDeviceUsageDateText() }),
                 success: function (response) {
                     if (!response || response.success === false || !response.rows || !response.rows.length) {
                         $('#deviceErpComparisonRows').html('<tr><td colspan="7" class="text-center text-muted py-3">Data perbandingan belum tersedia.</td></tr>');
@@ -1287,12 +1293,24 @@
 
                     var item = response.rows[0];
                     var current = item.currentMonth;
-                    var difference = Number(item.monthDifference || 0);
-                    var differencePercent = Number(item.monthDifferencePercent || 0);
-                    var differenceClass = difference > 0 ? 'text-danger' : (difference < 0 ? 'text-success' : 'text-muted');
+                    var periods = item.periods || [];
                     var html = '';
-                    (item.periods || []).slice().reverse().forEach(function (period) {
+                    periods.slice().reverse().forEach(function (period) {
                         var isCurrent = period.period === current.period;
+                        var differenceText = '<span class="text-muted">Belum tersedia</span>';
+                        var differenceClass = 'text-muted';
+                        if (period.actualCost !== null && period.actualCost !== undefined &&
+                            period.estimatedCost !== null && period.estimatedCost !== undefined) {
+                            var difference = Number(period.actualCost) - Number(period.estimatedCost);
+                            var differencePercent = Number(period.estimatedCost) === 0
+                                ? null
+                                : difference / Number(period.estimatedCost) * 100;
+                            differenceClass = difference > 0 ? 'text-danger' : (difference < 0 ? 'text-success' : 'text-muted');
+                            differenceText = formatComparisonCurrency(difference) + ' (' +
+                                (differencePercent === null
+                                    ? '—'
+                                    : differencePercent.toLocaleString('id-ID', { maximumFractionDigits: 1 }) + '%') + ')';
+                        }
                         html += '<tr' + (isCurrent ? ' class="font-weight-bold"' : '') + '>' +
                             '<td>' + escapeHtml(period.label || period.period) + '</td>' +
                             '<td class="text-right">' + Number(period.energyKWh || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
@@ -1300,7 +1318,7 @@
                             '<td class="text-right">' + formatComparisonCurrency(period.actualCost) + '</td>' +
                             '<td><span class="badge ' + (period.status === 'Aktual ERP' ? 'badge-success' : 'badge-warning') + '">' + escapeHtml(period.status) + '</span></td>' +
                             '<td>' + escapeHtml(period.paymentPeriod || '-') + '</td>' +
-                            '<td class="text-right ' + (isCurrent ? differenceClass : '') + '">' + (isCurrent ? formatComparisonCurrency(difference) + ' (' + differencePercent.toLocaleString('id-ID', { maximumFractionDigits: 1 }) + '%)' : '-') + '</td>' +
+                            '<td class="text-right ' + differenceClass + '">' + differenceText + '</td>' +
                             '</tr>';
                     });
                     $('#deviceErpComparisonRows').html(html);
@@ -1321,16 +1339,15 @@
 
             loadDeviceErpComparison();
 
-            var startDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate());
-            var endDate = new Date(deviceUsageDate.getFullYear(), deviceUsageDate.getMonth(), deviceUsageDate.getDate(), 23, 59, 59);
+            var selectedDateText = getDeviceUsageDateText();
 
             $.ajax({
                 url: '/api/Api/usage-statistics/' + deviceKey,
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({
-                    startDate: startDate.toISOString(),
-                    endDate: endDate.toISOString()
+                    startDate: selectedDateText,
+                    endDate: selectedDateText
                 }),
                 dataType: 'json',
                 timeout: 15000,

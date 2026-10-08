@@ -3399,6 +3399,349 @@ canvas {
     padding: 0.35rem 0.5rem;
 }
 
+/* Primary realtime metrics remain visible; secondary data stays collapsible. */
+.panel-primary-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+    margin-bottom: 0.6rem;
+    width: 100%;
+}
+
+.panel-primary-metrics > * {
+    width: 100%;
+    min-width: 0;
+}
+
+.panel-reference-topline {
+    display: grid;
+    grid-template-columns: minmax(135px, 0.95fr) minmax(0, 1.05fr);
+    gap: 0.5rem;
+    align-items: stretch;
+    width: 100%;
+}
+
+.panel-reference-topline > * {
+    min-width: 0;
+}
+
+.panel-primary-metrics .power-highlight-card {
+    min-height: 124px;
+    height: 100%;
+    padding: 0.65rem 0.5rem !important;
+    box-shadow: 0 5px 14px rgba(37, 99, 235, 0.2);
+}
+
+.panel-primary-metrics .power-highlight-card .power-icon {
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.panel-primary-metrics .power-highlight-card .power-value {
+    font-size: clamp(1.25rem, 4.5vw, 1.65rem);
+    line-height: 1;
+}
+
+.panel-primary-metrics .power-highlight-card .power-unit {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.phase-matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(38px, 1fr);
+    gap: 0.3rem;
+    align-content: stretch;
+    min-width: 0;
+}
+
+.phase-matrix-1 {
+    align-content: center;
+    grid-auto-rows: 38px;
+}
+
+.phase-matrix-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0.3rem;
+    border-radius: 0.45rem;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.phase-matrix-cell .phase-key {
+    opacity: 0.82;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
+.phase-matrix-cell .phase-val {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.phase-matrix-cell .phase-unit {
+    opacity: 0.78;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.phase-matrix-cell.bg-warning {
+    color: #212529;
+}
+
+.panel-average-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    width: 100%;
+}
+
+.average-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0.35rem 0.45rem;
+    border: 0;
+    border-radius: 0.45rem;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.15px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.average-badge-active {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2);
+}
+
+.average-badge-muted {
+    background: linear-gradient(135deg, #94a3b8, #64748b);
+    box-shadow: 0 4px 10px rgba(100, 116, 139, 0.18);
+}
+
+.panel-realtime-group,
+.panel-gauge-group {
+    min-width: 0;
+    width: 100%;
+    padding: 0.55rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--bg-muted);
+}
+
+.panel-primary-metrics .panel-reference-gauge,
+.panel-secondary-metrics .panel-reference-gauge {
+    padding: 0.55rem 0.6rem;
+    background: var(--bg-muted);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.panel-secondary-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.panel-primary-metrics .panel-label,
+.panel-primary-metrics .panel-value,
+.panel-secondary-metrics .panel-label,
+.panel-secondary-metrics .panel-value {
+    font-size: 0.72rem;
+}
+
+.panel-primary-metrics .panel-label,
+.panel-secondary-metrics .panel-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 800;
+}
+
+.panel-primary-metrics .panel-value,
+.panel-secondary-metrics .panel-value {
+    max-width: 65%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-weight: 800;
+}
+
+.panel-primary-metrics .panel-progress,
+.panel-secondary-metrics .panel-progress {
+    width: 100%;
+    height: 18px;
+    margin: 0;
+    border: 0;
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--bg-surface);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.panel-primary-metrics .panel-progress .progress-bar,
+.panel-secondary-metrics .panel-progress .progress-bar {
+    min-width: 0;
+    height: 18px;
+    line-height: 18px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    border-radius: 9px;
+    box-shadow: none;
+}
+
+.panel-energy-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.panel-energy-row > * {
+    min-width: 0;
+    min-height: 62px;
+    padding: 0.5rem !important;
+    border-radius: 0.5rem;
+}
+
+.panel-energy-row .aktif-icon {
+    font-size: 0.64rem;
+    font-weight: 700;
+}
+
+.panel-energy-row .aktif-value {
+    font-size: clamp(0.95rem, 3.5vw, 1.15rem);
+}
+
+.panel-energy-row .aktif-unit {
+    font-size: 0.58rem;
+    font-weight: 700;
+}
+
+.monthly-energy-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(22, 163, 74, 0.18);
+}
+
+.frequency-highlight {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 46px;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+.frequency-highlight .info-chip-label {
+    margin-bottom: 0.05rem;
+    opacity: 0.85;
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.frequency-highlight .info-chip-value {
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+/* Keep colored metric text readable despite generic card span rules. */
+.panel-card-clickable .card-body .phase-matrix-cell .phase-key,
+.panel-card-clickable .card-body .phase-matrix-cell .phase-val,
+.panel-card-clickable .card-body .phase-matrix-cell .phase-unit {
+    color: inherit;
+    font-weight: 800;
+}
+
+.panel-card-clickable .card-body .average-badge,
+.panel-card-clickable .card-body .frequency-highlight .info-chip-label,
+.panel-card-clickable .card-body .frequency-highlight .info-chip-value {
+    color: #fff !important;
+    font-weight: 800 !important;
+}
+
+.panel-secondary-section {
+    margin-top: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+.panel-secondary-section .aktif-highlight-card {
+    min-height: 64px;
+}
+
+@media (max-width: 575.98px) {
+    .panel-reference-topline {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .panel-primary-metrics .power-highlight-card {
+        min-height: 92px;
+    }
+
+    .panel-primary-metrics .panel-label,
+    .panel-primary-metrics .panel-value,
+    .panel-secondary-metrics .panel-label,
+    .panel-secondary-metrics .panel-value {
+        font-size: 0.7rem;
+    }
+
+    .panel-primary-metrics .panel-value,
+    .panel-secondary-metrics .panel-value {
+        max-width: 62%;
+    }
+
+    .phase-matrix-cell {
+        min-height: 34px;
+    }
+
+    .average-badge {
+        min-height: 32px;
+        font-size: 0.68rem;
+    }
+
+    .panel-energy-row {
+        gap: 0.45rem;
+    }
+
+    .panel-energy-row > * {
+        min-height: 58px;
+    }
+
+    .frequency-highlight {
+        min-height: 44px;
+    }
+}
+
 /* Power & Aktif highlight cards - fill available space */
 .power-highlight-card,
 .aktif-highlight-card {
@@ -6905,4 +7248,175 @@ canvas {
 .erp-tabs .erp-tab,
 .erp-tabs .nav-link {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Compact monitoring cards: keep the live summary balanced at narrow widths. */
+.panel-card-clickable .card-header {
+    min-height: 34px;
+    padding: 0.35rem 0.55rem !important;
+}
+
+.panel-card-clickable .card-header h6 {
+    font-size: 0.76rem;
+}
+
+.panel-card-clickable .card-body {
+    padding: 0.45rem !important;
+}
+
+.panel-card-clickable .card-footer {
+    padding: 0.28rem 0.45rem !important;
+}
+
+.panel-primary-metrics {
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+.panel-reference-topline {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 0.35rem;
+}
+
+.panel-primary-metrics .power-highlight-card {
+    min-height: 100px;
+    padding: 0.45rem 0.35rem !important;
+}
+
+.panel-primary-metrics .power-highlight-card .power-value {
+    font-size: clamp(1.15rem, 4vw, 1.45rem);
+}
+
+.phase-matrix {
+    gap: 0.22rem;
+    grid-auto-rows: minmax(29px, 1fr);
+}
+
+.phase-matrix-1 {
+    grid-auto-rows: 29px;
+}
+
+.phase-matrix-cell {
+    min-height: 29px;
+    padding: 0.2rem;
+    border-radius: 0.38rem;
+    font-size: 0.64rem;
+}
+
+.phase-matrix-cell .phase-val {
+    font-size: 0.69rem;
+}
+
+.panel-average-row {
+    gap: 0.35rem;
+}
+
+.average-badge {
+    min-height: 28px;
+    padding: 0.25rem 0.3rem;
+    font-size: 0.64rem;
+}
+
+.panel-primary-metrics .panel-reference-gauge {
+    padding: 0.4rem 0.5rem;
+}
+
+.panel-primary-metrics .panel-progress,
+.panel-primary-metrics .panel-progress .progress-bar {
+    height: 16px;
+}
+
+.panel-primary-metrics .panel-progress .progress-bar {
+    line-height: 16px;
+    font-size: 0.62rem;
+}
+
+@media (max-width: 575.98px) {
+    .panel-reference-topline {
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    }
+
+    .panel-primary-metrics .power-highlight-card {
+        min-height: 100px;
+    }
+
+    .phase-matrix-cell {
+        min-height: 29px;
+    }
+
+    .average-badge {
+        min-height: 28px;
+        font-size: 0.62rem;
+    }
+}
+
+/* Keep expanded details compact and visually consistent with the summary. */
+.panel-card-clickable .collapse {
+    margin-top: 0.35rem;
+}
+
+.panel-secondary-metrics {
+    gap: 0.35rem;
+}
+
+.panel-secondary-metrics .panel-reference-gauge {
+    padding: 0.4rem 0.5rem;
+}
+
+.panel-secondary-metrics .panel-progress,
+.panel-secondary-metrics .panel-progress .progress-bar {
+    height: 15px;
+}
+
+.panel-secondary-metrics .panel-progress .progress-bar {
+    line-height: 15px;
+    font-size: 0.6rem;
+}
+
+.panel-energy-row {
+    gap: 0.35rem;
+}
+
+.panel-energy-row > * {
+    min-height: 52px;
+    padding: 0.35rem !important;
+}
+
+.panel-energy-row .aktif-icon {
+    font-size: 0.6rem;
+}
+
+.panel-energy-row .aktif-value {
+    font-size: clamp(0.85rem, 3.2vw, 1.05rem);
+}
+
+.frequency-highlight {
+    min-height: 34px;
+    padding: 0.25rem 0.4rem;
+}
+
+.frequency-highlight .info-chip-value {
+    font-size: 0.74rem;
+}
+
+.panel-card-clickable .device-control-wrapper {
+    margin-top: 0.4rem !important;
+    padding: 0.25rem;
+}
+
+.panel-card-clickable .device-control-buttons .btn {
+    padding: 0.25rem 0.45rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+@media (max-width: 575.98px) {
+    .panel-energy-row > * {
+        min-height: 48px;
+    }
+
+    .panel-secondary-metrics .panel-label,
+    .panel-secondary-metrics .panel-value {
+        font-size: 0.66rem;
+    }
 }

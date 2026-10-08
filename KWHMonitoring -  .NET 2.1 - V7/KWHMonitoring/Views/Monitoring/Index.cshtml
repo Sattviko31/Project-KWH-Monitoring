@@ -1512,6 +1512,7 @@
                         panelCard.find('[data-value="power"]').text(formatNumber(dayaWatt));
                         panelCard.find('[data-value="total-energy"]').text(formatNumber(panel.totalEnergy) + ' Wh');
                         panelCard.find('[data-value="energi-aktif"]').text(formatNumber(panel.energiAktif));
+                        panelCard.find('[data-value="energi-bulanan"]').text(formatNumber(panel.totalW1M || 0));
                         panelCard.find('[data-value="cosphi"]').text(cosPhi.toFixed(3).replace('.', ','));
                         panelCard.find('[data-value="freq"]').text(panel.frekuensi.toFixed(2).replace('.', ',') + ' Hz');
 

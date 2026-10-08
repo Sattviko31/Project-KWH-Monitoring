@@ -1234,7 +1234,12 @@ namespace KWHMonitoring.Controllers
                     .ToListAsync();
 
                 var settings = await _deviceSettingsService.GetAllEffectiveAsync();
-                var erpHistory = await _titikLokasiService.GetBillingHistoryAsync(requestedKeys, historyStart, historyEnd);
+                // Periode di TagihanListrik adalah bulan pembayaran. Pembayaran bulan
+                // berikutnya dicocokkan dengan konsumsi/tagihan bulan sebelumnya.
+                var erpPaymentHistoryStart = historyStart.AddMonths(1);
+                var erpPaymentHistoryEnd = historyEnd.AddMonths(1);
+                var erpHistory = await _titikLokasiService.GetBillingHistoryAsync(
+                    requestedKeys, erpPaymentHistoryStart, erpPaymentHistoryEnd);
                 var periods = Enumerable.Range(0, 4)
                     .Select(offset => historyStart.AddMonths(offset))
                     .ToList();
@@ -1267,10 +1272,12 @@ namespace KWHMonitoring.Controllers
                         if (useRealtimeCurrentMonth && period.Year == currentMonth.Year && period.Month == currentMonth.Month)
                             energy = realtimeMonthEnergy;
                         var estimatedCost = Math.Round(energy * tariff, 0, MidpointRounding.AwayFromZero);
+                        var expectedPaymentPeriod = period.AddMonths(1);
                         var erp = deviceErpRows
                             .OrderByDescending(x => x.Periode)
                             .ThenByDescending(x => x.TagihanListrikID)
-                            .FirstOrDefault(x => x.Periode.Year == period.Year && x.Periode.Month == period.Month);
+                            .FirstOrDefault(x => x.Periode.Year == expectedPaymentPeriod.Year &&
+                                x.Periode.Month == expectedPaymentPeriod.Month);
                         var hasActual = erp != null;
                         var actualCost = hasActual ? erp.JumlahTagihan : (decimal?)null;
                         var comparisonCost = actualCost ?? estimatedCost;
