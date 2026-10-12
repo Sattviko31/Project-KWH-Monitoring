@@ -111,6 +111,7 @@ namespace KWHMonitoring.Services
                 BudgetKWh = effective.BudgetKWh,
                 SurfaceArea = effective.SurfaceArea,
                 RevenuePerHour = effective.RevenuePerHour,
+                BillingAnomalyThreshold = effective.BillingAnomalyThreshold,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -125,6 +126,12 @@ namespace KWHMonitoring.Services
         {
             if (settings == null)
                 throw new ArgumentNullException(nameof(settings));
+            if (string.IsNullOrWhiteSpace(deviceKey))
+                throw new ArgumentException("Device key wajib diisi.", nameof(deviceKey));
+            if (settings.BillingAnomalyThreshold.HasValue && settings.BillingAnomalyThreshold.Value < 0m)
+                throw new ArgumentOutOfRangeException(nameof(settings.BillingAnomalyThreshold), "Threshold anomaly tagihan tidak boleh negatif.");
+
+            deviceKey = deviceKey.Trim();
 
             var existing = await _context.DeviceSettings
                 .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
@@ -152,6 +159,7 @@ namespace KWHMonitoring.Services
                 existing.BudgetKWh = settings.BudgetKWh;
                 existing.SurfaceArea = settings.SurfaceArea;
                 existing.RevenuePerHour = settings.RevenuePerHour;
+                existing.BillingAnomalyThreshold = settings.BillingAnomalyThreshold;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else

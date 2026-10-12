@@ -180,11 +180,25 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.OperatorNotes).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
                 entity.Property(x => x.Severity).HasColumnType("nvarchar(20)").HasMaxLength(20);
                 entity.Property(x => x.RootCause).HasColumnType("nvarchar(500)").HasMaxLength(500);
+                entity.Property(x => x.BillingAnomalyType).HasColumnType("nvarchar(30)").HasMaxLength(30);
+                entity.Property(x => x.EstimatedBilling).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.ActualBilling).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingDifference).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingDifferencePercent).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.BillingPeriod).HasColumnType("date");
+                entity.Property(x => x.ErpBillingId);
+                entity.Property(x => x.PreviousBilling).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.PreviousBillingPeriod).HasColumnType("date");
+                entity.Property(x => x.PreviousErpBillingId);
                 entity.Property(x => x.RecommendedAction).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
                 entity.Property(x => x.Notes).HasColumnType("nvarchar(500)").HasMaxLength(500);
 
                 entity.HasIndex(x => x.DetectedTime).HasName("IX_AnomalyLogs_DetectedTime");
                 entity.HasIndex(x => x.DeviceKey).HasName("IX_AnomalyLogs_DeviceKey");
+                entity.HasIndex(x => new { x.AnomalyType, x.BillingAnomalyType, x.DeviceKey, x.BillingPeriod, x.ErpBillingId })
+                    .HasName("IX_AnomalyLogs_BillingDedup")
+                    .IsUnique()
+                    .HasFilter("[AnomalyType] = 'BILLING_VARIANCE' AND [BillingPeriod] IS NOT NULL AND [ErpBillingId] IS NOT NULL");
                 entity.HasIndex(x => x.Severity).HasName("IX_AnomalyLogs_Severity");
                 entity.HasIndex(x => x.IsResolved).HasName("IX_AnomalyLogs_IsResolved");
             });
@@ -243,6 +257,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.BudgetKWh).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.SurfaceArea).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.RevenuePerHour).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingAnomalyThreshold).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
 

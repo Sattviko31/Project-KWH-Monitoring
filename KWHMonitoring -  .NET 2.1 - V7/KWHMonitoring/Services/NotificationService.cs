@@ -1590,6 +1590,102 @@ namespace KWHMonitoring.Services
             }
         }
 
+        /// <summary>
+        /// Sends a billing-specific alert without changing the existing device anomaly alert format.
+        /// </summary>
+        public async Task SendBillingAnomalyAlertAsync(
+            string deviceKey,
+            DateTime billingPeriod,
+            decimal estimatedBilling,
+            decimal actualBilling,
+            decimal difference,
+            decimal? differencePercent,
+            decimal threshold,
+            long erpBillingId)
+        {
+            EnsureSettingsLoaded();
+            if ((!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
+                || !_settings.SendInstantAlert)
+                return;
+
+            var direction = difference >= 0m ? "lebih tinggi" : "lebih rendah";
+            var percentText = differencePercent.HasValue
+                ? string.Format("{0:N2}%", differencePercent.Value)
+                : "Tidak tersedia";
+            var subject = string.Format(
+                "⚠️ BILLING VARIANCE - {0} - {1:MMMM yyyy}",
+                deviceKey,
+                billingPeriod);
+            var message = string.Format(
+                "<div style='font-family:Arial,sans-serif;max-width:760px;margin:0 auto;'>" +
+                "<div style='background:linear-gradient(135deg,#fd7e14,#dc3545);color:white;padding:22px;text-align:center;'>" +
+                "<h2 style='margin:0;'>KWH MONITORING</h2><p style='margin:6px 0 0;'>Anomali Selisih Tagihan</p></div>" +
+                "<div style='padding:22px;background:#fff;border:1px solid #eee;'>" +
+                "<p>Tagihan yang sudah di-input ke ERP dianggap sudah payment dan valid untuk dibandingkan.</p>" +
+                "<table style='width:100%;border-collapse:collapse;'>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Perangkat</td><td style='padding:7px;border-bottom:1px solid #eee;'><strong>{0}</strong></td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Periode konsumsi</td><td style='padding:7px;border-bottom:1px solid #eee;'><strong>{1:MMMM yyyy}</strong></td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Estimasi sistem</td><td style='padding:7px;border-bottom:1px solid #eee;'>Rp {2:N0}</td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Tagihan ERP / aktual</td><td style='padding:7px;border-bottom:1px solid #eee;'>Rp {3:N0}</td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Selisih</td><td style='padding:7px;border-bottom:1px solid #eee;'><strong>Rp {4:N0} ({5})</strong></td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Arah selisih</td><td style='padding:7px;border-bottom:1px solid #eee;'>{6}</td></tr>" +
+                "<tr><td style='padding:7px;border-bottom:1px solid #eee;'>Ambang</td><td style='padding:7px;border-bottom:1px solid #eee;'>Rp {7:N0}</td></tr>" +
+                "<tr><td style='padding:7px;'>TagihanListrikID</td><td style='padding:7px;'><strong>{8}</strong></td></tr>" +
+                "</table><p style='margin-top:18px;'>Rekomendasi: verifikasi periode tagihan, tarif, konsumsi energi, dan komponen biaya pada ERP.</p></div>" +
+                "<div style='background:#343a40;color:white;padding:12px;text-align:center;font-size:12px;'>KWH Monitoring System</div></div>",
+                WebUtility.HtmlEncode(deviceKey), billingPeriod, estimatedBilling, actualBilling,
+                Math.Abs(difference), percentText, direction, threshold, erpBillingId);
+            var notificationSent = false;
+
+            if (_settings.EnableEmailNotification)
+            {
+                try
+                {
+                    await SendEmailAsync(subject, message);
+                    notificationSent = true;
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogWarning(emailEx, "Billing anomaly email failed for {DeviceKey}, ERP billing {ErpBillingId}.", deviceKey, erpBillingId);
+                }
+            }
+
+            if (_settings.EnableWhatsAppNotification)
+            {
+                var whatsappMessage = string.Format(
+                    "⚠️ *BILLING VARIANCE*\n\n" +
+                    "🖥️ Device: *{0}*\n" +
+                    "📅 Periode: *{1:MMMM yyyy}*\n" +
+                    "💰 Estimasi: *Rp {2:N0}*\n" +
+                    "🧾 Aktual ERP: *Rp {3:N0}*\n" +
+                    "📊 Selisih: *Rp {4:N0} ({5})*\n" +
+                    "📏 Ambang: *Rp {6:N0}*\n" +
+                    "🆔 TagihanListrikID: *{7}*\n\n" +
+                    "Tagihan yang di-input ke ERP dianggap sudah payment dan valid.\n" +
+                    "_KWH Monitoring System_",
+                    deviceKey, billingPeriod, estimatedBilling, actualBilling,
+                    Math.Abs(difference), percentText, threshold, erpBillingId);
+                try
+                {
+                    await SendWablasAsync(whatsappMessage);
+                    notificationSent = true;
+                }
+                catch (Exception whatsappEx)
+                {
+                    _logger.LogWarning(whatsappEx, "Billing anomaly WhatsApp failed for {DeviceKey}, ERP billing {ErpBillingId}.", deviceKey, erpBillingId);
+                }
+            }
+
+            if (notificationSent)
+            {
+                _logger.LogInformation("Billing anomaly alert sent for {DeviceKey}, ERP billing {ErpBillingId}.", deviceKey, erpBillingId);
+            }
+            else
+            {
+                _logger.LogWarning("Billing anomaly alert was not delivered by any enabled channel for {DeviceKey}, ERP billing {ErpBillingId}.", deviceKey, erpBillingId);
+            }
+        }
+
         // ============================================
         // EMAIL SENDER (for reports — sends to all Operator/Admin users)
         // ============================================

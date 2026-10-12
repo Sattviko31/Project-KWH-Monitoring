@@ -175,6 +175,13 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
+                                                <label class="device-label">Ambang Selisih Tagihan (Rp)</label>
+                                                <input type="number" class="form-control form-control-sm" data-field="BillingAnomalyThreshold" value="@(settings.BillingAnomalyThreshold.HasValue ? FormatNoTrailingZeros(settings.BillingAnomalyThreshold.Value) : string.Empty)" min="0" step="1000" placeholder="Kosong = global">
+                                                <small class="text-muted">Dipakai khusus perangkat ini. Kosong memakai threshold global.</small>
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
+                                            <div class="device-form-row">
                                                 <label class="device-label">Normal (%)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="LoadNormalThreshold" value="@settings.LoadNormalThreshold" min="1" max="100">
                                             </div>
@@ -280,6 +287,12 @@
                 budgetKWh: numberValue($card, 'BudgetRupiah', 0) / Math.max(numberValue($card, 'TariffPerKWh', 0), 1),
                 surfaceArea: numberValue($card, 'SurfaceArea', 0),
                 revenuePerHour: numberValue($card, 'RevenuePerHour', 0),
+                billingAnomalyThreshold: (function() {
+                    var raw = $card.find('[data-field="BillingAnomalyThreshold"]').val();
+                    if (raw === undefined || raw === null || raw.trim() === '') return null;
+                    var value = parseFloat(raw);
+                    return isNaN(value) || value < 0 ? null : value;
+                })(),
                 loadNormalThreshold: integerValue($card, 'LoadNormalThreshold', 0),
                 loadMediumThreshold: integerValue($card, 'LoadMediumThreshold', 0),
                 emaUpperThreshold: integerValue($card, 'EmaUpperThreshold', 0),
@@ -322,6 +335,7 @@
                 emaFibUpper: settings.emaFibUpper,
                 emaFibLower: settings.emaFibLower,
                 revenuePerHour: settings.revenuePerHour,
+                billingAnomalyThreshold: settings.billingAnomalyThreshold,
                 controlMode: settings.controlMode,
                 invertRelayCommand: settings.invertRelayCommand
             };

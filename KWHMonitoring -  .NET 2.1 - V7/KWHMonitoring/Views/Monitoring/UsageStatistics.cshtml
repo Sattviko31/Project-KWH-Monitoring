@@ -52,6 +52,53 @@
         white-space: nowrap;
     }
 
+    /* Tabel perbandingan: lebar kolom ditetapkan agar informasi formal,
+       rapi, dan tidak berubah mengikuti panjang isi setiap baris. */
+    .usage-erp-comparison-table {
+        table-layout: fixed;
+        min-width: 1360px;
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    .usage-erp-comparison-table th,
+    .usage-erp-comparison-table td {
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .usage-erp-comparison-table thead th {
+        height: 42px;
+        padding: .55rem .65rem;
+        font-size: .7rem;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+    }
+
+    .usage-erp-comparison-table tbody td {
+        height: 48px;
+        padding: .55rem .65rem;
+        font-size: .78rem;
+    }
+
+    .usage-erp-comparison-table .comparison-device-column { width: 14%; }
+    .usage-erp-comparison-table .comparison-period-column { width: 8%; }
+    .usage-erp-comparison-table .comparison-energy-column { width: 10%; }
+    .usage-erp-comparison-table .comparison-estimate-column { width: 11%; }
+    .usage-erp-comparison-table .comparison-actual-column { width: 12%; }
+    .usage-erp-comparison-table .comparison-status-column { width: 15%; }
+    .usage-erp-comparison-table .comparison-payment-column { width: 15%; }
+    .usage-erp-comparison-table .comparison-difference-column { width: 15%; }
+
+    .usage-erp-comparison-table .comparison-status-column .badge {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+    }
+
     @@media (max-width: 767.98px) {
         .usage-ranking-comparison-header-main,
         .usage-ranking-comparison-header-controls {
@@ -251,11 +298,14 @@
                     <button type="button" class="btn btn-outline-primary usage-ranking-period" data-period="year">Tahun Ini</button>
                 </div>
                 <div id="usageComparisonControls" class="usage-ranking-comparison-periods" style="display:none">
-                    <button type="button" class="btn btn-primary usage-comparison-period" data-period="current">Bulan Ini</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="previous">Bulan Lalu</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="twoMonthsAgo">2 Bulan Lalu</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="threeMonthsAgo">3 Bulan Lalu</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="average">Rata-rata 3 Bulan</button>
+                    <button type="button" class="btn btn-primary usage-comparison-period" data-period="current">Periode Berjalan</button>
+                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="previous">Periode Sebelumnya</button>
+                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="twoMonthsAgo">Dua Periode Sebelumnya</button>
+                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="threeMonthsAgo">Tiga Periode Sebelumnya</button>
+                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="average">Rata-rata Tiga Periode</button>
+                    <button type="button" class="btn btn-outline-secondary" id="btnRefreshUsageComparison" title="Muat ulang data perbandingan dari server">
+                        <i class="fas fa-sync-alt"></i> <span class="refresh-comparison-label">Refresh Data</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -271,14 +321,24 @@
         <div id="usageComparisonPanel" style="display:none">
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0 usage-erp-comparison-table">
+                    <colgroup>
+                        <col class="comparison-device-column">
+                        <col class="comparison-period-column">
+                        <col class="comparison-energy-column">
+                        <col class="comparison-estimate-column">
+                        <col class="comparison-actual-column">
+                        <col class="comparison-status-column">
+                        <col class="comparison-payment-column">
+                        <col class="comparison-difference-column">
+                    </colgroup>
                     <thead class="thead-light">
                         <tr>
-                            <th>Perangkat</th>
-                            <th>Periode</th>
-                            <th class="text-right">Energi Terukur</th>
-                            <th class="text-right">Perkiraan Tagihan</th>
-                            <th class="text-right">Tagihan Aktual</th>
-                            <th>Keterangan</th>
+                            <th>Unit Monitoring</th>
+                            <th>Periode Tagihan</th>
+                            <th class="text-right">Energi Terukur (kWh)</th>
+                            <th class="text-right">Estimasi Tagihan</th>
+                            <th class="text-right">Tagihan Aktual ERP</th>
+                            <th>Status Verifikasi</th>
                             <th>Tanggal Pembayaran</th>
                             <th class="text-right">Selisih Tagihan</th>
                         </tr>
@@ -489,8 +549,8 @@
                 $('.usage-panel-view').removeClass('btn-primary').addClass('btn-outline-primary');
                 $('.usage-panel-view[data-view="' + usagePanelView + '"]').removeClass('btn-outline-primary').addClass('btn-primary');
                 if (isComparison) {
-                    $('#usageRankingPanelTitle').html('<i class="fas fa-file-invoice-dollar text-primary"></i> Perbandingan Estimasi KWH vs WWERP2019');
-                    $('#usageRankingCaption').text('Pilih periode perbandingan untuk melihat estimasi dan aktual ERP');
+                    $('#usageRankingPanelTitle').html('<i class="fas fa-file-invoice-dollar text-primary"></i> Perbandingan Estimasi Energi dan Tagihan Aktual ERP');
+                    $('#usageRankingCaption').text('Pilih periode untuk membandingkan estimasi sistem dengan tagihan aktual ERP');
                     var currentComparisonKey = getUsageComparisonRequestKey();
                     if (comparisonResponse && comparisonResponseKey === currentComparisonKey) {
                         renderUsageComparison(comparisonResponse, comparisonPeriod, false);
@@ -1020,7 +1080,7 @@
 
         function getUsageComparisonCacheKey(keys) {
             var dateKey = getUsageComparisonDateText();
-            return 'comparison.v2.' + dateKey + '.' + keys.slice().sort().join('|');
+            return 'comparison.v3.billing-anomaly.' + dateKey + '.' + keys.slice().sort().join('|');
         }
 
         function getUsageComparisonDateText() {
@@ -1090,7 +1150,7 @@
             comparisonResponse = response;
             comparisonPeriod = period || comparisonPeriod;
             var html = '';
-            var periodLabels = { current: 'Bulan ini', previous: 'Bulan lalu', twoMonthsAgo: '2 bulan lalu', threeMonthsAgo: '3 bulan lalu', average: 'Rata-rata 3 bulan' };
+            var periodLabels = { current: 'Periode berjalan', previous: 'Periode sebelumnya', twoMonthsAgo: 'Dua periode sebelumnya', threeMonthsAgo: 'Tiga periode sebelumnya', average: 'Rata-rata tiga periode' };
             response.rows.forEach(function (item) {
                 var selected = getComparisonPeriodRow(item, comparisonPeriod);
                 if (!selected) return;
@@ -1098,33 +1158,37 @@
                 var device = (usagePanelList || []).filter(function (panel) { return panel.deviceKey === item.deviceKey; })[0];
                 var label = device ? (device.groupName || device.deviceId || item.deviceKey) : item.deviceKey;
                 var actualCost = selected.actualCost;
-                var status = isAverage ? 'Rata-rata 3 bulan' : (selected.status || 'Estimasi saja');
+                var status = isAverage ? 'Rata-rata tiga bulan' : (selected.billingStatus || selected.status || 'Belum tersedia');
+                var isBillingAnomaly = !isAverage && selected.billingAnomaly === true;
                 var comparison = getUsageComparisonDifference(selected);
                 var difference = comparison.difference;
                 var differencePercent = comparison.percent;
-                var differenceClass = !comparison.available || difference === 0
+                var differenceClass = isBillingAnomaly
+                    ? 'text-danger font-weight-bold'
+                    : (!comparison.available || difference === 0
                     ? 'text-muted'
-                    : (difference > 0 ? 'text-danger' : 'text-success');
+                    : (difference > 0 ? 'text-danger' : 'text-success'));
                 var actualText = actualCost === null || actualCost === undefined
-                    ? '<span class="text-muted">Belum tersedia</span>'
+                    ? '<span class="text-muted">Data belum tersedia</span>'
                     : formatComparisonCurrency(actualCost);
-                var paymentText = selected.paymentPeriod || (isAverage
-                    ? 'Gabungan ' + (selected.actualMonthCount || 0) + '/3 bulan'
-                    : 'Belum ada bukti ERP');
+                var paymentText = selected.paymentPeriod || 'Data belum tersedia';
                 var differenceText = !comparison.available
-                    ? '<span class="text-muted">Belum tersedia</span>'
+                    ? '<span class="text-muted">Data belum tersedia</span>'
                     : formatComparisonCurrency(difference) + ' (' + (differencePercent === null
-                        ? 'persentase tidak tersedia'
+                        ? 'persentase belum tersedia'
                         : differencePercent.toLocaleString('id-ID', { maximumFractionDigits: 1 }) + '%') + ')';
-                html += '<tr>' +
-                    '<td><strong>' + escapeHtml(label) + '</strong></td>' +
-                    '<td>' + escapeHtml(isAverage ? periodLabels.average : (selected.label || selected.period)) + '</td>' +
-                    '<td class="text-right">' + (selected.energyKWh === null || selected.energyKWh === undefined ? '<span class="text-muted">Belum tersedia</span>' : Number(selected.energyKWh).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kWh') + '</td>' +
-                    '<td class="text-right">' + formatComparisonCurrency(selected.estimatedCost) + '</td>' +
-                    '<td class="text-right">' + actualText + '</td>' +
-                    '<td><span class="badge ' + (status === 'Aktual ERP' ? 'badge-success' : (isAverage ? 'badge-info' : 'badge-warning')) + '">' + escapeHtml(status) + '</span></td>' +
-                    '<td>' + escapeHtml(paymentText) + '</td>' +
-                    '<td class="text-right ' + differenceClass + '">' + differenceText + '</td>' +
+                if (isBillingAnomaly) {
+                    status = 'Anomali: selisih tagihan';
+                }
+                html += '<tr class="' + (isBillingAnomaly ? 'table-danger' : '') + '">' +
+                    '<td class="comparison-device-cell" title="' + escapeHtml(label) + '"><strong>' + escapeHtml(label) + '</strong></td>' +
+                    '<td class="comparison-period-cell">' + escapeHtml(isAverage ? periodLabels.average : (selected.label || selected.period || 'Periode belum tersedia')) + '</td>' +
+                    '<td class="text-right comparison-energy-cell">' + (selected.energyKWh === null || selected.energyKWh === undefined ? '<span class="text-muted">Data belum tersedia</span>' : Number(selected.energyKWh).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kWh') + '</td>' +
+                    '<td class="text-right comparison-estimate-cell">' + formatComparisonCurrency(selected.estimatedCost) + '</td>' +
+                    '<td class="text-right comparison-actual-cell">' + actualText + '</td>' +
+                    '<td class="comparison-status-cell" title="' + escapeHtml(status) + '"><span class="badge ' + (isBillingAnomaly ? 'badge-danger' : (status.indexOf('Valid') === 0 || status === 'Aktual ERP' ? 'badge-success' : (isAverage ? 'badge-info' : 'badge-warning'))) + '\">' + escapeHtml(status) + '</span>' + (isBillingAnomaly && selected.billingAnomalyLogId ? ' <small class="text-muted">ID #' + escapeHtml(String(selected.billingAnomalyLogId)) + '</small>' : '') + '</td>' +
+                    '<td class="comparison-payment-cell" title="' + escapeHtml(paymentText) + '">' + (paymentText === 'Data belum tersedia' ? '<span class="text-muted">' + escapeHtml(paymentText) + '</span>' : escapeHtml(paymentText)) + '</td>' +
+                    '<td class="text-right comparison-difference-cell ' + differenceClass + '\">' + differenceText + '</td>' +
                     '</tr>';
             });
             $('#usageErpComparisonRows').html(html || '<tr><td colspan="8" class="text-center text-muted py-3">Belum ada data energi.</td></tr>');
@@ -1140,10 +1204,12 @@
             if (!keys.length && !usagePanelListLoaded) {
                 comparisonLoadPending = true;
                 $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Menyiapkan daftar perangkat...</td></tr>');
+                setUsageComparisonRefreshState(false);
                 return;
             }
             if (!keys.length) {
                 $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3">Belum ada perangkat untuk dibandingkan.</td></tr>');
+                setUsageComparisonRefreshState(false);
                 return;
             }
             var requestKey = getUsageComparisonRequestKey();
@@ -1178,14 +1244,49 @@
                 if (comparisonRequestKey === requestKey) {
                     comparisonRequestInProgress = false;
                     comparisonXhr = null;
+                    setUsageComparisonRefreshState(false);
                 }
             });
+        }
+
+        function setUsageComparisonRefreshState(isLoading) {
+            var $button = $('#btnRefreshUsageComparison');
+            if (!$button.length) return;
+            $button.prop('disabled', isLoading);
+            $button.find('i').toggleClass('fa-spin', isLoading);
+            $button.find('.refresh-comparison-label').text(isLoading ? 'Memuat...' : 'Refresh Data');
+        }
+
+        function refreshUsageComparison() {
+            var keys = activeUsageChipDeviceKey
+                ? [activeUsageChipDeviceKey]
+                : (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
+            var cacheKey = keys.length ? getUsageComparisonCacheKey(keys) : null;
+
+            if (comparisonXhr && comparisonXhr.readyState !== 4) comparisonXhr.abort();
+            comparisonRequestInProgress = false;
+            comparisonRequestKey = null;
+            comparisonResponse = null;
+            comparisonResponseKey = null;
+            comparisonLoadPending = false;
+
+            if (cacheKey) {
+                try { window.localStorage.removeItem(usageCachePrefix + cacheKey); } catch (error) { }
+            }
+
+            setUsageComparisonRefreshState(true);
+            $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat data perbandingan terbaru...</td></tr>');
+            loadUsageErpComparison();
         }
 
         $(document).on('click', '.usage-comparison-period', function () {
             comparisonPeriod = $(this).data('period');
             if (comparisonResponse && comparisonResponseKey === getUsageComparisonRequestKey()) renderUsageComparison(comparisonResponse, comparisonPeriod, false);
             else loadUsageErpComparison();
+        });
+
+        $(document).on('click', '#btnRefreshUsageComparison', function () {
+            refreshUsageComparison();
         });
 
         function updateDayName() {

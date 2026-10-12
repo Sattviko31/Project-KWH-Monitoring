@@ -135,6 +135,19 @@
     </div>
 </div>
 
+<!-- Anomaly Tagihan -->
+<div class="card shadow-sm mb-3 billing-anomaly-section" data-card-help="Daftar Anomali Tagihan|Tabel khusus untuk membandingkan estimasi sistem dengan tagihan aktual ERP.|Hanya anomaly BILLING_VARIANCE yang ditampilkan di sini.|Selisih positif berarti tagihan ERP lebih tinggi dari estimasi sistem.">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+        <h6 class="mb-0"><i class="fas fa-file-invoice-dollar text-warning"></i> Anomali Tagihan</h6>
+        <span class="badge badge-warning text-dark">BILLING_VARIANCE</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="anomaly-grid-scroll-wrapper">
+            <div id="billingAnomalyDataGrid" style="width:100%;"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Laporan Bulanan -->
 <div class="card shadow-sm mb-3" data-card-help="Laporan Anomali Bulanan|Rekapitulasi anomali untuk setiap bulan yang dapat ditampilkan atau dibuat oleh Operator atau Administrator.|Isi laporan: jumlah anomali, distribusi jenis anomali, dampak biaya, kehilangan pendapatan, dan rekomendasi.|Pembuatan laporan menyimpan rekapitulasi secara permanen untuk periode tersebut.">
     <div class="card-header bg-white py-2">
@@ -335,7 +348,7 @@
             </div>
             <div class="modal-body">
                 <div class="detail-modal-grid">
-                    <section class="detail-modal-card">
+                    <section class="detail-modal-card" id="detailDeviceInfoCard">
                         <h6><i class="fas fa-info-circle text-muted"></i> Informasi Dasar</h6>
                         <table class="table table-sm table-borderless mb-0">
                             <tbody>
@@ -354,18 +367,45 @@
                             </tbody>
                         </table>
                     </section>
+                    <section class="detail-modal-card d-none" id="detailBillingInfoCard">
+                        <h6><i class="fas fa-file-invoice-dollar text-primary"></i> Informasi Tagihan</h6>
+                        <table class="table table-sm table-borderless mb-0">
+                            <tbody>
+                                <tr><td class="text-muted">Perangkat</td><td id="detailBillingDevice">-</td></tr>
+                                <tr><td class="text-muted">Lokasi</td><td id="detailBillingLocation">-</td></tr>
+                                <tr><td class="text-muted">Periode Tagihan</td><td id="detailBillingPeriod">-</td></tr>
+                                <tr><td class="text-muted">Subtype Billing</td><td id="detailBillingStatus">-</td></tr>
+                                <tr><td class="text-muted">Estimasi Sistem</td><td id="detailEstimatedBilling" class="fw-bold">-</td></tr>
+                                <tr><td class="text-muted">Tagihan ERP</td><td id="detailActualBilling" class="fw-bold">-</td></tr>
+                                <tr><td class="text-muted">Tagihan ERP Sebelumnya</td><td id="detailBillingPrevious" class="fw-bold">-</td></tr>
+                                <tr><td class="text-muted">Periode Sebelumnya</td><td id="detailBillingPreviousPeriod">-</td></tr>
+                                <tr><td class="text-muted">Selisih Nominal</td><td id="detailBillingDifference" class="fw-bold">-</td></tr>
+                                <tr><td class="text-muted">Selisih Persentase</td><td id="detailBillingDifferencePercent" class="fw-bold">-</td></tr>
+                                <tr><td class="text-muted">ERP Billing ID</td><td id="detailErpBillingId">-</td></tr>
+                                <tr><td class="text-muted">ERP Billing ID Sebelumnya</td><td id="detailPreviousErpBillingId">-</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
                     <section class="detail-modal-card">
                         <h6><i class="fas fa-brain text-muted"></i> Analisis &amp; Rekomendasi</h6>
-                        <p class="mb-1 font-weight-bold small">Penyebab Utama</p>
-                        <p class="small text-muted" id="detailRootCause">-</p>
-                        <p class="mb-1 font-weight-bold small">Tindakan yang Disarankan</p>
-                        <p class="small text-muted" id="detailRecommendedAction">-</p>
+                        <div id="detailDeviceAnalysis">
+                            <p class="mb-1 font-weight-bold small">Penyebab Utama</p>
+                            <p class="small text-muted" id="detailRootCause">-</p>
+                            <p class="mb-1 font-weight-bold small">Tindakan yang Disarankan</p>
+                            <p class="small text-muted" id="detailRecommendedAction">-</p>
+                        </div>
+                        <div id="detailBillingAnalysis" class="d-none">
+                            <p class="mb-1 font-weight-bold small">Penyebab Utama</p>
+                            <p class="small text-muted">Nilai tagihan ERP berbeda dari estimasi sistem melebihi ambang batas yang ditentukan.</p>
+                            <p class="mb-1 font-weight-bold small">Tindakan yang Disarankan</p>
+                            <p class="small text-muted">Verifikasi periode tagihan, tarif, konsumsi energi, dan komponen biaya pada ERP sebelum melakukan koreksi.</p>
+                        </div>
                         <p class="mb-1 font-weight-bold small">Catatan Deteksi</p>
                         <p class="small text-muted" id="detailDetectionNotes">-</p>
                         <p class="mb-1 font-weight-bold small">Catatan Operator</p>
                         <p class="small text-muted" id="detailOperatorNotes">-</p>
                     </section>
-                    <section class="detail-modal-card">
+                    <section class="detail-modal-card" id="detailFinancialCard">
                         <h6><i class="fas fa-coins text-muted"></i> Dampak Finansial</h6>
                         <div id="detailFinancialImpactContainer">
                             <p class="mb-1 font-weight-bold small">Dampak Biaya (Beban Berlebih)</p>
@@ -375,7 +415,16 @@
                             <p class="small text-muted mt-2 mb-0" id="detailFinancialNote">-</p>
                         </div>
                     </section>
-                    <section class="detail-modal-card detail-snapshot-card">
+                    <section class="detail-modal-card d-none" id="detailBillingSummaryCard">
+                        <h6><i class="fas fa-scale-balanced text-warning"></i> Ringkasan Variansi Tagihan</h6>
+                        <div class="billing-variance-summary">
+                            <div class="billing-variance-value"><span>Estimasi</span><strong id="detailBillingEstimateSummary">-</strong></div>
+                            <div class="billing-variance-arrow"><i class="fas fa-arrow-right"></i></div>
+                            <div class="billing-variance-value"><span>ERP</span><strong id="detailBillingActualSummary">-</strong></div>
+                        </div>
+                        <div class="alert alert-warning small mb-0 mt-3" id="detailBillingSummaryNote">-</div>
+                    </section>
+                    <section class="detail-modal-card detail-snapshot-card" id="detailSnapshotCard">
                         <div class="detail-snapshot-heading">
                             <h6><i class="fas fa-chart-area text-primary"></i> Cuplikan Grafik</h6>
                             <span id="detailSnapshotLiveBadge" class="badge bg-info text-dark d-none"><i class="fas fa-circle fa-xs"></i> LIVE</span>
@@ -688,26 +737,123 @@
     }
 
      Detail modal cards and live snapshot chart
-    #detailModal .modal-dialog { max-width: min(1200px, calc(100% - 1.5rem)); }
-    #detailModal .modal-body { padding: 1rem; }
+    #detailModal .modal-dialog {
+        width: calc(100% - 2rem);
+        max-width: 1180px;
+        margin: 1rem auto;
+    }
+    #detailModal .modal-content {
+        overflow: hidden;
+        border: 0;
+        border-radius: 0.9rem;
+        background: #f1f5f9;
+        box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, 0.28);
+    }
+    #detailModal .modal-header {
+        min-height: 58px;
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid #dbe3ee;
+        background: #ffffff !important;
+        color: #172033 !important;
+    }
+    #detailModal .modal-title {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        color: #172033 !important;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+    #detailModal .modal-title i { color: #2563eb; }
+    #detailModal .modal-header .close {
+        margin: -0.25rem -0.35rem -0.25rem auto;
+        padding: 0.25rem 0.5rem;
+        color: #475569 !important;
+        text-shadow: none;
+    }
+    #detailModal .modal-body { padding: 1.15rem; }
     .detail-modal-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1rem;
+        gap: 0.9rem;
         align-items: stretch;
     }
     .detail-modal-card {
         min-width: 0;
-        padding: 1rem;
-        border: 1px solid #e2e8f0;
-        border-radius: 0.65rem;
-        background: var(--bs-body-bg, #fff);
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        padding: 1.05rem 1.1rem;
+        border: 1px solid #dbe3ee;
+        border-radius: 0.75rem;
+        background: #ffffff;
+        color: #1e293b;
+        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
     }
-    .detail-modal-card h6 { margin: 0 0 0.8rem; font-weight: 700; }
-    .detail-modal-card .table td { padding: 0.34rem 0.25rem; vertical-align: middle; }
-    .detail-modal-card .table td:first-child { width: 42%; }
-    .detail-modal-card p { overflow-wrap: anywhere; }
+    .detail-modal-card h6 {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        min-height: 1.4rem;
+        margin: 0 0 0.8rem;
+        color: #1e293b !important;
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+    .detail-modal-card h6 i { color: #64748b; }
+    .detail-modal-card .table {
+        margin-bottom: 0;
+        color: #1e293b;
+        table-layout: fixed;
+    }
+    .detail-modal-card .table td {
+        padding: 0.48rem 0.25rem;
+        vertical-align: top;
+        border-top: 1px solid #e2e8f0;
+        overflow-wrap: anywhere;
+    }
+    .detail-modal-card .table tr:first-child td { border-top: 0; }
+    .detail-modal-card .table td:first-child {
+        width: 43%;
+        color: #64748b !important;
+        font-size: 0.78rem;
+        line-height: 1.25;
+    }
+    .detail-modal-card .table td:last-child {
+        color: #1e293b !important;
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+    .detail-modal-card p {
+        color: #475569 !important;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+    }
+    .detail-modal-card .text-muted { color: #64748b !important; }
+    #detailBillingSummaryCard,
+    #detailFinancialCard { grid-column: 1 / -1; }
+    #detailBillingAnalysis p.small,
+    #detailDeviceAnalysis p.small { font-size: 0.8rem; }
+    .billing-variance-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .billing-variance-value {
+        min-width: 0;
+        padding: 0.85rem;
+        border: 1px solid #dbe3ee;
+        border-radius: 0.5rem;
+        background: #f8fafc;
+    }
+    .billing-variance-value span { display: block; color: #64748b !important; font-size: 0.76rem; font-weight: 600; }
+    .billing-variance-value strong { display: block; margin-top: 0.25rem; color: #1e293b !important; font-size: 1rem; overflow-wrap: anywhere; }
+    .billing-variance-arrow { color: #2563eb; font-size: 1.15rem; }
+    #detailBillingSummaryNote {
+        border: 1px solid #f6d88b;
+        color: #854d0e !important;
+        line-height: 1.45;
+    }
+    #detailFinancialCard .h5 { font-size: 1.15rem; }
     .detail-snapshot-card { grid-column: 1 / -1; padding: 1rem 1.1rem 0.85rem; }
     .detail-snapshot-heading, .detail-snapshot-footer {
         display: flex;
@@ -726,8 +872,15 @@
     .detail-snapshot-footer {
         min-height: 2.25rem;
         padding-top: 0.55rem;
-        color: #64748b;
+        color: #64748b !important;
         font-size: 0.82rem;
+    }
+    #detailSnapshotStatus,
+    #detailSnapshotProgress { color: #64748b !important; }
+    #detailModal .modal-footer {
+        padding: 0.75rem 1.15rem;
+        border-top: 1px solid #dbe3ee;
+        background: #ffffff;
     }
     .detail-snapshot-progress-track {
         height: 4px;
@@ -743,11 +896,21 @@
         transition: width 0.35s ease;
     }
     @@media (max-width: 767.98px) {
-        #detailModal .modal-dialog { max-width: calc(100% - 0.5rem); margin: 0.25rem auto; }
+        #detailModal .modal-dialog { width: calc(100% - 0.5rem); max-width: none; margin: 0.25rem auto; }
+        #detailModal .modal-body { padding: 0.75rem; }
         .detail-modal-grid { grid-template-columns: minmax(0, 1fr); gap: 0.65rem; }
+        #detailBillingSummaryCard,
+        #detailFinancialCard,
         .detail-snapshot-card { grid-column: auto; }
         .detail-modal-card { padding: 0.8rem; }
+        .billing-variance-summary { grid-template-columns: minmax(0, 1fr); }
+        .billing-variance-arrow { text-align: center; transform: rotate(90deg); }
         .detail-chart-snapshot-container { height: 300px; min-height: 260px; }
+    }
+    @@media (min-width: 768px) and (max-width: 991.98px) {
+        #detailModal .modal-dialog { width: calc(100% - 1rem); }
+        #detailModal .modal-body { padding: 0.9rem; }
+        .detail-modal-grid { gap: 0.75rem; }
     }
      Severity badges
     .severity-badge {
@@ -809,6 +972,7 @@
         var autoRefreshEnabled = true;
         var deleteLogId = null;
         var dataGrid = null;
+        var billingDataGrid = null;
         var allData = [];
         var currentDetailId = null;
         var currentUserRole = '@userRole';
@@ -829,12 +993,14 @@
             updateLastUpdate();
             setInterval(updateLastUpdate, 60000);
 
-            initDataGrid();
+            initDataGrid('POWER', '#anomalyDataGrid');
+            initBillingDataGrid();
             loadDashboard();
             loadTrends(7);
 
             $('#btnRefresh').click(function() {
                 if (dataGrid) dataGrid.refresh();
+                if (billingDataGrid) billingDataGrid.refresh();
                 loadDashboard();
                 loadTrends(7);
             });
@@ -895,6 +1061,7 @@
                 // Hormati toggle "Auto Refresh" di UI.
                 if (!autoRefreshEnabled) return;
                 if (dataGrid) dataGrid.refresh();
+                if (billingDataGrid) billingDataGrid.refresh();
                 loadDashboard();
             };
 
@@ -937,6 +1104,17 @@
                 var mm = String(d.getMinutes()).padStart(2, '0');
                 var ss = String(d.getSeconds()).padStart(2, '0');
                 return dd + '/' + MM + '/' + yyyy + ' ' + hh + ':' + mm + ':' + ss;
+            } catch(e) {
+                return isoStr;
+            }
+        }
+
+        function formatDateOnly(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                var d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
             } catch(e) {
                 return isoStr;
             }
@@ -1114,14 +1292,14 @@
         // ============================================
         // DATA GRID
         // ============================================
-        function initDataGrid() {
-            dataGrid = $('#anomalyDataGrid').dxDataGrid({
+        function initDataGrid(anomalyType, gridSelector) {
+            dataGrid = $(gridSelector).dxDataGrid({
                 dataSource: new DevExpress.data.DataSource({
                     store: new DevExpress.data.CustomStore({
                         key: 'id',
                         load: function(loadOptions) {
                             var d = $.Deferred();
-                            var params = { skip: loadOptions.skip || 0, take: loadOptions.take || 10 };
+                            var params = { skip: loadOptions.skip || 0, take: loadOptions.take || 10, anomalyType: anomalyType };
                             if (loadOptions.sort) params.sort = JSON.stringify(loadOptions.sort);
 
                             $.ajax({
@@ -1147,6 +1325,7 @@
                                             emaValue: item.emaValue || item.EMAValue,
                                             thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
                                             severity: item.severity || item.Severity || 'medium',
+                                            billingAnomalyType: item.billingAnomalyType || item.BillingAnomalyType || '',
                                             rootCause: item.rootCause || item.RootCause || '',
                                             recommendedAction: item.recommendedAction || item.RecommendedAction || '',
                                             acknowledged: item.acknowledged || item.Acknowledged || false,
@@ -1159,7 +1338,13 @@
                                             anomalyCostImpact: item.anomalyCostImpact || item.AnomalyCostImpact || 0,
                                             operatorAction: item.operatorAction || item.OperatorAction || '',
                                             operatorNotes: item.operatorNotes || item.OperatorNotes || '',
-                                            notes: item.notes || item.Notes || ''
+                                            notes: item.notes || item.Notes || '',
+                                            estimatedBilling: item.estimatedBilling != null ? item.estimatedBilling : item.EstimatedBilling,
+                                            actualBilling: item.actualBilling != null ? item.actualBilling : item.ActualBilling,
+                                            billingDifference: item.billingDifference != null ? item.billingDifference : item.BillingDifference,
+                                            billingDifferencePercent: item.billingDifferencePercent != null ? item.billingDifferencePercent : item.BillingDifferencePercent,
+                                            billingPeriod: item.billingPeriod || item.BillingPeriod,
+                                            erpBillingId: item.erpBillingId != null ? item.erpBillingId : item.ErpBillingId
                                         };
                                     });
                                     allData = mapped;
@@ -1396,6 +1581,141 @@
             }).dxDataGrid('instance');
         }
 
+        function initBillingDataGrid() {
+            billingDataGrid = $('#billingAnomalyDataGrid').dxDataGrid({
+                dataSource: new DevExpress.data.DataSource({
+                    store: new DevExpress.data.CustomStore({
+                        key: 'id',
+                        load: function(loadOptions) {
+                            var d = $.Deferred();
+                            var params = {
+                                skip: loadOptions.skip || 0,
+                                take: loadOptions.take || 10,
+                                anomalyType: 'BILLING_VARIANCE'
+                            };
+                            if (loadOptions.sort) params.sort = JSON.stringify(loadOptions.sort);
+
+                            $.ajax({
+                                url: '/api/Api/anomaly-logs/ALL',
+                                method: 'GET',
+                                data: params,
+                                dataType: 'json',
+                                success: function(response) {
+                                    var mapped = (response.data || []).map(function(item) {
+                                        return {
+                                            id: item.id || item.Id || 0,
+                                            deviceKey: item.deviceKey || item.DeviceKey || '',
+                                            groupName: item.groupName || item.GroupName || item.deviceKey || '',
+                                            location: item.location || item.Location || '-',
+                                            deviceCategory: item.deviceCategory || item.DeviceCategory || 'Unknown',
+                                            severity: item.severity || item.Severity || 'medium',
+                                            billingAnomalyType: item.billingAnomalyType || item.BillingAnomalyType || '',
+                                            detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
+                                            estimatedBilling: item.estimatedBilling != null ? item.estimatedBilling : item.EstimatedBilling,
+                                            actualBilling: item.actualBilling != null ? item.actualBilling : item.ActualBilling,
+                                            billingDifference: item.billingDifference != null ? item.billingDifference : item.BillingDifference,
+                                            billingDifferencePercent: item.billingDifferencePercent != null ? item.billingDifferencePercent : item.BillingDifferencePercent,
+                                            billingPeriod: item.billingPeriod || item.BillingPeriod,
+                                            erpBillingId: item.erpBillingId != null ? item.erpBillingId : item.ErpBillingId,
+                                            previousBilling: item.previousBilling != null ? item.previousBilling : item.PreviousBilling,
+                                            previousBillingPeriod: item.previousBillingPeriod || item.PreviousBillingPeriod,
+                                            previousErpBillingId: item.previousErpBillingId != null ? item.previousErpBillingId : item.PreviousErpBillingId,
+                                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
+                                            acknowledged: item.acknowledged || item.Acknowledged || false,
+                                            isResolved: item.isResolved || item.IsResolved || false
+                                        };
+                                    });
+                                    d.resolve(mapped, { totalCount: response.totalCount || 0 });
+                                },
+                                error: function(xhr, status, error) { d.reject(error); }
+                            });
+                            return d.promise();
+                        },
+                        remove: function(key) {
+                            var d = $.Deferred();
+                            $.ajax({
+                                url: '/api/Api/anomaly-logs/' + key,
+                                method: 'DELETE',
+                                success: function() { d.resolve(); },
+                                error: function(xhr) { d.reject(xhr.responseText || 'Delete failed'); }
+                            });
+                            return d.promise();
+                        }
+                    })
+                }),
+                remoteOperations: { sorting: true, paging: true, filtering: true },
+                paging: { pageSize: 10 },
+                pager: { showPageSizeSelector: true, allowedPageSizes: [10, 25, 50, 100], showInfo: true, showNavigationButtons: true, visible: true },
+                scrolling: { mode: 'standard', showScrollbar: 'always', useNative: true },
+                searchPanel: { visible: true, width: 180, placeholder: 'Cari anomaly tagihan...' },
+                columnChooser: { enabled: true, mode: 'select' },
+                columnFixing: { enabled: true },
+                headerFilter: { visible: true },
+                filterRow: { visible: true },
+                sorting: { mode: 'single' },
+                rowAlternationEnabled: true,
+                showBorders: true,
+                allowColumnResizing: true,
+                allowColumnReordering: true,
+                columnAutoWidth: true,
+                loadPanel: { enabled: true, text: 'Memuat anomaly tagihan...' },
+                noDataText: 'Tidak ada anomaly tagihan',
+                onToolbarPreparing: function(e) {
+                    e.toolbarOptions.items.push({ location: 'after', widget: 'dxButton', options: { text: 'Columns', onClick: function() { billingDataGrid.showColumnChooser(); } } });
+                    e.toolbarOptions.items.push({ location: 'after', widget: 'dxButton', options: { text: 'Clear', onClick: function() { billingDataGrid.clearFilter(); billingDataGrid.refresh(); } } });
+                },
+                onRowPrepared: function(e) {
+                    if (e.rowType === 'data') e.rowElement.css('border-left', '3px solid #f59e0b');
+                },
+                columns: [
+                    {
+                        caption: 'Tindakan', width: 105, alignment: 'center', allowFiltering: false, allowSorting: false,
+                        cellTemplate: function(container, options) {
+                            var data = options.data;
+                            $('<button>').addClass('btn btn-sm btn-info').attr('title', 'Lihat detail').html('<i class="fas fa-eye"></i>')
+                                .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(container);
+                        }
+                    },
+                    { dataField: 'id', caption: '#', width: 80, alignment: 'center' },
+                    { dataField: 'detectedTime', caption: 'Waktu Deteksi', dataType: 'datetime', format: 'dd/MM/yyyy HH:mm:ss', width: 155 },
+                    { dataField: 'deviceKey', caption: 'Perangkat', minWidth: 150 },
+                    { dataField: 'groupName', caption: 'Grup', minWidth: 130 },
+                    { dataField: 'deviceCategory', caption: 'Kategori', minWidth: 110 },
+                    { dataField: 'billingPeriod', caption: 'Periode Tagihan', dataType: 'date', format: 'MM/yyyy', width: 120 },
+                    { dataField: 'billingAnomalyType', caption: 'Subtype', minWidth: 180 },
+                    { dataField: 'estimatedBilling', caption: 'Estimasi Sistem', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 145 },
+                    { dataField: 'actualBilling', caption: 'Aktual ERP', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 135 },
+                    {
+                        dataField: 'billingDifference', caption: 'Selisih', dataType: 'number', alignment: 'right', minWidth: 130,
+                        cellTemplate: function(container, options) {
+                            var value = options.value;
+                            var cls = value >= 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
+                            $('<span>').addClass(cls).text('Rp ' + formatNumber(Math.abs(value || 0)) + (value >= 0 ? ' ↑' : ' ↓')).appendTo(container);
+                        }
+                    },
+                    {
+                        dataField: 'billingDifferencePercent', caption: 'Selisih %', dataType: 'number', alignment: 'right', minWidth: 95,
+                        cellTemplate: function(container, options) { $('<span>').text(options.value == null ? '-' : fmt(Math.abs(options.value), 2) + '%').appendTo(container); }
+                    },
+                    { dataField: 'erpBillingId', caption: 'ERP Billing ID', dataType: 'number', alignment: 'center', minWidth: 115 },
+                    { dataField: 'thresholdValue', caption: 'Threshold', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 110 },
+                    {
+                        dataField: 'severity', caption: 'Keparahan', alignment: 'center',
+                        cellTemplate: function(container, options) { $('<span>').addClass('severity-badge ' + severityClass(options.value)).text(options.value || 'medium').appendTo(container); }
+                    },
+                    {
+                        dataField: 'isResolved', caption: 'Status', dataType: 'boolean', alignment: 'center',
+                        cellTemplate: function(container, options) {
+                            var data = options.row.data;
+                            if (data.isResolved) $('<span>').addClass('badge bg-success').html('<i class="fas fa-check-double"></i> Selesai').appendTo(container);
+                            else if (data.acknowledged) $('<span>').addClass('badge bg-info').html('<i class="fas fa-check"></i> Dikonfirmasi').appendTo(container);
+                            else $('<span>').addClass('badge bg-secondary').html('<i class="fas fa-circle"></i> Baru').appendTo(container);
+                        }
+                    }
+                ]
+            }).dxDataGrid('instance');
+        }
+
         // ============================================
         // DETAIL MODAL
         // ============================================
@@ -1405,12 +1725,14 @@
         var lastDetailSnapshotSignature = null;
         var currentDetailSnapshotStatus = null;
         var currentDetailSnapshotAfterCount = 0;
+        var currentDetailIsBilling = false;
 
         function openDetailModal(id) {
             currentDetailId = id;
             lastDetailSnapshotSignature = null;
             currentDetailSnapshotStatus = null;
             currentDetailSnapshotAfterCount = 0;
+            currentDetailIsBilling = false;
             $.ajax({
                 url: '/api/Api/anomaly-logs/detail/' + id,
                 method: 'GET',
@@ -1419,7 +1741,7 @@
                     if (response.success && response.data) {
                         renderDetailModal(response.data);
                         // Defer chart rendering until modal is visible (DevExtreme needs container dimensions)
-                        pendingChartSnapshot = response.data.chartSnapshot;
+                        pendingChartSnapshot = currentDetailIsBilling ? null : response.data.chartSnapshot;
                         $('#detailModal').modal('show');
                     } else {
                         showNotification('Gagal memuat detail anomali', 'danger');
@@ -1431,7 +1753,7 @@
 
         // Render chart AFTER modal is shown so Chart.js can measure the container
         $('#detailModal').on('shown.bs.modal', function() {
-            if (pendingChartSnapshot !== null) {
+            if (!currentDetailIsBilling && pendingChartSnapshot !== null) {
                 var initialSnapshot = pendingChartSnapshot;
                 var initialStatus = (initialSnapshot.snapshotStatus || '').toLowerCase();
                 var initialSignature = initialStatus + '|' + (initialSnapshot.beforeDataJson || '') + '|' + (initialSnapshot.afterDataJson || '');
@@ -1442,7 +1764,7 @@
             setTimeout(function() {
                 if (detailChart) detailChart.resize();
             }, 150);
-            startDetailSnapshotPolling();
+            if (!currentDetailIsBilling) startDetailSnapshotPolling();
         });
 
         function startDetailSnapshotPolling() {
@@ -1558,6 +1880,49 @@
             else statusHtml = '<span class="badge bg-secondary">New</span>';
             $('#detailStatus').html(statusHtml);
 
+            var isBilling = data.anomalyType === 'BILLING_VARIANCE';
+            currentDetailIsBilling = isBilling;
+            $('#detailDeviceInfoCard').toggleClass('d-none', isBilling);
+            $('#detailBillingInfoCard').toggleClass('d-none', !isBilling);
+            $('#detailFinancialCard').toggleClass('d-none', isBilling);
+            $('#detailBillingSummaryCard').toggleClass('d-none', !isBilling);
+            $('#detailSnapshotCard').toggleClass('d-none', isBilling);
+            $('#detailDeviceAnalysis').toggleClass('d-none', isBilling);
+            $('#detailBillingAnalysis').toggleClass('d-none', !isBilling);
+
+            if (isBilling) {
+                var estimatedBilling = data.estimatedBilling;
+                var actualBilling = data.actualBilling;
+                var billingDifference = data.billingDifference;
+                var billingDifferencePercent = data.billingDifferencePercent;
+                var hasEstimated = estimatedBilling !== null && estimatedBilling !== undefined;
+                var hasActual = actualBilling !== null && actualBilling !== undefined;
+                var hasDifference = billingDifference !== null && billingDifference !== undefined;
+                var hasDifferencePercent = billingDifferencePercent !== null && billingDifferencePercent !== undefined;
+                var billingCurrency = function(value) { return value === null || value === undefined ? '-' : 'Rp ' + formatNumber(value); };
+
+                $('#detailBillingDevice').text((data.groupName || data.deviceKey || '-') + (data.deviceId ? ' (' + data.deviceId + ')' : ''));
+                $('#detailBillingLocation').text(data.location || '-');
+                $('#detailBillingPeriod').text(data.billingPeriod ? formatDateOnly(data.billingPeriod) : 'Data belum tersedia');
+                $('#detailEstimatedBilling').text(hasEstimated ? billingCurrency(estimatedBilling) : 'Data belum tersedia');
+                $('#detailActualBilling').text(hasActual ? billingCurrency(actualBilling) : 'Data belum tersedia');
+                $('#detailBillingDifference').text(hasDifference ? billingCurrency(billingDifference) : 'Data belum tersedia')
+                    .toggleClass('text-danger', hasDifference && Number(billingDifference) > 0)
+                    .toggleClass('text-success', hasDifference && Number(billingDifference) < 0);
+                $('#detailBillingDifferencePercent').text(hasDifferencePercent ? fmt(billingDifferencePercent, 2) + '%' : 'Data belum tersedia');
+                $('#detailErpBillingId').text(data.erpBillingId || 'Data belum tersedia');
+                var subtype = data.billingAnomalyType || '-';
+                $('#detailBillingStatus').html('<span class="badge bg-warning text-dark"><i class="fas fa-triangle-exclamation"></i> ' + subtype + '</span>');
+                $('#detailBillingPrevious').text(data.previousBilling != null ? billingCurrency(data.previousBilling) : 'Data belum tersedia');
+                $('#detailBillingPreviousPeriod').text(data.previousBillingPeriod ? formatDateOnly(data.previousBillingPeriod) : 'Data belum tersedia');
+                $('#detailPreviousErpBillingId').text(data.previousErpBillingId || 'Data belum tersedia');
+                $('#detailBillingEstimateSummary').text(hasEstimated ? billingCurrency(estimatedBilling) : 'Data belum tersedia');
+                $('#detailBillingActualSummary').text(hasActual ? billingCurrency(actualBilling) : 'Data belum tersedia');
+                $('#detailBillingSummaryNote').text(hasDifference
+                    ? 'Selisih terdeteksi sebesar ' + billingCurrency(billingDifference) + (hasDifferencePercent ? ' (' + fmt(billingDifferencePercent, 2) + '%).' : '.') + ' Periksa sumber estimasi dan data tagihan ERP.'
+                    : 'Rincian selisih tagihan belum tersedia pada data anomaly ini.');
+            }
+
             $('#detailRootCause').text(data.rootCause || '-');
             $('#detailRecommendedAction').text(data.recommendedAction || '-');
             $('#detailDetectionNotes').text(data.notes || '-');
@@ -1594,6 +1959,7 @@
             if (type === 'OVERLOAD') { cls = 'bg-danger'; icon = 'fa-bolt'; text = isEnglishUi() ? 'OVERLOAD' : 'BEBAN BERLEBIH'; }
             else if (type === 'DROP') { cls = 'bg-warning text-dark'; icon = 'fa-arrow-down'; text = 'DEVICE DROP'; }
             else if (type === 'DEVICE_OFFLINE' || type === 'DEVICE_DROP' || type === 'DEVICE OFFLINE') { cls = 'bg-secondary text-white'; icon = 'fa-plug'; text = isEnglishUi() ? 'DEVICE OFFLINE' : 'PERANGKAT OFFLINE'; }
+            else if (type === 'BILLING_VARIANCE') { cls = 'bg-primary'; icon = 'fa-file-invoice-dollar'; text = 'VARIANSI TAGIHAN'; }
             else { cls = 'bg-info'; icon = 'fa-question'; text = type; }
             return '<span class="badge ' + cls + '"><i class="fas ' + icon + '"></i> ' + text + '</span>';
         }

@@ -92,6 +92,10 @@ namespace KWHMonitoring.Models
         [Column("RevenuePerHour", TypeName = "decimal(18,2)")]
         public decimal RevenuePerHour { get; set; } = 0m;
 
+        // Null means use the global billing anomaly threshold.
+        [Column("BillingAnomalyThreshold", TypeName = "decimal(18,2)")]
+        public decimal? BillingAnomalyThreshold { get; set; }
+
         [Column("CreatedAt", TypeName = "datetime2")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

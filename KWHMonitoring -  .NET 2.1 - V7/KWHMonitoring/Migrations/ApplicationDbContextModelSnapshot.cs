@@ -91,11 +91,32 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("AcknowledgedTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("ActualBilling")
+                        .HasColumnName("ActualBilling")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("AnomalyType")
                         .IsRequired()
                         .HasColumnName("AnomalyType")
                         .HasColumnType("nvarchar(20)")
                         .HasMaxLength(20);
+
+                    b.Property<string>("BillingAnomalyType")
+                        .HasColumnName("BillingAnomalyType")
+                        .HasColumnType("nvarchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<decimal?>("BillingDifference")
+                        .HasColumnName("BillingDifference")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("BillingDifferencePercent")
+                        .HasColumnName("BillingDifferencePercent")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("BillingPeriod")
+                        .HasColumnName("BillingPeriod")
+                        .HasColumnType("date");
 
                     b.Property<DateTime>("DetectedTime")
                         .HasColumnName("DetectedTime")
@@ -120,6 +141,13 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("EMAValue")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<long?>("ErpBillingId")
+                        .HasColumnName("ErpBillingId");
+
+                    b.Property<decimal?>("EstimatedBilling")
+                        .HasColumnName("EstimatedBilling")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsResolved")
                         .HasColumnName("IsResolved");
 
@@ -141,6 +169,17 @@ namespace KWHMonitoring.Migrations
                     b.Property<decimal>("PowerValue")
                         .HasColumnName("PowerValue")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PreviousBilling")
+                        .HasColumnName("PreviousBilling")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("PreviousBillingPeriod")
+                        .HasColumnName("PreviousBillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<long?>("PreviousErpBillingId")
+                        .HasColumnName("PreviousErpBillingId");
 
                     b.Property<string>("RecommendedAction")
                         .HasColumnName("RecommendedAction")
@@ -188,6 +227,11 @@ namespace KWHMonitoring.Migrations
 
                     b.HasIndex("Severity")
                         .HasName("IX_AnomalyLogs_Severity");
+
+                    b.HasIndex("AnomalyType", "BillingAnomalyType", "DeviceKey", "BillingPeriod", "ErpBillingId")
+                        .IsUnique()
+                        .HasName("IX_AnomalyLogs_BillingDedup")
+                        .HasFilter("[AnomalyType] = 'BILLING_VARIANCE' AND [BillingPeriod] IS NOT NULL AND [ErpBillingId] IS NOT NULL");
 
                     b.ToTable("AnomalyLogs");
                 });
@@ -551,6 +595,10 @@ namespace KWHMonitoring.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<decimal?>("BillingAnomalyThreshold")
+                        .HasColumnName("BillingAnomalyThreshold")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("BudgetKWh")
                         .HasColumnName("BudgetKWh")

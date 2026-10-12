@@ -58,6 +58,7 @@ namespace KWHMonitoring
             services.AddScoped<AesEncryptionService>();
             services.AddSingleton<MqttService>();
             services.AddScoped<IAnomalyAnalysisService, AnomalyAnalysisService>();
+            services.AddScoped<IBillingAnomalyDetectionService, BillingAnomalyDetectionService>();
             services.AddSingleton<AppSettingsCache>();
 
             services.AddScoped<IEmailService, EmailService>();

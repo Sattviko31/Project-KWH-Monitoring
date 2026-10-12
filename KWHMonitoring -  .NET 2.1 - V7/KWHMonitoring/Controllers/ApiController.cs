@@ -41,10 +41,11 @@ namespace KWHMonitoring.Controllers
         private readonly IHostingEnvironment _environment;
         private readonly IEmailService _emailService;
         private readonly IAnomalyAnalysisService _analysisService;
+        private readonly IBillingAnomalyDetectionService _billingAnomalyDetectionService;
         private readonly IDeviceSettingsService _deviceSettingsService;
         private readonly ITitikLokasiService _titikLokasiService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IBillingAnomalyDetectionService billingAnomalyDetectionService, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
         {
             _context = context;
             _cache = cache;
@@ -55,6 +56,7 @@ namespace KWHMonitoring.Controllers
             _environment = environment;
             _emailService = emailService;
             _analysisService = analysisService;
+            _billingAnomalyDetectionService = billingAnomalyDetectionService;
             _deviceSettingsService = deviceSettingsService;
             _titikLokasiService = titikLokasiService;
         }
@@ -1295,7 +1297,7 @@ namespace KWHMonitoring.Controllers
                             .ThenByDescending(x => x.TagihanListrikID)
                             .FirstOrDefault(x => x.Periode.Year == expectedPaymentPeriod.Year &&
                                 x.Periode.Month == expectedPaymentPeriod.Month);
-                        var hasActual = erp != null;
+                        var hasActual = erp != null && erp.TagihanListrikID > 0;
                         var actualCost = hasActual ? erp.JumlahTagihan : (decimal?)null;
                         var comparisonCost = actualCost ?? estimatedCost;
 
@@ -1311,11 +1313,50 @@ namespace KWHMonitoring.Controllers
                             actualCost,
                             comparisonCost,
                             status = hasActual ? "Aktual ERP" : "Estimasi",
+                            billingStatus = hasActual ? "Valid / sudah payment" : "Belum tersedia",
                             paymentPeriod = hasActual ? erp.Periode.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : null,
                             kodeLokasi = hasActual ? erp.KodeLokasi : null,
                             tagihanListrikID = hasActual ? (long?)erp.TagihanListrikID : null
                         };
                     }).ToList();
+
+                    var billingEvaluations = new Dictionary<string, BillingAnomalyEvaluation>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var row in periodRows)
+                    {
+                        var expectedPaymentPeriod = new DateTime(row.year, row.month, 1).AddMonths(1);
+                        var billing = deviceErpRows
+                            .Where(x => x.TagihanListrikID > 0
+                                && x.Periode.Year == expectedPaymentPeriod.Year
+                                && x.Periode.Month == expectedPaymentPeriod.Month)
+                            .OrderByDescending(x => x.Periode)
+                            .ThenByDescending(x => x.TagihanListrikID)
+                            .FirstOrDefault();
+
+                        var previousBilling = deviceErpRows
+                            .Where(x => x.TagihanListrikID > 0
+                                && x.Periode.Year == expectedPaymentPeriod.AddMonths(-1).Year
+                                && x.Periode.Month == expectedPaymentPeriod.AddMonths(-1).Month)
+                            .OrderByDescending(x => x.Periode)
+                            .ThenByDescending(x => x.TagihanListrikID)
+                            .FirstOrDefault();
+
+                        if (billing == null || row.actualCost == null)
+                            continue;
+
+                        try
+                        {
+                            billingEvaluations[row.period] = await _billingAnomalyDetectionService.EvaluateAsync(
+                                deviceKey,
+                                new DateTime(row.year, row.month, 1),
+                                row.estimatedCost,
+                                billing,
+                                previousBilling);
+                        }
+                        catch (Exception billingEx)
+                        {
+                            _logger.LogWarning(billingEx, "Billing anomaly evaluation failed for {DeviceKey}, period {Period}; comparison remains available.", deviceKey, row.period);
+                        }
+                    }
 
                     var previousRows = periodRows.Where(x => x.year != currentMonth.Year || x.month != currentMonth.Month).ToList();
                     var previousActual = previousRows.Where(x => x.actualCost.HasValue).Select(x => x.actualCost.Value).ToList();
@@ -1331,6 +1372,7 @@ namespace KWHMonitoring.Controllers
                         deviceKey,
                         currentMonth = currentRow,
                         previousMonth = previousRow,
+                        billingAnomalyThreshold = billingEvaluations.Values.Select(x => (decimal?)x.Threshold).FirstOrDefault(),
                         monthDifference = Math.Round(difference, 0),
                         monthDifferencePercent = differencePercent,
                         averagePreviousThree = new
@@ -1340,7 +1382,45 @@ namespace KWHMonitoring.Controllers
                             comparisonCost = Math.Round(previousComparison.Average(), 0),
                             actualMonthCount = previousActual.Count
                         },
-                        periods = periodRows
+                        periods = periodRows.Select(row =>
+                        {
+                            billingEvaluations.TryGetValue(row.period, out var evaluation);
+                            return new
+                            {
+                                row.year,
+                                row.month,
+                                row.period,
+                                row.label,
+                                row.energyKWh,
+                                row.tariffPerKWh,
+                                row.estimatedCost,
+                                row.actualCost,
+                                row.comparisonCost,
+                                row.status,
+                                row.billingStatus,
+                                row.paymentPeriod,
+                                row.kodeLokasi,
+                                row.tagihanListrikID,
+                                billingAnomaly = evaluation != null && evaluation.IsAnomaly,
+                                billingAnomalyLogId = evaluation?.LogId,
+                                billingAnomalyType = evaluation == null ? null :
+                                    (evaluation.EstimateVsErpIsAnomaly && evaluation.PeriodOverPeriodIsAnomaly ? "ESTIMATE_VS_ERP,PERIOD_OVER_PERIOD" :
+                                        evaluation.EstimateVsErpIsAnomaly ? "ESTIMATE_VS_ERP" :
+                                        evaluation.PeriodOverPeriodIsAnomaly ? "PERIOD_OVER_PERIOD" : null),
+                                estimateVsErpAnomaly = evaluation != null && evaluation.EstimateVsErpIsAnomaly,
+                                periodOverPeriodAnomaly = evaluation != null && evaluation.PeriodOverPeriodIsAnomaly,
+                                estimateVsErpLogId = evaluation?.EstimateVsErpLogId,
+                                periodOverPeriodLogId = evaluation?.PeriodOverPeriodLogId,
+                                billingDifference = evaluation?.Difference,
+                                billingDifferencePercent = evaluation?.DifferencePercent,
+                                previousBilling = evaluation?.PreviousBilling,
+                                previousBillingPeriod = evaluation?.PreviousBillingPeriod,
+                                previousErpBillingId = evaluation?.PreviousErpBillingId,
+                                periodDifference = evaluation?.PeriodDifference,
+                                periodDifferencePercent = evaluation?.PeriodDifferencePercent,
+                                billingAnomalyThreshold = evaluation?.Threshold ?? 0m
+                            };
+                        }).ToList()
                     });
                 }
 
@@ -3794,7 +3874,8 @@ namespace KWHMonitoring.Controllers
             int skip = 0,
             int take = 10,
             string sort = null,
-            string filter = null)
+            string filter = null,
+            string anomalyType = null)
         {
             try
             {
@@ -3812,6 +3893,17 @@ namespace KWHMonitoring.Controllers
                 else
                 {
                     query = _context.AnomalyLogs.Where(x => x.DeviceKey == deviceKey);
+                }
+
+                // Keep the existing endpoint backward compatible while allowing
+                // the UI to load power and billing anomalies independently.
+                if (string.Equals(anomalyType, "BILLING_VARIANCE", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.AnomalyType == "BILLING_VARIANCE");
+                }
+                else if (string.Equals(anomalyType, "POWER", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(x => x.AnomalyType != "BILLING_VARIANCE");
                 }
 
                 // Apply sorting
@@ -3852,6 +3944,7 @@ namespace KWHMonitoring.Controllers
                         deviceId = x.DeviceId,
                         groupName = (string)null,
                         anomalyType = x.AnomalyType,
+                        billingAnomalyType = x.BillingAnomalyType,
                         powerValue = x.PowerValue,
                         thresholdValue = x.ThresholdValue,
                         deviation = x.Deviation,
@@ -3869,7 +3962,16 @@ namespace KWHMonitoring.Controllers
                         resolvedTime = x.ResolvedTime,
                         operatorAction = x.OperatorAction,
                         operatorNotes = x.OperatorNotes,
-                        notes = x.Notes
+                        notes = x.Notes,
+                        estimatedBilling = x.EstimatedBilling,
+                        actualBilling = x.ActualBilling,
+                        billingDifference = x.BillingDifference,
+                        billingDifferencePercent = x.BillingDifferencePercent,
+                        billingPeriod = x.BillingPeriod,
+                        erpBillingId = x.ErpBillingId
+                        ,previousBilling = x.PreviousBilling
+                        ,previousBillingPeriod = x.PreviousBillingPeriod
+                        ,previousErpBillingId = x.PreviousErpBillingId
                     })
                     .ToListAsync();
 
@@ -3917,6 +4019,7 @@ namespace KWHMonitoring.Controllers
                         { "location", location },
                         { "deviceCategory", category },
                         { "anomalyType", x.anomalyType },
+                        { "billingAnomalyType", x.billingAnomalyType },
                         { "powerValue", x.powerValue },
                         { "thresholdValue", x.thresholdValue },
                         { "deviation", x.deviation },
@@ -3938,7 +4041,16 @@ namespace KWHMonitoring.Controllers
                         { "anomalyCostImpact", anomalyCostImpact },
                         { "operatorAction", canViewOperationalMetadata ? x.operatorAction : null },
                         { "operatorNotes", canViewOperationalMetadata ? x.operatorNotes : null },
-                        { "notes", x.notes }
+                        { "notes", x.notes },
+                        { "estimatedBilling", x.estimatedBilling },
+                        { "actualBilling", x.actualBilling },
+                        { "billingDifference", x.billingDifference },
+                        { "billingDifferencePercent", x.billingDifferencePercent },
+                        { "billingPeriod", x.billingPeriod },
+                        { "erpBillingId", x.erpBillingId },
+                        { "previousBilling", x.previousBilling },
+                        { "previousBillingPeriod", x.previousBillingPeriod },
+                        { "previousErpBillingId", x.previousErpBillingId }
                     };
                     return dict;
                 }).ToList();
@@ -4775,6 +4887,7 @@ namespace KWHMonitoring.Controllers
                         location = location,
                         deviceCategory = category,
                         anomalyType = log.AnomalyType,
+                        billingAnomalyType = log.BillingAnomalyType,
                         powerValue = log.PowerValue,
                         thresholdValue = log.ThresholdValue,
                         deviation = log.Deviation,
@@ -4795,6 +4908,15 @@ namespace KWHMonitoring.Controllers
                         responseTimeMinutes = responseTimeMinutes,
                         revenueLoss = revenueLoss,
                         anomalyCostImpact = anomalyCostImpact,
+                        estimatedBilling = log.EstimatedBilling,
+                        actualBilling = log.ActualBilling,
+                        billingDifference = log.BillingDifference,
+                        billingDifferencePercent = log.BillingDifferencePercent,
+                        billingPeriod = log.BillingPeriod,
+                        erpBillingId = log.ErpBillingId,
+                        previousBilling = log.PreviousBilling,
+                        previousBillingPeriod = log.PreviousBillingPeriod,
+                        previousErpBillingId = log.PreviousErpBillingId,
                         operatorAction = canViewOperationalMetadata ? log.OperatorAction : null,
                         operatorNotes = canViewOperationalMetadata ? log.OperatorNotes : null,
                         chartSnapshot = snapshot == null ? null : new
@@ -7875,7 +7997,8 @@ namespace KWHMonitoring.Controllers
                     WbpEndHour = data.WbpEndHour,
                     BudgetKWh = data.BudgetKWh,
                     SurfaceArea = data.SurfaceArea,
-                    RevenuePerHour = data.RevenuePerHour
+                    RevenuePerHour = data.RevenuePerHour,
+                    BillingAnomalyThreshold = data.BillingAnomalyThreshold
                 };
 
                 await _deviceSettingsService.SaveAsync(deviceKey, settings);
@@ -7933,7 +8056,8 @@ namespace KWHMonitoring.Controllers
                                     WbpEndHour = item.WbpEndHour,
                                     BudgetKWh = item.BudgetKWh,
                                     SurfaceArea = item.SurfaceArea,
-                                    RevenuePerHour = item.RevenuePerHour
+                                    RevenuePerHour = item.RevenuePerHour,
+                                    BillingAnomalyThreshold = item.BillingAnomalyThreshold
                                 };
 
                                 await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
@@ -8300,6 +8424,7 @@ namespace KWHMonitoring.Controllers
         public decimal BudgetKWh { get; set; }
         public decimal SurfaceArea { get; set; }
         public decimal RevenuePerHour { get; set; }
+        public decimal? BillingAnomalyThreshold { get; set; }
     }
 
     public class BulkDeviceSettingsRequest
