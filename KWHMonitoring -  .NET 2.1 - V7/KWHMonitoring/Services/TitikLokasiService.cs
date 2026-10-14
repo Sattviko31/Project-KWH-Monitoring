@@ -217,10 +217,6 @@ namespace KWHMonitoring.Services
                                 "ON t.[RekListrikID] = r.[RekListrikID] " +
                                 "INNER JOIN " + target.TableReference + " l " +
                                 "ON r.[TitikLokasiID] = l.[TitikLokasiID] " +
-                                "INNER JOIN " + target.LocationDetailTableReference + " ld " +
-                                "ON l.[TitikLokasiID] = ld.[TitikLokasiID] " +
-                                "LEFT JOIN " + target.ClientTableReference + " c " +
-                                "ON t.[ClientID] = c.[ClientID] " +
                                 "WHERE CONVERT(nvarchar(50), l.[TitikLokasiID]) IN (" + string.Join(", ", parameterNames) + ") " +
                                 "AND t.[Periode] >= @fromPeriod AND t.[Periode] < @toPeriod" +
                                 ") SELECT [DeviceKey], [KodeLokasi], [Periode], [JumlahTagihan], [TagihanListrikID] " +

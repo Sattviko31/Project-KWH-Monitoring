@@ -168,6 +168,25 @@
                                             </div>
                                         </div>
                                         <div class="device-form-group">
+                                            <div class="device-form-row align-self-center">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" data-field="BillingCutoffEnabled" @(settings.BillingCutoffEnabled ? "checked" : "")>
+                                                    <label class="form-check-label device-label">Cutoff Meter PLN</label>
+                                                </div>
+                                                <small class="text-muted">Nonaktif = periode tanggal 1 sampai akhir bulan.</small>
+                                            </div>
+                                            <div class="device-form-row">
+                                                <label class="device-label">Tanggal Cutoff (25–31)</label>
+                                                <select class="form-select form-select-sm" data-field="BillingCutoffDay" @(settings.BillingCutoffEnabled ? "" : "disabled")>
+                                                    <option value="" selected="@(!settings.BillingCutoffDay.HasValue ? "selected" : null)">Tidak digunakan</option>
+                                                    @for (var cutoffDay = 25; cutoffDay <= 31; cutoffDay++)
+                                                    {
+                                                        <option value="@cutoffDay" selected="@(settings.BillingCutoffDay == cutoffDay ? "selected" : null)">@cutoffDay</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="device-form-group">
                                             <div class="device-form-row">
                                                 <label class="device-label">Pendapatan per Jam (Rp)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000" placeholder="0 = tidak tersedia">
@@ -301,6 +320,13 @@
                 emaFibLower: 0,
                 controlMode: $card.find('[data-field="ControlMode"]').val() || 'OnOff',
                 invertRelayCommand: $card.find('[data-field="InvertRelayCommand"]').is(':checked')
+                ,billingCutoffEnabled: $card.find('[data-field="BillingCutoffEnabled"]').is(':checked')
+                ,billingCutoffDay: (function() {
+                    var raw = $card.find('[data-field="BillingCutoffDay"]').val();
+                    if (!raw) return null;
+                    var value = parseInt(raw, 10);
+                    return isNaN(value) ? null : value;
+                })()
             };
         }
 
@@ -337,7 +363,9 @@
                 revenuePerHour: settings.revenuePerHour,
                 billingAnomalyThreshold: settings.billingAnomalyThreshold,
                 controlMode: settings.controlMode,
-                invertRelayCommand: settings.invertRelayCommand
+                invertRelayCommand: settings.invertRelayCommand,
+                billingCutoffEnabled: settings.billingCutoffEnabled,
+                billingCutoffDay: settings.billingCutoffEnabled ? settings.billingCutoffDay : null
             };
 
             $.ajax({
@@ -368,6 +396,13 @@
             var deviceKey = $card.data('device-key');
             var settings = collectDeviceSettings($card);
             saveDeviceSettings(deviceKey, settings, $card);
+        });
+
+        $(document).on('change', '[data-field="BillingCutoffEnabled"]', function() {
+            var $card = $(this).closest('.device-settings-card');
+            var $day = $card.find('[data-field="BillingCutoffDay"]');
+            $day.prop('disabled', !$(this).is(':checked'));
+            if (!$(this).is(':checked')) $day.val('');
         });
 
         $('#btnSaveAllDeviceSettings').on('click', function() {

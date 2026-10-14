@@ -42,6 +42,8 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(deviceSettings.ControlMode))
                 deviceSettings.ControlMode = "OnOff";
 
+            NormalizeBillingCutoff(deviceSettings);
+
             // WBP/LWBP: if both 0, not configured — keep 0 to signal "use flat tariff"
             // WbpStartHour/WbpEndHour default to 18/22 from model, only override if clearly invalid
             return deviceSettings;
@@ -69,6 +71,8 @@ namespace KWHMonitoring.Services
                     setting.WbpStartHour = 18;
                 if (setting.WbpEndHour < 0 || setting.WbpEndHour > 23)
                     setting.WbpEndHour = 22;
+
+                NormalizeBillingCutoff(setting);
 
                 result[setting.DeviceKey] = setting;
             }
@@ -112,6 +116,8 @@ namespace KWHMonitoring.Services
                 SurfaceArea = effective.SurfaceArea,
                 RevenuePerHour = effective.RevenuePerHour,
                 BillingAnomalyThreshold = effective.BillingAnomalyThreshold,
+                BillingCutoffEnabled = effective.BillingCutoffEnabled,
+                BillingCutoffDay = effective.BillingCutoffDay,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -130,6 +136,8 @@ namespace KWHMonitoring.Services
                 throw new ArgumentException("Device key wajib diisi.", nameof(deviceKey));
             if (settings.BillingAnomalyThreshold.HasValue && settings.BillingAnomalyThreshold.Value < 0m)
                 throw new ArgumentOutOfRangeException(nameof(settings.BillingAnomalyThreshold), "Threshold anomaly tagihan tidak boleh negatif.");
+
+            NormalizeBillingCutoff(settings);
 
             deviceKey = deviceKey.Trim();
 
@@ -160,6 +168,8 @@ namespace KWHMonitoring.Services
                 existing.SurfaceArea = settings.SurfaceArea;
                 existing.RevenuePerHour = settings.RevenuePerHour;
                 existing.BillingAnomalyThreshold = settings.BillingAnomalyThreshold;
+                existing.BillingCutoffEnabled = settings.BillingCutoffEnabled;
+                existing.BillingCutoffDay = settings.BillingCutoffDay;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -171,6 +181,18 @@ namespace KWHMonitoring.Services
             }
 
             await _context.SaveChangesAsync();
+        }
+
+        private static void NormalizeBillingCutoff(DeviceSettings settings)
+        {
+            if (!settings.BillingCutoffEnabled)
+            {
+                settings.BillingCutoffDay = null;
+                return;
+            }
+
+            if (!settings.BillingCutoffDay.HasValue || settings.BillingCutoffDay.Value < 25 || settings.BillingCutoffDay.Value > 31)
+                throw new ArgumentOutOfRangeException(nameof(settings.BillingCutoffDay), "Tanggal cutoff harus berada pada rentang 25 sampai 31 ketika cutoff diaktifkan.");
         }
     }
 }

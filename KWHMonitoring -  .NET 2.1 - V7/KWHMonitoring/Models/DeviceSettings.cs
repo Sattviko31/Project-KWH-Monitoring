@@ -96,6 +96,13 @@ namespace KWHMonitoring.Models
         [Column("BillingAnomalyThreshold", TypeName = "decimal(18,2)")]
         public decimal? BillingAnomalyThreshold { get; set; }
 
+        // Optional PLN billing cycle. Disabled/null keeps the existing calendar-month behavior.
+        [Column("BillingCutoffEnabled")]
+        public bool BillingCutoffEnabled { get; set; } = false;
+
+        [Column("BillingCutoffDay")]
+        public int? BillingCutoffDay { get; set; }
+
         [Column("CreatedAt", TypeName = "datetime2")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

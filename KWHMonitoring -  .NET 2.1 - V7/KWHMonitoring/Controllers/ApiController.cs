@@ -659,7 +659,8 @@ namespace KWHMonitoring.Controllers
                 var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
                 var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
 
-                // Bill projection
+                // Bill projection for the aggregate endpoint remains calendar-based for
+                // backward compatibility. The per-device endpoint applies cutoff settings.
                 var dayOfMonth = serverNow.Day;
                 var daysInMonthProj = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
                 var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInMonthProj, 2) : monthKWh;
@@ -749,7 +750,10 @@ namespace KWHMonitoring.Controllers
                     // Financial: Bill projection
                     billProjection = new
                     {
-                        projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining
+                        projectedMonthKWh,
+                        projectedCost,
+                        daysElapsed = dayOfMonth,
+                        daysRemaining
                     },
                     // Financial: Anomaly cost impact
                     anomalyCostImpact = new
@@ -973,6 +977,29 @@ namespace KWHMonitoring.Controllers
                 foreach (var row in dailyRecords) recordUpdatedAt(row.DeviceKey, row.UpdatedAt);
                 foreach (var row in monthlyRecords) recordUpdatedAt(row.DeviceKey, row.UpdatedAt);
 
+                // Billing consumption is resolved per device. The active cutoff period can
+                // cross the previous calendar month, so load the complete possible window once
+                // instead of accidentally limiting every device to the selected calendar month.
+                var billingPeriodByDevice = settings.ToDictionary(
+                    x => x.Key,
+                    x => BillingPeriodCalculator.Resolve(serverNow, x.Value.BillingCutoffEnabled, x.Value.BillingCutoffDay),
+                    StringComparer.Ordinal);
+                var billingWindowStart = billingPeriodByDevice.Count > 0
+                    ? billingPeriodByDevice.Values.Min(x => x.Start).Date
+                    : new DateTime(serverNow.Year, serverNow.Month, 1);
+                var billingWindowEnd = billingPeriodByDevice.Count > 0
+                    ? billingPeriodByDevice.Values.Max(x => x.End).Date
+                    : new DateTime(serverNow.Year, serverNow.Month, 1).AddMonths(1);
+                var billingDailyRows = await _context.DailyEnergy
+                    .AsNoTracking()
+                    .Where(x => x.Date >= billingWindowStart && x.Date < billingWindowEnd)
+                    .Select(x => new { x.DeviceKey, x.Date, x.EnergyKWh, x.CalculatedAt })
+                    .ToListAsync();
+                var billingDailyByDevice = billingDailyRows
+                    .GroupBy(x => x.DeviceKey)
+                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+                foreach (var row in billingDailyRows) recordUpdatedAt(row.DeviceKey, row.CalculatedAt);
+
                 var daysInMonth = DateTime.DaysInMonth(startDate.Year, startDate.Month);
                 var result = new List<object>();
                 var noAggregateDeviceKeys = new List<string>();
@@ -989,6 +1016,12 @@ namespace KWHMonitoring.Controllers
                     var hourlyMap = hourlyByDevice.ContainsKey(deviceKey) ? hourlyByDevice[deviceKey] : new Dictionary<int, decimal>();
                     var dailyMap = dailyByDevice.ContainsKey(deviceKey) ? dailyByDevice[deviceKey] : new Dictionary<int, decimal>();
                     var monthlyMap = monthlyByDevice.ContainsKey(deviceKey) ? monthlyByDevice[deviceKey] : new Dictionary<Tuple<int, int>, decimal>();
+                    var billingPeriod = billingPeriodByDevice.ContainsKey(deviceKey)
+                        ? billingPeriodByDevice[deviceKey]
+                        : BillingPeriodCalculator.Resolve(serverNow, deviceSettings.BillingCutoffEnabled, deviceSettings.BillingCutoffDay);
+                    var deviceBillingRows = billingDailyByDevice.ContainsKey(deviceKey)
+                        ? billingDailyByDevice[deviceKey]
+                        : billingDailyRows.Where(x => x.DeviceKey == deviceKey).ToList();
 
                     var hourlyData = Enumerable.Range(0, 24).Select(h => new
                     {
@@ -1017,11 +1050,27 @@ namespace KWHMonitoring.Controllers
                     var hourlyKwhByHour = hourlyData.Select(x => x.energy).ToArray();
                     var wbp = CalculateWbpLwbp(hourlyKwhByHour, deviceSettings);
                     var waste = CalculateWaste(hourlyKwhByHour, deviceSettings);
+                    var billingKWh = deviceBillingRows
+                        .Where(x => x.Date >= billingPeriod.Start.Date && x.Date < billingPeriod.End.Date)
+                        .Sum(x => x.EnergyKWh);
+                    if (isToday && serverToday >= billingPeriod.Start.Date && serverToday < billingPeriod.End.Date)
+                    {
+                        var currentDayDaily = deviceBillingRows.FirstOrDefault(x => x.Date.Date == serverToday);
+                        billingKWh -= currentDayDaily == null ? 0m : currentDayDaily.EnergyKWh;
+                        billingKWh += hourlyMap.Values.Sum();
+                    }
+                    billingKWh = Math.Round(Math.Max(0m, billingKWh), 2);
+                    var elapsedDays = billingPeriod.IsDeviceCutoff ? billingPeriod.ElapsedDays : serverNow.Day;
+                    var averageKWhPerDay = elapsedDays > 0 ? Math.Round(billingKWh / elapsedDays, 2) : 0m;
+                    var projectedPeriodKWh = elapsedDays > 0
+                        ? Math.Round(billingKWh / elapsedDays * billingPeriod.PeriodDays, 2)
+                        : billingKWh;
+                    var projectedPeriodCost = Math.Round(projectedPeriodKWh * tariff, 0);
                     var budgetKWh = deviceSettings.BudgetKWh;
-                    var budgetVariance = budgetKWh > 0 ? Math.Round(monthKWh - budgetKWh, 2) : 0m;
-                    var budgetVariancePct = budgetKWh > 0 ? Math.Round((monthKWh - budgetKWh) / budgetKWh * 100, 1) : 0m;
+                    var budgetVariance = budgetKWh > 0 ? Math.Round(billingKWh - budgetKWh, 2) : 0m;
+                    var budgetVariancePct = budgetKWh > 0 ? Math.Round((billingKWh - budgetKWh) / budgetKWh * 100, 1) : 0m;
                     var budgetCost = budgetKWh > 0 ? Math.Round(budgetKWh * tariff, 0) : 0m;
-                    var actualCost = Math.Round(monthKWh * tariff, 0);
+                    var actualCost = Math.Round(billingKWh * tariff, 0);
                     var lastMonthKWh = monthlyMap.ContainsKey(Tuple.Create(lastMonth.Year, lastMonth.Month)) ? monthlyMap[Tuple.Create(lastMonth.Year, lastMonth.Month)] : 0m;
                     var lastYearSameMonthKWh = monthlyMap.ContainsKey(Tuple.Create(comparisonYear, startDate.Month)) ? monthlyMap[Tuple.Create(comparisonYear, startDate.Month)] : 0m;
                     var momChange = Math.Round(monthKWh - lastMonthKWh, 2);
@@ -1030,8 +1079,8 @@ namespace KWHMonitoring.Controllers
                     var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
                     var dayOfMonth = serverNow.Day;
                     var daysInCurrentMonth = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
-                    var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInCurrentMonth, 2) : monthKWh;
-                    var projectedCost = Math.Round(projectedMonthKWh * tariff, 0);
+                    var projectedMonthKWh = projectedPeriodKWh;
+                    var projectedCost = projectedPeriodCost;
                     var deviceAnomalies = anomaliesByDevice.ContainsKey(deviceKey) ? anomaliesByDevice[deviceKey] : new List<UsageStatisticsBatchAnomaly>();
                     decimal anomalyExcessKWh = 0m;
                     foreach (var anomaly in deviceAnomalies) anomalyExcessKWh += Math.Max(anomaly.PowerValue - anomaly.ThresholdValue, 0m) * 0.25m / 1000m;
@@ -1062,9 +1111,20 @@ namespace KWHMonitoring.Controllers
                         isToday, dataUpdatedAt = deviceUpdatedAt,
                         wbpLwbp = new { configured = wbp.configured, wbpKWh = wbp.wbpKWh, lwbpKWh = wbp.lwbpKWh, wbpCost = wbp.wbpCost, lwbpCost = wbp.lwbpCost, totalCostWBP = wbp.totalCostWBP, wbpRatio = wbp.wbpRatio, tariffWBP = wbp.tariffWBP, tariffLWBP = wbp.tariffLWBP, wbpStart = deviceSettings.WbpStartHour, wbpEnd = deviceSettings.WbpEndHour },
                         waste = new { configured = waste.configured, wasteKWh = waste.wasteKWh, wasteCost = waste.wasteCost, wastePercent = waste.wastePercent, downtimeStart = waste.dtStart, downtimeEnd = waste.dtEnd },
-                        budget = new { configured = budgetKWh > 0m, budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct, budgetCost, actualCost },
+                        budget = new { configured = budgetKWh > 0, budgetKWh, actualKWh = billingKWh, variance = budgetVariance, variancePercent = budgetVariancePct, budgetCost, actualCost },
                         periodComparison = new { lastMonthKWh, momChange, momChangePercent, lastYearSameMonthKWh, yoyChange, yoyChangePercent },
-                        billProjection = new { projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining = daysInCurrentMonth - dayOfMonth },
+                        billProjection = new
+                        {
+                            projectedMonthKWh, projectedCost, projectedPeriodKWh, projectedPeriodCost,
+                            actualKWh = billingKWh, averageKWhPerDay,
+                            periodStart = billingPeriod.Start, periodEnd = billingPeriod.End,
+                            asOfDate = serverNow, configuredCutoffDay = billingPeriod.ConfiguredCutoffDay,
+                            effectiveCutoffDate = billingPeriod.EffectiveCutoffDate,
+                            billingPeriodMode = billingPeriod.Mode,
+                            cutoffResolutionStatus = billingPeriod.ResolutionStatus,
+                            periodDays = billingPeriod.PeriodDays, daysElapsed = elapsedDays,
+                            daysRemaining = billingPeriod.DaysRemaining
+                        },
                         anomalyCostImpact = new { totalAnomalies = deviceAnomalies.Count, estimatedExcessKWh = anomalyExcessKWh, estimatedCostImpact = anomalyCostImpact, topAnomalies },
                         loadFactorInfo = new { configured = maxCapacity > 0m, loadFactor, maxCapacity, status = loadFactorStatus },
                         unitEconomics = new { configured = surfaceArea > 0m, costPerM2, costPerHour, surfaceArea }
@@ -1204,6 +1264,9 @@ namespace KWHMonitoring.Controllers
                 var currentMonth = new DateTime(selectedDate.Year, selectedDate.Month, 1);
                 var historyStart = currentMonth.AddMonths(-3);
                 var historyEnd = currentMonth.AddMonths(1);
+                var currentServerMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                var useRealtimeCurrentMonth = currentMonth == currentServerMonth;
+                var realtimeDate = DateTime.Today;
                 var requestedKeys = new List<string>();
 
                 if (!string.IsNullOrWhiteSpace(request?.DeviceKey))
@@ -1228,6 +1291,26 @@ namespace KWHMonitoring.Controllers
                 if (requestedKeys.Count == 0)
                     return Ok(new { success = true, currentMonth = currentMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture), rows = new List<object>() });
 
+                // Refresh realtime dapat mengirim request perbandingan yang sama
+                // beberapa kali dalam waktu singkat. Hindari mengulang query energi
+                // dan koneksi ERP untuk request identik, tanpa menyimpan hasil cukup
+                // lama hingga mengurangi freshness data.
+                var comparisonCacheIdentity = string.Join("|", new[]
+                {
+                    currentMonth.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
+                    string.Join(",", requestedKeys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)),
+                    request?.IncludeBillingAnomalyDetails == false ? "without-anomaly-details" : "with-anomaly-details"
+                });
+                string comparisonCacheKey;
+                using (var sha256 = SHA256.Create())
+                {
+                    comparisonCacheKey = "UsageCostComparison:" + Convert.ToBase64String(
+                        sha256.ComputeHash(Encoding.UTF8.GetBytes(comparisonCacheIdentity)))
+                        .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                }
+                if (_cache.TryGetValue(comparisonCacheKey, out object cachedComparison))
+                    return Ok(cachedComparison);
+
                 var monthlyRows = await _context.MonthlyEnergy
                     .AsNoTracking()
                     .Where(x => requestedKeys.Contains(x.DeviceKey) &&
@@ -1242,13 +1325,13 @@ namespace KWHMonitoring.Controllers
                 var realtimeDailyRows = await _context.DailyEnergy
                     .AsNoTracking()
                     .Where(x => requestedKeys.Contains(x.DeviceKey) &&
-                        x.Date >= currentMonth && x.Date < historyEnd)
+                        useRealtimeCurrentMonth && x.Date >= currentMonth && x.Date < historyEnd)
                     .Select(x => new { x.DeviceKey, x.Date, x.EnergyKWh })
                     .ToListAsync();
                 var realtimeHourlyRows = await _context.HourlyEnergy
                     .AsNoTracking()
                     .Where(x => requestedKeys.Contains(x.DeviceKey) &&
-                        x.Hour >= selectedDate.Date && x.Hour < selectedDate.Date.AddDays(1))
+                        useRealtimeCurrentMonth && x.Hour >= realtimeDate && x.Hour < realtimeDate.AddDays(1))
                     .Select(x => new { x.DeviceKey, x.Hour, x.EnergyKWh })
                     .ToListAsync();
 
@@ -1263,7 +1346,10 @@ namespace KWHMonitoring.Controllers
                     .Select(offset => historyStart.AddMonths(offset))
                     .ToList();
                 var resultRows = new List<object>();
-                var useRealtimeCurrentMonth = selectedDate.Date == DateTime.Today;
+                // The table sends the first day of the selected month. Therefore the
+                // selected date itself is not a reliable indication of whether the
+                // requested current month is still in progress. The current month is
+                // read from DailyEnergy plus today's HourlyEnergy so it is not stale.
 
                 foreach (var deviceKey in requestedKeys)
                 {
@@ -1276,7 +1362,7 @@ namespace KWHMonitoring.Controllers
 
                     var realtimeMonthEnergy = useRealtimeCurrentMonth
                         ? realtimeDailyRows
-                            .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) && x.Date.Date < selectedDate.Date)
+                            .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase) && x.Date.Date < realtimeDate)
                             .Sum(x => x.EnergyKWh)
                             + realtimeHourlyRows
                                 .Where(x => string.Equals(x.DeviceKey, deviceKey, StringComparison.OrdinalIgnoreCase))
@@ -1321,40 +1407,39 @@ namespace KWHMonitoring.Controllers
                     }).ToList();
 
                     var billingEvaluations = new Dictionary<string, BillingAnomalyEvaluation>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var row in periodRows)
+                    if (request?.IncludeBillingAnomalyDetails != false)
                     {
-                        var expectedPaymentPeriod = new DateTime(row.year, row.month, 1).AddMonths(1);
-                        var billing = deviceErpRows
-                            .Where(x => x.TagihanListrikID > 0
-                                && x.Periode.Year == expectedPaymentPeriod.Year
-                                && x.Periode.Month == expectedPaymentPeriod.Month)
-                            .OrderByDescending(x => x.Periode)
-                            .ThenByDescending(x => x.TagihanListrikID)
-                            .FirstOrDefault();
-
-                        var previousBilling = deviceErpRows
-                            .Where(x => x.TagihanListrikID > 0
-                                && x.Periode.Year == expectedPaymentPeriod.AddMonths(-1).Year
-                                && x.Periode.Month == expectedPaymentPeriod.AddMonths(-1).Month)
-                            .OrderByDescending(x => x.Periode)
-                            .ThenByDescending(x => x.TagihanListrikID)
-                            .FirstOrDefault();
-
-                        if (billing == null || row.actualCost == null)
-                            continue;
-
-                        try
+                        foreach (var row in periodRows)
                         {
-                            billingEvaluations[row.period] = await _billingAnomalyDetectionService.EvaluateAsync(
-                                deviceKey,
-                                new DateTime(row.year, row.month, 1),
-                                row.estimatedCost,
-                                billing,
-                                previousBilling);
-                        }
-                        catch (Exception billingEx)
-                        {
-                            _logger.LogWarning(billingEx, "Billing anomaly evaluation failed for {DeviceKey}, period {Period}; comparison remains available.", deviceKey, row.period);
+                            var expectedPaymentPeriod = new DateTime(row.year, row.month, 1).AddMonths(1);
+                            var billing = deviceErpRows
+                                .Where(x => x.TagihanListrikID > 0
+                                    && x.Periode.Year == expectedPaymentPeriod.Year
+                                    && x.Periode.Month == expectedPaymentPeriod.Month)
+                                .OrderByDescending(x => x.Periode)
+                                .ThenByDescending(x => x.TagihanListrikID)
+                                .FirstOrDefault();
+                            var previousBilling = deviceErpRows
+                                .Where(x => x.TagihanListrikID > 0
+                                    && x.Periode.Year == expectedPaymentPeriod.AddMonths(-1).Year
+                                    && x.Periode.Month == expectedPaymentPeriod.AddMonths(-1).Month)
+                                .OrderByDescending(x => x.Periode)
+                                .ThenByDescending(x => x.TagihanListrikID)
+                                .FirstOrDefault();
+                            if (billing == null || row.actualCost == null) continue;
+                            try
+                            {
+                                billingEvaluations[row.period] = await _billingAnomalyDetectionService.EvaluateAsync(
+                                    deviceKey,
+                                    new DateTime(row.year, row.month, 1),
+                                    row.estimatedCost,
+                                    billing,
+                                    previousBilling);
+                            }
+                            catch (Exception billingEx)
+                            {
+                                _logger.LogWarning(billingEx, "Billing anomaly evaluation failed for {DeviceKey}, period {Period}; comparison remains available.", deviceKey, row.period);
+                            }
                         }
                     }
 
@@ -1424,13 +1509,15 @@ namespace KWHMonitoring.Controllers
                     });
                 }
 
-                return Ok(new
+                var response = new
                 {
                     success = true,
                     currentMonth = currentMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
                     historyStart = historyStart.ToString("yyyy-MM", CultureInfo.InvariantCulture),
                     rows = resultRows
-                });
+                };
+                _cache.Set(comparisonCacheKey, response, TimeSpan.FromSeconds(10));
+                return Ok(response);
             }
             catch (Exception ex)
             {
@@ -1647,12 +1734,47 @@ namespace KWHMonitoring.Controllers
                 var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
                 var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
 
-                // Bill projection
+                // Bill projection: calendar month by default, or the explicitly configured
+                // per-device cutoff period.
                 var dayOfMonth = serverNow.Day;
                 var daysInMonthProj = DateTime.DaysInMonth(serverNow.Year, serverNow.Month);
-                var projectedMonthKWh = dayOfMonth > 0 ? Math.Round(monthKWh / dayOfMonth * daysInMonthProj, 2) : monthKWh;
-                var projectedCost = Math.Round(projectedMonthKWh * tariffPerKWh, 0);
-                var daysRemaining = daysInMonthProj - dayOfMonth;
+                var billingPeriod = BillingPeriodCalculator.Resolve(serverNow, devSettings.BillingCutoffEnabled, devSettings.BillingCutoffDay);
+                var billingDailyRows = await _context.DailyEnergy
+                    .AsNoTracking()
+                    .Where(x => x.DeviceKey == deviceKey
+                        && x.Date >= billingPeriod.Start.Date
+                        && x.Date < billingPeriod.End.Date)
+                    .Select(x => new { x.Date, x.EnergyKWh })
+                    .ToListAsync();
+                var billingKWh = billingDailyRows.Sum(x => x.EnergyKWh);
+
+                if (serverNow.Date >= billingPeriod.Start.Date && serverNow.Date < billingPeriod.End.Date)
+                {
+                    var currentDayHourlyKWh = await _context.HourlyEnergy
+                        .AsNoTracking()
+                        .Where(x => x.DeviceKey == deviceKey && x.Hour >= serverToday && x.Hour < serverToday.AddDays(1))
+                        .SumAsync(x => (decimal?)x.EnergyKWh) ?? 0m;
+                    var dailyCurrent = billingDailyRows.FirstOrDefault(x => x.Date.Date == serverToday);
+                    billingKWh -= dailyCurrent?.EnergyKWh ?? 0m;
+                    billingKWh += currentDayHourlyKWh;
+                }
+
+                billingKWh = Math.Round(Math.Max(billingKWh, 0m), 2);
+                var elapsedDays = billingPeriod.IsDeviceCutoff ? billingPeriod.ElapsedDays : dayOfMonth;
+                var averageKWhPerDay = elapsedDays > 0 ? Math.Round(billingKWh / elapsedDays, 2) : 0m;
+                // Budget and actual cost must use the same active billing period as the
+                // projection. MoM/YoY intentionally remain calendar-month comparisons.
+                budgetVariance = budgetKWh > 0 ? Math.Round(billingKWh - budgetKWh, 2) : 0m;
+                budgetVariancePct = budgetKWh > 0 ? Math.Round((billingKWh - budgetKWh) / budgetKWh * 100, 1) : 0m;
+                actualCost = Math.Round(billingKWh * tariffPerKWh, 0);
+                var projectionBaseKWh = billingPeriod.IsDeviceCutoff ? billingKWh : monthKWh;
+                var projectedPeriodKWh = elapsedDays > 0
+                    ? Math.Round(projectionBaseKWh / elapsedDays * billingPeriod.PeriodDays, 2)
+                    : projectionBaseKWh;
+                var projectedPeriodCost = Math.Round(projectedPeriodKWh * tariffPerKWh, 0);
+                var projectedMonthKWh = projectedPeriodKWh;
+                var projectedCost = projectedPeriodCost;
+                var daysRemaining = billingPeriod.DaysRemaining;
 
                 // Anomaly cost impact
                 var monthStartForAnomaly = new DateTime(startDate.Year, startDate.Month, 1);
@@ -1720,7 +1842,7 @@ namespace KWHMonitoring.Controllers
                     budget = new
                     {
                         configured = budgetKWh > 0,
-                        budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct,
+                        budgetKWh, actualKWh = billingKWh, variance = budgetVariance, variancePercent = budgetVariancePct,
                         budgetCost, actualCost
                     },
                     // Financial: Period comparison
@@ -1732,7 +1854,15 @@ namespace KWHMonitoring.Controllers
                     // Financial: Bill projection
                     billProjection = new
                     {
-                        projectedMonthKWh, projectedCost, daysElapsed = dayOfMonth, daysRemaining
+                        projectedMonthKWh, projectedCost,
+                        projectedPeriodKWh, projectedPeriodCost, actualKWh = billingKWh, averageKWhPerDay,
+                        periodStart = billingPeriod.Start, periodEnd = billingPeriod.End,
+                        asOfDate = serverNow, configuredCutoffDay = billingPeriod.ConfiguredCutoffDay,
+                        effectiveCutoffDate = billingPeriod.EffectiveCutoffDate,
+                        billingPeriodMode = billingPeriod.Mode,
+                        cutoffResolutionStatus = billingPeriod.ResolutionStatus,
+                        periodDays = billingPeriod.PeriodDays,
+                        daysElapsed = elapsedDays, daysRemaining
                     },
                     // Financial: Anomaly cost impact
                     anomalyCostImpact = new
@@ -7998,7 +8128,9 @@ namespace KWHMonitoring.Controllers
                     BudgetKWh = data.BudgetKWh,
                     SurfaceArea = data.SurfaceArea,
                     RevenuePerHour = data.RevenuePerHour,
-                    BillingAnomalyThreshold = data.BillingAnomalyThreshold
+                    BillingAnomalyThreshold = data.BillingAnomalyThreshold,
+                    BillingCutoffEnabled = data.BillingCutoffEnabled,
+                    BillingCutoffDay = data.BillingCutoffDay
                 };
 
                 await _deviceSettingsService.SaveAsync(deviceKey, settings);
@@ -8057,7 +8189,9 @@ namespace KWHMonitoring.Controllers
                                     BudgetKWh = item.BudgetKWh,
                                     SurfaceArea = item.SurfaceArea,
                                     RevenuePerHour = item.RevenuePerHour,
-                                    BillingAnomalyThreshold = item.BillingAnomalyThreshold
+                                    BillingAnomalyThreshold = item.BillingAnomalyThreshold,
+                                    BillingCutoffEnabled = item.BillingCutoffEnabled,
+                                    BillingCutoffDay = item.BillingCutoffDay
                                 };
 
                                 await _deviceSettingsService.SaveAsync(item.DeviceKey, settings);
@@ -8425,6 +8559,8 @@ namespace KWHMonitoring.Controllers
         public decimal SurfaceArea { get; set; }
         public decimal RevenuePerHour { get; set; }
         public decimal? BillingAnomalyThreshold { get; set; }
+        public bool BillingCutoffEnabled { get; set; }
+        public int? BillingCutoffDay { get; set; }
     }
 
     public class BulkDeviceSettingsRequest

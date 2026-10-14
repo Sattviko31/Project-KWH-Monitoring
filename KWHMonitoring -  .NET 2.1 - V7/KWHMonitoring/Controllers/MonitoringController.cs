@@ -342,35 +342,83 @@ namespace KWHMonitoring.Controllers
         {
             var now = DateTime.Now;
             var today = now.Date;
-            var monthStart = new DateTime(now.Year, now.Month, 1);
+            var normalizedPeriod = (period ?? "today").Trim();
+            var selectedDay = today;
+            var selectedMonth = new DateTime(now.Year, now.Month, 1);
+            var selectedYear = now.Year;
             var energyByDevice = new Dictionary<string, decimal>();
 
-            if (period == "month")
+            switch (normalizedPeriod)
             {
-                var daily = await _context.DailyEnergy.Where(x => x.Date >= monthStart && x.Date < today)
+                case "yesterday":
+                    selectedDay = today.AddDays(-1);
+                    break;
+                case "twoDaysAgo":
+                    selectedDay = today.AddDays(-2);
+                    break;
+                case "threeDaysAgo":
+                    selectedDay = today.AddDays(-3);
+                    break;
+                case "previousMonth":
+                    selectedMonth = new DateTime(now.Year, now.Month, 1).AddMonths(-1);
+                    break;
+                case "twoMonthsAgo":
+                    selectedMonth = new DateTime(now.Year, now.Month, 1).AddMonths(-2);
+                    break;
+                case "threeMonthsAgo":
+                    selectedMonth = new DateTime(now.Year, now.Month, 1).AddMonths(-3);
+                    break;
+                case "previousYear":
+                    selectedYear = now.Year - 1;
+                    break;
+                case "twoYearsAgo":
+                    selectedYear = now.Year - 2;
+                    break;
+            }
+
+            if (normalizedPeriod == "today" || normalizedPeriod == "yesterday" || normalizedPeriod == "twoDaysAgo" || normalizedPeriod == "threeDaysAgo")
+            {
+                var dayEnd = selectedDay.AddDays(1);
+                var daily = await _context.DailyEnergy.Where(x => x.Date >= selectedDay && x.Date < dayEnd)
                     .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
                 foreach (var item in daily) energyByDevice[item.DeviceKey] = item.KWh;
-                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
-                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
-                foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+                if (selectedDay == today)
+                {
+                    var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= selectedDay && x.Hour < dayEnd)
+                        .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                    foreach (var item in hourly) energyByDevice[item.DeviceKey] = item.KWh;
+                }
             }
-            else if (period == "year")
+            else if (normalizedPeriod == "month" || normalizedPeriod == "currentMonth" || normalizedPeriod == "previousMonth" || normalizedPeriod == "twoMonthsAgo" || normalizedPeriod == "threeMonthsAgo")
             {
-                var yearlyParts = await _context.MonthlyEnergy.Where(x => x.Year == now.Year && x.Month < now.Month)
+                var monthEnd = selectedMonth.AddMonths(1);
+                var monthDataEnd = selectedMonth == new DateTime(now.Year, now.Month, 1) ? today : monthEnd;
+                var daily = await _context.DailyEnergy.Where(x => x.Date >= selectedMonth && x.Date < monthDataEnd)
+                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                foreach (var item in daily) energyByDevice[item.DeviceKey] = item.KWh;
+                if (selectedMonth == new DateTime(now.Year, now.Month, 1))
+                {
+                    var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
+                        .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                    foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+                }
+            }
+            else if (normalizedPeriod == "year" || normalizedPeriod == "currentYear" || normalizedPeriod == "previousYear" || normalizedPeriod == "twoYearsAgo")
+            {
+                var currentYear = now.Year;
+                var yearlyParts = await _context.MonthlyEnergy.Where(x => x.Year == selectedYear && (selectedYear != currentYear || x.Month < now.Month))
                     .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
                 foreach (var item in yearlyParts) energyByDevice[item.DeviceKey] = item.KWh;
-                var daily = await _context.DailyEnergy.Where(x => x.Date >= monthStart && x.Date < today)
-                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
-                foreach (var item in daily) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
-                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
-                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
-                foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
-            }
-            else
-            {
-                var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
-                    .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
-                foreach (var item in hourly) energyByDevice[item.DeviceKey] = item.KWh;
+                if (selectedYear == currentYear)
+                {
+                    var monthStart = new DateTime(now.Year, now.Month, 1);
+                    var daily = await _context.DailyEnergy.Where(x => x.Date >= monthStart && x.Date < today)
+                        .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                    foreach (var item in daily) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+                    var hourly = await _context.HourlyEnergy.Where(x => x.Hour >= today && x.Hour < today.AddDays(1))
+                        .GroupBy(x => x.DeviceKey).Select(g => new { DeviceKey = g.Key, KWh = g.Sum(x => x.EnergyKWh) }).ToListAsync();
+                    foreach (var item in hourly) energyByDevice[item.DeviceKey] = energyByDevice.GetValueOrDefault(item.DeviceKey) + item.KWh;
+                }
             }
 
             var latest = await _context.KWH_Monitoring.GroupBy(x => x.DeviceKey)

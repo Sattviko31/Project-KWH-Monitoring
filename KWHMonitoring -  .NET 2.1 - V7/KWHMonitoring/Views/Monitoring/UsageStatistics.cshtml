@@ -52,45 +52,76 @@
         white-space: nowrap;
     }
 
-    /* Tabel perbandingan: lebar kolom ditetapkan agar informasi formal,
-       rapi, dan tidak berubah mengikuti panjang isi setiap baris. */
+    /* Tabel perbandingan dibuat compact dan selalu mengikuti lebar card.
+       Seluruh proporsi kolom berjumlah 100% agar tidak memicu scroll horizontal. */
+    .usage-ranking-comparison-card .table-responsive {
+        overflow-x: hidden;
+    }
+
     .usage-erp-comparison-table {
         table-layout: fixed;
-        min-width: 1360px;
         width: 100%;
+        max-width: 100%;
         margin-bottom: 0;
     }
 
     .usage-erp-comparison-table th,
     .usage-erp-comparison-table td {
         vertical-align: middle;
-        white-space: nowrap;
+        white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     .usage-erp-comparison-table thead th {
-        height: 42px;
-        padding: .55rem .65rem;
-        font-size: .7rem;
+        height: 38px;
+        padding: .35rem .3rem;
+        font-size: .62rem;
         letter-spacing: .02em;
         text-transform: uppercase;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+        cursor: help;
     }
 
     .usage-erp-comparison-table tbody td {
-        height: 48px;
-        padding: .55rem .65rem;
-        font-size: .78rem;
+        height: 52px;
+        padding: .35rem .3rem;
+        font-size: .7rem;
     }
 
+    /* Proporsi auto-fit; total lebar tepat 100%. */
+    .usage-erp-comparison-table .comparison-rank-column { width: 4%; }
     .usage-erp-comparison-table .comparison-device-column { width: 14%; }
-    .usage-erp-comparison-table .comparison-period-column { width: 8%; }
+    .usage-erp-comparison-table .comparison-realtime-column { width: 9%; }
+    .usage-erp-comparison-table .comparison-period-column { width: 7%; }
     .usage-erp-comparison-table .comparison-energy-column { width: 10%; }
-    .usage-erp-comparison-table .comparison-estimate-column { width: 11%; }
-    .usage-erp-comparison-table .comparison-actual-column { width: 12%; }
-    .usage-erp-comparison-table .comparison-status-column { width: 15%; }
-    .usage-erp-comparison-table .comparison-payment-column { width: 15%; }
-    .usage-erp-comparison-table .comparison-difference-column { width: 15%; }
+    .usage-erp-comparison-table .comparison-change-column { width: 13%; }
+    .usage-erp-comparison-table .comparison-estimate-column { width: 10%; }
+    .usage-erp-comparison-table .comparison-actual-column { width: 9%; }
+    .usage-erp-comparison-table .comparison-difference-column { width: 10%; }
+    .usage-erp-comparison-table .comparison-period-change-column { width: 9%; }
+    .usage-erp-comparison-table .comparison-status-column { width: 5%; }
+
+    .usage-erp-comparison-table .comparison-number {
+        white-space: nowrap;
+        text-align: right;
+        font-size: .68rem;
+    }
+
+    .usage-erp-comparison-table .comparison-status-badge {
+        display: inline-block;
+        min-width: 0;
+        max-width: 100%;
+        padding: .25rem .3rem;
+        font-size: .65rem;
+        white-space: normal;
+        line-height: 1.15;
+    }
+
+    .usage-erp-comparison-table .comparison-status-unavailable { background-color: #6c757d; color: #fff; }
+    .usage-erp-comparison-table .comparison-status-estimate { background-color: #ffc107; color: #212529; }
+    .usage-erp-comparison-table .comparison-status-valid { background-color: #28a745; color: #fff; }
 
     .usage-erp-comparison-table .comparison-status-column .badge {
         max-width: 100%;
@@ -286,69 +317,43 @@
                     <h6 class="mb-0" id="usageRankingPanelTitle"><i class="fas fa-trophy text-warning"></i> Peringkat Penggunaan Energi</h6>
                     <small class="text-muted" id="usageRankingCaption">Konsumsi hari ini · memuat data</small>
                 </div>
-                <div class="usage-ranking-comparison-switch btn-group btn-group-sm" role="group" aria-label="Tampilan ranking dan perbandingan">
-                    <button type="button" class="btn btn-primary usage-panel-view" data-view="ranking"><i class="fas fa-trophy"></i> Peringkat</button>
-                    <button type="button" class="btn btn-outline-primary usage-panel-view" data-view="comparison"><i class="fas fa-file-invoice-dollar"></i> Perbandingan Tagihan</button>
-                </div>
+                <span class="badge badge-primary"><i class="fas fa-layer-group"></i> Peringkat &amp; Perbandingan</span>
             </div>
             <div class="usage-ranking-comparison-header-controls">
-                <div id="usageRankingControls" class="usage-ranking-comparison-periods">
-                    <button type="button" class="btn btn-primary usage-ranking-period" data-period="today">Hari Ini</button>
-                    <button type="button" class="btn btn-outline-primary usage-ranking-period" data-period="month">Bulan Ini</button>
-                    <button type="button" class="btn btn-outline-primary usage-ranking-period" data-period="year">Tahun Ini</button>
-                </div>
-                <div id="usageComparisonControls" class="usage-ranking-comparison-periods" style="display:none">
-                    <button type="button" class="btn btn-primary usage-comparison-period" data-period="current">Periode Berjalan</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="previous">Periode Sebelumnya</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="twoMonthsAgo">Dua Periode Sebelumnya</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="threeMonthsAgo">Tiga Periode Sebelumnya</button>
-                    <button type="button" class="btn btn-outline-primary usage-comparison-period" data-period="average">Rata-rata Tiga Periode</button>
+                <div class="usage-ranking-comparison-periods">
+                    <select id="usagePeriodMode" class="form-control form-control-sm" style="width:auto;min-width:110px" aria-label="Tingkat periode">
+                        <option value="day">Hari</option>
+                        <option value="month" selected>Bulan</option>
+                        <option value="year">Tahun</option>
+                    </select>
+                    <div id="usagePeriodPresets" class="usage-ranking-comparison-periods"></div>
                     <button type="button" class="btn btn-outline-secondary" id="btnRefreshUsageComparison" title="Muat ulang data perbandingan dari server">
                         <i class="fas fa-sync-alt"></i> <span class="refresh-comparison-label">Refresh Data</span>
                     </button>
                 </div>
             </div>
         </div>
-        <div id="usageRankingPanel">
-            <div class="table-responsive">
-                <table class="table table-hover table-sm mb-0 align-middle">
-                    <thead class="thead-light"><tr><th>#</th><th>Perangkat</th><th>Grup</th><th class="text-right">Energi (kWh)</th><th class="text-right">Estimasi Biaya</th><th class="text-right">Daya (W)</th><th class="text-right">Faktor Daya</th><th>Pembaruan</th></tr></thead>
-                    <tbody id="usageRankingRows"><tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i>Memuat peringkat...</td></tr></tbody>
-                </table>
-            </div>
-            <div class="card-footer py-2"><small class="text-muted">Pilih baris untuk membuka detail perangkat. Estimasi biaya dihitung menggunakan tarif untuk setiap perangkat.</small></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 usage-erp-comparison-table">
+                <thead class="thead-light">
+                    <tr>
+                        <th class="comparison-rank-column" title="Urutan perangkat berdasarkan energi terpakai pada periode terpilih">Rank</th>
+                        <th class="comparison-device-column" title="Nama perangkat dan kode lokasi">Perangkat</th>
+                        <th class="comparison-realtime-column text-right" title="Pembacaan KWH realtime terbaru dari perangkat">KWH Realtime</th>
+                        <th class="comparison-period-column" title="Periode energi dan tagihan yang sedang dipilih">Periode</th>
+                        <th class="comparison-energy-column text-right" title="Total energi terpakai pada periode terpilih">Energi Terpakai</th>
+                        <th class="comparison-change-column text-right" title="Selisih energi terhadap periode sebelumnya">Selisih Energi<br><small>(vs bulan sebelumnya)</small></th>
+                        <th class="comparison-estimate-column text-right" title="Estimasi tagihan berdasarkan energi terpakai dan tarif">Estimasi Tagihan</th>
+                        <th class="comparison-actual-column text-right" title="Tagihan aktual dari data ERP pada periode terpilih">Tagihan Aktual</th>
+                        <th class="comparison-difference-column text-right" title="Selisih antara tagihan aktual dan estimasi tagihan">Selisih<br><small>(aktual - estimasi)</small></th>
+                        <th class="comparison-period-change-column text-right" title="Perubahan tagihan aktual terhadap periode sebelumnya">Perubahan<br><small>(aktual vs sebelumnya)</small></th>
+                        <th class="comparison-status-column" title="Status ketersediaan dan validitas data tagihan">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="usageCombinedRows"><tr><td colspan="11" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat data Usage Statistics...</td></tr></tbody>
+            </table>
         </div>
-        <div id="usageComparisonPanel" style="display:none">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0 usage-erp-comparison-table">
-                    <colgroup>
-                        <col class="comparison-device-column">
-                        <col class="comparison-period-column">
-                        <col class="comparison-energy-column">
-                        <col class="comparison-estimate-column">
-                        <col class="comparison-actual-column">
-                        <col class="comparison-status-column">
-                        <col class="comparison-payment-column">
-                        <col class="comparison-difference-column">
-                    </colgroup>
-                    <thead class="thead-light">
-                        <tr>
-                            <th>Unit Monitoring</th>
-                            <th>Periode Tagihan</th>
-                            <th class="text-right">Energi Terukur (kWh)</th>
-                            <th class="text-right">Estimasi Tagihan</th>
-                            <th class="text-right">Tagihan Aktual ERP</th>
-                            <th>Status Verifikasi</th>
-                            <th>Tanggal Pembayaran</th>
-                            <th class="text-right">Selisih Tagihan</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usageErpComparisonRows">
-                        <tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat perbandingan...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <div class="card-footer py-2"><small class="text-muted" id="usageCombinedFooter">Satu baris mewakili satu perangkat. Data tagihan hanya ditampilkan jika tersedia untuk periode yang dipilih.</small></div>
     </div>
 
     <!-- Financial Analysis -->
@@ -535,32 +540,177 @@
         }
 
         (function () {
-            var rankingPeriod = 'today';
+            var rankingPeriod = 'month';
             var rankingRequestInProgress = false;
             var rankingXhr = null;
             var rankingHasLoaded = false;
-            function showUsagePanel(view) {
-                usagePanelView = view === 'comparison' ? 'comparison' : 'ranking';
-                var isComparison = usagePanelView === 'comparison';
-                $('#usageRankingPanel').toggle(!isComparison);
-                $('#usageComparisonPanel').toggle(isComparison);
-                $('#usageRankingControls').toggle(!isComparison);
-                $('#usageComparisonControls').toggle(isComparison);
-                $('.usage-panel-view').removeClass('btn-primary').addClass('btn-outline-primary');
-                $('.usage-panel-view[data-view="' + usagePanelView + '"]').removeClass('btn-outline-primary').addClass('btn-primary');
-                if (isComparison) {
-                    $('#usageRankingPanelTitle').html('<i class="fas fa-file-invoice-dollar text-primary"></i> Perbandingan Estimasi Energi dan Tagihan Aktual ERP');
-                    $('#usageRankingCaption').text('Pilih periode untuk membandingkan estimasi sistem dengan tagihan aktual ERP');
-                    var currentComparisonKey = getUsageComparisonRequestKey();
-                    if (comparisonResponse && comparisonResponseKey === currentComparisonKey) {
-                        renderUsageComparison(comparisonResponse, comparisonPeriod, false);
-                    } else {
-                        loadUsageErpComparison();
-                    }
-                } else {
-                    $('#usageRankingPanelTitle').html('<i class="fas fa-trophy text-warning"></i> Peringkat Penggunaan Energi');
-                    $('#usageRankingCaption').text(captions[rankingPeriod] || captions.today);
+            var combinedRankingRows = [];
+            var combinedComparisonResponse = null;
+            var combinedPeriod = 'current';
+
+            function getUnifiedPeriodConfig() {
+                var mode = $('#usagePeriodMode').val() || 'month';
+                if (mode === 'day') {
+                    return [
+                        { key: 'today', label: 'Hari Ini', ranking: 'today', dateOffset: 0 },
+                        { key: 'yesterday', label: 'Kemarin', ranking: 'yesterday', dateOffset: -1 },
+                        { key: 'twoDaysAgo', label: '2 Hari Lalu', ranking: 'twoDaysAgo', dateOffset: -2 },
+                        { key: 'threeDaysAgo', label: '3 Hari Lalu', ranking: 'threeDaysAgo', dateOffset: -3 }
+                    ];
                 }
+                if (mode === 'year') {
+                    return [
+                        { key: 'currentYear', label: 'Tahun Ini', ranking: 'year', dateOffset: 0 },
+                        { key: 'previousYear', label: 'Tahun Lalu', ranking: 'previousYear', dateOffset: -12 },
+                        { key: 'twoYearsAgo', label: '2 Tahun Lalu', ranking: 'twoYearsAgo', dateOffset: -24 }
+                    ];
+                }
+                return [
+                    { key: 'currentMonth', label: 'Bulan Ini', ranking: 'month', dateOffset: 0 },
+                    { key: 'previousMonth', label: 'Bulan Lalu', ranking: 'previousMonth', dateOffset: -1 },
+                    { key: 'twoMonthsAgo', label: '2 Bulan Lalu', ranking: 'twoMonthsAgo', dateOffset: -2 },
+                    { key: 'threeMonthsAgo', label: '3 Bulan Lalu', ranking: 'threeMonthsAgo', dateOffset: -3 }
+                ];
+            }
+
+            function renderUnifiedPeriodPresets() {
+                var configs = getUnifiedPeriodConfig();
+                var selected = configs.some(function (item) { return item.key === rankingPeriod; }) ? rankingPeriod : configs[0].key;
+                var html = configs.map(function (item) {
+                    return '<button type="button" class="btn btn-sm ' + (item.key === selected ? 'btn-primary' : 'btn-outline-primary') + ' usage-unified-period" data-period="' + item.key + '">' + item.label + '</button>';
+                }).join('');
+                $('#usagePeriodPresets').html(html);
+            }
+
+            function formatUsageNumber(value, fractionDigits) {
+                if (value === null || value === undefined || !isFinite(Number(value))) return '—';
+                return Number(value).toLocaleString('id-ID', { minimumFractionDigits: fractionDigits || 0, maximumFractionDigits: fractionDigits || 0 });
+            }
+
+            function formatUsagePercent(value) {
+                if (value === null || value === undefined || !isFinite(Number(value))) return '—';
+                var prefix = Number(value) > 0 ? '+' : '';
+                return prefix + Number(value).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+            }
+
+            function getUnifiedComparisonRow(item) {
+                if (!item || !item.currentMonth) return null;
+                var period = combinedPeriod === 'previous' ? 'previous' :
+                    (combinedPeriod === 'twoMonthsAgo' ? 'twoMonthsAgo' :
+                        (combinedPeriod === 'threeMonthsAgo' ? 'threeMonthsAgo' : 'current'));
+                return getComparisonPeriodRow(item, period);
+            }
+
+            function renderUnifiedRows() {
+                var tableSearch = ($('#usageDeviceSearch').val() || '').trim().toLowerCase();
+                var tableCategory = $('#usageCategoryFilter').val() || 'all';
+                var rows = (combinedRankingRows || []).filter(function (item) {
+                    var deviceKey = String(item.deviceKey || '');
+                    var panel = (usagePanelList || []).filter(function (candidate) {
+                        return String(candidate.deviceKey || '').toLowerCase() === deviceKey.toLowerCase();
+                    })[0] || {};
+                    var category = panel.deviceCategory || usageDeviceCategoryMap[deviceKey] || 'Billboard';
+                    var label = String(item.groupName || item.deviceId || deviceKey).toLowerCase();
+                    var matchesDevice = !tableUsageDeviceKey || deviceKey.toLowerCase() === String(tableUsageDeviceKey).toLowerCase();
+                    var matchesSearch = !tableSearch || label.indexOf(tableSearch) >= 0 || deviceKey.toLowerCase().indexOf(tableSearch) >= 0;
+                    var matchesCategory = tableCategory === 'all' || category === tableCategory;
+                    return matchesDevice && matchesSearch && matchesCategory;
+                });
+                var comparisonByDevice = {};
+                if (combinedComparisonResponse && Array.isArray(combinedComparisonResponse.rows)) {
+                    combinedComparisonResponse.rows.forEach(function (item) {
+                        if (item && item.deviceKey) comparisonByDevice[String(item.deviceKey).toLowerCase()] = item;
+                    });
+                }
+                if (!rows.length) {
+                    $('#usageCombinedRows').html('<tr><td colspan="11" class="text-center text-muted py-3">Belum ada data energi.</td></tr>');
+                    return;
+                }
+                    var mode = $('#usagePeriodMode').val() || 'month';
+                var html = rows.map(function (item, index) {
+                    var billingItem = comparisonByDevice[String(item.deviceKey || '').toLowerCase()];
+                        // Billing follows the selected comparison period returned by
+                        // the same endpoint used by Details. It is not disabled for
+                        // day/year display modes because ERP billing is monthly.
+                        var comparison = getUnifiedComparisonRow(billingItem);
+                    var currentKwh = Number(item.kwh || 0);
+                    var selectedEnergy = comparison && comparison.energyKWh !== null && comparison.energyKWh !== undefined ? Number(comparison.energyKWh) : null;
+                    var previousComparison = billingItem ? getComparisonPeriodRow(billingItem, 'previous') : null;
+                    var previousEnergy = previousComparison && previousComparison.energyKWh !== null && previousComparison.energyKWh !== undefined ? Number(previousComparison.energyKWh) : null;
+                    var energyChange = selectedEnergy === null || previousEnergy === null ? null : selectedEnergy - previousEnergy;
+                    var energyChangePercent = energyChange === null || previousEnergy === 0 ? null : (energyChange / previousEnergy * 100);
+                    // API mengirim nilai billing pada currentMonth/periods. Ambil
+                    // secara eksplisit dari baris periode aktif agar estimasi dan
+                    // aktual ERP tidak tertukar dengan metadata agregat lainnya.
+                    var estimated = comparison && comparison.estimatedCost !== undefined ? comparison.estimatedCost : null;
+                    var actual = comparison && comparison.actualCost !== undefined ? comparison.actualCost : null;
+                    var difference = estimated === null || estimated === undefined || actual === null || actual === undefined ? null : Number(actual) - Number(estimated);
+                    var previousActual = previousComparison && previousComparison.actualCost !== null && previousComparison.actualCost !== undefined ? Number(previousComparison.actualCost) : null;
+                    var actualChange = actual === null || previousActual === null ? null : Number(actual) - previousActual;
+                    var actualChangePercent = actualChange === null || previousActual === 0 ? null : (actualChange / previousActual * 100);
+                    var status = comparison && comparison.actualCost !== null && comparison.actualCost !== undefined ? 'Valid' : (comparison ? 'Estimasi' : 'Belum Tersedia');
+                    var statusClass = status === 'Valid' ? 'comparison-status-valid' : (status === 'Estimasi' ? 'comparison-status-estimate' : 'comparison-status-unavailable');
+                    var label = item.groupName || item.deviceId || item.deviceKey;
+                    var detailUrl = '@Url.Action("Details", "Monitoring")?deviceKey=' + encodeURIComponent(item.deviceKey);
+                    var changeClass = energyChange === null || energyChange === 0 ? 'text-muted' : (energyChange > 0 ? 'text-danger' : 'text-success');
+                    var actualChangeClass = actualChange === null || actualChange === 0 ? 'text-muted' : (actualChange > 0 ? 'text-danger' : 'text-success');
+                    var differenceClass = difference === null || difference === 0 ? 'text-muted' : (difference > 0 ? 'text-danger' : 'text-success');
+                    return '<tr class="usage-ranking-row" role="link" tabindex="0" data-url="' + escapeHtml(detailUrl) + '" style="cursor:pointer">' +
+                        '<td><span class="badge ' + (index === 0 ? 'badge-warning' : 'badge-light') + '">' + (index + 1) + '</span></td>' +
+                        '<td><strong>' + escapeHtml(label) + '</strong><br><small class="text-muted">' + escapeHtml(item.kodeLokasi || item.deviceKey || '-') + '</small></td>' +
+                        '<td class="comparison-number font-weight-bold">' + formatUsageNumber(currentKwh, 2) + '</td>' +
+                        '<td>' + escapeHtml(comparison && comparison.label ? comparison.label : '—') + '</td>' +
+                        '<td class="comparison-number">' + formatUsageNumber(selectedEnergy, 2) + '</td>' +
+                        '<td class="comparison-number ' + changeClass + '">' + (energyChange === null ? '—' : (energyChange > 0 ? '+' : '') + formatUsageNumber(energyChange, 2) + ' (' + formatUsagePercent(energyChangePercent) + ')') + '</td>' +
+                        '<td class="comparison-number">' + (estimated === null || estimated === undefined ? '—' : formatComparisonCurrency(estimated)) + '</td>' +
+                        '<td class="comparison-number">' + (actual === null || actual === undefined ? '—' : formatComparisonCurrency(actual)) + '</td>' +
+                        '<td class="comparison-number ' + differenceClass + '">' + (difference === null ? '—' : formatComparisonCurrency(difference)) + '</td>' +
+                        '<td class="comparison-number ' + actualChangeClass + '">' + (actualChange === null ? '—' : formatComparisonCurrency(actualChange) + ' (' + formatUsagePercent(actualChangePercent) + ')') + '</td>' +
+                        '<td><span class="badge comparison-status-badge ' + statusClass + '" title="' + escapeHtml(status) + '">' + escapeHtml(status) + '</span></td>' +
+                        '</tr>';
+                }).join('');
+                $('#usageCombinedRows').html(html);
+                var modeLabel = mode === 'day' ? 'harian' : (mode === 'year' ? 'tahunan' : 'bulanan');
+                $('#usageCombinedFooter').text('Satu baris mewakili satu perangkat · Energi dan estimasi mengikuti cutoff periode terpilih · Positif merah, negatif hijau.');
+            }
+
+            // Expose only the table renderer to the comparison functions below.
+            // The table period must not control dashboard rendering.
+            window.renderUnifiedRows = renderUnifiedRows;
+            window.updateUnifiedComparison = function (response, period) {
+                combinedComparisonResponse = response || null;
+                combinedPeriod = period || 'current';
+                renderUnifiedRows();
+            };
+
+            function applyUnifiedPeriod(periodKey) {
+                var config = getUnifiedPeriodConfig().filter(function (item) { return item.key === periodKey; })[0] || getUnifiedPeriodConfig()[0];
+                rankingPeriod = config.ranking;
+                var current = new Date();
+                if ($('#usagePeriodMode').val() === 'day') {
+                    current.setDate(current.getDate() + config.dateOffset);
+                } else if ($('#usagePeriodMode').val() === 'month') {
+                    current = new Date(current.getFullYear(), current.getMonth() + config.dateOffset, 1);
+                } else if (config.dateOffset) {
+                    current = new Date(current.getFullYear() + (config.dateOffset / 12), current.getMonth(), 1);
+                }
+                // This preset belongs to the ranking/comparison table only.
+                // Do not change selectedDate, date inputs, dashboard cards, or charts.
+                tableUsageDate = current;
+                resetUsageComparisonState();
+                // The selected preset is the active period. The API response also
+                // contains the preceding three months, so the comparison row for
+                // the selected period must remain "current" here.
+                comparisonPeriod = 'current';
+                combinedPeriod = comparisonPeriod;
+                renderUnifiedPeriodPresets();
+                // Kontrol periode ini hanya memuat ulang tabel gabungan.
+                loadUsageRanking(rankingPeriod);
+                loadUsageErpComparison();
+            }
+            function showUsagePanel(view) {
+                usagePanelView = 'combined';
+                $('#usageRankingPanelTitle').html('<i class="fas fa-layer-group text-primary"></i> Peringkat dan Perbandingan Usage Statistics');
             }
             function loadUsageRanking(period) {
                 rankingPeriod = period;
@@ -569,28 +719,29 @@
                 $('#usageRankingCaption').text(captions[period] + (rankingHasLoaded ? ' · memperbarui…' : ''));
                 var rankingCacheKey = 'ranking.' + period;
                 var cachedRows = readUsageCache(rankingCacheKey);
-                if (!rankingHasLoaded && !cachedRows) $('#usageRankingRows').html('<tr><td colspan="8" class="text-center text-muted py-3">Memuat peringkat...</td></tr>');
                 if (cachedRows) {
                     renderUsageRanking(cachedRows);
                     rankingHasLoaded = true;
-                    $('#usageRankingCaption').text(captions[period] + ' · cache terakhir');
+                    $('#usageRankingCaption').text('Data ' + period + ' · cache terakhir');
                 }
-                $('.usage-ranking-period').removeClass('btn-primary').addClass('btn-outline-primary');
-                $('.usage-ranking-period[data-period="' + period + '"]').removeClass('btn-outline-primary').addClass('btn-primary');
                 rankingXhr = $.getJSON('@Url.Action("UsageRanking", "Monitoring")', { period: period }).done(function (rows) {
                     rankingRequestInProgress = false;
                     rankingHasLoaded = true;
                     writeUsageCache(rankingCacheKey, rows || []);
                     renderUsageRanking(rows || []);
-                    $('#usageRankingCaption').text(captions[period] + ' · diperbarui ' + new Date().toLocaleTimeString('id-ID'));
+                    $('#usageRankingCaption').text('Data ' + period + ' · diperbarui ' + new Date().toLocaleTimeString('id-ID'));
                 }).fail(function (xhr, status) {
                     rankingRequestInProgress = false;
                     if (status === 'abort') return;
-                    if (cachedRows || rankingHasLoaded) $('#usageRankingCaption').text(captions[period] + ' · offline, menampilkan cache terakhir');
-                    else $('#usageRankingRows').html('<tr><td colspan="8" class="text-center text-danger py-3">Peringkat belum tersedia.</td></tr>');
+                    if (cachedRows || rankingHasLoaded) $('#usageRankingCaption').text('Data ' + period + ' · offline, menampilkan cache terakhir');
+                    else $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-danger py-3">Peringkat belum tersedia.</td></tr>');
                 });
             }
             function renderUsageRanking(rows) {
+                combinedRankingRows = rows || [];
+                renderUnifiedRows();
+                return;
+                /* Legacy renderer retained below for reference; unified table is authoritative.
                 if (!rows || !rows.length) {
                     $('#usageRankingRows').html('<tr><td colspan="8" class="text-center text-muted py-3">Belum ada data konsumsi pada periode ini.</td></tr>');
                     return;
@@ -611,15 +762,8 @@
                         '<td><small>' + escapeHtml(seen) + '</small></td></tr>';
                 });
                 $('#usageRankingRows').html(html);
+                */
             }
-            $(document).on('click', '.usage-panel-view', function () { showUsagePanel($(this).data('view')); });
-            $(document).on('click', '.usage-ranking-period', function () {
-                if (rankingXhr && rankingRequestInProgress) {
-                    rankingXhr.abort();
-                    rankingRequestInProgress = false;
-                }
-                loadUsageRanking($(this).data('period'));
-            });
             $(document).on('click', '.usage-ranking-row', function () { window.location.href = $(this).data('url'); });
             $(document).on('keydown', '.usage-ranking-row', function (event) {
                 if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.location.href = $(this).data('url'); }
@@ -628,8 +772,19 @@
                 if (!document.hidden) loadUsageRanking(rankingPeriod);
             });
             $(function () {
+                renderUnifiedPeriodPresets();
+                $('#usagePeriodMode').on('change', function () {
+                    var first = getUnifiedPeriodConfig()[0];
+                    applyUnifiedPeriod(first.key);
+                });
+                $(document).on('click', '.usage-unified-period', function () {
+                    applyUnifiedPeriod($(this).data('period'));
+                });
                 loadUsageRanking(rankingPeriod);
-                showUsagePanel('ranking');
+                // Perbandingan membutuhkan daftar device dari /panels. Pemanggilan
+                // di sini sebelumnya membuat request kedua: request pertama berjalan
+                // dengan keys kosong, lalu fetchUsagePanelList memanggilnya lagi.
+                showUsagePanel('combined');
                 if (window.RealtimeRefresh) {
                     // Peringkat ikut diperbarui ketika data KWH/agregasi berubah.
                     window.RealtimeRefresh.watch(
@@ -649,6 +804,7 @@
 
         let charts = {};
         let selectedDate = new Date();
+        let tableUsageDate = new Date();
         let refreshTimer = null;
         let refreshWatcherId = null; // watcher realtime (refresh saat data berubah)
         let lastFinancialRefreshTime = 0;
@@ -721,6 +877,7 @@
         // ============================================
         let usagePanelList = []; // Fetched from API
         let activeUsageChipDeviceKey = null; // null = all devices
+        let tableUsageDeviceKey = null; // table-only device filter; never changes dashboard data
         let usageAnomalyStatusMap = {};
         let usageDeviceCategoryMap = {}; // deviceKey -> category
 
@@ -775,24 +932,25 @@
 
             // "All" chip
             var $allChip = $('<span>')
-                .addClass('panel-chip chip-normal' + (activeUsageChipDeviceKey === null ? ' active' : ''))
+                    .addClass('panel-chip chip-normal' + (tableUsageDeviceKey === null ? ' active' : ''))
                 .attr('data-device-key', '__all__')
                 .html('<span class="chip-dot"></span>Semua Panel')
                 .on('click', function() {
                     activeUsageChipDeviceKey = null;
+                    tableUsageDeviceKey = null;
                     resetUsageComparisonState();
                     $list.find('.panel-chip').removeClass('active');
                     $(this).addClass('active');
                     updateDeviceFilterLabel();
                     lastFinancialRefreshTime = 0;
-                    loadData(true);
+                    loadUsageErpComparison();
                 });
             $list.append($allChip);
 
             sorted.forEach(function(panel) {
                 var chipClass = getUsageChipClass(panel.deviceKey);
                 var label = panel.groupName || panel.deviceKey;
-                var isActive = activeUsageChipDeviceKey === panel.deviceKey;
+                var isActive = tableUsageDeviceKey === panel.deviceKey;
 
                 // Category filter: hide chips that don't match
                 var panelCategory = panel.deviceCategory || usageDeviceCategoryMap[panel.deviceKey] || 'Billboard';
@@ -804,13 +962,11 @@
                     .attr('data-category', panelCategory)
                     .html('<span class="chip-dot"></span>' + label)
                     .on('click', function() {
-                        activeUsageChipDeviceKey = panel.deviceKey;
-                        resetUsageComparisonState();
+                        tableUsageDeviceKey = panel.deviceKey;
                         $list.find('.panel-chip').removeClass('active');
                         $(this).addClass('active');
                         updateDeviceFilterLabel();
-                        lastFinancialRefreshTime = 0;
-                        loadData(true);
+                        renderUnifiedRows();
                     });
 
                 if (!visibleByCategory) {
@@ -829,11 +985,11 @@
                 var categoryLabel = catNames[category] ? ' — ' + (catNames[category].icon || '') + ' ' + category : ' — ' + category;
             }
 
-            if (activeUsageChipDeviceKey === null) {
+            if (tableUsageDeviceKey === null) {
                 $('#deviceFilterLabel').text('Semua Panel' + categoryLabel);
             } else {
-                var panel = usagePanelList.find(function(p) { return p.deviceKey === activeUsageChipDeviceKey; });
-                var name = panel ? (panel.groupName || panel.deviceKey) : activeUsageChipDeviceKey;
+                var panel = usagePanelList.find(function(p) { return p.deviceKey === tableUsageDeviceKey; });
+                var name = panel ? (panel.groupName || panel.deviceKey) : tableUsageDeviceKey;
                 $('#deviceFilterLabel').text(name + categoryLabel);
             }
         }
@@ -855,21 +1011,20 @@
                             $(this).hide();
                         }
                     });
+                    renderUnifiedRows();
                 }, 200);
             });
 
             $('#usageCategoryFilter').on('change', function() {
                 // If a specific device is selected and it doesn't match the new category, reset to all
                 var category = $(this).val();
-                if (activeUsageChipDeviceKey && category !== 'all') {
-                    var panel = usagePanelList.find(function(p) { return p.deviceKey === activeUsageChipDeviceKey; });
+                if (tableUsageDeviceKey && category !== 'all') {
+                    var panel = usagePanelList.find(function(p) { return p.deviceKey === tableUsageDeviceKey; });
                     var panelCategory = panel ? (panel.deviceCategory || usageDeviceCategoryMap[panel.deviceKey] || 'Billboard') : 'Billboard';
                     if (panelCategory !== category) {
-                        activeUsageChipDeviceKey = null;
-                        resetUsageComparisonState();
-                        lastFinancialRefreshTime = 0;
+                        tableUsageDeviceKey = null;
                         updateDeviceFilterLabel();
-                        loadData(true);
+                        renderUnifiedRows();
                     }
                 }
                 renderUsageChips();
@@ -878,14 +1033,13 @@
             $('#btnClearUsageFilter').on('click', function() {
                 $('#usageDeviceSearch').val('');
                 $('#usageCategoryFilter').val('all');
-                activeUsageChipDeviceKey = null;
-                resetUsageComparisonState();
+                tableUsageDeviceKey = null;
                 $('#usageChipList').find('.panel-chip').removeClass('active');
                 $('#usageChipList').find('[data-device-key="__all__"]').addClass('active');
                 $('#usageChipList').find('.panel-chip').show();
                 updateDeviceFilterLabel();
                 lastFinancialRefreshTime = 0;
-                loadData(true);
+                renderUnifiedRows();
             });
         }
 
@@ -917,11 +1071,11 @@
                         usageInitialLoadPending = false;
                         loadData(true);
                     }
-                    if (comparisonLoadPending && usagePanelView === 'comparison') {
+                    if (comparisonLoadPending && usagePanelView === 'combined') {
                         comparisonLoadPending = false;
                         loadUsageErpComparison();
                     }
-                    else if (usagePanelView === 'comparison') {
+                    else if (usagePanelView === 'combined') {
                         loadUsageErpComparison();
                     }
                 },
@@ -932,12 +1086,12 @@
                         usageInitialLoadPending = false;
                         loadData(true);
                     }
-                    if (comparisonLoadPending && usagePanelView === 'comparison') {
+                    if (comparisonLoadPending && usagePanelView === 'combined') {
                         comparisonLoadPending = false;
                         loadUsageErpComparison();
                     }
-                    else if (usagePanelView === 'comparison') {
-                        $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-danger py-3">Daftar perangkat tidak dapat dimuat.</td></tr>');
+                    else if (usagePanelView === 'combined') {
+                    $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-danger py-3">Daftar perangkat tidak dapat dimuat.</td></tr>');
                     }
                     @* console.error('Error fetching panel list for usage filter'); *@
                 }
@@ -1079,19 +1233,18 @@
         }
 
         function getUsageComparisonCacheKey(keys) {
+            var mode = $('#usagePeriodMode').val() || 'month';
             var dateKey = getUsageComparisonDateText();
-            return 'comparison.v3.billing-anomaly.' + dateKey + '.' + keys.slice().sort().join('|');
+            return 'comparison.v4.billing.' + mode + '.' + dateKey + '.' + keys.slice().sort().join('|');
         }
 
         function getUsageComparisonDateText() {
-            return selectedDate.getFullYear() + '-' + String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' + String(selectedDate.getDate()).padStart(2, '0');
+            return tableUsageDate.getFullYear() + '-' + String(tableUsageDate.getMonth() + 1).padStart(2, '0') + '-' + String(tableUsageDate.getDate()).padStart(2, '0');
         }
 
         function getUsageComparisonRequestKey() {
-            var keys = activeUsageChipDeviceKey
-                ? [activeUsageChipDeviceKey]
-                : (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
-            return getUsageComparisonDateText() + '|' + keys.slice().sort().join('|');
+            var keys = (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
+            return ($('#usagePeriodMode').val() || 'month') + '|' + getUsageComparisonDateText() + '|' + keys.slice().sort().join('|');
         }
 
         function getComparisonPeriodRow(item, period) {
@@ -1149,6 +1302,12 @@
             if (!response || !Array.isArray(response.rows)) return;
             comparisonResponse = response;
             comparisonPeriod = period || comparisonPeriod;
+            if (typeof window.updateUnifiedComparison === 'function') {
+                window.updateUnifiedComparison(response, comparisonPeriod);
+            }
+            $('#usageRankingCaption').text('Perbandingan ' + (comparisonPeriod === 'current' ? 'periode berjalan' : 'periode terpilih') + (fromCache ? ' · cache terakhir' : ' · diperbarui ' + new Date().toLocaleTimeString('id-ID')));
+            return;
+            /* Legacy comparison renderer retained below; unified table is authoritative.
             var html = '';
             var periodLabels = { current: 'Periode berjalan', previous: 'Periode sebelumnya', twoMonthsAgo: 'Dua periode sebelumnya', threeMonthsAgo: 'Tiga periode sebelumnya', average: 'Rata-rata tiga periode' };
             response.rows.forEach(function (item) {
@@ -1191,24 +1350,23 @@
                     '<td class="text-right comparison-difference-cell ' + differenceClass + '\">' + differenceText + '</td>' +
                     '</tr>';
             });
-            $('#usageErpComparisonRows').html(html || '<tr><td colspan="8" class="text-center text-muted py-3">Belum ada data energi.</td></tr>');
+                    $('#usageCombinedRows').html(html || '<tr><td colspan="14" class="text-center text-muted py-3">Belum ada data energi.</td></tr>');
             $('#usageRankingCaption').text('Periode: ' + periodLabels[comparisonPeriod] + (fromCache ? ' · cache terakhir (offline)' : ' · diperbarui ' + new Date().toLocaleTimeString('id-ID')));
-            $('.usage-comparison-period').removeClass('btn-primary').addClass('btn-outline-primary');
-            $('.usage-comparison-period[data-period="' + comparisonPeriod + '"]').removeClass('btn-outline-primary').addClass('btn-primary');
+            $('.usage-unified-period').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('.usage-unified-period[data-period="' + rankingPeriod + '"]').removeClass('btn-outline-primary').addClass('btn-primary');
+            */
         }
 
         function loadUsageErpComparison() {
-            var keys = activeUsageChipDeviceKey
-                ? [activeUsageChipDeviceKey]
-                : (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
-            if (!keys.length && !usagePanelListLoaded) {
+            var keys = (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
+                if (!keys.length && !usagePanelListLoaded) {
                 comparisonLoadPending = true;
-                $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Menyiapkan daftar perangkat...</td></tr>');
+                    $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Menyiapkan daftar perangkat...</td></tr>');
                 setUsageComparisonRefreshState(false);
                 return;
             }
             if (!keys.length) {
-                $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3">Belum ada perangkat untuk dibandingkan.</td></tr>');
+                $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3">Belum ada perangkat untuk dibandingkan.</td></tr>');
                 setUsageComparisonRefreshState(false);
                 return;
             }
@@ -1220,7 +1378,7 @@
             comparisonRequestInProgress = true;
             comparisonRequestKey = requestKey;
             comparisonLoadPending = false;
-            $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat perbandingan...</td></tr>');
+            $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat perbandingan...</td></tr>');
             var cacheKey = getUsageComparisonCacheKey(keys);
             var cached = readUsageCache(cacheKey);
             if (cached && cached.success !== false && Array.isArray(cached.rows)) {
@@ -1229,7 +1387,7 @@
             }
             comparisonXhr = $.ajax({
                 url: '/api/Api/usage-cost-comparison', method: 'POST', contentType: 'application/json', dataType: 'json', timeout: 15000,
-                data: JSON.stringify({ deviceKeys: keys, startDate: getUsageComparisonDateText() })
+                data: JSON.stringify({ deviceKeys: keys, startDate: getUsageComparisonDateText(), includeBillingAnomalyDetails: false })
             }).done(function (response) {
                 if (!response || response.success === false || !Array.isArray(response.rows)) throw new Error('Invalid comparison response');
                 if (requestKey !== getUsageComparisonRequestKey()) return;
@@ -1238,7 +1396,7 @@
                 renderUsageComparison(response, comparisonPeriod, false);
             }).fail(function () {
                 if (requestKey !== getUsageComparisonRequestKey()) return;
-                if (!cached) $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3">Perbandingan belum tersedia.</td></tr>');
+                if (!cached) $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3">Perbandingan belum tersedia.</td></tr>');
                 $('#usageRankingCaption').text(cached ? 'Database/ERP offline · menampilkan cache terakhir' : 'Database/ERP belum tersedia');
             }).always(function () {
                 if (comparisonRequestKey === requestKey) {
@@ -1258,9 +1416,7 @@
         }
 
         function refreshUsageComparison() {
-            var keys = activeUsageChipDeviceKey
-                ? [activeUsageChipDeviceKey]
-                : (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
+            var keys = (usagePanelList || []).map(function (panel) { return panel.deviceKey; });
             var cacheKey = keys.length ? getUsageComparisonCacheKey(keys) : null;
 
             if (comparisonXhr && comparisonXhr.readyState !== 4) comparisonXhr.abort();
@@ -1275,15 +1431,9 @@
             }
 
             setUsageComparisonRefreshState(true);
-            $('#usageErpComparisonRows').html('<tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat data perbandingan terbaru...</td></tr>');
+            $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat data perbandingan terbaru...</td></tr>');
             loadUsageErpComparison();
         }
-
-        $(document).on('click', '.usage-comparison-period', function () {
-            comparisonPeriod = $(this).data('period');
-            if (comparisonResponse && comparisonResponseKey === getUsageComparisonRequestKey()) renderUsageComparison(comparisonResponse, comparisonPeriod, false);
-            else loadUsageErpComparison();
-        });
 
         $(document).on('click', '#btnRefreshUsageComparison', function () {
             refreshUsageComparison();
@@ -3456,10 +3606,13 @@
 
             // Proyeksi Akhir Bulan
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-chart-line text-warning"></i> Proyeksi</div>';
-            var projKwh = bp.projectedMonthKWh || 0;
-            var projCost = bp.projectedCost || 0;
+            var projKwh = bp.projectedPeriodKWh != null ? bp.projectedPeriodKWh : (bp.projectedMonthKWh || 0);
+            var projCost = bp.projectedPeriodCost != null ? bp.projectedPeriodCost : (bp.projectedCost || 0);
+            var periodLabel = bp.billingPeriodMode === 'device_cutoff'
+                ? ('Cutoff ' + (bp.configuredCutoffDay || '-') + ' · ')
+                : 'Bulan kalender · ';
             html += '<div class="fin-metric-value">' + formatDecimal(projKwh) + ' kWh</div>';
-            html += '<div class="fin-metric-sub">Rp ' + formatInteger(projCost) + ' · Sisa ' + (bp.daysRemaining || 0) + ' hari</div></div>';
+            html += '<div class="fin-metric-sub">' + periodLabel + 'Rp ' + formatInteger(projCost) + ' · Sisa ' + (bp.daysRemaining || 0) + ' hari</div></div>';
 
             // Budget
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-wallet text-success"></i> Anggaran</div>';

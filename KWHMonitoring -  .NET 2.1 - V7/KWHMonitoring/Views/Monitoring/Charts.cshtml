@@ -159,6 +159,7 @@
             var safeKey = $(this).data('safe-key');
             var chartType = $(this).val();
             switchChartType(safeKey, chartType);
+            saveChartViewSettings();
         });
 
         // ============================================
@@ -167,6 +168,7 @@
         var charts = {};
         var refreshTimer = null;
         var refreshWatcherId = null; // watcher realtime (refresh chart saat data berubah)
+        var chartViewStorageKey = 'kwhChartViewSettings';
         var deviceCategoryMap = {};
         var categoryDowntimeMap = {};
         var categoryMetaMap = {};
@@ -338,6 +340,7 @@
                     $list.find('.panel-chip').removeClass('active');
                     $(this).addClass('active');
                     applyChartFilter();
+                    saveChartViewSettings();
                 });
             $list.append($allChip);
 
@@ -355,6 +358,7 @@
                         $list.find('.panel-chip').removeClass('active');
                         $(this).addClass('active');
                         applyChartFilter();
+                    saveChartViewSettings();
                     });
 
                 $list.append($chip);
@@ -407,10 +411,16 @@
         function setupChartFilterEvents() {
             $('#chartSearch').on('input', function() {
                 clearTimeout(chartFilterDebounce);
-                chartFilterDebounce = setTimeout(applyChartFilter, 200);
+                chartFilterDebounce = setTimeout(function() {
+                    applyChartFilter();
+                    saveChartViewSettings();
+                }, 200);
             });
 
-            $('#chartCategoryFilter').on('change', applyChartFilter);
+            $('#chartCategoryFilter').on('change', function() {
+                applyChartFilter();
+                saveChartViewSettings();
+            });
 
             $('#btnClearChartFilter').on('click', function() {
                 $('#chartSearch').val('');
@@ -418,6 +428,7 @@
                 activeChartChipDeviceKey = null;
                 $('#chartChipList').find('.panel-chip').removeClass('active');
                 applyChartFilter();
+                saveChartViewSettings();
             });
         }
 
@@ -587,26 +598,60 @@
         // ============================================
         // LOAD SETTINGS FROM DATABASE
         // ============================================
+        var chartSettingsCachePrefix = 'kwhChartServerSettings:';
+        var chartSettingsCacheMaxAge = 15 * 60 * 1000;
+
+        function readChartSettingsCache(cacheName) {
+            try {
+                var cached = JSON.parse(localStorage.getItem(chartSettingsCachePrefix + cacheName) || 'null');
+                if (cached && cached.settings && (!cached.savedAt || (Date.now() - cached.savedAt) <= chartSettingsCacheMaxAge)) {
+                    return cached.settings;
+                }
+            } catch (e) { }
+            return null;
+        }
+
+        function writeChartSettingsCache(cacheName, settings) {
+            try {
+                localStorage.setItem(chartSettingsCachePrefix + cacheName, JSON.stringify({
+                    savedAt: Date.now(),
+                    settings: settings
+                }));
+            } catch (e) { }
+        }
+
+        function applyEmaSettings(data) {
+            if (!data || typeof data !== 'object') return;
+            emaSettings = {
+                period: data.emaPeriod != null ? parseInt(data.emaPeriod) : emaSettings.period,
+                mode: data.emaMode || emaSettings.mode,
+                upperThreshold: data.emaUpperThreshold != null ? Number(data.emaUpperThreshold) : emaSettings.upperThreshold,
+                lowerThreshold: data.emaLowerThreshold != null ? Number(data.emaLowerThreshold) : emaSettings.lowerThreshold,
+                fibUpper: data.emaFibUpper != null ? Number(data.emaFibUpper) : emaSettings.fibUpper,
+                fibLower: data.emaFibLower != null ? Number(data.emaFibLower) : emaSettings.fibLower,
+                showEMA: data.emaShowLine !== undefined ? data.emaShowLine !== false : emaSettings.showEMA,
+                showThresholds: data.emaShowThresholds !== undefined ? data.emaShowThresholds !== false : emaSettings.showThresholds,
+                // Browser-only preference must survive server refreshes.
+                showMaxCapacity: emaSettings.showMaxCapacity,
+                useInitial100ForEma: data.useInitial100ForEma !== undefined ? data.useInitial100ForEma === true : emaSettings.useInitial100ForEma,
+                refreshInterval: data.refreshInterval != null ? parseInt(data.refreshInterval) : emaSettings.refreshInterval
+            };
+        }
+
         function loadEmaSettings() {
             return new Promise(function(resolve) {
+                var cached = readChartSettingsCache('ema');
+                if (cached) applyEmaSettings(cached);
                 $.ajax({
                     url: '/api/Api/get-ema-settings',
                     method: 'GET',
                     dataType: 'json',
                     timeout: 10000,
                     success: function(data) {
-                        emaSettings = {
-                            period: data.emaPeriod || 20,
-                            mode: data.emaMode || 'manual',
-                            upperThreshold: data.emaUpperThreshold || 0,
-                            lowerThreshold: data.emaLowerThreshold || 0,
-                            fibUpper: data.emaFibUpper || 0,
-                            fibLower: data.emaFibLower || 0,
-                            showEMA: data.emaShowLine !== false,
-                            showThresholds: data.emaShowThresholds !== false,
-                            useInitial100ForEma: data.useInitial100ForEma || false,
-                            refreshInterval: data.refreshInterval || 10
-                         };
+                        if (data && typeof data === 'object') {
+                            applyEmaSettings(data);
+                            writeChartSettingsCache('ema', data);
+                        }
                         /* console.log(' EMA Settings loaded:', emaSettings) */;
                         resolve();
                     },
@@ -617,6 +662,8 @@
 
         function loadSystemSettings() {
             return new Promise(function(resolve) {
+                var cached = readChartSettingsCache('system');
+                if (cached && cached.success && cached.settings) applySystemSettings(cached.settings);
                 $.ajax({
                     url: '/api/Api/get-system-settings',
                     method: 'GET',
@@ -624,13 +671,8 @@
                     timeout: 10000,
                     success: function(data) {
                         if (data.success && data.settings) {
-                            systemSettings.chartDataPoints = parseInt(data.settings['Chart.DataPoints']) || 20;
-                            systemSettings.refreshInterval = parseInt(data.settings['RefreshInterval']) || emaSettings.refreshInterval || 10;
-                            systemSettings.showGrid = data.settings['Chart.ShowGrid'] !== 'false';
-                            systemSettings.showGridX = data.settings['Chart.ShowGridX'] !== 'false';
-                            systemSettings.showGridY = data.settings['Chart.ShowGridY'] !== 'false';
-                            systemSettings.gridColor = data.settings['Chart.GridColor'] || '#e0e0e0';
-                            systemSettings.showLegend = data.settings['Chart.ShowLegend'] !== 'false';
+                            applySystemSettings(data.settings);
+                            writeChartSettingsCache('system', data);
                          }
                         /* console.log(' System Settings loaded:', systemSettings) */;
                         resolve();
@@ -640,19 +682,30 @@
             });
         }
 
+        function applySystemSettings(settings) {
+            if (!settings) return;
+            if (settings['Chart.DataPoints'] != null) systemSettings.chartDataPoints = parseInt(settings['Chart.DataPoints']) || systemSettings.chartDataPoints;
+            if (settings['RefreshInterval'] != null) systemSettings.refreshInterval = parseInt(settings['RefreshInterval']) || systemSettings.refreshInterval;
+            if (settings['Chart.ShowGrid'] != null) systemSettings.showGrid = settings['Chart.ShowGrid'] !== 'false';
+            if (settings['Chart.ShowGridX'] != null) systemSettings.showGridX = settings['Chart.ShowGridX'] !== 'false';
+            if (settings['Chart.ShowGridY'] != null) systemSettings.showGridY = settings['Chart.ShowGridY'] !== 'false';
+            if (settings['Chart.GridColor']) systemSettings.gridColor = settings['Chart.GridColor'];
+            if (settings['Chart.ShowLegend'] != null) systemSettings.showLegend = settings['Chart.ShowLegend'] !== 'false';
+        }
+
         // Load Display Settings from localStorage
         function loadDisplaySettings() {
             try {
                 var stored = localStorage.getItem('chartDisplaySettings');
                 if (stored) {
                     var settings = JSON.parse(stored);
-                    systemSettings.chartDataPoints = settings.chartDataPoints || 20;
-                    systemSettings.gridColor = settings.gridColor || '#e0e0e0';
-                    systemSettings.showGrid = settings.showGrid !== false;
-                    systemSettings.showLegend = settings.showLegend !== false;
-                    emaSettings.showEMA = settings.showEMA !== false;
-                    emaSettings.showThresholds = settings.showThresholds !== false;
-                    emaSettings.showMaxCapacity = settings.showMaxCapacity !== false;
+                    if (settings.chartDataPoints != null) systemSettings.chartDataPoints = parseInt(settings.chartDataPoints) || systemSettings.chartDataPoints;
+                    if (settings.gridColor) systemSettings.gridColor = settings.gridColor;
+                    if (settings.showGrid != null) systemSettings.showGrid = settings.showGrid === true;
+                    if (settings.showLegend != null) systemSettings.showLegend = settings.showLegend === true;
+                    if (settings.showEMA != null) emaSettings.showEMA = settings.showEMA === true;
+                    if (settings.showThresholds != null) emaSettings.showThresholds = settings.showThresholds === true;
+                    if (settings.showMaxCapacity != null) emaSettings.showMaxCapacity = settings.showMaxCapacity === true;
                     /* console.log('Display Settings lo aded from localStorage:', settings) */;
                 }
              } catch (e) {
@@ -662,6 +715,41 @@
 
         // Load display settings immediately (before API calls)
         loadDisplaySettings();
+
+        function saveChartViewSettings() {
+            try {
+                var chartTypes = {};
+                $('.chart-type-selector').each(function() {
+                    chartTypes[$(this).data('safe-key')] = $(this).val();
+                });
+                localStorage.setItem(chartViewStorageKey, JSON.stringify({
+                    chartTypes: chartTypes,
+                    search: $('#chartSearch').val() || '',
+                    category: $('#chartCategoryFilter').val() || 'all',
+                    activeDeviceKey: activeChartChipDeviceKey || null
+                }));
+            } catch (e) { }
+        }
+
+        function loadChartViewSettings() {
+            try {
+                var stored = localStorage.getItem(chartViewStorageKey);
+                if (!stored) return;
+                var settings = JSON.parse(stored);
+                var chartTypes = settings.chartTypes || {};
+                $('.chart-type-selector').each(function() {
+                    var safeKey = $(this).data('safe-key');
+                    var savedType = chartTypes[safeKey];
+                    if (savedType && $(this).find('option[value="' + savedType + '"]').length) {
+                        $(this).val(savedType);
+                        switchChartType(safeKey, savedType);
+                    }
+                });
+                $('#chartSearch').val(settings.search || '');
+                $('#chartCategoryFilter').val(settings.category || 'all');
+                activeChartChipDeviceKey = settings.activeDeviceKey || null;
+            } catch (e) { }
+        }
 
         function loadDowntimeSettings() {
             return new Promise(function(resolve) {
@@ -865,6 +953,64 @@
             }
         }
 
+        function syncMaxCapacityDataset(deviceKey, safeKey, powerData, chartCapacity) {
+            var chart = charts['power_' + safeKey];
+            if (!chart) return;
+
+            var deviceSettings = window.getDeviceSettings ? window.getDeviceSettings(deviceKey) : null;
+            var configuredValue = deviceSettings && deviceSettings.maxCapacity != null
+                ? Number(deviceSettings.maxCapacity)
+                : 0;
+            var responseValue = Number(chartCapacity);
+            var capacityValue = configuredValue > 0
+                ? configuredValue
+                : (responseValue > 0 ? responseValue : 0);
+            var maxDataset = null;
+
+            for (var i = 0; i < chart.data.datasets.length; i++) {
+                if ((chart.data.datasets[i].label || '').indexOf('Max Capacity') === 0) {
+                    maxDataset = chart.data.datasets[i];
+                    break;
+                }
+            }
+
+            if (!emaSettings.showMaxCapacity) {
+                if (maxDataset) {
+                    maxDataset.data = [];
+                    maxDataset.label = 'Max Capacity (-)';
+                    maxDataset.borderColor = 'transparent';
+                }
+                return;
+            }
+
+            if (!maxDataset) {
+                maxDataset = {
+                    label: 'Max Capacity',
+                    data: [],
+                    borderColor: '#8e44ad',
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    tension: 0,
+                    borderWidth: 1.5,
+                    borderDash: [15, 5],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    order: 0
+                };
+                chart.data.datasets.push(maxDataset);
+            }
+
+            if (capacityValue > 0) {
+                maxDataset.data = (powerData || []).map(function() { return capacityValue; });
+                maxDataset.label = 'Max Capacity (' + capacityValue.toLocaleString('id-ID') + ' W)';
+                maxDataset.borderColor = '#8e44ad';
+            } else {
+                maxDataset.data = [];
+                maxDataset.label = 'Max Capacity (-)';
+                maxDataset.borderColor = 'transparent';
+            }
+        }
+
         // ============================================
         // EMA CALCULATION HELPER
         // ============================================
@@ -946,27 +1092,10 @@
                             charts['power_' + safeKey].data.labels = data.labels || [];
                             charts['power_' + safeKey].data.datasets[0].data = powerData;
 
-                            // Update max capacity line (per-device, only if enabled)
-                            if (emaSettings.showMaxCapacity) {
-                                var mcDs = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
-                                var mcValue = data.maxCapacity || mcDs.maxCapacity || 0;
-                                // Find Max Capacity dataset by label
-                                for (var i = 0; i < charts['power_' + safeKey].data.datasets.length; i++) {
-                                    if (charts['power_' + safeKey].data.datasets[i].label.indexOf('Max Capacity') === 0) {
-                                        if (mcValue > 0) {
-                                            charts['power_' + safeKey].data.datasets[i].data = powerData.map(function() { return mcValue; });
-                                            charts['power_' + safeKey].data.datasets[i].label = 'Max Capacity (' + mcValue.toLocaleString('id-ID') + ' W)';
-                                            charts['power_' + safeKey].data.datasets[i].borderColor = '#8e44ad';
-                                            charts['power_' + safeKey].data.datasets[i].borderDash = [15, 5];
-                                        } else {
-                                            charts['power_' + safeKey].data.datasets[i].data = [];
-                                            charts['power_' + safeKey].data.datasets[i].label = 'Max Capacity (-)';
-                                            charts['power_' + safeKey].data.datasets[i].borderColor = 'transparent';
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
+                            // Update max capacity line (per-device, only if enabled).
+                            // The device-settings response is the source of truth; the chart
+                            // endpoint's optional maxCapacity must not erase a valid setting.
+                            syncMaxCapacityDataset(deviceKey, safeKey, powerData, data.maxCapacity);
 
                             // Calculate and add EMA (Promise-based, non-blocking)
                             if (emaSettings.showEMA && charts['power_' + safeKey].data.datasets[1]) {
@@ -1318,33 +1447,54 @@
                 updateChartAnomalyStatus();
             });
 
-            // Load all settings in parallel (including per-device settings), then init charts
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadDowntimeSettings(), loadCategoriesMetaForCharts(), Promise.resolve(window._deviceSettingsPromise)]) .then(function() {
+            // Load core chart settings and per-device settings first. Downtime and
+            // category metadata are supplementary and must not block first render.
+            Promise.all([loadEmaSettings(), loadSystemSettings(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
                 /* console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Devices:', Object.keys(window._deviceSettings || {}).length) */;
-                /* console.log('Setti ngs loaded, loading categories...') */;
-                // Load device categories, then init
-                loadDeviceCategories ().then(function() {
-                    /* console.log('All settings + ca tegories loaded, initializing charts...') */;
-                    updateSettingsModalUI();
+                /* console.log('Setti ngs loaded, initializing charts...') */
+                updateSettingsModalUI();
+                panelList.forEach(function(panel) {
+                    initPanelCharts(panel.deviceKey, panel.safeKey, panel.isThreePhase);
+                });
+                panelList.forEach(function(panel) {
+                    loadChartData(panel.deviceKey, panel.safeKey);
+                });
+                // Ensure charts render correctly after layout is settled
+                setTimeout(function() {
                     panelList.forEach(function(panel) {
-                        initPanelCharts(panel.deviceKey, panel.safeKey, panel.isThreePhase);
-                    });
-                    panelList.forEach(function(panel) {
-                        loadChartData(panel.deviceKey, panel.safeKey);
-                    });
-                    // Ensure charts render correctly after layout is settled
-                    setTimeout(function() {
-                        panelList.forEach(function(panel) {
-                            ['power', 'voltage', 'current'].forEach(function(type) {
-                                var key = type + '_' + panel.safeKey;
-                                if (charts[key]) charts[key].resize();
-                            });
+                        ['power', 'voltage', 'current'].forEach(function(type) {
+                            var key = type + '_' + panel.safeKey;
+                            if (charts[key]) charts[key].resize();
                         });
-                    }, 200);
-                    setupResponsiveDropdowns();
-                    startAutoRefresh();
+                    });
+                }, 200);
+                loadChartViewSettings();
+                panelList.forEach(function(panel) {
+                    syncMaxCapacityDataset(panel.deviceKey, panel.safeKey, charts['power_' + panel.safeKey] ? charts['power_' + panel.safeKey].data.datasets[0].data : []);
+                    if (charts['power_' + panel.safeKey]) charts['power_' + panel.safeKey].update('none');
+                });
+                renderChartChips();
+                applyChartFilter();
+                setupResponsiveDropdowns();
+                startAutoRefresh();
+
+                // Category and downtime data enrich the UI after charts are visible.
+                Promise.all([loadDowntimeSettings(), loadCategoriesMetaForCharts(), loadDeviceCategories()]).catch(function() {
+                    // Keep chart data available with default category/downtime values.
                 });
             });
+
+            // Refresh chart datasets after the shared settings cache is updated.
+            $(document).on('deviceSettingsLoaded.charts', function() {
+                panelList.forEach(function(panel) {
+                    loadChartData(panel.deviceKey, panel.safeKey);
+                });
+            });
+            if (window._deviceSettingsLoaded) {
+                panelList.forEach(function(panel) {
+                    loadChartData(panel.deviceKey, panel.safeKey);
+                });
+            }
 
             // Refresh button
             $('#btnRefresh').click(function() {
@@ -1428,7 +1578,9 @@
                     showLegend: $('#chartShowLegend').is(':checked')
                 };
 
-                localStorage.setItem('chartDisplaySettings', JSON.stringify(displaySettings));
+                try {
+                    localStorage.setItem('chartDisplaySettings', JSON.stringify(displaySettings));
+                } catch (e) { }
 
                 // Update local settings
                 systemSettings.chartDataPoints = displaySettings.chartDataPoints;

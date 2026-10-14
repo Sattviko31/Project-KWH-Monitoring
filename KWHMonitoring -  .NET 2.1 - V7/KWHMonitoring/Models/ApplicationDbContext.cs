@@ -258,6 +258,8 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.SurfaceArea).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.RevenuePerHour).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.BillingAnomalyThreshold).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingCutoffEnabled);
+                entity.Property(x => x.BillingCutoffDay);
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
 

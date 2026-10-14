@@ -17,5 +17,9 @@ namespace KWHMonitoring.Models
         public List<string> DeviceKeys { get; set; } = new List<string>();
         public string StartDate { get; set; }
         public string DeviceKey { get; set; }
+        // Usage Statistics only needs the ERP comparison values. Keep anomaly
+        // evaluation opt-in so the page does not wait for an expensive billing
+        // analysis for every device and historical month.
+        public bool? IncludeBillingAnomalyDetails { get; set; }
     }
 }

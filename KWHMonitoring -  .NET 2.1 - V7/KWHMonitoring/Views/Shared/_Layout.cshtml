@@ -1730,29 +1730,98 @@
         (function() {
             window._deviceSettings = window._deviceSettings || {};
             window._deviceSettingsLoaded = false;
+            var deviceSettingsStorageKey = 'kwhDeviceSettingsCache';
+            var deviceSettingsCacheMaxAge = 15 * 60 * 1000;
+
+            function mergeDeviceSettings(settings) {
+                if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+                    return false;
+                }
+
+                var merged = false;
+                Object.keys(settings).forEach(function(deviceKey) {
+                    var incoming = settings[deviceKey];
+                    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+                        return;
+                    }
+
+                    // Merge per device instead of replacing the complete map. This
+                    // protects settings that are not present in an old cache or in
+                    // a partial response while still refreshing returned fields.
+                    window._deviceSettings[deviceKey] = Object.assign(
+                        {},
+                        window._deviceSettings[deviceKey] || {},
+                        incoming
+                    );
+                    merged = true;
+                });
+
+                return merged;
+            }
+
+            function readDeviceSettingsCache() {
+                try {
+                    var cached = JSON.parse(localStorage.getItem(deviceSettingsStorageKey) || 'null');
+                    if (cached && cached.settings && typeof cached.settings === 'object' &&
+                        (!cached.savedAt || (Date.now() - cached.savedAt) <= deviceSettingsCacheMaxAge)) {
+                        var merged = mergeDeviceSettings(cached.settings);
+                        if (merged) window._deviceSettingsLoaded = true;
+                        return merged;
+                    }
+                } catch (e) { }
+                return false;
+            }
+
+            function writeDeviceSettingsCache(settings) {
+                try {
+                    localStorage.setItem(deviceSettingsStorageKey, JSON.stringify({
+                        savedAt: Date.now(),
+                        settings: settings || window._deviceSettings
+                    }));
+                } catch (e) { }
+            }
+
+            // Use the last known-good values immediately. The server request below
+            // refreshes them, but must never replace them with an empty/error result.
+            readDeviceSettingsCache();
 
             function fetchDeviceSettings() {
                 return $.ajax({
                     url: '/api/Api/device-settings',
                     method: 'GET',
                     dataType: 'json',
-                    cache: false
+                    cache: false,
+                    timeout: 8000
                 }).then(function(resp) {
-                    if (resp.success && resp.settings) {
-                        window._deviceSettings = resp.settings;
-                        window._deviceSettingsLoaded = true;
-                        var keys = Object.keys(resp.settings);
-                        var sample = keys.length > 0 ? resp.settings[keys[0]] : null;
+                    if (resp && resp.success && resp.settings && typeof resp.settings === 'object' && Object.keys(resp.settings).length > 0) {
+                        if (mergeDeviceSettings(resp.settings)) {
+                            window._deviceSettingsLoaded = true;
+                            writeDeviceSettingsCache(window._deviceSettings);
+                            // Defer the notification until page-specific ready handlers
+                            // have had a chance to register.
+                            setTimeout(function() {
+                                $(document).trigger('deviceSettingsLoaded');
+                            }, 0);
+                        }
+                        var keys = Object.keys(window._deviceSettings || {});
+                        var sample = keys.length > 0 ? window._deviceSettings[keys[0]] : null;
                         @* console.log('DeviceSettings loaded:', keys.length, 'devices. Keys:', keys.join(','), 'Sample:', JSON.stringify(sample)); *@
                      } else {
                         @* console.warn('DeviceSettings: API returned no settings', resp); *@
                     }
-                 }).fail(function(xhr, status, error) {
+                    return window._deviceSettings;
+                 }, function(xhr, status, error) {
                     @* console.error('DeviceSettings: Failed to load:', error || status); *@
+                    // Do not reject the shared loader. Consumers can continue with
+                    // cache/last-known-good values and load their other settings.
+                    return window._deviceSettings;
                 });
             }
 
-            window._deviceSettingsPromise = fetchDeviceSettings();
+            // Never block first render on the network. The request runs immediately
+            // in the background and notifies pages when fresher settings arrive.
+            fetchDeviceSettings();
+            window._deviceSettingsPromise = Promise.resolve(window._deviceSettings);
 
             // Periodic refresh every 60 seconds to pick up admin settings changes
             setInterval(function() {
@@ -1765,22 +1834,36 @@
                     /* console.warn('getDevi ceSettings: no settings for deviceKey="' + deviceKey + '"') */;
                     return null;
                 }
-                return {
-                    installedCapacityVA: s.installedCapacityVA || s.InstalledCapacityVA || 0,
-                    maxCapacity: s.effectiveMaxCapacityWatt || s.EffectiveMaxCapacityWatt || s.maxCapacity || s.MaxCapacity || 0,
-                    loadNormalThreshold: (s.loadNormalThreshold != null && s.loadNormalThreshold > 0) ? s.loadNormalThreshold : (s.LoadNormalThreshold != null && s.LoadNormalThreshold > 0 ? s.LoadNormalThreshold : 30),
-                    loadMediumThreshold: (s.loadMediumThreshold != null && s.loadMediumThreshold > 0) ? s.loadMediumThreshold : (s.LoadMediumThreshold != null && s.LoadMediumThreshold > 0 ? s.LoadMediumThreshold : 70),
-                    emaUpperThreshold: s.emaUpperThreshold || s.EmaUpperThreshold || 0,
-                    emaLowerThreshold: s.emaLowerThreshold || s.EmaLowerThreshold || 0,
-                    emaFibUpper: s.emaFibUpper || s.EmaFibUpper || 0,
-                    emaFibLower: s.emaFibLower || s.EmaFibLower || 0,
-                    tariffPerKWh: (s.tariffPerKWh != null && s.tariffPerKWh > 0) ? s.tariffPerKWh : (s.TariffPerKWh != null && s.TariffPerKWh > 0 ? s.TariffPerKWh : 1500),
-                    downtimeEnabled: s.downtimeEnabled === true || s.DowntimeEnabled === true,
-                    downtimeStart: s.downtimeStart || s.DowntimeStart,
-                    downtimeEnd: s.downtimeEnd || s.DowntimeEnd,
-                    controlMode: s.controlMode || s.ControlMode || 'OnOff',
-                    deviceCategory: s.deviceCategory || s.DeviceCategory || 'Billboard'
-                };
+                var effectiveMaxCapacity = s.effectiveMaxCapacityWatt != null
+                    ? s.effectiveMaxCapacityWatt
+                    : s.EffectiveMaxCapacityWatt;
+                var configuredMaxCapacity = s.maxCapacity != null
+                    ? s.maxCapacity
+                    : s.MaxCapacity;
+                var maxCapacity = Number(effectiveMaxCapacity) > 0
+                    ? Number(effectiveMaxCapacity)
+                    : (Number(configuredMaxCapacity) > 0 ? Number(configuredMaxCapacity) : 0);
+
+                // Return the complete device settings object. Previously this
+                // function returned only a subset, which made callers lose fields
+                // such as tariffs, billing, cutoff and other device settings.
+                var normalized = Object.assign({}, s);
+                normalized.installedCapacityVA = s.installedCapacityVA != null ? s.installedCapacityVA : (s.InstalledCapacityVA || 0);
+                normalized.maxCapacity = maxCapacity;
+                normalized.effectiveMaxCapacityWatt = maxCapacity;
+                normalized.loadNormalThreshold = (s.loadNormalThreshold != null && s.loadNormalThreshold > 0) ? s.loadNormalThreshold : (s.LoadNormalThreshold != null && s.LoadNormalThreshold > 0 ? s.LoadNormalThreshold : 30);
+                normalized.loadMediumThreshold = (s.loadMediumThreshold != null && s.loadMediumThreshold > 0) ? s.loadMediumThreshold : (s.LoadMediumThreshold != null && s.LoadMediumThreshold > 0 ? s.LoadMediumThreshold : 70);
+                normalized.emaUpperThreshold = s.emaUpperThreshold != null ? s.emaUpperThreshold : (s.EmaUpperThreshold || 0);
+                normalized.emaLowerThreshold = s.emaLowerThreshold != null ? s.emaLowerThreshold : (s.EmaLowerThreshold || 0);
+                normalized.emaFibUpper = s.emaFibUpper != null ? s.emaFibUpper : (s.EmaFibUpper || 0);
+                normalized.emaFibLower = s.emaFibLower != null ? s.emaFibLower : (s.EmaFibLower || 0);
+                normalized.tariffPerKWh = (s.tariffPerKWh != null && s.tariffPerKWh > 0) ? s.tariffPerKWh : (s.TariffPerKWh != null && s.TariffPerKWh > 0 ? s.TariffPerKWh : 1500);
+                normalized.downtimeEnabled = s.downtimeEnabled === true || s.DowntimeEnabled === true;
+                normalized.downtimeStart = s.downtimeStart != null ? s.downtimeStart : s.DowntimeStart;
+                normalized.downtimeEnd = s.downtimeEnd != null ? s.downtimeEnd : s.DowntimeEnd;
+                normalized.controlMode = s.controlMode || s.ControlMode || 'OnOff';
+                normalized.deviceCategory = s.deviceCategory || s.DeviceCategory || 'Billboard';
+                return normalized;
             };
 
             window.getDeviceSetting = function(deviceKey, field, defaultValue) {

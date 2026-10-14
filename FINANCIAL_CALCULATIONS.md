@@ -259,6 +259,12 @@ yoyChangePercent     = lastYearSameMonthKWh > 0 ? Round((monthKWh − lastYearSa
 
 ### 4f. Bill Projection
 
+Billing projection menggunakan periode yang diselesaikan oleh `BillingPeriodCalculator`.
+Default tetap memakai bulan kalender penuh; mode cutoff hanya berlaku jika
+`DeviceSettings.BillingCutoffEnabled = true` dan `BillingCutoffDay` berada pada rentang 25–31.
+
+#### Mode kalender (default/legacy)
+
 ```
 dayOfMonth        = DateTime.Now.Day
 daysInMonth       = DateTime.DaysInMonth(year, month)
@@ -268,6 +274,33 @@ daysRemaining     = daysInMonth − dayOfMonth
 ```
 
 **Formula:** `proyeksi = (konsumsi saat ini / hari berjalan) × total hari bulan`
+
+#### Mode cutoff per-device
+
+Interval billing bersifat setengah terbuka: `[periodStart, periodEnd)`.
+
+```text
+periodStart       = hari setelah cutoff periode sebelumnya
+periodEnd         = cutoff periode berjalan
+periodDays        = (periodEnd - periodStart).Days
+elapsedDays       = clamp((asOfDate - periodStart).Days, 0, periodDays)
+actualKWh         = sum DailyEnergy dalam interval periode
+                    + HourlyEnergy hari berjalan
+                      (menggantikan DailyEnergy hari berjalan bila tersedia)
+projectedPeriodKWh = elapsedDays > 0
+                    ? Round(actualKWh / elapsedDays × periodDays, 2)
+                    : actualKWh
+projectedPeriodCost = Round(projectedPeriodKWh × tariffPerKWh, 0)
+```
+
+`projectedMonthKWh` dan `projectedCost` tetap dikembalikan sebagai field legacy,
+tetapi nilainya mengikuti proyeksi periode aktif. Metadata periode dikembalikan
+melalui `periodStart`, `periodEnd`, `periodDays`, `daysElapsed`, `daysRemaining`,
+`billingPeriodMode`, `configuredCutoffDay`, `effectiveCutoffDate`, dan
+`cutoffResolutionStatus`.
+
+Cutoff 29, 30, atau 31 di-clamp ke hari terakhir bulan jika tanggal nominal tidak
+tersedia. Device lama dan device tanpa cutoff tetap menggunakan mode kalender.
 
 ### 4g. Anomaly Cost Impact
 

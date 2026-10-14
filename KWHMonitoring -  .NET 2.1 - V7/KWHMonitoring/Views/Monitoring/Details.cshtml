@@ -924,6 +924,20 @@
 
         var categoryDowntimeMap = {};
 
+        // Read the shared per-device settings without replacing or narrowing the
+        // original settings object. The loader exposes both the configured
+        // maxCapacity and the ERP-derived effectiveMaxCapacityWatt alias.
+        function getDetailDeviceSettings() {
+            var settings = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
+            var maxCapacity = Number(settings.effectiveMaxCapacityWatt);
+            if (!isFinite(maxCapacity) || maxCapacity <= 0) {
+                maxCapacity = Number(settings.maxCapacity);
+            }
+            return Object.assign({}, settings, {
+                detailMaxCapacity: isFinite(maxCapacity) && maxCapacity > 0 ? maxCapacity : 0
+            });
+        }
+
         // Load categories metadata from API
         function loadCategoriesMeta() {
             return $.ajax({
@@ -1215,7 +1229,7 @@
         }
 
         function isDowntimeForDevice() {
-            var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || { downtimeEnabled: false };
+            var ds = getDetailDeviceSettings();
             if (!ds.downtimeEnabled) return false;
 
             var startParts = (ds.downtimeStart || '22:00:00').toString().split(':');
@@ -2467,8 +2481,11 @@
             var dailyData = (d.month && d.month.dailyData) || [];
             var peakDayInfo = dailyData.length > 0 ? dailyData.reduce(function(max, dd) { return dd.energy > max.energy ? dd : max; }, { energy: 0, timeLabel: '-' }) : { energy: 0, timeLabel: '-' };
 
-            var projKwh = bp.projectedMonthKWh || 0;
-            var projCost = bp.projectedCost || 0;
+            var projKwh = bp.projectedPeriodKWh != null ? bp.projectedPeriodKWh : (bp.projectedMonthKWh || 0);
+            var projCost = bp.projectedPeriodCost != null ? bp.projectedPeriodCost : (bp.projectedCost || 0);
+            var periodLabel = bp.billingPeriodMode === 'device_cutoff'
+                ? ('Cutoff ' + (bp.configuredCutoffDay || '-') + ' · ')
+                : 'Bulan kalender · ';
 
             var html = '';
             html += '<div class="fin-metric-grid" style="margin-bottom:8px">';
@@ -2491,7 +2508,7 @@
             // Proyeksi
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-chart-line text-warning"></i> Proyeksi</div>';
             html += '<div class="fin-metric-value">' + formatDecimal(projKwh) + ' kWh</div>';
-            html += '<div class="fin-metric-sub">Rp ' + formatNumber(projCost) + ' · Sisa ' + (bp.daysRemaining || 0) + ' hari</div></div>';
+            html += '<div class="fin-metric-sub">' + periodLabel + 'Rp ' + formatNumber(projCost) + ' · Sisa ' + (bp.daysRemaining || 0) + ' hari</div></div>';
 
             // Budget
             html += '<div class="fin-metric"><div class="fin-metric-label"><i class="fas fa-wallet text-success"></i> Budget</div>';
@@ -3202,10 +3219,12 @@
                     var avgVoltage = isThreePhase ? (voltR + voltS + voltT) / 3 : voltR;
                     var avgCurrent = isThreePhase ? (ampR + ampS + ampT) / 3 : ampR;
                     var pfPercent = (cosPhi * 100);
-                    var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || { maxCapacity: 0, loadNormalThreshold: 30, loadMediumThreshold: 70 };
-                    var maxCap = ds.maxCapacity || 0;
-                    var normalThresh = ds.loadNormalThreshold || 30;
-                    var mediumThresh = ds.loadMediumThreshold || 70;
+                    var ds = getDetailDeviceSettings();
+                    var maxCap = ds.detailMaxCapacity;
+                    var normalThresh = Number(ds.loadNormalThreshold);
+                    var mediumThresh = Number(ds.loadMediumThreshold);
+                    if (!isFinite(normalThresh) || normalThresh <= 0) normalThresh = 30;
+                    if (!isFinite(mediumThresh) || mediumThresh <= 0) mediumThresh = 70;
                     var loadPercent = maxCap > 0 ? Math.min((dayaWatt / maxCap) * 100, 100) : 0;
 
                     $('#panelStatus').text(panel.status);
@@ -3527,8 +3546,8 @@
 
                             // Update max capacity line (per-device, only if enabled)
                             if (emaSettings.showMaxCapacity) {
-                                var mcDs = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
-                                var mcValue = mcDs.maxCapacity || 0;
+                                var mcDs = getDetailDeviceSettings();
+                                var mcValue = mcDs.detailMaxCapacity;
                                 // Find Max Capacity dataset by label
                                 for (var i = 0; i < charts.power.data.datasets.length; i++) {
                                     if (charts.power.data.datasets[i].label.indexOf('Max Capacity') === 0) {
@@ -3555,9 +3574,11 @@
                                         charts.power.data.datasets[1].tension = emaSettings.useInitial100ForEma ? 0 : 0.3;
 
                                         if (emaSettings.showThresholds && charts.power.data.datasets[2]) {
-                                            var ds = (window.getDeviceSettings && window.getDeviceSettings(deviceKey)) || {};
-                                            var upperValue = ds.emaUpperThreshold || 0;
-                                            var lowerValue = ds.emaLowerThreshold || 0;
+                                            var ds = getDetailDeviceSettings();
+                                            var upperValue = Number(ds.emaUpperThreshold);
+                                            var lowerValue = Number(ds.emaLowerThreshold);
+                                            if (!isFinite(upperValue) || upperValue <= 0) upperValue = 0;
+                                            if (!isFinite(lowerValue) || lowerValue <= 0) lowerValue = 0;
 
                                             // Calculate thresholds only when at least one value is configured
                                             var thresholds = (upperValue > 0 || lowerValue > 0)
@@ -4014,49 +4035,54 @@
             console.log('Device Key:', deviceKey);
             console.log('========================================'); *@
 
-            // Load all settings in parallel (including per-device settings), then init charts
-            // NOTE: checkDowntimeStatus is NOT called here because currentCategory
-            // is not yet known. It will be called after loadDeviceCategory() completes.
-            Promise.all([loadEmaSettings(), loadSystemSettings(), loadAnomalyMaxConfirmations(), loadCategoryDowntimeSettings(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
+            // Load core settings in parallel. Category downtime is supplementary and
+            // must not block the first chart/panel render.
+            Promise.all([loadEmaSettings(), loadSystemSettings(), loadAnomalyMaxConfirmations(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
                 @* console.log('Per-device settings loaded:', window._deviceSettingsLoaded, 'Device settings:', window.getDeviceSettings ? window.getDeviceSettings(deviceKey) : 'N/A');
                 console.log('All settings loaded, loading categories...'); *@
 
-                // Load categories meta first, then device category, then downtime
-                loadCategoriesMeta().then(function() {
-                    return loadDeviceCategory();
-                }).then(function() {
+                updateSettingsModalUI();
+                initDetailCharts();
+                loadDetailChartData();
+                updatePanelMonitoring();
+                initDetailAnomalyGrid();
+                startAutoRefresh();
+
+                // Category metadata, device category, and downtime are secondary UI
+                // data. Load them in the background after the primary Details UI starts.
+                Promise.all([loadCategoriesMeta(), loadDeviceCategory()]).then(function() {
                     return loadCategoryDowntimeSettings();
                 }).then(function() {
                     return loadAllCategoryDowntime();
                 }).then(function() {
-                    // Now that category downtime data is loaded, check the actual
-                    // downtime status for the current device category and update UI
                     return checkDowntimeStatus();
                 }).then(function() {
-                    // Upd ate header downtime display with actual data
                     updateCategoryDowntimeUI(currentCategory);
-
-                    @* console.log('All settings + categories + downtime loaded, initializing charts...'); *@
-
-                    updateSettingsModalUI();
-                    initDetailCharts();
-                    loadDetailChartData();
-                    updatePanelMonitoring();
-                    initDetailAnomalyGrid();
-                    startAutoRefresh();
-
-                    // Periodically re-check downtime status and anomaly maxConfirmations
-                    setInterval(function() {
-                        loadAnomalyMaxConfirmations();
-                        loadAllCategoryDowntime().then(function() {
-                            updateCategoryDowntimeUI(currentCategory);
-                            checkDowntimeStatus().then(function() {
-                                loadDetailChartData();
-                            });
-                        });
-                    }, 60000);
+                }).catch(function() {
+                    // Downtime is supplementary; keep charts and panel data usable.
                 });
+
+                // Periodically re-check downtime status and anomaly maxConfirmations.
+                setInterval(function() {
+                    loadAnomalyMaxConfirmations();
+                    loadAllCategoryDowntime().then(function() {
+                        updateCategoryDowntimeUI(currentCategory);
+                        return checkDowntimeStatus();
+                    }).then(function() {
+                        loadDetailChartData();
+                    });
+                }, 60000);
             });
+
+            // Apply fresher per-device settings when the shared background refresh completes.
+            $(document).on('deviceSettingsLoaded.details', function() {
+                loadDetailChartData();
+                updatePanelMonitoring();
+            });
+            if (window._deviceSettingsLoaded) {
+                loadDetailChartData();
+                updatePanelMonitoring();
+            }
 
             // Load usage statistics  when tab is shown
             $('#usage-tab').on('shown.bs.tab', function() {

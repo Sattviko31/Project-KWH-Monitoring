@@ -903,17 +903,31 @@
 
         $(document).ready(function() {
             // Load settings dari database TERLEBIH DAHULU (including per-device settings)
-            Promise.all([loadSystemSettings(), Promise.resolve(window._deviceSettingsPromise)]).then(function() {
-                loadAnomalyMaxConfirmations();
-                loadCategoriesMeta().then(function() {
-                    loadDeviceCategories();
-                });
+            Promise.all([loadSystemSettings(), Promise.resolve(window._deviceSettingsPromise), loadAnomalyMaxConfirmations()]).then(function() {
                 syncProgressBars();
                 updatePanelCards();
                 updateStatistics();
                 setupResponsiveDropdowns();
                 startAutoRefresh();
+
+                // Category metadata only enriches labels and filters. Load it in the
+                // background so a category API failure cannot block the first render.
+                Promise.all([loadCategoriesMeta(), loadDeviceCategories()]).catch(function() {
+                    // Keep the primary monitoring view usable with default categories.
+                });
             });
+
+            // Re-apply capacity/threshold-dependent card values when settings refresh.
+            $(document).on('deviceSettingsLoaded.index', function() {
+                syncProgressBars();
+                updatePanelCards();
+                applyPanelFilter();
+            });
+            if (window._deviceSettingsLoaded) {
+                syncProgressBars();
+                updatePanelCards();
+                applyPanelFilter();
+            }
 
             // Setup filter events
             setupFilterEvents();

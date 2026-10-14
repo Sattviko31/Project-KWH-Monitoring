@@ -1,5 +1,15 @@
 # KWH Monitoring — Per-Device Settings Architecture
 
+## 2026-10-12 — Optional PLN Billing Cutoff per Device
+
+- Menambahkan `BillingCutoffEnabled` dan `BillingCutoffDay` pada `DeviceSettings`.
+- Menambahkan migration `20261012085233_AddBillingCutoffToDeviceSettings` dengan default aman untuk device existing.
+- Menambahkan `BillingPeriodCalculator` untuk mode bulan kalender dan cutoff per-device.
+- Mempertahankan field response legacy serta menambahkan metadata periode dan field `projectedPeriod*` secara additive.
+- Memperbarui settings UI, bulk save, Usage Statistics, dan Details.
+- Aggregate existing tetap memakai perilaku kalender; perubahan cutoff diterapkan pada kalkulasi per-device.
+- Validasi compile target berhasil; validasi staging/database dan data PLN masih diperlukan sebelum rollout.
+
 ## Tanggal: 2025-09-21
 ## Status: Completed
 

@@ -600,6 +600,12 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("BillingAnomalyThreshold")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("BillingCutoffDay")
+                        .HasColumnName("BillingCutoffDay");
+
+                    b.Property<bool>("BillingCutoffEnabled")
+                        .HasColumnName("BillingCutoffEnabled");
+
                     b.Property<decimal>("BudgetKWh")
                         .HasColumnName("BudgetKWh")
                         .HasColumnType("decimal(18,2)");
