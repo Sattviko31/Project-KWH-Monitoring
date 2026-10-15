@@ -101,7 +101,7 @@
                 <div class="panel-gauge-group panel-reference-gauge">
                     <div class="d-flex justify-content-between align-items-baseline mb-1">
                         <span class="panel-label"><i class="fas fa-percentage"></i> Faktor Daya</span>
-                        <span class="panel-value" data-label="pf-percent" data-value="cosphi">@Model.Cos_Phi.ToString("N3")</span>
+                        <span class="panel-value" data-label="pf-percent" data-value="cosphi" data-raw-value="@Model.Cos_Phi.ToString(System.Globalization.CultureInfo.InvariantCulture)">@Model.Cos_Phi.ToString("P1")</span>
                     </div>
                     <div class="progress panel-progress">
                         <div class="progress-bar bg-@Model.CosPhiColor" role="progressbar" style="width: @(Model.Cos_Phi * 100)%" data-gauge="power-factor">@Model.Cos_Phi.ToString("P0")</div>

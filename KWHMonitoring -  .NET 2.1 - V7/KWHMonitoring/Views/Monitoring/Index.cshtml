@@ -1201,6 +1201,17 @@
         // ============================================
         // SYNC PROGRESS BARS (Initial Load)
         // ============================================
+        // CosPhi disimpan di database sebagai rasio 0..1 (contoh 0,8 = 80%).
+        // Normalisasi ini juga menangani response legacy yang mungkin masih
+        // mengirim nilai persen 0..100, sehingga tidak pernah terjadi
+        // perkalian 100 dua kali pada progress bar.
+        function normalizePowerFactor(value) {
+            let powerFactor = parseFloat(value);
+            if (!Number.isFinite(powerFactor)) return 0;
+            if (powerFactor > 1 && powerFactor <= 100) powerFactor /= 100;
+            return Math.max(0, Math.min(powerFactor, 1));
+        }
+
         function syncProgressBars() {
             @* console.log('Syncing progress bars with settings:', systemSettings); *@
 
@@ -1209,11 +1220,12 @@
                 const panelCard = $(`#panel_${safeKey}`);
                 if (panelCard.length === 0) return;
 
-                // Ambil nilai dari data-value yang sudah di-render server
-                const cosPhiText = panelCard.find('[data-value="cosphi"]').text().replace(',', '.');
                 const loadText = panelCard.find('[data-label="load-value"]').text().replace(/\./g, '').replace(' W', '').replace(',', '.');
-
-                const cosPhi = parseFloat(cosPhiText) || 0;
+                const livePanel = allPanelData.find(p => p.deviceKey === panel.deviceKey);
+                const rawCosPhi = livePanel ? livePanel.cosPhi
+                    : panel.cosPhi !== undefined ? panel.cosPhi
+                    : panelCard.find('[data-value="cosphi"]').attr('data-raw-value');
+                const cosPhi = normalizePowerFactor(rawCosPhi);
                 const dayaWatt = parseFloat(loadText) || 0;
 
                 // Update Power Factor gauge
@@ -1447,7 +1459,7 @@
                         const panelCard = $(`#panel_${safeKey}`);
                         if (panelCard.length === 0) return;
 
-                        const cosPhi = parseFloat(panel.cosPhi) || 0;
+                        const cosPhi = normalizePowerFactor(panel.cosPhi);
                         const dayaWatt = parseFloat(panel.dayaWatt) || 0;
                         const isThreePhase = panel.isThreePhase === true;
                         const avgVoltage = isThreePhase

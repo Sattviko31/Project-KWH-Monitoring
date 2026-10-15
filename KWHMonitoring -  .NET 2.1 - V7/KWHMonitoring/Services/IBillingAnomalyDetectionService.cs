@@ -11,7 +11,8 @@ namespace KWHMonitoring.Services
             DateTime billingPeriod,
             decimal estimatedBilling,
             ErpBillingRecord erpBilling,
-            ErpBillingRecord previousErpBilling = null);
+            ErpBillingRecord previousErpBilling = null,
+            bool persistAnomaly = true);
     }
 
     public class BillingAnomalyEvaluation

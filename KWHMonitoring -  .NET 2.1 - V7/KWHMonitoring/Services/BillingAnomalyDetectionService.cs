@@ -41,7 +41,8 @@ namespace KWHMonitoring.Services
             DateTime billingPeriod,
             decimal estimatedBilling,
             ErpBillingRecord erpBilling,
-            ErpBillingRecord previousErpBilling = null)
+            ErpBillingRecord previousErpBilling = null,
+            bool persistAnomaly = true)
         {
             var result = new BillingAnomalyEvaluation
             {
@@ -67,10 +68,13 @@ namespace KWHMonitoring.Services
             result.EstimateVsErpIsAnomaly = Math.Abs(result.Difference.Value) > result.Threshold;
             if (result.EstimateVsErpIsAnomaly)
             {
-                result.EstimateVsErpLogId = await SaveBillingAnomalyAsync(
-                    deviceKey, normalizedBillingPeriod, estimatedBilling, erpBilling,
-                    result.Difference.Value, result.DifferencePercent, result.Threshold,
-                    "ESTIMATE_VS_ERP", null);
+                if (persistAnomaly)
+                {
+                    result.EstimateVsErpLogId = await SaveBillingAnomalyAsync(
+                        deviceKey, normalizedBillingPeriod, estimatedBilling, erpBilling,
+                        result.Difference.Value, result.DifferencePercent, result.Threshold,
+                        "ESTIMATE_VS_ERP", null);
+                }
                 result.LogId = result.EstimateVsErpLogId;
                 result.IsAnomaly = true;
             }
@@ -85,14 +89,20 @@ namespace KWHMonitoring.Services
                 result.PeriodDifferencePercent = previousErpBilling.JumlahTagihan == 0m
                     ? (erpBilling.JumlahTagihan == 0m ? 0m : (decimal?)null)
                     : Math.Round(result.PeriodDifference.Value / previousErpBilling.JumlahTagihan * 100m, 4, MidpointRounding.AwayFromZero);
-                result.PeriodOverPeriodIsAnomaly = Math.Abs(result.PeriodDifference.Value) > result.Threshold;
+                // Period-over-period billing anomaly hanya berlaku ketika tagihan
+                // periode terpilih meningkat melebihi threshold. Penurunan besar
+                // tetap ditampilkan sebagai delta negatif, tetapi bukan anomaly ini.
+                result.PeriodOverPeriodIsAnomaly = result.PeriodDifference.Value > result.Threshold;
 
                 if (result.PeriodOverPeriodIsAnomaly)
                 {
-                    result.PeriodOverPeriodLogId = await SaveBillingAnomalyAsync(
-                        deviceKey, normalizedBillingPeriod, previousErpBilling.JumlahTagihan, erpBilling,
-                        result.PeriodDifference.Value, result.PeriodDifferencePercent, result.Threshold,
-                        "PERIOD_OVER_PERIOD", previousErpBilling);
+                    if (persistAnomaly)
+                    {
+                        result.PeriodOverPeriodLogId = await SaveBillingAnomalyAsync(
+                            deviceKey, normalizedBillingPeriod, previousErpBilling.JumlahTagihan, erpBilling,
+                            result.PeriodDifference.Value, result.PeriodDifferencePercent, result.Threshold,
+                            "PERIOD_OVER_PERIOD", previousErpBilling);
+                    }
                     result.IsAnomaly = true;
                     if (!result.LogId.HasValue)
                         result.LogId = result.PeriodOverPeriodLogId;
@@ -215,16 +225,19 @@ namespace KWHMonitoring.Services
                     .Select(x => x.BillingAnomalyThreshold)
                     .FirstOrDefaultAsync();
 
-                if (deviceThreshold.HasValue && deviceThreshold.Value >= 0m)
+                // Nilai 0 pada data settings lama berarti belum dikonfigurasi.
+                // Jangan menjadikannya threshold aktif karena itu membuat setiap
+                // kenaikan positif terbaca sebagai anomaly.
+                if (deviceThreshold.HasValue && deviceThreshold.Value > 0m)
                     return deviceThreshold.Value;
             }
 
             var cached = _settingsCache.GetValue(ThresholdSettingKey, null);
-            if (decimal.TryParse(cached, NumberStyles.Number, CultureInfo.InvariantCulture, out var cachedValue) && cachedValue >= 0m)
+            if (decimal.TryParse(cached, NumberStyles.Number, CultureInfo.InvariantCulture, out var cachedValue) && cachedValue > 0m)
                 return cachedValue;
 
             var configured = _configuration["UsageStatistics:BillingAnomalyThreshold"];
-            if (decimal.TryParse(configured, NumberStyles.Number, CultureInfo.InvariantCulture, out var configuredValue) && configuredValue >= 0m)
+            if (decimal.TryParse(configured, NumberStyles.Number, CultureInfo.InvariantCulture, out var configuredValue) && configuredValue > 0m)
                 return configuredValue;
 
             return DefaultThreshold;

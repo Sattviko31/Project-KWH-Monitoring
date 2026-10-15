@@ -441,6 +441,7 @@ namespace KWHMonitoring.Controllers
                     deviceKey = device.DeviceKey,
                     deviceId = device.DeviceId,
                     kodeLokasi = location?.KodeLokasi ?? string.Empty,
+                    idPelanggan = location?.IDPelanggan ?? string.Empty,
                     groupName = device.GroupName,
                     kwh = Math.Round(kwh, 3),
                     cost = Math.Round(kwh * tariff, 0),

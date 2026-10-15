@@ -1295,8 +1295,11 @@ namespace KWHMonitoring.Controllers
                 // beberapa kali dalam waktu singkat. Hindari mengulang query energi
                 // dan koneksi ERP untuk request identik, tanpa menyimpan hasil cukup
                 // lama hingga mengurangi freshness data.
+                // Versi cache ikut berubah ketika kontrak evaluasi anomaly berubah.
+                // Ini mencegah response lama tanpa detail anomaly dipakai kembali.
                 var comparisonCacheIdentity = string.Join("|", new[]
                 {
+                    "billing-anomaly-v2",
                     currentMonth.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
                     string.Join(",", requestedKeys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)),
                     request?.IncludeBillingAnomalyDetails == false ? "without-anomaly-details" : "with-anomaly-details"
@@ -1434,7 +1437,8 @@ namespace KWHMonitoring.Controllers
                                     new DateTime(row.year, row.month, 1),
                                     row.estimatedCost,
                                     billing,
-                                    previousBilling);
+                                    previousBilling,
+                                    persistAnomaly: false);
                             }
                             catch (Exception billingEx)
                             {
