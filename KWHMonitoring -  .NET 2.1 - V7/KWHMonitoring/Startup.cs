@@ -48,6 +48,7 @@ namespace KWHMonitoring
             // Microsoft agar retry internal SqlClient tidak menumpuk dengan retry EF).
 
             services.AddMemoryCache();
+            services.AddHttpContextAccessor();
 
             services.AddResponseCompression(options =>
             {
@@ -58,11 +59,13 @@ namespace KWHMonitoring
             services.AddScoped<AesEncryptionService>();
             services.AddSingleton<MqttService>();
             services.AddScoped<IAnomalyAnalysisService, AnomalyAnalysisService>();
+            services.AddScoped<IBillingAnomalyEvaluationService, BillingAnomalyEvaluationService>();
             services.AddScoped<IBillingAnomalyDetectionService, BillingAnomalyDetectionService>();
             services.AddSingleton<AppSettingsCache>();
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IDeviceSettingsService, DeviceSettingsService>();
+            services.AddScoped<IBillingTrendWorkflowService, BillingTrendWorkflowService>();
 
             // Data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi)
             // untuk info lokasi pada tooltip header kartu panel monitoring.
@@ -94,6 +97,7 @@ namespace KWHMonitoring
             if (string.IsNullOrEmpty(disableNotificationBg) || disableNotificationBg == "0" || disableNotificationBg.Equals("false", StringComparison.OrdinalIgnoreCase))
             {
                 services.AddHostedService<AnomalyNotificationBackgroundService>();
+                services.AddHostedService<BillingNotificationOutboxService>();
             }
 
             // =========================================================
@@ -240,7 +244,10 @@ namespace KWHMonitoring
                 context.Response.Headers["X-Content-Type-Options"] = "nosniff";
                 context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
                 context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-                context.Response.Headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+                // Explicitly disable the legacy unload feature. The remaining unload
+                // stack trace can still be reported from the old DevExtreme bundle,
+                // but application code is not allowed to register it.
+                context.Response.Headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), unload=()";
                 context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';";
                 await next();
             });

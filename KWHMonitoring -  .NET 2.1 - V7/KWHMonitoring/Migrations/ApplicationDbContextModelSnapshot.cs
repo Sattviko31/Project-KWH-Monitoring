@@ -103,8 +103,8 @@ namespace KWHMonitoring.Migrations
 
                     b.Property<string>("BillingAnomalyType")
                         .HasColumnName("BillingAnomalyType")
-                        .HasColumnType("nvarchar(30)")
-                        .HasMaxLength(30);
+                        .HasColumnType("nvarchar(100)")
+                        .HasMaxLength(100);
 
                     b.Property<decimal?>("BillingDifference")
                         .HasColumnName("BillingDifference")
@@ -112,6 +112,14 @@ namespace KWHMonitoring.Migrations
 
                     b.Property<decimal?>("BillingDifferencePercent")
                         .HasColumnName("BillingDifferencePercent")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("PeriodDifference")
+                        .HasColumnName("PeriodDifference")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PeriodDifferencePercent")
+                        .HasColumnName("PeriodDifferencePercent")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTime?>("BillingPeriod")
@@ -228,7 +236,7 @@ namespace KWHMonitoring.Migrations
                     b.HasIndex("Severity")
                         .HasName("IX_AnomalyLogs_Severity");
 
-                    b.HasIndex("AnomalyType", "BillingAnomalyType", "DeviceKey", "BillingPeriod", "ErpBillingId")
+                    b.HasIndex("DeviceKey", "BillingPeriod", "ErpBillingId", "AnomalyType")
                         .IsUnique()
                         .HasName("IX_AnomalyLogs_BillingDedup")
                         .HasFilter("[AnomalyType] = 'BILLING_VARIANCE' AND [BillingPeriod] IS NOT NULL AND [ErpBillingId] IS NOT NULL");
@@ -334,6 +342,10 @@ namespace KWHMonitoring.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasMaxLength(50);
 
+                    b.Property<string>("WhatsAppNumber")
+                        .HasColumnType("nvarchar(30)")
+                        .HasMaxLength(30);
+
                     b.HasKey("Id");
 
                     b.HasIndex("IsMasterAdmin")
@@ -417,6 +429,330 @@ namespace KWHMonitoring.Migrations
                         .HasName("IX_AppSettings_SettingKey");
 
                     b.ToTable("AppSettings");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingAnomalyNote", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<long>("AnomalyLogId");
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(256)")
+                        .HasMaxLength(256);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Decision")
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(2000)")
+                        .HasMaxLength(2000);
+
+                    b.Property<string>("NoteType")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<int?>("UserId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnomalyLogId", "CreatedAt")
+                        .HasName("IX_BillingAnomalyNotes_Anomaly_Created");
+
+                    b.ToTable("BillingAnomalyNotes");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingBudgetHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("BaselineVersion");
+
+                    b.Property<string>("ChangedBy")
+                        .HasColumnType("nvarchar(256)")
+                        .HasMaxLength(256);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<decimal?>("PreviousAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<long?>("TrendProfileId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasName("IX_BillingBudgetHistories_IdempotencyKey");
+
+                    b.ToTable("BillingBudgetHistories");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingConfirmationRecipient", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<bool>("IsSelected");
+
+                    b.Property<DateTime>("SelectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SelectedBy")
+                        .HasColumnType("nvarchar(256)")
+                        .HasMaxLength(256);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasName("IX_BillingConfirmationRecipients_UserId");
+
+                    b.ToTable("BillingConfirmationRecipients");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingConfirmationToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<long?>("AnomalyLogId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(128)")
+                        .HasMaxLength(128);
+
+                    b.Property<long>("TrendProfileId");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UsedBy")
+                        .HasColumnType("nvarchar(256)")
+                        .HasMaxLength(256);
+
+                    b.Property<int>("UserId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash", "Purpose")
+                        .IsUnique()
+                        .HasName("IX_BillingConfirmationTokens_Hash_Purpose");
+
+                    b.ToTable("BillingConfirmationTokens");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingNotificationOutbox", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<int>("AttemptCount");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("nvarchar(1000)")
+                        .HasMaxLength(1000);
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasColumnType("nvarchar(200)")
+                        .HasMaxLength(200);
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey", "Channel", "NotificationType")
+                        .IsUnique()
+                        .HasName("IX_BillingOutbox_Event_Channel_Type");
+
+                    b.ToTable("BillingNotificationOutbox");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingTrendConfirmation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<long?>("AnomalyLogId");
+
+                    b.Property<DateTime>("BillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Channel")
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("ConfirmedBy")
+                        .HasColumnType("nvarchar(256)")
+                        .HasMaxLength(256);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal>("ObservedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(1000)")
+                        .HasMaxLength(1000);
+
+                    b.Property<long>("TrendProfileId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceKey", "BillingPeriod")
+                        .IsUnique()
+                        .HasName("IX_BillingTrendConfirmations_Device_Period");
+
+                    b.ToTable("BillingTrendConfirmations");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingTrendProfile", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ActiveBaselineAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AnchorAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("AnchorBillingPeriod")
+                        .HasColumnType("date");
+
+                    b.Property<int>("BaselineVersion");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ValidConfirmationCount");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceKey", "Status")
+                        .IsUnique()
+                        .HasName("IX_BillingTrendProfiles_Device_Status");
+
+                    b.ToTable("BillingTrendProfiles");
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.ColumnMapping", b =>
@@ -600,11 +936,33 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("BillingAnomalyThreshold")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("BillingAnomalyThresholdMode")
+                        .HasColumnName("BillingAnomalyThresholdMode")
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal?>("BillingAnomalyThresholdPercent")
+                        .HasColumnName("BillingAnomalyThresholdPercent")
+                        .HasColumnType("decimal(9,4)");
+
                     b.Property<int?>("BillingCutoffDay")
                         .HasColumnName("BillingCutoffDay");
 
                     b.Property<bool>("BillingCutoffEnabled")
                         .HasColumnName("BillingCutoffEnabled");
+
+                    b.Property<decimal?>("BillingTrendToleranceAmount")
+                        .HasColumnName("BillingTrendToleranceAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("BillingTrendToleranceMode")
+                        .HasColumnName("BillingTrendToleranceMode")
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal?>("BillingTrendTolerancePercent")
+                        .HasColumnName("BillingTrendTolerancePercent")
+                        .HasColumnType("decimal(9,4)");
 
                     b.Property<decimal>("BudgetKWh")
                         .HasColumnName("BudgetKWh")
@@ -667,6 +1025,28 @@ namespace KWHMonitoring.Migrations
                     b.Property<decimal>("MaxCapacity")
                         .HasColumnName("MaxCapacity")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MonthlyBillingBudgetAmount")
+                        .HasColumnName("MonthlyBillingBudgetAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("MonthlyBillingBudgetBaselineVersion")
+                        .HasColumnName("MonthlyBillingBudgetBaselineVersion");
+
+                    b.Property<bool>("MonthlyBillingBudgetManualOverride")
+                        .HasColumnName("MonthlyBillingBudgetManualOverride");
+
+                    b.Property<string>("MonthlyBillingBudgetSource")
+                        .HasColumnName("MonthlyBillingBudgetSource")
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<long?>("MonthlyBillingBudgetTrendProfileId")
+                        .HasColumnName("MonthlyBillingBudgetTrendProfileId");
+
+                    b.Property<DateTime?>("MonthlyBillingBudgetUpdatedAt")
+                        .HasColumnName("MonthlyBillingBudgetUpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal>("RevenuePerHour")
                         .HasColumnName("RevenuePerHour")

@@ -26,6 +26,10 @@ namespace KWHMonitoring.Models
         [MaxLength(256)]
         public string DisplayName { get; set; } = string.Empty;
 
+        [Column(TypeName = "nvarchar(30)")]
+        [MaxLength(30)]
+        public string WhatsAppNumber { get; set; }
+
         [Required]
         [Column(TypeName = "nvarchar(500)")]
         public string PasswordHash { get; set; } = string.Empty;

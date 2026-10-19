@@ -1165,8 +1165,9 @@
             startAnomalyService();
         });
         
-        // Cleanup saat halaman di-unload
-        $(window).on('beforeunload', function() {
+        // Cleanup saat halaman menjadi tersembunyi. Hindari beforeunload karena browser modern
+        // melarang handler unload tertentu melalui Permissions Policy.
+        $(window).on('pagehide', function() {
             // Save state sebelum halaman ditutup menggunakan sendBeacon
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
             try {
@@ -1189,7 +1190,7 @@
                         var finalAfterData = buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE);
                         var snapPayload = JSON.stringify({ After: finalAfterData, IsFinal: finalAfterData.length >= CHART_SNAPSHOT_SIZE });
                         var snapBlob = new Blob([snapPayload], { type:  'application/json' });
-                        var sent = navigator.sendBeacon('/api/Api/anomaly-logs/' + buf.logId + '/chart-snapshot ', snapBlob);
+                        var sent = navigator.sendBeacon('/api/Api/anomaly-logs/' + buf.logId + '/chart-snapshot', snapBlob);
                         @* console.log('ðŸ“Š Sent chart snapshot via sendBeacon  for #' + buf.logId + ' (' + buf.afterBuffer.length + ' points, sen t=' + sent + ')'); *@
                     }
                 });

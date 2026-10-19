@@ -1754,6 +1754,12 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task<bool> SendEmailAsync(string to, string subject, string body)
         {
+            var result = await SendEmailWithResultAsync(to, subject, body);
+            return result.Success;
+        }
+
+        public async Task<EmailSendResult> SendEmailWithResultAsync(string to, string subject, string body)
+        {
             EnsureSettingsLoaded();
             if (string.IsNullOrEmpty(_settings.SmtpServer) ||
                 string.IsNullOrEmpty(_settings.SenderEmail) ||
@@ -1761,7 +1767,7 @@ namespace KWHMonitoring.Services
                 string.IsNullOrEmpty(to))
             {
                 _logger.LogWarning("Email settings not configured or recipient is empty");
-                return false;
+                return EmailSendResult.Failed("Konfigurasi SMTP belum lengkap atau penerima email kosong.");
             }
 
             try
@@ -1800,19 +1806,35 @@ namespace KWHMonitoring.Services
                         if (mailMessage.To.Count == 0)
                         {
                             _logger.LogWarning("No valid recipients found for email");
-                            return false;
+                            return EmailSendResult.Failed("Tidak ada alamat email penerima yang valid.");
                         }
 
                         await client.SendMailAsync(mailMessage);
                         _logger.LogInformation("Email sent successfully to {0}", to);
-                        return true;
+                        return EmailSendResult.Succeeded();
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending email to {0}: {1}", to, ex.Message);
-                return false;
+                return EmailSendResult.Failed("SMTP gagal menerima email: " + ex.Message);
+            }
+        }
+
+        public sealed class EmailSendResult
+        {
+            public bool Success { get; private set; }
+            public string Message { get; private set; }
+
+            public static EmailSendResult Succeeded()
+            {
+                return new EmailSendResult { Success = true, Message = "SMTP menerima email." };
+            }
+
+            public static EmailSendResult Failed(string message)
+            {
+                return new EmailSendResult { Success = false, Message = message };
             }
         }
 
@@ -1917,7 +1939,7 @@ namespace KWHMonitoring.Services
                 response.RawResponse = responseContent;
                 response.HttpStatus = (int)httpResponse.StatusCode;
 
-                if (httpResponse.IsSuccessStatusCode)
+                if (httpResponse.IsSuccessStatusCode && ProviderAcceptedResponse(responseContent))
                 {
                     response.Success = true;
                     response.Message = "Message sent successfully";
@@ -1988,7 +2010,7 @@ namespace KWHMonitoring.Services
                 response.RawResponse = responseContent;
                 response.HttpStatus = (int)httpResponse.StatusCode;
 
-                if (httpResponse.IsSuccessStatusCode)
+                if (httpResponse.IsSuccessStatusCode && ProviderAcceptedResponse(responseContent))
                 {
                     response.Success = true;
                     response.Message = "Message sent successfully via V1 API";
@@ -2310,6 +2332,34 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrEmpty(response))
                 return "";
             return response.Length > 200 ? response.Substring(0, 200) + "..." : response;
+        }
+
+        private static bool ProviderAcceptedResponse(string responseContent)
+        {
+            if (string.IsNullOrWhiteSpace(responseContent))
+                return true;
+
+            try
+            {
+                var json = JObject.Parse(responseContent);
+                var success = json.SelectToken("success") ?? json.SelectToken("data.success");
+                if (success != null && success.Type == JTokenType.Boolean)
+                    return success.Value<bool>();
+
+                var status = json.SelectToken("status") ?? json.SelectToken("data.status");
+                if (status != null && status.Type == JTokenType.Boolean)
+                    return status.Value<bool>();
+
+                var error = json.SelectToken("error") ?? json.SelectToken("message.error") ?? json.SelectToken("data.error");
+                if (error != null && !string.IsNullOrWhiteSpace(error.ToString()))
+                    return false;
+            }
+            catch (JsonException)
+            {
+                // Non-JSON 2xx responses are treated as accepted for compatibility.
+            }
+
+            return true;
         }
 
         private string GetWablasAuthHeader()

@@ -6,6 +6,18 @@ using Microsoft.Extensions.Logging;
 
 namespace KWHMonitoring.Services
 {
+    public sealed class BillingDeviceInfo
+    {
+        public string GroupName { get; set; }
+        public string DeviceId { get; set; }
+        public string KodeLokasi { get; set; }
+        public string Address { get; set; }
+        public string KotaProvinsi { get; set; }
+        public string IDPelanggan { get; set; }
+        public decimal DayaVA { get; set; }
+        public string Catatan { get; set; }
+    }
+
     public class EmailService : IEmailService
     {
         private readonly NotificationService _notificationService;
@@ -187,6 +199,57 @@ namespace KWHMonitoring.Services
 
             var body = BuildEmailTemplate(title, content, "#0d6efd");
             return await _notificationService.SendEmailAsync(email, subject, body);
+        }
+
+        public async Task<bool> SendBillingConfirmationEmailAsync(string email, string confirmationLink, string deviceKey, DateTime? billingPeriod, decimal? estimatedBilling, decimal? actualBilling, decimal? difference, decimal? differencePercent, decimal? previousBilling, DateTime? previousBillingPeriod, DateTime expiresAt, BillingDeviceInfo deviceInfo = null)
+        {
+            var subject = "[KWH Monitoring] Konfirmasi Anomali Periode Tagihan Diperlukan";
+            var body = BuildBillingConfirmationEmail(confirmationLink, deviceKey, billingPeriod, estimatedBilling, actualBilling, difference, differencePercent, previousBilling, previousBillingPeriod, expiresAt, deviceInfo);
+            return await _notificationService.SendEmailAsync(email, subject, body);
+        }
+        public string BuildBillingConfirmationEmail(string confirmationLink, string deviceKey, DateTime? billingPeriod, decimal? estimatedBilling, decimal? actualBilling, decimal? difference, decimal? differencePercent, decimal? previousBilling, DateTime? previousBillingPeriod, DateTime expiresAt, BillingDeviceInfo deviceInfo = null)
+        {
+            var title = "Konfirmasi Anomaly Periode Tagihan";
+            var period = billingPeriod.HasValue ? billingPeriod.Value.ToString("MMMM yyyy") : "Tidak tersedia";
+            var previousPeriod = previousBillingPeriod.HasValue ? previousBillingPeriod.Value.ToString("MMMM yyyy") : "Tidak tersedia";
+            var currentAmount = actualBilling.HasValue ? actualBilling.Value.ToString("N2") : "-";
+            var previousAmount = previousBilling.HasValue ? previousBilling.Value.ToString("N2") : "-";
+            var differenceAmount = difference.HasValue ? difference.Value.ToString("N2") : "-";
+            var percentage = differencePercent.HasValue ? differencePercent.Value.ToString("N2") + "%" : "-";
+            var direction = difference > 0 ? "lebih tinggi" : difference < 0 ? "lebih rendah" : "sama";
+            var info = deviceInfo ?? new BillingDeviceInfo();
+            var deviceInfoRows = $@"
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;width:145px;"">Group</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.GroupName)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">ID perangkat</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.DeviceId)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Kode lokasi</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.KodeLokasi)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Alamat</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.Address)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Kota / Provinsi</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.KotaProvinsi)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">ID pelanggan</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.IDPelanggan)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Kapasitas VA</td><td style=""padding:12px 16px;color:#495057;"">{(info.DayaVA > 0m ? info.DayaVA.ToString("N0") + " VA" : "-")}</td></tr>
+    <tr><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Catatan</td><td style=""padding:12px 16px;color:#495057;"">{HtmlValue(info.Catatan)}</td></tr>";
+            var content = $@"<p style=""margin:0 0 16px 0;"">Halo,</p>
+<p style=""margin:0 0 16px 0;"">Sistem menemukan <strong>anomali periode-ke-periode</strong>: tagihan ERP pada periode berjalan berbeda secara signifikan dibandingkan tagihan ERP pada periode sebelumnya. Ini bukan perbandingan estimasi sistem dengan ERP.</p>
+<table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""border-collapse:collapse;background:#ffffff;border:1px solid #e9ecef;border-radius:10px;overflow:hidden;margin:16px 0;"">
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;width:145px;"">Perangkat</td><td style=""padding:12px 16px;color:#495057;"">{WebUtility.HtmlEncode(deviceKey)}</td></tr>
+    {deviceInfoRows}
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Periode berjalan</td><td style=""padding:12px 16px;color:#495057;"">{WebUtility.HtmlEncode(period)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Tagihan ERP berjalan</td><td style=""padding:12px 16px;color:#495057;font-weight:700;"">Rp {currentAmount}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Periode sebelumnya</td><td style=""padding:12px 16px;color:#495057;"">{WebUtility.HtmlEncode(previousPeriod)}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Tagihan ERP sebelumnya</td><td style=""padding:12px 16px;color:#495057;"">Rp {previousAmount}</td></tr>
+    <tr style=""border-bottom:1px solid #e9ecef;""><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Selisih periode-ke-periode</td><td style=""padding:12px 16px;color:#dc3545;font-weight:700;"">Rp {differenceAmount} ({WebUtility.HtmlEncode(direction)})</td></tr>
+    <tr><td style=""padding:12px 16px;font-weight:bold;color:#1a1d23;background:#f8f9fa;"">Persentase perubahan</td><td style=""padding:12px 16px;color:#dc3545;font-weight:700;"">{percentage}</td></tr>
+</table>
+<table role=""presentation"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""margin:24px 0;""><tr><td>{CtaButton(confirmationLink, "Tinjau & Konfirmasi Anomali", "#0d6efd")}</td></tr></table>
+<p style=""margin:0 0 8px 0;"">Atau salin link berikut ke browser Anda:</p>
+<p style=""margin:0 0 16px 0;word-break:break-all;""><a href=""{WebUtility.HtmlEncode(confirmationLink)}"" style=""color:#0d6efd;text-decoration:none;"">{WebUtility.HtmlEncode(confirmationLink)}</a></p>
+<div style=""background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:16px 20px;margin:16px 0;""><p style=""margin:0 0 8px 0;color:#856404;font-weight:600;"">&#9888;&#65039; Informasi keamanan</p><ul style=""margin:0;padding-left:20px;color:#856404;line-height:1.8;""><li>Link berlaku sampai <strong>{expiresAt:dd MMMM yyyy HH:mm} UTC</strong>.</li><li>Link hanya dapat digunakan oleh akun penerima yang terdaftar.</li><li>Setelah berhasil dikonfirmasi, link otomatis tidak dapat digunakan kembali.</li></ul></div>";
+            var body = BuildEmailTemplate(title, content, "#0d6efd");
+            return body;
+        }
+
+        private static string HtmlValue(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "-" : WebUtility.HtmlEncode(value.Trim());
         }
 
         public async Task<bool> SendRelayOtpAsync(string email, string code, string groupName, string actionText)

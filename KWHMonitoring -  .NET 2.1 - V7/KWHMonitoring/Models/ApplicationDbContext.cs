@@ -63,6 +63,13 @@ namespace KWHMonitoring.Models
         public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
         public DbSet<SecurityAuditLog> SecurityAuditLogs { get; set; }
         public DbSet<RelayControl> RelayControls { get; set; }
+        public DbSet<BillingTrendProfile> BillingTrendProfiles { get; set; }
+        public DbSet<BillingTrendConfirmation> BillingTrendConfirmations { get; set; }
+        public DbSet<BillingConfirmationToken> BillingConfirmationTokens { get; set; }
+        public DbSet<BillingBudgetHistory> BillingBudgetHistories { get; set; }
+        public DbSet<BillingNotificationOutbox> BillingNotificationOutbox { get; set; }
+        public DbSet<BillingConfirmationRecipient> BillingConfirmationRecipients { get; set; }
+        public DbSet<BillingAnomalyNote> BillingAnomalyNotes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -180,7 +187,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.OperatorNotes).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
                 entity.Property(x => x.Severity).HasColumnType("nvarchar(20)").HasMaxLength(20);
                 entity.Property(x => x.RootCause).HasColumnType("nvarchar(500)").HasMaxLength(500);
-                entity.Property(x => x.BillingAnomalyType).HasColumnType("nvarchar(30)").HasMaxLength(30);
+                entity.Property(x => x.BillingAnomalyType).HasColumnType("nvarchar(100)").HasMaxLength(100);
                 entity.Property(x => x.EstimatedBilling).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.ActualBilling).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.BillingDifference).HasColumnType("decimal(18,2)");
@@ -195,7 +202,7 @@ namespace KWHMonitoring.Models
 
                 entity.HasIndex(x => x.DetectedTime).HasName("IX_AnomalyLogs_DetectedTime");
                 entity.HasIndex(x => x.DeviceKey).HasName("IX_AnomalyLogs_DeviceKey");
-                entity.HasIndex(x => new { x.AnomalyType, x.BillingAnomalyType, x.DeviceKey, x.BillingPeriod, x.ErpBillingId })
+                entity.HasIndex(x => new { x.DeviceKey, x.BillingPeriod, x.ErpBillingId, x.AnomalyType })
                     .HasName("IX_AnomalyLogs_BillingDedup")
                     .IsUnique()
                     .HasFilter("[AnomalyType] = 'BILLING_VARIANCE' AND [BillingPeriod] IS NOT NULL AND [ErpBillingId] IS NOT NULL");
@@ -258,12 +265,100 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.SurfaceArea).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.RevenuePerHour).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.BillingAnomalyThreshold).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingAnomalyThresholdMode).HasColumnType("varchar(20)").HasMaxLength(20);
+                entity.Property(x => x.BillingAnomalyThresholdPercent).HasColumnType("decimal(9,4)");
+                entity.Property(x => x.BillingTrendToleranceMode).HasColumnType("varchar(20)").HasMaxLength(20);
+                entity.Property(x => x.BillingTrendToleranceAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.BillingTrendTolerancePercent).HasColumnType("decimal(9,4)");
+                entity.Property(x => x.MonthlyBillingBudgetAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.MonthlyBillingBudgetSource).HasColumnType("varchar(20)").HasMaxLength(20);
+                entity.Property(x => x.MonthlyBillingBudgetManualOverride);
+                entity.Property(x => x.MonthlyBillingBudgetTrendProfileId);
+                entity.Property(x => x.MonthlyBillingBudgetBaselineVersion);
+                entity.Property(x => x.MonthlyBillingBudgetUpdatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.BillingCutoffEnabled);
                 entity.Property(x => x.BillingCutoffDay);
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
 
                 entity.HasIndex(x => x.DeviceKey).IsUnique().HasName("IX_DeviceSettings_DeviceKey");
+            });
+
+            modelBuilder.Entity<BillingTrendProfile>(entity =>
+            {
+                entity.ToTable("BillingTrendProfiles");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.Status).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.AnchorAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.ActiveBaselineAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.AnchorBillingPeriod).HasColumnType("date");
+                entity.Property(x => x.AcceptedAt).HasColumnType("datetime2");
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.Status }).IsUnique().HasName("IX_BillingTrendProfiles_Device_Status");
+            });
+
+            modelBuilder.Entity<BillingTrendConfirmation>(entity =>
+            {
+                entity.ToTable("BillingTrendConfirmations");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.BillingPeriod).HasColumnType("date");
+                entity.Property(x => x.ObservedAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.Decision).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.Reason).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
+                entity.Property(x => x.ConfirmedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.Channel).HasColumnType("varchar(30)").HasMaxLength(30);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.BillingPeriod }).IsUnique().HasName("IX_BillingTrendConfirmations_Device_Period");
+            });
+
+            modelBuilder.Entity<BillingConfirmationToken>(entity =>
+            {
+                entity.ToTable("BillingConfirmationTokens");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.TokenHash).HasColumnType("nvarchar(128)").HasMaxLength(128).IsRequired();
+                entity.Property(x => x.Purpose).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.ExpiresAt).HasColumnType("datetime2");
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UsedAt).HasColumnType("datetime2");
+                entity.Property(x => x.RevokedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UsedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.HasIndex(x => new { x.TokenHash, x.Purpose }).IsUnique().HasName("IX_BillingConfirmationTokens_Hash_Purpose");
+            });
+
+            modelBuilder.Entity<BillingBudgetHistory>(entity =>
+            {
+                entity.ToTable("BillingBudgetHistories");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.PreviousAmount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.Amount).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.Source).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.IdempotencyKey).HasColumnType("varchar(100)").HasMaxLength(100).IsRequired();
+                entity.Property(x => x.ChangedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => x.IdempotencyKey).IsUnique().HasName("IX_BillingBudgetHistories_IdempotencyKey");
+            });
+
+            modelBuilder.Entity<BillingNotificationOutbox>(entity =>
+            {
+                entity.ToTable("BillingNotificationOutbox");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.EventKey).HasColumnType("varchar(100)").HasMaxLength(100).IsRequired();
+                entity.Property(x => x.Channel).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.NotificationType).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)").IsRequired();
+                entity.Property(x => x.Status).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.ClaimedAt).HasColumnType("datetime2");
+                entity.Property(x => x.SentAt).HasColumnType("datetime2");
+                entity.Property(x => x.NextAttemptAt).HasColumnType("datetime2");
+                entity.Property(x => x.LastError).HasColumnType("nvarchar(1000)").HasMaxLength(1000);
+                entity.Property(x => x.ProviderMessageId).HasColumnType("nvarchar(200)").HasMaxLength(200);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.EventKey, x.Channel, x.NotificationType }).IsUnique().HasName("IX_BillingOutbox_Event_Channel_Type");
             });
 
             modelBuilder.Entity<AnomalyMonthlyReport>(entity =>
@@ -423,6 +518,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Email).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
                 entity.Property(x => x.NormalizedEmail).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
                 entity.Property(x => x.DisplayName).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.WhatsAppNumber).HasColumnType("nvarchar(30)").HasMaxLength(30);
                 entity.Property(x => x.PasswordHash).HasColumnType("nvarchar(500)").IsRequired();
                 entity.Property(x => x.Role).HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2").IsRequired();
@@ -432,6 +528,28 @@ namespace KWHMonitoring.Models
                 entity.HasIndex(x => x.IsMasterAdmin).HasName("IX_ApplicationUsers_IsMasterAdmin");
 
                 entity.HasIndex(x => x.NormalizedEmail).IsUnique().HasName("IX_ApplicationUsers_NormalizedEmail");
+            });
+
+            modelBuilder.Entity<BillingConfirmationRecipient>(entity =>
+            {
+                entity.ToTable("BillingConfirmationRecipients");
+                entity.HasKey(x => x.Id);
+                entity.HasIndex(x => x.UserId).IsUnique().HasName("IX_BillingConfirmationRecipients_UserId");
+                entity.Property(x => x.SelectedBy).HasColumnType("nvarchar(256)").HasMaxLength(256);
+                entity.Property(x => x.SelectedAt).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
+            });
+
+            modelBuilder.Entity<BillingAnomalyNote>(entity =>
+            {
+                entity.ToTable("BillingAnomalyNotes");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Author).HasColumnType("nvarchar(256)").HasMaxLength(256).IsRequired();
+                entity.Property(x => x.NoteType).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.Note).HasColumnType("nvarchar(2000)").HasMaxLength(2000).IsRequired();
+                entity.Property(x => x.Decision).HasColumnType("varchar(30)").HasMaxLength(30);
+                entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.AnomalyLogId, x.CreatedAt }).HasName("IX_BillingAnomalyNotes_Anomaly_Created");
             });
 
             modelBuilder.Entity<EmailVerificationToken>(entity =>

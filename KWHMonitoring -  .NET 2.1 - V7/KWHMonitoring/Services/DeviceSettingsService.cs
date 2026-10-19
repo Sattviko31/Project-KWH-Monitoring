@@ -42,6 +42,8 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(deviceSettings.ControlMode))
                 deviceSettings.ControlMode = "OnOff";
 
+            NormalizeBillingConfigurationDefaults(deviceSettings);
+
             NormalizeBillingCutoff(deviceSettings);
 
             // WBP/LWBP: if both 0, not configured — keep 0 to signal "use flat tariff"
@@ -65,6 +67,8 @@ namespace KWHMonitoring.Services
 
                 if (string.IsNullOrWhiteSpace(setting.ControlMode))
                     setting.ControlMode = "OnOff";
+
+                NormalizeBillingConfigurationDefaults(setting);
 
                 // WBP/LWBP: if both 0, not configured — keep 0
                 if (setting.WbpStartHour < 0 || setting.WbpStartHour > 23)
@@ -137,6 +141,8 @@ namespace KWHMonitoring.Services
             if (settings.BillingAnomalyThreshold.HasValue && settings.BillingAnomalyThreshold.Value < 0m)
                 throw new ArgumentOutOfRangeException(nameof(settings.BillingAnomalyThreshold), "Threshold anomaly tagihan tidak boleh negatif.");
 
+            ValidateBillingConfiguration(settings);
+
             NormalizeBillingCutoff(settings);
 
             deviceKey = deviceKey.Trim();
@@ -168,6 +174,17 @@ namespace KWHMonitoring.Services
                 existing.SurfaceArea = settings.SurfaceArea;
                 existing.RevenuePerHour = settings.RevenuePerHour;
                 existing.BillingAnomalyThreshold = settings.BillingAnomalyThreshold;
+                existing.BillingAnomalyThresholdMode = settings.BillingAnomalyThresholdMode;
+                existing.BillingAnomalyThresholdPercent = settings.BillingAnomalyThresholdPercent;
+                existing.BillingTrendToleranceMode = settings.BillingTrendToleranceMode;
+                existing.BillingTrendToleranceAmount = settings.BillingTrendToleranceAmount;
+                existing.BillingTrendTolerancePercent = settings.BillingTrendTolerancePercent;
+                existing.MonthlyBillingBudgetAmount = settings.MonthlyBillingBudgetAmount;
+                existing.MonthlyBillingBudgetSource = settings.MonthlyBillingBudgetSource;
+                existing.MonthlyBillingBudgetManualOverride = settings.MonthlyBillingBudgetManualOverride;
+                existing.MonthlyBillingBudgetTrendProfileId = settings.MonthlyBillingBudgetTrendProfileId;
+                existing.MonthlyBillingBudgetBaselineVersion = settings.MonthlyBillingBudgetBaselineVersion;
+                existing.MonthlyBillingBudgetUpdatedAt = settings.MonthlyBillingBudgetUpdatedAt;
                 existing.BillingCutoffEnabled = settings.BillingCutoffEnabled;
                 existing.BillingCutoffDay = settings.BillingCutoffDay;
                 existing.UpdatedAt = DateTime.UtcNow;
@@ -193,6 +210,69 @@ namespace KWHMonitoring.Services
 
             if (!settings.BillingCutoffDay.HasValue || settings.BillingCutoffDay.Value < 25 || settings.BillingCutoffDay.Value > 31)
                 throw new ArgumentOutOfRangeException(nameof(settings.BillingCutoffDay), "Tanggal cutoff harus berada pada rentang 25 sampai 31 ketika cutoff diaktifkan.");
+        }
+
+        private static void NormalizeBillingConfigurationDefaults(DeviceSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.BillingAnomalyThresholdMode))
+                settings.BillingAnomalyThresholdMode = BillingConfigurationResolver.AmountMode;
+            else
+                settings.BillingAnomalyThresholdMode = settings.BillingAnomalyThresholdMode.Trim().ToUpperInvariant();
+
+            if (string.IsNullOrWhiteSpace(settings.BillingTrendToleranceMode))
+                settings.BillingTrendToleranceMode = BillingConfigurationResolver.PercentageMode;
+            else
+                settings.BillingTrendToleranceMode = settings.BillingTrendToleranceMode.Trim().ToUpperInvariant();
+
+            if (!settings.BillingTrendTolerancePercent.HasValue
+                && settings.BillingTrendToleranceMode == BillingConfigurationResolver.PercentageMode)
+                settings.BillingTrendTolerancePercent = 10m;
+
+            if (string.IsNullOrWhiteSpace(settings.MonthlyBillingBudgetSource))
+                settings.MonthlyBillingBudgetSource = "MANUAL";
+        }
+
+        private static void ValidateBillingConfiguration(DeviceSettings settings)
+        {
+            var thresholdMode = (settings.BillingAnomalyThresholdMode ?? BillingConfigurationResolver.AmountMode).Trim().ToUpperInvariant();
+            if (thresholdMode != BillingConfigurationResolver.AmountMode && thresholdMode != BillingConfigurationResolver.PercentageMode)
+                throw new ArgumentException("Mode threshold billing harus AMOUNT atau PERCENTAGE.", nameof(settings.BillingAnomalyThresholdMode));
+
+            if (settings.BillingAnomalyThresholdPercent.HasValue
+                && (settings.BillingAnomalyThresholdPercent.Value < 0m || settings.BillingAnomalyThresholdPercent.Value > 1000m))
+                throw new ArgumentOutOfRangeException(nameof(settings.BillingAnomalyThresholdPercent), "Persentase threshold billing tidak valid.");
+
+            var toleranceMode = (settings.BillingTrendToleranceMode ?? BillingConfigurationResolver.PercentageMode).Trim().ToUpperInvariant();
+            if (toleranceMode != BillingConfigurationResolver.AmountMode && toleranceMode != BillingConfigurationResolver.PercentageMode)
+                throw new ArgumentException("Mode toleransi trend harus AMOUNT atau PERCENTAGE.", nameof(settings.BillingTrendToleranceMode));
+
+            if (settings.BillingTrendToleranceAmount.HasValue && settings.BillingTrendToleranceAmount.Value < 0m)
+                throw new ArgumentOutOfRangeException(nameof(settings.BillingTrendToleranceAmount), "Toleransi nominal tidak boleh negatif.");
+
+            if (settings.BillingTrendTolerancePercent.HasValue
+                && (settings.BillingTrendTolerancePercent.Value < 0m || settings.BillingTrendTolerancePercent.Value > 1000m))
+                throw new ArgumentOutOfRangeException(nameof(settings.BillingTrendTolerancePercent), "Persentase toleransi trend tidak valid.");
+
+            if (settings.MonthlyBillingBudgetAmount.HasValue && settings.MonthlyBillingBudgetAmount.Value < 0m)
+                throw new ArgumentOutOfRangeException(nameof(settings.MonthlyBillingBudgetAmount), "Anggaran tagihan nominal tidak boleh negatif.");
+
+            var source = (settings.MonthlyBillingBudgetSource ?? string.Empty).Trim().ToUpperInvariant();
+            if (source != "TREND_AUTO" && source != "MANUAL" && source != "FALLBACK")
+                source = settings.MonthlyBillingBudgetManualOverride ? "MANUAL" : "TREND_AUTO";
+
+            // Mode is controlled by the explicit override switch. Never allow a
+            // stale/inconsistent source from the client to disable trend updates.
+            if (settings.MonthlyBillingBudgetManualOverride)
+                source = "MANUAL";
+            else if (source == "MANUAL")
+                source = "TREND_AUTO";
+
+            settings.BillingAnomalyThresholdMode = thresholdMode;
+            settings.BillingTrendToleranceMode = toleranceMode;
+            settings.MonthlyBillingBudgetSource = source;
+            if (settings.BillingTrendToleranceMode == BillingConfigurationResolver.PercentageMode
+                && !settings.BillingTrendTolerancePercent.HasValue)
+                settings.BillingTrendTolerancePercent = 10m;
         }
     }
 }

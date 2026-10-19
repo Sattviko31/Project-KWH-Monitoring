@@ -255,6 +255,76 @@ namespace KWHMonitoring.Services
             return result;
         }
 
+        public async Task<Dictionary<string, List<ErpBillingRecord>>> GetAllBillingHistoryAsync()
+        {
+            var result = new Dictionary<string, List<ErpBillingRecord>>(StringComparer.OrdinalIgnoreCase);
+            var target = ResolveTarget();
+            if (string.IsNullOrWhiteSpace(target.ConnectionString))
+                throw new InvalidOperationException("Koneksi database ERP belum dikonfigurasi.");
+
+            try
+            {
+                var builder = new SqlConnectionStringBuilder(target.ConnectionString)
+                {
+                    ConnectTimeout = GetIntSetting("WwmErp:ConnectTimeoutSeconds", 5),
+                    ConnectRetryCount = 0,
+                    ApplicationName = "KWHMonitoring"
+                };
+
+                using (var connection = new SqlConnection(builder.ConnectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandTimeout = GetIntSetting("WwmErp:CommandTimeoutSeconds", 8);
+                        command.CommandText =
+                            "WITH LatestErp AS (" +
+                            "SELECT CONVERT(nvarchar(50), l.[TitikLokasiID]) AS [DeviceKey], " +
+                            "l.[KodeLokasi], t.[Periode], t.[JumlahTagihan], t.[TagihanListrikID], " +
+                            "ROW_NUMBER() OVER (" +
+                            "PARTITION BY l.[TitikLokasiID], YEAR(t.[Periode]), MONTH(t.[Periode]) " +
+                            "ORDER BY t.[Periode] DESC, t.[TagihanListrikID] DESC) AS [RowNumber] " +
+                            "FROM " + target.BillingTableReference + " t " +
+                            "INNER JOIN " + target.ElectricityAccountTableReference + " r " +
+                            "ON t.[RekListrikID] = r.[RekListrikID] " +
+                            "INNER JOIN " + target.TableReference + " l " +
+                            "ON r.[TitikLokasiID] = l.[TitikLokasiID]" +
+                            ") SELECT [DeviceKey], [KodeLokasi], [Periode], [JumlahTagihan], [TagihanListrikID] " +
+                            "FROM LatestErp WHERE [RowNumber] = 1";
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var key = Normalize(Convert.ToString(reader["DeviceKey"]));
+                                if (string.IsNullOrWhiteSpace(key)) continue;
+                                if (!result.TryGetValue(key, out var rows))
+                                {
+                                    rows = new List<ErpBillingRecord>();
+                                    result[key] = rows;
+                                }
+                                rows.Add(new ErpBillingRecord
+                                {
+                                    DeviceKey = key,
+                                    KodeLokasi = Normalize(Convert.ToString(reader["KodeLokasi"])),
+                                    Periode = reader["Periode"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(reader["Periode"]),
+                                    JumlahTagihan = ReadDecimalAllowZero(reader["JumlahTagihan"]),
+                                    TagihanListrikID = reader["TagihanListrikID"] == DBNull.Value ? 0L : Convert.ToInt64(reader["TagihanListrikID"])
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Seluruh histori tagihan ERP tidak dapat dibaca untuk rescan.");
+                throw new InvalidOperationException("Data tagihan ERP tidak dapat dibaca. Scan ulang dibatalkan agar log anomaly tidak terhapus.", ex);
+            }
+
+            return result;
+        }
+
         /// <summary>
         /// Menjalankan QueryAsync dengan batas waktu total (WwmErp:OverallTimeoutSeconds).
         ///

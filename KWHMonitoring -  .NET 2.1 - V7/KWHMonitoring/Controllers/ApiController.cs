@@ -44,8 +44,9 @@ namespace KWHMonitoring.Controllers
         private readonly IBillingAnomalyDetectionService _billingAnomalyDetectionService;
         private readonly IDeviceSettingsService _deviceSettingsService;
         private readonly ITitikLokasiService _titikLokasiService;
+        private readonly IBillingTrendWorkflowService _billingTrendWorkflowService;
 
-        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IBillingAnomalyDetectionService billingAnomalyDetectionService, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
+        public ApiController(ApplicationDbContext context, IMemoryCache cache, IServiceProvider serviceProvider, ILogger<ApiController> logger, AesEncryptionService encryption, MqttService mqttService, IHostingEnvironment environment, IEmailService emailService, IAnomalyAnalysisService analysisService, IBillingAnomalyDetectionService billingAnomalyDetectionService, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService, IBillingTrendWorkflowService billingTrendWorkflowService)
         {
             _context = context;
             _cache = cache;
@@ -59,6 +60,14 @@ namespace KWHMonitoring.Controllers
             _billingAnomalyDetectionService = billingAnomalyDetectionService;
             _deviceSettingsService = deviceSettingsService;
             _titikLokasiService = titikLokasiService;
+            _billingTrendWorkflowService = billingTrendWorkflowService;
+        }
+
+        private async Task<bool> IsCurrentUserMasterAdminAsync()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(userIdClaim, out var userId)
+                && await _context.ApplicationUsers.AnyAsync(x => x.Id == userId && x.IsMasterAdmin && x.IsActive);
         }
 
         // Revenue loss is an estimate based on configured hourly revenue and the
@@ -78,6 +87,248 @@ namespace KWHMonitoring.Controllers
                 return 0m;
 
             return Math.Round(elapsedHours * revenuePerHour, 0, MidpointRounding.AwayFromZero);
+        }
+
+        [HttpDelete("billing-anomaly-logs/clear-all")]
+        public async Task<IActionResult> ClearAllBillingAnomalyLogs()
+        {
+            if (!await IsCurrentUserMasterAdminAsync())
+                return Forbid();
+
+            try
+            {
+                var logs = await _context.AnomalyLogs
+                    .Where(x => x.AnomalyType == BillingAnomalyDetectionService.AnomalyType)
+                    .ToListAsync();
+                var logIds = logs.Select(x => x.Id).ToList();
+                var notes = await _context.BillingAnomalyNotes
+                    .Where(x => logIds.Contains(x.AnomalyLogId))
+                    .ToListAsync();
+
+                _context.BillingAnomalyNotes.RemoveRange(notes);
+                _context.AnomalyLogs.RemoveRange(logs);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, deleted = logs.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing billing anomaly logs");
+                return SafeError(ex);
+            }
+        }
+
+        [HttpPost("billing-anomaly-logs/rescan")]
+        public async Task<IActionResult> RescanBillingAnomalyLogs()
+        {
+            if (!await IsCurrentUserMasterAdminAsync())
+                return Forbid();
+
+            try
+            {
+                // Gunakan jendela periode yang sama dengan deteksi otomatis pada
+                // GetUsageCostComparison: empat bulan konsumsi terakhir, dengan
+                // periode pembayaran ERP = periode konsumsi + satu bulan.
+                // Histori ERP di luar jendela ini tidak pernah dievaluasi otomatis,
+                // sehingga tidak boleh membuat scan ulang gagal.
+                var currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+                var historyStart = currentMonth.AddMonths(-3);
+                var historyEnd = currentMonth.AddMonths(1);
+                var monthlyEnergy = await _context.MonthlyEnergy
+                    .AsNoTracking()
+                    .Where(x => (x.Year > historyStart.Year
+                            || (x.Year == historyStart.Year && x.Month >= historyStart.Month))
+                        && (x.Year < historyEnd.Year
+                            || (x.Year == historyEnd.Year && x.Month < historyEnd.Month)))
+                    .Select(x => new { x.DeviceKey, x.Year, x.Month, x.EnergyKWh })
+                    .ToListAsync();
+                var deviceKeys = monthlyEnergy
+                    .Select(x => x.DeviceKey)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                // Ambil satu bulan pembayaran tambahan di awal sebagai baseline
+                // period-over-period untuk billing pada bulan pertama jendela scan.
+                var billingByDevice = await _titikLokasiService.GetBillingHistoryAsync(
+                    deviceKeys, historyStart, historyEnd.AddMonths(1));
+                var allBillingRows = billingByDevice
+                    .SelectMany(x => x.Value ?? new List<ErpBillingRecord>())
+                    .Where(x => x.TagihanListrikID > 0 && x.Periode != DateTime.MinValue && x.JumlahTagihan >= 0m)
+                    .ToList();
+                var targetBillingRows = allBillingRows
+                    .Where(x => x.Periode >= historyStart.AddMonths(1) && x.Periode < historyEnd.AddMonths(1))
+                    .ToList();
+
+                var existingLogs = await _context.AnomalyLogs
+                    .Where(x => x.AnomalyType == BillingAnomalyDetectionService.AnomalyType)
+                    .ToListAsync();
+                if (targetBillingRows.Count == 0 || deviceKeys.Count == 0)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, new
+                    {
+                        success = false,
+                        message = "Tidak ada data tagihan ERP yang dapat dipindai. Log anomaly tidak diubah."
+                    });
+                }
+
+                var energyByPeriod = monthlyEnergy
+                    .GroupBy(x => string.Format("{0}|{1:0000}-{2:00}", x.DeviceKey, x.Year, x.Month), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => x.Sum(item => item.EnergyKWh), StringComparer.OrdinalIgnoreCase);
+                var settings = new Dictionary<string, DeviceSettings>(
+                    await _deviceSettingsService.GetAllEffectiveAsync(), StringComparer.OrdinalIgnoreCase);
+                var devices = await _context.DeviceRegistry
+                    .AsNoTracking()
+                    .Where(x => deviceKeys.Contains(x.DeviceKey))
+                    .ToDictionaryAsync(x => x.DeviceKey, StringComparer.OrdinalIgnoreCase);
+
+                var existingByIdentity = existingLogs
+                    .Where(x => x.BillingPeriod.HasValue && x.ErpBillingId.HasValue)
+                    .GroupBy(x => BillingAnomalyIdentity(x.DeviceKey, x.BillingPeriod.Value, x.ErpBillingId.Value), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(x => x.Key, x => x.OrderByDescending(log => log.Id).First(), StringComparer.OrdinalIgnoreCase);
+                var updated = 0;
+                var recreated = 0;
+                var removed = new List<AnomalyLog>();
+                var validIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var evaluatedIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var evaluated = 0;
+                var estimatedByBillingId = new Dictionary<long, decimal>();
+
+                foreach (var billing in targetBillingRows)
+                {
+                    var consumptionPeriod = new DateTime(billing.Periode.Year, billing.Periode.Month, 1).AddMonths(-1);
+                    var energyKey = string.Format("{0}|{1:0000}-{2:00}", billing.DeviceKey, consumptionPeriod.Year, consumptionPeriod.Month);
+                    energyByPeriod.TryGetValue(energyKey, out var energy);
+
+                    var tariff = settings.TryGetValue(billing.DeviceKey, out var deviceSettings) && deviceSettings.TariffPerKWh > 0m
+                        ? deviceSettings.TariffPerKWh
+                        : 1500m;
+                    estimatedByBillingId[billing.TagihanListrikID] = Math.Round(energy * tariff, 0, MidpointRounding.AwayFromZero);
+                }
+
+                var billingByPaymentMonth = allBillingRows
+                    .GroupBy(x => x.DeviceKey, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        x => x.Key,
+                        x => x
+                            .GroupBy(item => string.Format("{0:0000}-{1:00}", item.Periode.Year, item.Periode.Month), StringComparer.OrdinalIgnoreCase)
+                            .ToDictionary(
+                                month => month.Key,
+                                month => month
+                                    .OrderByDescending(item => item.Periode)
+                                    .ThenByDescending(item => item.TagihanListrikID)
+                                    .First(),
+                                StringComparer.OrdinalIgnoreCase),
+                        StringComparer.OrdinalIgnoreCase);
+
+                foreach (var billing in targetBillingRows)
+                {
+                    var consumptionPeriod = new DateTime(billing.Periode.Year, billing.Periode.Month, 1).AddMonths(-1);
+                    var estimatedBilling = estimatedByBillingId[billing.TagihanListrikID];
+                    var identity = BillingAnomalyIdentity(billing.DeviceKey, consumptionPeriod, billing.TagihanListrikID);
+                    evaluatedIdentities.Add(identity);
+                    var billingMonths = billingByPaymentMonth[billing.DeviceKey];
+                    var previousPaymentPeriod = billing.Periode.Date.AddMonths(-1);
+                    var previousPaymentMonthKey = string.Format(
+                        "{0:0000}-{1:00}", previousPaymentPeriod.Year, previousPaymentPeriod.Month);
+                    billingMonths.TryGetValue(previousPaymentMonthKey, out var previousBilling);
+                    var evaluation = await _billingAnomalyDetectionService.EvaluateAsync(
+                        billing.DeviceKey, consumptionPeriod, estimatedBilling, billing, previousBilling,
+                        false, settings.TryGetValue(billing.DeviceKey, out var effectiveSettings) ? effectiveSettings : null);
+                    evaluated++;
+                    existingByIdentity.TryGetValue(identity, out var log);
+
+                    if (!evaluation.IsValidBilling || !evaluation.IsAnomaly)
+                    {
+                        if (log != null)
+                            removed.Add(log);
+                        continue;
+                    }
+
+                    validIdentities.Add(identity);
+
+                    var billingAnomalyType = evaluation.EstimateVsErpIsAnomaly && evaluation.PeriodOverPeriodIsAnomaly
+                        ? "ESTIMATE_VS_ERP,PERIOD_OVER_PERIOD"
+                        : evaluation.EstimateVsErpIsAnomaly
+                            ? "ESTIMATE_VS_ERP"
+                            : "PERIOD_OVER_PERIOD";
+                    var severityPercent = Math.Max(
+                        Math.Abs(evaluation.DifferencePercent ?? 0m),
+                        Math.Abs(evaluation.PeriodDifferencePercent ?? 0m));
+
+                    if (log == null)
+                    {
+                        devices.TryGetValue(billing.DeviceKey, out var device);
+                        log = new AnomalyLog
+                        {
+                            DeviceKey = billing.DeviceKey,
+                            DeviceId = device?.DeviceId ?? string.Empty,
+                            AnomalyType = BillingAnomalyDetectionService.AnomalyType,
+                            BillingAnomalyType = billingAnomalyType,
+                            Acknowledged = false,
+                            IsResolved = false,
+                            Severity = severityPercent >= 50m ? "high" : "medium",
+                            Notes = "Dibuat ulang oleh Scan Ulang Anomaly Tagihan"
+                        };
+                        _context.AnomalyLogs.Add(log);
+                        recreated++;
+                    }
+
+                    log.ActualBilling = billing.JumlahTagihan;
+                    log.EstimatedBilling = estimatedBilling;
+                    log.BillingDifference = evaluation.Difference;
+                    log.BillingDifferencePercent = evaluation.DifferencePercent;
+                    log.PeriodDifference = evaluation.PeriodDifference;
+                    log.PeriodDifferencePercent = evaluation.PeriodDifferencePercent;
+                    log.BillingAnomalyType = billingAnomalyType;
+                    log.Severity = severityPercent >= 50m ? "high" : "medium";
+                    log.BillingPeriod = consumptionPeriod;
+                    log.ErpBillingId = billing.TagihanListrikID;
+                    log.PreviousBilling = evaluation.PreviousBilling;
+                    log.PreviousBillingPeriod = evaluation.PreviousBillingPeriod;
+                    log.PreviousErpBillingId = evaluation.PreviousErpBillingId;
+                    log.ThresholdValue = evaluation.Threshold;
+                    log.DetectedTime = DateTime.Now;
+                    updated++;
+                }
+
+                removed.AddRange(existingLogs.Where(x => x.BillingPeriod.HasValue && x.ErpBillingId.HasValue
+                    && evaluatedIdentities.Contains(BillingAnomalyIdentity(x.DeviceKey, x.BillingPeriod.Value, x.ErpBillingId.Value))
+                    && !validIdentities.Contains(BillingAnomalyIdentity(x.DeviceKey, x.BillingPeriod.Value, x.ErpBillingId.Value))
+                    && !removed.Contains(x)));
+                if (removed.Count > 0)
+                {
+                    var removedIds = removed.Select(x => x.Id).ToList();
+                    var notes = await _context.BillingAnomalyNotes
+                        .Where(x => removedIds.Contains(x.AnomalyLogId))
+                        .ToListAsync();
+                    _context.BillingAnomalyNotes.RemoveRange(notes);
+                    _context.AnomalyLogs.RemoveRange(removed);
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new
+                {
+                    success = true,
+                    rescanned = targetBillingRows.Count,
+                    erpBillingCount = targetBillingRows.Count,
+                    deviceCount = deviceKeys.Count,
+                    evaluated,
+                    anomaliesDetected = validIdentities.Count,
+                    updated,
+                    recreated,
+                    removed = removed.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rescanning billing anomaly logs");
+                return SafeError(ex);
+            }
+        }
+
+        private static string BillingAnomalyIdentity(string deviceKey, DateTime billingPeriod, long erpBillingId)
+        {
+            return string.Format("{0}|{1:yyyy-MM-dd}|{2}", deviceKey ?? string.Empty, billingPeriod.Date, erpBillingId);
         }
 
         private async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
@@ -7217,21 +7468,7 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var settings = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Notification"))
-                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
-
-                var smtpServer = GetString(settings, "Notification.SmtpServer", "smtp.gmail.com");
-                var smtpPort = GetInt(settings, "Notification.SmtpPort", 587);
-                var senderEmail = GetString(settings, "Notification.SenderEmail", "");
-                var senderPassword = GetString(settings, "Notification.SenderPassword", "");
-
-                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(senderPassword))
-                {
-                    return BadRequest(new { error = "Email SMTP settings not configured (sender email/password)" });
-                }
-
-                var notificationService = HttpContext.RequestServices.GetService(typeof(NotificationService)) as NotificationService;
+                var notificationService = HttpContext.RequestServices.GetRequiredService<NotificationService>();
                 var recipients = await notificationService.GetReportRecipientEmailsAsync();
 
                 if (recipients.Count == 0)
@@ -7239,28 +7476,33 @@ namespace KWHMonitoring.Controllers
                     return BadRequest(new { error = "No active Operator/Admin users found to send test email to" });
                 }
 
-                using (var client = new SmtpClient(smtpServer, smtpPort))
+                var sentCount = 0;
+                var failures = new List<object>();
+                foreach (var recipient in recipients)
                 {
-                    client.Credentials = new NetworkCredential(senderEmail, senderPassword);
-                    client.EnableSsl = true;
-
-                    var mailMessage = new MailMessage
+                    var result = await notificationService.SendEmailWithResultAsync(
+                        recipient.Trim(),
+                        "Test Email - KWH Monitoring",
+                        "<h2>Test Email</h2><p>This is a test email from KWH Monitoring System. If you receive this, email notifications are working correctly!</p>");
+                    if (result.Success)
                     {
-                        From = new MailAddress(senderEmail),
-                        Subject = "Test Email - KWH Monitoring",
-                        Body = "<h2>Test Email</h2><p>This is a test email from KWH Monitoring System. If you receive this, email notifications are working correctly!</p>",
-                        IsBodyHtml = true
-                    };
-
-                    foreach (var recipient in recipients)
-                    {
-                        mailMessage.To.Add(recipient.Trim());
+                        sentCount++;
                     }
-
-                    await client.SendMailAsync(mailMessage);
+                    else
+                    {
+                        failures.Add(new { recipient = recipient.Trim(), error = result.Message });
+                    }
                 }
 
-                return Ok(new { success = true, message = string.Format("Test email sent successfully to {0} recipient(s)", recipients.Count) });
+                if (sentCount == 0)
+                    return BadRequest(new { success = false, error = "SMTP tidak menerima email uji untuk penerima mana pun.", failures });
+
+                return Ok(new
+                {
+                    success = sentCount == recipients.Count,
+                    message = string.Format("Test email diterima SMTP untuk {0}/{1} penerima.", sentCount, recipients.Count),
+                    failures
+                });
             }
             catch (Exception ex)
             {
@@ -7277,40 +7519,14 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                var settings = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("Notification"))
-                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+                var notificationService = HttpContext.RequestServices.GetRequiredService<NotificationService>();
+                var result = await notificationService.SendWablasAsync(
+                    "Test WhatsApp from KWH Monitoring System. If you receive this, WhatsApp notifications are working correctly!");
 
-                var gatewayUrl = GetString(settings, "Notification.WhatsAppGatewayUrl", "");
-                var token = GetString(settings, "Notification.WhatsAppToken", "");
-                var phone = GetString(settings, "Notification.WhatsAppPhone", "");
+                if (!result.Success)
+                    return BadRequest(new { success = false, error = result.Message, providerResponse = result.RawResponse });
 
-                if (string.IsNullOrEmpty(gatewayUrl) || string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phone))
-                {
-                    return BadRequest(new { error = "WhatsApp settings not configured" });
-                }
-
-                using (var httpClient = new System.Net.Http.HttpClient())
-                {
-                    httpClient.DefaultRequestHeaders.Add("Authorization", token);
-
-                    var content = new FormUrlEncodedContent(new[]
-                    {
-                        new KeyValuePair<string, string>("target", phone),
-                        new KeyValuePair<string, string>("message", "Test WhatsApp from KWH Monitoring System. If you receive this, WhatsApp notifications are working correctly!")
-                    });
-
-                    var response = await httpClient.PostAsync(gatewayUrl, content);
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        return Ok(new { success = true, message = "Test WhatsApp sent successfully" });
-                    }
-                    else
-                    {
-                        return BadRequest(new { error = string.Format("WhatsApp API error: {0}", response.StatusCode) });
-                    }
-                }
+                return Ok(new { success = true, message = result.Message, providerResponse = result.RawResponse });
             }
             catch (Exception ex)
             {
@@ -8020,6 +8236,145 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // DEVICE SETTINGS API
         // ============================================
+        [HttpGet("billing-trend/{deviceKey}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetBillingTrend(string deviceKey)
+        {
+            if (string.IsNullOrWhiteSpace(deviceKey))
+                return BadRequest(new { success = false, message = "DeviceKey is required" });
+            var profile = await _billingTrendWorkflowService.GetActiveAsync(deviceKey);
+            return Ok(new { success = true, deviceKey, trend = profile });
+        }
+
+        [HttpPost("billing-trend/confirm")]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfirmBillingTrend([FromBody] BillingTrendConfirmationRequest data)
+        {
+            try
+            {
+                if (data == null || string.IsNullOrWhiteSpace(data.Token))
+                    return BadRequest(new { success = false, message = "Token wajib diisi." });
+                if (data.BillingPeriod == default(DateTime) || data.BillingPeriod.Date > DateTime.UtcNow.Date)
+                    return BadRequest(new { success = false, message = "Billing period tidak valid." });
+                if (data.ObservedAmount <= 0m || data.ObservedAmount > 1000000000000m)
+                    return BadRequest(new { success = false, message = "Observed amount tidak valid." });
+                if (string.IsNullOrWhiteSpace(data.Reason) || data.Reason.Trim().Length < 3 || data.Reason.Length > 1000)
+                    return BadRequest(new { success = false, message = "Reason wajib 3-1000 karakter." });
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out var authenticatedUserId))
+                    return StatusCode(StatusCodes.Status401Unauthorized, new { success = false, message = "Identitas akun tidak valid." });
+                var result = await _billingTrendWorkflowService.ConfirmWithTokenAsync(
+                    data.Token, data.BillingPeriod, data.ObservedAmount, data.AnomalyLogId,
+                    data.Decision, data.Reason, User.Identity.Name, data.Channel, authenticatedUserId);
+                return Ok(new { success = true, result });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(StatusCodes.Status401Unauthorized, new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Billing trend confirmation failed.");
+                return SafeError(ex);
+            }
+        }
+
+        [HttpGet("billing-confirmation-recipients")]
+        [Authorize(Policy = "RequireAdmin")]
+        public async Task<IActionResult> GetBillingConfirmationRecipients()
+        {
+            var masterAdminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(masterAdminIdClaim, out var masterAdminId) ||
+                !await _context.ApplicationUsers.AnyAsync(x => x.Id == masterAdminId && x.IsMasterAdmin && x.IsActive))
+                return Forbid();
+            var rows = await (from user in _context.ApplicationUsers
+                              join selection in _context.BillingConfirmationRecipients
+                                  on user.Id equals selection.UserId into selectionRows
+                              from selection in selectionRows.DefaultIfEmpty()
+                              where user.IsActive && !user.IsMasterAdmin
+                              orderby user.DisplayName, user.Email
+                              select new
+                              {
+                                  user.Id,
+                                  user.Email,
+                                  user.DisplayName,
+                                  user.Role,
+                                  user.WhatsAppNumber,
+                                  IsSelected = selection != null && selection.IsSelected,
+                                  SelectedAt = selection == null ? (DateTime?)null : selection.SelectedAt,
+                                  SelectedBy = selection == null ? null : selection.SelectedBy
+                              }).ToListAsync();
+            return Ok(new { success = true, recipients = rows });
+        }
+
+        [HttpPost("billing-confirmation-recipients")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveBillingConfirmationRecipients([FromBody] BillingConfirmationRecipientsRequest data)
+        {
+            var masterAdminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(masterAdminIdClaim, out var masterAdminId) ||
+                !await _context.ApplicationUsers.AnyAsync(x => x.Id == masterAdminId && x.IsMasterAdmin && x.IsActive))
+                return Forbid();
+            if (data == null || data.UserIds == null)
+                return BadRequest(new { success = false, message = "UserIds wajib diisi." });
+            var master = await _context.ApplicationUsers.FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
+            var actor = User.Identity.Name ?? "system";
+            var selectedIds = data.UserIds.Distinct().ToList();
+            var users = await _context.ApplicationUsers.Where(x => selectedIds.Contains(x.Id) && x.IsActive && !x.IsMasterAdmin).ToListAsync();
+            if (users.Count != selectedIds.Count)
+                return BadRequest(new { success = false, message = "Sebagian akun tidak valid atau tidak aktif." });
+            var existing = await _context.BillingConfirmationRecipients.ToListAsync();
+            foreach (var row in existing) row.IsSelected = selectedIds.Contains(row.UserId);
+            foreach (var user in users)
+            {
+                var row = existing.FirstOrDefault(x => x.UserId == user.Id);
+                if (row == null)
+                {
+                    _context.BillingConfirmationRecipients.Add(new BillingConfirmationRecipient
+                    {
+                        UserId = user.Id, IsSelected = true, SelectedBy = actor
+                    });
+                }
+                else
+                {
+                    row.IsSelected = true;
+                    row.SelectedBy = actor;
+                    row.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, count = users.Count, masterAdminConfigured = master != null });
+        }
+
+        [HttpPost("billing-anomalies/{id}/notify-confirmation")]
+        [Authorize(Policy = "RequireAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> NotifyBillingAnomalyConfirmation(long id)
+        {
+            try
+            {
+                var masterAdminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(masterAdminIdClaim, out var masterAdminId) ||
+                    !await _context.ApplicationUsers.AnyAsync(x => x.Id == masterAdminId && x.IsMasterAdmin && x.IsActive))
+                    return Forbid();
+                var anomaly = await _context.AnomalyLogs.FirstOrDefaultAsync(x => x.Id == id);
+                if (anomaly == null) return NotFound(new { success = false, message = "Anomaly tidak ditemukan." });
+                if (anomaly.IsResolved) return BadRequest(new { success = false, message = "Anomaly sudah terkonfirmasi. Kirim ulang tidak diperbolehkan." });
+                await _billingTrendWorkflowService.QueueAnomalyNotificationsAsync(id, forceResend: true);
+                return Ok(new { success = true, anomalyLogId = id, message = "Notifikasi dimasukkan ke antrean pengiriman." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet("device-settings")]
         [AllowAnonymous] // Effective settings untuk tampilan dashboard (read-only)
         public async Task<IActionResult> GetAllDeviceSettings()
@@ -8133,6 +8488,17 @@ namespace KWHMonitoring.Controllers
                     SurfaceArea = data.SurfaceArea,
                     RevenuePerHour = data.RevenuePerHour,
                     BillingAnomalyThreshold = data.BillingAnomalyThreshold,
+                    BillingAnomalyThresholdMode = data.BillingAnomalyThresholdMode,
+                    BillingAnomalyThresholdPercent = data.BillingAnomalyThresholdPercent,
+                    BillingTrendToleranceMode = data.BillingTrendToleranceMode,
+                    BillingTrendToleranceAmount = data.BillingTrendToleranceAmount,
+                    BillingTrendTolerancePercent = data.BillingTrendTolerancePercent,
+                    MonthlyBillingBudgetAmount = data.MonthlyBillingBudgetAmount,
+                    MonthlyBillingBudgetSource = data.MonthlyBillingBudgetSource,
+                    MonthlyBillingBudgetManualOverride = data.MonthlyBillingBudgetManualOverride,
+                    MonthlyBillingBudgetTrendProfileId = data.MonthlyBillingBudgetTrendProfileId,
+                    MonthlyBillingBudgetBaselineVersion = data.MonthlyBillingBudgetBaselineVersion,
+                    MonthlyBillingBudgetUpdatedAt = data.MonthlyBillingBudgetUpdatedAt,
                     BillingCutoffEnabled = data.BillingCutoffEnabled,
                     BillingCutoffDay = data.BillingCutoffDay
                 };
@@ -8194,6 +8560,17 @@ namespace KWHMonitoring.Controllers
                                     SurfaceArea = item.SurfaceArea,
                                     RevenuePerHour = item.RevenuePerHour,
                                     BillingAnomalyThreshold = item.BillingAnomalyThreshold,
+                                    BillingAnomalyThresholdMode = item.BillingAnomalyThresholdMode,
+                                    BillingAnomalyThresholdPercent = item.BillingAnomalyThresholdPercent,
+                                    BillingTrendToleranceMode = item.BillingTrendToleranceMode,
+                                    BillingTrendToleranceAmount = item.BillingTrendToleranceAmount,
+                                    BillingTrendTolerancePercent = item.BillingTrendTolerancePercent,
+                                    MonthlyBillingBudgetAmount = item.MonthlyBillingBudgetAmount,
+                                    MonthlyBillingBudgetSource = item.MonthlyBillingBudgetSource,
+                                    MonthlyBillingBudgetManualOverride = item.MonthlyBillingBudgetManualOverride,
+                                    MonthlyBillingBudgetTrendProfileId = item.MonthlyBillingBudgetTrendProfileId,
+                                    MonthlyBillingBudgetBaselineVersion = item.MonthlyBillingBudgetBaselineVersion,
+                                    MonthlyBillingBudgetUpdatedAt = item.MonthlyBillingBudgetUpdatedAt,
                                     BillingCutoffEnabled = item.BillingCutoffEnabled,
                                     BillingCutoffDay = item.BillingCutoffDay
                                 };
@@ -8563,8 +8940,36 @@ namespace KWHMonitoring.Controllers
         public decimal SurfaceArea { get; set; }
         public decimal RevenuePerHour { get; set; }
         public decimal? BillingAnomalyThreshold { get; set; }
+        public string BillingAnomalyThresholdMode { get; set; } = "AMOUNT";
+        public decimal? BillingAnomalyThresholdPercent { get; set; }
+        public string BillingTrendToleranceMode { get; set; } = "PERCENTAGE";
+        public decimal? BillingTrendToleranceAmount { get; set; }
+        public decimal? BillingTrendTolerancePercent { get; set; } = 10m;
+        public decimal? MonthlyBillingBudgetAmount { get; set; }
+        public string MonthlyBillingBudgetSource { get; set; } = "MANUAL";
+        public bool MonthlyBillingBudgetManualOverride { get; set; }
+        public long? MonthlyBillingBudgetTrendProfileId { get; set; }
+        public int? MonthlyBillingBudgetBaselineVersion { get; set; }
+        public DateTime? MonthlyBillingBudgetUpdatedAt { get; set; }
         public bool BillingCutoffEnabled { get; set; }
         public int? BillingCutoffDay { get; set; }
+    }
+
+    public class BillingTrendConfirmationRequest
+    {
+        public string Token { get; set; }
+        public DateTime BillingPeriod { get; set; }
+        public decimal ObservedAmount { get; set; }
+        public long? AnomalyLogId { get; set; }
+        public string Decision { get; set; } = "VALID";
+        public string Reason { get; set; }
+        public string ConfirmedBy { get; set; }
+        public string Channel { get; set; } = "WEB";
+    }
+
+    public class BillingConfirmationRecipientsRequest
+    {
+        public List<int> UserIds { get; set; }
     }
 
     public class BulkDeviceSettingsRequest

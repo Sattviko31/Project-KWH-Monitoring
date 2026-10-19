@@ -314,6 +314,10 @@ namespace KWHMonitoring.Controllers
                 else
                     ViewBag.CurrentUserRole = "Viewer";
 
+                var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                ViewBag.IsMasterAdmin = int.TryParse(currentUserIdClaim, out var currentUserId)
+                    && await _context.ApplicationUsers.AnyAsync(x => x.Id == currentUserId && x.IsMasterAdmin && x.IsActive);
+
                 return View(viewModel);
             }
             catch (Exception ex)

@@ -13,6 +13,6 @@
         public int RefreshInterval { get; set; } = 10;
         public int ChartDataPoints { get; set; } = 20;
         public decimal? TariffPerKWh { get; set; } = 1500m;
-        public bool useInitial100ForEma { get; set; } = false;
+        public bool useInitial100ForEma { get; set; } = true;
     }
 }

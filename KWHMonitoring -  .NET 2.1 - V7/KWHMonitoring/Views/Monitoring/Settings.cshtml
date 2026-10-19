@@ -549,8 +549,8 @@
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Jumlah Sampling Anomali</label>
-                            <input type="number" class="form-control" id="anomalyMaxConfirmations" value="3" min="0" max="10" step="1">
-                            <small class="text-muted">Data berturut-turut sebelum anomali terdeteksi (0-10, default: 3). 0 = tidak mendeteksi.</small>
+                            <input type="number" class="form-control" id="anomalyMaxConfirmations" value="10" min="0" max="50" step="1">
+                            <small class="text-muted">Data berturut-turut sebelum anomali terdeteksi (0-50, default: 10). 0 = tidak mendeteksi.</small>
                         </div>
                     </div>
 
@@ -1408,7 +1408,7 @@
                 url: '/api/Api/test-email-notification',
                 method: 'POST',
                 success: function(response) {
-                    showNotification('Email uji berhasil dikirim. Periksa kotak masuk Anda.', 'success');
+                    showNotification(response.message || 'Email uji diterima SMTP.', response.success ? 'success' : 'warning');
                     btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> Uji Pengiriman Email');
                 },
                 error: function(xhr, status, error) {
@@ -1437,7 +1437,10 @@
                     message: 'Pesan uji dari Sistem Pemantauan KWH - ' + new Date().toLocaleString('id-ID')
                 }),
                 success: function (response) {
-                    $('#wablasStatus').html('<div class="alert alert-success py-1 px-2 mb-0"><i class="fas fa-check-circle"></i> ' + response.message + '</div>');
+                    var message = response.message || 'Provider menerima pesan uji.';
+                    var alertClass = response.success ? 'alert-success' : 'alert-danger';
+                    var icon = response.success ? 'fa-check-circle' : 'fa-exclamation-circle';
+                    $('#wablasStatus').html('<div class="alert ' + alertClass + ' py-1 px-2 mb-0"><i class="fas ' + icon + '"></i> ' + message + '</div>');
                     btn.prop('disabled', false).html('<i class="fab fa-whatsapp"></i> Uji Pengiriman');
                 },
                 error: function (xhr) {

@@ -33,6 +33,22 @@
             </div>
         </div>
 
+        <!-- Billing anomaly responsibility -->
+        <div class="settings-field settings-field-full mb-3">
+            <div class="settings-info-banner settings-info-banner-info">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <div>
+                    <strong>Penanggung Jawab Anomali Billing</strong> — Pilih akun aktif yang menerima notifikasi konfirmasi anomaly billing melalui email dan WhatsApp. Notifikasi anomaly baru tetap dikirim otomatis setelah deteksi.
+                </div>
+            </div>
+            <div id="billingRecipientList" class="row g-2 mt-2">
+                <div class="col-12 text-muted"><i class="fas fa-spinner fa-spin"></i> Memuat akun...</div>
+            </div>
+            <button type="button" id="btnSaveBillingRecipients" class="btn btn-sm btn-primary mt-2">
+                <i class="fas fa-save"></i> Simpan Penanggung Jawab
+            </button>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-striped table-hover" id="userManagementTable">
                 <thead>
@@ -381,5 +397,51 @@
             });
         });
     }
+
+    // ---- Billing anomaly recipients ----
+    function loadBillingRecipients() {
+        $.getJSON('/api/Api/billing-confirmation-recipients')
+            .done(function (data) {
+                var $list = $('#billingRecipientList').empty();
+                if (!data.success || !data.recipients || !data.recipients.length) {
+                    $list.append('<div class="col-12 text-muted">Belum ada akun aktif yang dapat dipilih.</div>');
+                    return;
+                }
+                $.each(data.recipients, function (_, user) {
+                    var id = 'billingRecipient_' + user.id;
+                    var label = $('<label>').addClass('col-md-6 col-lg-4');
+                    var wrapper = $('<div>').addClass('form-check border rounded p-2');
+                    $('<input>').attr({ type: 'checkbox', id: id, value: user.id })
+                        .addClass('form-check-input billing-recipient-checkbox')
+                        .prop('checked', !!user.isSelected).appendTo(wrapper);
+                    $('<label>').attr('for', id).addClass('form-check-label ms-1')
+                        .text((user.displayName || user.email) + ' (' + user.email + ')').appendTo(wrapper);
+                    wrapper.appendTo(label);
+                    label.appendTo($list);
+                });
+            })
+            .fail(function () { $('#billingRecipientList').html('<div class="col-12 text-danger">Gagal memuat akun penanggung jawab.</div>'); });
+    }
+
+    $('#btnSaveBillingRecipients').on('click', function () {
+        var $button = $(this);
+        var originalHtml = $button.html();
+        var userIds = $('.billing-recipient-checkbox:checked').map(function () { return parseInt(this.value, 10); }).get();
+        $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...');
+        $.ajax({
+            url: '/api/Api/billing-confirmation-recipients',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ userIds: userIds }),
+            dataType: 'json'
+        }).done(function (data) {
+            umNotify(data.success ? 'Penanggung jawab anomaly billing berhasil disimpan.' : (data.message || 'Gagal menyimpan penanggung jawab.'), data.success ? 'success' : 'danger');
+        }).fail(function (xhr) {
+            var message = xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error);
+            umNotify(message || 'Tidak dapat menyimpan penanggung jawab.', 'danger');
+        }).always(function () { $button.prop('disabled', false).html(originalHtml); });
+    });
+
+    loadBillingRecipients();
 })();
 </script>

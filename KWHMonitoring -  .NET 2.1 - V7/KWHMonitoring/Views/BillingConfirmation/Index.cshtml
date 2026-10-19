@@ -1,0 +1,45 @@
+@model KWHMonitoring.Controllers.BillingConfirmationPageModel
+@{
+    ViewData["Title"] = "Konfirmasi Anomaly Tagihan";
+    ViewData["AuthPage"] = true;
+    Layout = "_Layout";
+}
+<div class="container py-5" style="max-width:720px">
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <h3 class="mb-3"><i class="fas fa-file-invoice-dollar text-primary"></i> Konfirmasi Anomaly Tagihan</h3>
+            @if (!string.IsNullOrWhiteSpace(Model.Error))
+            {
+                <div class="alert alert-danger">@Model.Error</div>
+            }
+            else if (!string.IsNullOrWhiteSpace(Model.Success))
+            {
+                <div class="alert alert-success">@Model.Success</div>
+                <a class="btn btn-primary" href="/Monitoring/AnomalyLogs">Buka Anomaly Logs</a>
+            }
+            else if (Model.Details != null)
+            {
+                <p>Jenis anomaly: <strong>Periode-ke-periode</strong>. Nilai di bawah membandingkan tagihan ERP periode berjalan dengan periode sebelumnya, bukan estimasi sistem.</p>
+                <dl class="row">
+                    <dt class="col-sm-5">Perangkat</dt><dd class="col-sm-7">@Model.Details.DeviceKey</dd>
+                    <dt class="col-sm-5">Periode berjalan</dt><dd class="col-sm-7">@(Model.Details.BillingPeriod?.ToString("MMMM yyyy") ?? "-")</dd>
+                    <dt class="col-sm-5">Tagihan ERP berjalan</dt><dd class="col-sm-7">@(Model.Details.ActualBilling?.ToString("N2") ?? "-")</dd>
+                    <dt class="col-sm-5">Periode sebelumnya</dt><dd class="col-sm-7">@(Model.Details.PreviousBillingPeriod?.ToString("MMMM yyyy") ?? "-")</dd>
+                    <dt class="col-sm-5">Tagihan ERP sebelumnya</dt><dd class="col-sm-7">@(Model.Details.PreviousBilling?.ToString("N2") ?? "-")</dd>
+                    <dt class="col-sm-5">Selisih periode-ke-periode</dt><dd class="col-sm-7 text-danger fw-bold">@(Model.Details.PeriodDifference?.ToString("N2") ?? Model.Details.BillingDifference?.ToString("N2") ?? "-")</dd>
+                    <dt class="col-sm-5">Persentase perubahan</dt><dd class="col-sm-7 text-danger fw-bold">@(Model.Details.PeriodDifferencePercent?.ToString("N2") ?? "-")%</dd>
+                    <dt class="col-sm-4">Berlaku sampai</dt><dd class="col-sm-8">@Model.Details.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd>
+                </dl>
+                <form method="post" action="/BillingConfirmation">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="token" value="@Model.Token" />
+                    <div class="form-group mb-3">
+                        <label for="reason">Catatan konfirmasi</label>
+                        <textarea id="reason" name="reason" class="form-control" rows="4" minlength="3" maxlength="1000" required placeholder="Jelaskan hasil pemeriksaan anomaly"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Konfirmasi Anomaly</button>
+                </form>
+            }
+        </div>
+    </div>
+</div>

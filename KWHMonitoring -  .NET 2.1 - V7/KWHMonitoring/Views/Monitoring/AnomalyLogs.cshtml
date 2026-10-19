@@ -1,6 +1,7 @@
 @{
     ViewData["Title"] = "Anomaly Center";
     var userRole = ViewBag.CurrentUserRole?.ToString() ?? "Viewer";
+    var isMasterAdmin = ViewBag.IsMasterAdmin is bool && (bool)ViewBag.IsMasterAdmin;
 }
 
 @await Html.PartialAsync("_DashboardHeader")
@@ -72,7 +73,7 @@
         </div>
     </div>
     <div class="charts-col charts-col-side">
-        <div class="card shadow-sm h-100" data-card-help="Anomali berdasarkan Perangkat|Diagram lingkaran sebaran anomali antar perangkat.|Rumus: tiap irisan = jumlah kejadian anomali perangkat ÷ total anomali × 100%|Perangkat dengan irisan terbesar paling sering bermasalah.">
+        <div class="card shadow-sm h-100" data-card-help="Anomali berdasarkan Perangkat|Diagram lingkaran sebaran anomali antar perangkat.|Rumus: tiap irisan = jumlah kejadian anomali perangkat &divide; total anomali &times; 100%|Perangkat dengan irisan terbesar paling sering bermasalah.">
             <div class="card-header bg-white py-2">
                 <h6 class="mb-0"><i class="fas fa-chart-pie text-muted"></i> Anomali per Perangkat</h6>
             </div>
@@ -86,21 +87,21 @@
 <!-- Financial Impact KPIs -->
 <div class="stats-row mb-3" id="financialImpactRow">
     <div>
-        <div class="stat-card" style="background: linear-gradient(135deg,#fd7e14,#ff9f43);color:#fff;" data-card-help="Dampak Biaya Anomali|Estimasi biaya tambahan akibat anomali beban berlebih periode ini.|Rumus: Kelebihan energi (kWh) ≈ daya berlebih (W) ÷1000 ×0,25 jam per kejadian&#10;Biaya = Kelebihan energi (kWh) × Tarif (Rp/kWh)|Semakin sering beban berlebih, semakin besar pemborosan biaya.">
+        <div class="stat-card" style="background: linear-gradient(135deg,#fd7e14,#ff9f43);color:#fff;" data-card-help="Dampak Biaya Anomali|Estimasi biaya tambahan akibat anomali beban berlebih periode ini.|Rumus: Kelebihan energi (kWh) &asymp; daya berlebih (W) &divide;1000 &times;0,25 jam per kejadian&#10;Biaya = Kelebihan energi (kWh) &times; Tarif (Rp/kWh)|Semakin sering beban berlebih, semakin besar pemborosan biaya.">
             <div class="stat-label">Dampak Biaya Anomali</div>
             <div class="stat-value" id="dashAnomalyCost">Rp 0</div>
             <i class="fas fa-bolt stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#c0392b);color:#fff;" data-card-help="Estimasi Kehilangan Pendapatan|Estimasi kerugian pendapatan saat gangguan perangkat (mati total).|Rumus: Kehilangan pendapatan ≈ durasi gangguan (jam) × pendapatan rata-rata per jam perangkat|Dihitung dari perangkat yang kategorinya menghasilkan pendapatan (mis. billboard).">
+        <div class="stat-card" style="background: linear-gradient(135deg,#dc3545,#c0392b);color:#fff;" data-card-help="Estimasi Kehilangan Pendapatan|Estimasi kerugian pendapatan saat gangguan perangkat (mati total).|Rumus: Kehilangan pendapatan &asymp; durasi gangguan (jam) &times; pendapatan rata-rata per jam perangkat|Dihitung dari perangkat yang kategorinya menghasilkan pendapatan (mis. billboard).">
             <div class="stat-label">Estimasi Kehilangan Pendapatan</div>
             <div class="stat-value" id="dashRevenueLoss">Rp 0</div>
             <i class="fas fa-money-bill-wave stat-icon"></i>
         </div>
     </div>
     <div>
-        <div class="stat-card" style="background: linear-gradient(135deg,#6f42c1,#8e44ad);color:#fff;" data-card-help="Kehilangan Pendapatan yang Sedang Berlangsung|Akumulasi kerugian dari perangkat yang masih mengalami gangguan.|Rumus: akumulasi = durasi gangguan (jam) × pendapatan per jam.|Nilai terus bertambah hingga perangkat kembali beroperasi normal.">
+        <div class="stat-card" style="background: linear-gradient(135deg,#6f42c1,#8e44ad);color:#fff;" data-card-help="Kehilangan Pendapatan yang Sedang Berlangsung|Akumulasi kerugian dari perangkat yang masih mengalami gangguan.|Rumus: akumulasi = durasi gangguan (jam) &times; pendapatan per jam.|Nilai terus bertambah hingga perangkat kembali beroperasi normal.">
             <div class="stat-label">Kehilangan Pendapatan yang Sedang Berlangsung</div>
             <div class="stat-value" id="dashOngoingRevenueLoss">Rp 0</div>
             <i class="fas fa-clock stat-icon"></i>
@@ -116,16 +117,11 @@
 </div>
 
 <!-- DataGrid -->
-<div class="card shadow-sm mb-3" data-card-help="Daftar Anomali|Tabel berisi waktu, perangkat, jenis anomali, tingkat keparahan, daya, deviasi, dan status.|Rumus: deviasi (%) = (daya − ambang batas) ÷ ambang batas × 100.|Gunakan penyaringan, pengurutan, dan detail untuk meninjau catatan; konfirmasikan penanganan atau tandai anomali sebagai selesai melalui tabel.">
+<div class="card shadow-sm mb-3" data-card-help="Daftar Anomali|Tabel berisi waktu, perangkat, jenis anomali, tingkat keparahan, daya, deviasi, dan status.|Rumus: deviasi (%) = (daya &minus; ambang batas) &divide; ambang batas &times; 100.|Gunakan penyaringan, pengurutan, dan detail untuk meninjau catatan; konfirmasikan penanganan atau tandai anomali sebagai selesai melalui tabel.">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
         <h6 class="mb-0"><i class="fas fa-list text-muted"></i> Daftar Anomali</h6>
         <div class="d-flex gap-1">
-            @if (userRole == "Admin")
-            {
-                <button class="btn btn-sm btn-danger" id="btnClearAll">
-                    <i class="fas fa-trash-alt"></i> <span class="d-none d-sm-inline">Hapus Semua</span>
-                </button>
-            }
+            <span class="text-muted small"><i class="fas fa-shield-alt"></i> Log perangkat</span>
         </div>
     </div>
     <div class="card-body p-0">
@@ -139,7 +135,18 @@
 <div class="card shadow-sm mb-3 billing-anomaly-section" data-card-help="Daftar Anomali Tagihan|Tabel khusus untuk membandingkan estimasi sistem dengan tagihan aktual ERP.|Hanya anomaly BILLING_VARIANCE yang ditampilkan di sini.|Selisih positif berarti tagihan ERP lebih tinggi dari estimasi sistem.">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
         <h6 class="mb-0"><i class="fas fa-file-invoice-dollar text-warning"></i> Anomali Tagihan</h6>
-        <span class="badge badge-warning text-dark">BILLING_VARIANCE</span>
+        <div class="d-flex align-items-center flex-wrap gap-1">
+            <span class="badge badge-warning text-dark">BILLING_VARIANCE</span>
+            @if (isMasterAdmin)
+            {
+                <button class="btn btn-sm btn-outline-primary billing-admin-action" id="btnRescanBillingAnomaly" title="Scan ulang anomaly tagihan dari data ERP">
+                    <i class="fas fa-sync-alt"></i> <span class="d-none d-md-inline">Scan Ulang</span>
+                </button>
+                <button class="btn btn-sm btn-outline-danger billing-admin-action" id="btnClearBillingAnomaly" title="Hapus semua log anomaly tagihan">
+                    <i class="fas fa-trash-alt"></i> <span class="d-none d-md-inline">Clear All Log</span>
+                </button>
+            }
+        </div>
     </div>
     <div class="card-body p-0">
         <div class="anomaly-grid-scroll-wrapper">
@@ -230,19 +237,19 @@
                         <div class="h5 mb-0 fw-bold text-primary" id="repAvgDeviation">0%</div>
                     </div>
                 </div>
-                <div class="report-stat-card" data-card-help="Dampak Biaya (Laporan)|Estimasi biaya tambahan dari anomali beban berlebih bulan terpilih.|Rumus: Kelebihan energi (kWh) ≈ daya berlebih (W) ÷1000 ×0,25 jam · Biaya = Kelebihan energi (kWh) × tarif|Total keuangan dari seluruh kejadian beban berlebih bulan ini.">
+                <div class="report-stat-card" data-card-help="Dampak Biaya (Laporan)|Estimasi biaya tambahan dari anomali beban berlebih bulan terpilih.|Rumus: Kelebihan energi (kWh) &asymp; daya berlebih (W) &divide;1000 &times;0,25 jam &middot; Biaya = Kelebihan energi (kWh) &times; tarif|Total keuangan dari seluruh kejadian beban berlebih bulan ini.">
                     <div class="border rounded p-2 text-center">
                         <div class="text-muted small">Dampak Biaya</div>
                         <div class="h5 mb-0 fw-bold text-danger" id="repAnomalyCost">Rp 0</div>
                     </div>
                 </div>
-                <div class="report-stat-card" data-card-help="Kehilangan Pendapatan (Laporan)|Perkiraan total kehilangan pendapatan akibat gangguan perangkat pada bulan yang dipilih.|Rumus: jumlah (durasi gangguan perangkat × pendapatan per jam perangkat).|Perhitungan berlaku untuk perangkat yang menghasilkan pendapatan.">
+                <div class="report-stat-card" data-card-help="Kehilangan Pendapatan (Laporan)|Perkiraan total kehilangan pendapatan akibat gangguan perangkat pada bulan yang dipilih.|Rumus: jumlah (durasi gangguan perangkat &times; pendapatan per jam perangkat).|Perhitungan berlaku untuk perangkat yang menghasilkan pendapatan.">
                     <div class="border rounded p-2 text-center">
                         <div class="text-muted small">Kehilangan Pendapatan</div>
                         <div class="h5 mb-0 fw-bold text-danger" id="repRevenueLoss">Rp 0</div>
                     </div>
                 </div>
-                <div class="report-stat-card" data-card-help="Kehilangan Pendapatan Berjalan (Laporan)|Perkiraan kehilangan pendapatan dari perangkat yang masih mengalami gangguan saat laporan dibuka.|Rumus: durasi gangguan × pendapatan per jam.|Nilai ini tidak lagi bertambah setelah perangkat kembali beroperasi normal.">
+                <div class="report-stat-card" data-card-help="Kehilangan Pendapatan Berjalan (Laporan)|Perkiraan kehilangan pendapatan dari perangkat yang masih mengalami gangguan saat laporan dibuka.|Rumus: durasi gangguan &times; pendapatan per jam.|Nilai ini tidak lagi bertambah setelah perangkat kembali beroperasi normal.">
                     <div class="border rounded p-2 text-center">
                         <div class="text-muted small">Loss Berlangsung</div>
                         <div class="h5 mb-0 fw-bold text-warning" id="repOngoingRevenueLoss">Rp 0</div>
@@ -261,7 +268,7 @@
                     <div id="repRecommendations" class="small">-</div>
                 </div>
             </div>
-            <div class="card mb-3" data-card-help="Dampak Keuangan dan Penyebab Utama|Rincian biaya akibat anomali dan penyebab yang paling sering ditemukan.|Dampak biaya = kelebihan energi (kWh) × tarif. Kehilangan pendapatan = durasi gangguan × pendapatan per jam.|Penyebab utama adalah penyebab yang paling sering tercatat pada bulan ini.">
+            <div class="card mb-3" data-card-help="Dampak Keuangan dan Penyebab Utama|Rincian biaya akibat anomali dan penyebab yang paling sering ditemukan.|Dampak biaya = kelebihan energi (kWh) &times; tarif. Kehilangan pendapatan = durasi gangguan &times; pendapatan per jam.|Penyebab utama adalah penyebab yang paling sering tercatat pada bulan ini.">
                 <div class="card-header bg-white py-2"><strong><i class="fas fa-search-dollar text-muted me-1"></i>Dampak Finansial & Root Cause</strong></div>
                 <div class="card-body py-2">
                     <div class="row small">
@@ -433,7 +440,7 @@
                             <canvas id="detailChartSnapshot"></canvas>
                         </div>
                         <div class="detail-snapshot-footer">
-                            <span id="detailSnapshotStatus">Menunggu data snapshot…</span>
+                            <span id="detailSnapshotStatus">Menunggu data snapshot&hellip;</span>
                             <span id="detailSnapshotProgress" class="fw-semibold"></span>
                         </div>
                         <div class="detail-snapshot-progress-track"><div id="detailSnapshotProgressBar"></div></div>
@@ -541,6 +548,29 @@
     </div>
 </div>
 
+@if (isMasterAdmin)
+{
+    <div class="modal fade" id="billingAdminModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white" id="billingAdminModalHeader">
+                    <h5 class="modal-title" id="billingAdminModalTitle"><i class="fas fa-sync-alt"></i> Konfirmasi Aksi</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning mb-0" id="billingAdminModalMessage"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmBillingAdminAction">
+                        <i class="fas fa-check"></i> Lanjutkan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
     /* Keep anomaly dashboard layouts independent from global card/grid rules. */
     .charts-row {
@@ -551,6 +581,152 @@
     }
     .charts-col {
         min-width: 0;
+    }
+    .billing-anomaly-section,
+    #anomalyDataGrid,
+    #billingAnomalyDataGrid {
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-sm) !important;
+    }
+    .billing-anomaly-section {
+        border-color: rgba(245, 158, 11, 0.55);
+        background: var(--bg-surface);
+    }
+    .billing-anomaly-section .card-header {
+        border-bottom: 1px solid rgba(245, 158, 11, 0.55);
+        background: var(--bg-surface-hover) !important;
+        color: var(--text-primary);
+    }
+    .billing-admin-action {
+        border-radius: 999px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .billing-admin-action:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0.25rem 0.65rem rgba(0, 0, 0, 0.12);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-headers,
+    #anomalyDataGrid .dx-datagrid-headers {
+        background: var(--bg-surface-hover) !important;
+        color: var(--text-primary) !important;
+        border-bottom: 1px solid var(--border-color);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-headers .dx-header-row,
+    #anomalyDataGrid .dx-datagrid-headers .dx-header-row {
+        background: var(--bg-surface-hover) !important;
+    }
+    #billingAnomalyDataGrid .dx-datagrid-headers .dx-datagrid-text-content,
+    #anomalyDataGrid .dx-datagrid-headers .dx-datagrid-text-content {
+        color: var(--text-primary) !important;
+        font-weight: 700;
+        white-space: normal;
+        line-height: 1.25;
+        padding: 0.45rem 0.35rem;
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row,
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row {
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row:nth-child(even),
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row:nth-child(even) {
+        background: var(--bg-surface-hover);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row:nth-child(odd),
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row:nth-child(odd) {
+        background: var(--bg-surface);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row td,
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row td {
+        color: var(--text-primary);
+        font-weight: 500;
+        border-right: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-headers td,
+    #anomalyDataGrid .dx-datagrid-headers td,
+    #billingAnomalyDataGrid .dx-datagrid-filter-row > td,
+    #anomalyDataGrid .dx-datagrid-filter-row > td {
+        border-right: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row td:last-child,
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row td:last-child,
+    #billingAnomalyDataGrid .dx-datagrid-headers td:last-child,
+    #anomalyDataGrid .dx-datagrid-headers td:last-child,
+    #billingAnomalyDataGrid .dx-datagrid-filter-row > td:last-child,
+    #anomalyDataGrid .dx-datagrid-filter-row > td:last-child {
+        border-right: 0;
+    }
+    #billingAnomalyDataGrid .dx-datagrid-rowsview .dx-row:hover,
+    #anomalyDataGrid .dx-datagrid-rowsview .dx-row:hover {
+        background-color: var(--bg-muted);
+    }
+    #billingAnomalyDataGrid .dx-datagrid-filter-row,
+    #anomalyDataGrid .dx-datagrid-filter-row,
+    #billingAnomalyDataGrid .dx-datagrid-filter-row > td,
+    #anomalyDataGrid .dx-datagrid-filter-row > td,
+    #billingAnomalyDataGrid .dx-datagrid-rowsview,
+    #anomalyDataGrid .dx-datagrid-rowsview {
+        background: var(--bg-surface) !important;
+        color: var(--text-primary);
+    }
+    #billingAnomalyDataGrid .dx-texteditor,
+    #anomalyDataGrid .dx-texteditor {
+        background: var(--input-bg) !important;
+        border-color: var(--input-border) !important;
+        color: var(--input-text) !important;
+    }
+    #billingAnomalyDataGrid .dx-texteditor-input,
+    #anomalyDataGrid .dx-texteditor-input,
+    #billingAnomalyDataGrid .dx-placeholder,
+    #anomalyDataGrid .dx-placeholder {
+        color: var(--input-text) !important;
+    }
+    #billingAnomalyDataGrid .dx-placeholder,
+    #anomalyDataGrid .dx-placeholder {
+        color: var(--input-placeholder) !important;
+    }
+    #billingAnomalyDataGrid .dx-datagrid-content,
+    #anomalyDataGrid .dx-datagrid-content {
+        min-width: 100%;
+    }
+    #anomalyDataGrid .anomaly-action-buttons {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0.2rem;
+        width: 100%;
+        min-width: 142px;
+        white-space: nowrap;
+        overflow: visible;
+    }
+    #anomalyDataGrid .anomaly-action-buttons .btn {
+        flex: 0 0 28px;
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #anomalyDataGrid .anomaly-action-cell {
+        min-width: 150px !important;
+        width: 150px !important;
+        max-width: 150px !important;
+        white-space: nowrap;
+        overflow: visible;
+    }
+    [data-theme="dark"] .billing-anomaly-section .text-muted,
+    [data-theme="dark"] #billingAnomalyDataGrid .text-muted,
+    [data-theme="dark"] #anomalyDataGrid .text-muted {
+        color: var(--text-muted) !important;
     }
     .charts-col .card {
         min-width: 0;
@@ -579,7 +755,7 @@
     }
 
      ============================================
-       KPI STAT CARDS — consistent with main theme
+       KPI STAT CARDS &mdash; consistent with main theme
        ============================================
     .stats-row .stat-card {
         position: relative;
@@ -609,7 +785,7 @@
     }
 
      ============================================
-       CHARTS ROW — flexbox, side-by-side
+        CHARTS ROW &mdash; flexbox, side-by-side
        ============================================
     .charts-row {
         display: flex;
@@ -662,7 +838,7 @@
     }
 
      ============================================
-       REPORT FORM — flex row
+        REPORT FORM &mdash; flex row
        ============================================
     .report-form-row {
         display: flex;
@@ -682,7 +858,7 @@
     }
 
      ============================================
-       REPORT STATS — auto-fit grid
+        REPORT STATS &mdash; auto-fit grid
        ============================================
     .report-stats-row {
         display: grid;
@@ -696,7 +872,7 @@
     }
 
      ============================================
-       AUDIT FORM — flex row
+        AUDIT FORM &mdash; flex row
        ============================================
     .audit-form-row {
         display: flex;
@@ -981,6 +1157,31 @@
         var detailChart = null;
         var latestMonthlyReportData = null;
 
+        function fitAnomalyGridColumns(grid) {
+            if (!grid) return;
+            if (grid.__isFittingColumns) return;
+            if (grid.__fitColumnsTimer) window.clearTimeout(grid.__fitColumnsTimer);
+            grid.__fitColumnsTimer = window.setTimeout(function() {
+                grid.__isFittingColumns = true;
+                try {
+                    grid.bestFitColumns();
+                    if (grid.element && grid.element().attr('id') === 'anomalyDataGrid') {
+                        grid.columnOption(0, 'width', 150);
+                        grid.columnOption(0, 'minWidth', 150);
+                    }
+                } catch (error) {
+                    // Best-fit is optional; keep the grid usable if the widget is still rendering.
+                } finally {
+                    grid.__isFittingColumns = false;
+                }
+            }, 0);
+        }
+
+        $(window).on('resize', function() {
+            fitAnomalyGridColumns(dataGrid);
+            fitAnomalyGridColumns(billingDataGrid);
+        });
+
         $(document).ready(function() {
             // Hide page-specific buttons not applicable to this page
             $('#btnRescan, #btnExport').hide();
@@ -1021,6 +1222,23 @@
             $('#btnClearAll').click(function() { $('#clearAllModal').modal('show'); });
             $('#btnConfirmClearAll').click(function() { clearAllLogs(); });
             $('#btnConfirmDelete').click(function() { if (deleteLogId) deleteSingleLog(deleteLogId); });
+            $('#btnClearBillingAnomaly').click(function() {
+                billingAdminAction = 'clear';
+                $('#billingAdminModalHeader').removeClass('bg-primary').addClass('bg-danger');
+                $('#billingAdminModalTitle').html('<i class="fas fa-trash-alt"></i> Clear All Log Anomaly Tagihan');
+                $('#billingAdminModalMessage').html('<strong>Perhatian:</strong> seluruh log <code>BILLING_VARIANCE</code> dan catatan konfirmasinya akan dihapus permanen. Aksi ini tidak dapat dibatalkan.');
+                $('#btnConfirmBillingAdminAction').removeClass('btn-primary').addClass('btn-danger').html('<i class="fas fa-trash-alt"></i> Clear All');
+                $('#billingAdminModal').modal('show');
+            });
+            $('#btnRescanBillingAnomaly').click(function() {
+                billingAdminAction = 'rescan';
+                $('#billingAdminModalHeader').removeClass('bg-danger').addClass('bg-primary');
+                $('#billingAdminModalTitle').html('<i class="fas fa-sync-alt"></i> Scan Ulang Anomaly Tagihan');
+                $('#billingAdminModalMessage').html('Sistem akan mengambil ulang data tagihan ERP dan mengevaluasi kembali log anomaly tagihan yang tersimpan.');
+                $('#btnConfirmBillingAdminAction').removeClass('btn-danger').addClass('btn-primary').html('<i class="fas fa-sync-alt"></i> Scan Ulang');
+                $('#billingAdminModal').modal('show');
+            });
+            $('#btnConfirmBillingAdminAction').click(function() { executeBillingAdminAction(); });
 
             $('[data-days]').click(function() {
                 $('[data-days]').removeClass('active');
@@ -1204,9 +1422,11 @@
                 dataSource: chartData,
                 palette: ['#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6c757d', '#17a2b8'],
                 legend: {
+                    visible: chartData.length <= 5,
                     verticalAlignment: 'bottom',
                     horizontalAlignment: 'center',
-                    font: { size: 11 }
+                    font: { size: 10 },
+                    rowCount: 1
                 },
                 tooltip: {
                     enabled: true,
@@ -1222,7 +1442,7 @@
                     argumentField: 'arg',
                     valueField: 'val',
                     label: {
-                        visible: true,
+                        visible: chartData.length <= 5,
                         format: 'fixedPoint',
                         connector: { visible: true, width: 1 },
                         customizeText: function() { return this.argumentText + ': ' + this.valueText; }
@@ -1318,11 +1538,11 @@
                                             location: item.location || item.Location || '-',
                                             deviceCategory: item.deviceCategory || item.DeviceCategory || 'Unknown',
                                             anomalyType: item.anomalyType || item.AnomalyType || '',
-                                            powerValue: item.powerValue || item.PowerValue || 0,
-                                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
-                                            deviation: item.deviation || item.Deviation || 0,
+                                             powerValue: item.powerValue != null ? item.powerValue : (item.PowerValue != null ? item.PowerValue : 0),
+                                             thresholdValue: item.thresholdValue != null ? item.thresholdValue : (item.ThresholdValue != null ? item.ThresholdValue : 0),
+                                             deviation: item.deviation != null ? item.deviation : (item.Deviation != null ? item.Deviation : 0),
                                             detectedTime: item.detectedTime ? new Date(item.detectedTime) : null,
-                                            emaValue: item.emaValue || item.EMAValue,
+                                             emaValue: item.emaValue != null ? item.emaValue : item.EMAValue,
                                             thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
                                             severity: item.severity || item.Severity || 'medium',
                                             billingAnomalyType: item.billingAnomalyType || item.BillingAnomalyType || '',
@@ -1334,8 +1554,8 @@
                                             resolvedTime: item.resolvedTime || item.ResolvedTime,
                                             durationMinutes: item.durationMinutes || item.DurationMinutes,
                                             responseTimeMinutes: item.responseTimeMinutes || item.ResponseTimeMinutes,
-                                            revenueLoss: item.revenueLoss || item.RevenueLoss || 0,
-                                            anomalyCostImpact: item.anomalyCostImpact || item.AnomalyCostImpact || 0,
+                                             revenueLoss: item.revenueLoss != null ? item.revenueLoss : (item.RevenueLoss != null ? item.RevenueLoss : 0),
+                                             anomalyCostImpact: item.anomalyCostImpact != null ? item.anomalyCostImpact : (item.AnomalyCostImpact != null ? item.AnomalyCostImpact : 0),
                                             operatorAction: item.operatorAction || item.OperatorAction || '',
                                             operatorNotes: item.operatorNotes || item.OperatorNotes || '',
                                             notes: item.notes || item.Notes || '',
@@ -1399,6 +1619,9 @@
                 columnAutoWidth: true,
                 loadPanel: { enabled: true, text: 'Memuat data...' },
                 noDataText: 'Tidak ada data anomali',
+                onContentReady: function(e) {
+                    fitAnomalyGridColumns(e.component);
+                },
                 onToolbarPreparing: function(e) {
                     var items = e.toolbarOptions.items;
                     items.push({
@@ -1424,11 +1647,12 @@
                 },
                 columns: [
                     {
-                        caption: 'Action', width: 180, alignment: 'center',
+                        caption: 'Tindakan', cssClass: 'anomaly-action-cell', width: 150, minWidth: 150, maxWidth: 150, alignment: 'center',
+                        allowResizing: false,
                         allowFiltering: false, allowSorting: false, allowGrouping: false, allowHeaderFiltering: false,
                         cellTemplate: function(container, options) {
                             var data = options.data;
-                            var buttons = $('<div class="d-flex justify-content-center gap-1">');
+                            var buttons = $('<div class="anomaly-action-buttons">');
                             $('<button>').addClass('btn btn-sm btn-info').attr('title', 'View detail').html('<i class="fas fa-eye"></i>')
                                 .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(buttons);
                             if (currentUserRole === 'Operator' || currentUserRole === 'Admin') {
@@ -1446,9 +1670,9 @@
                             buttons.appendTo(container);
                         }
                     },
-                    { dataField: 'id', caption: '#', width: 50, alignment: 'center', allowGrouping: false, allowFiltering: false, allowHeaderFiltering: false },
+                    { dataField: 'id', caption: '#', width: 82, minWidth: 82, alignment: 'center', allowGrouping: false, allowFiltering: false, allowHeaderFiltering: false },
                     {
-                        dataField: 'detectedTime', caption: 'Time', dataType: 'datetime', sortOrder: 'desc', alignment: 'center',
+                        dataField: 'detectedTime', caption: 'Waktu Deteksi', dataType: 'datetime', sortOrder: 'desc', alignment: 'center', minWidth: 150,
                         allowHeaderFiltering: false, filterOperations: ['between', '>=', '<=', '>', '<', '='], selectedFilterOperation: 'between',
                         format: { type: 'dd/MM/yyyy HH:mm:ss' },
                         cellTemplate: function(container, options) {
@@ -1470,11 +1694,13 @@
                             $('<span>').text(text).appendTo(container);
                         }
                     },
-                    { dataField: 'groupName', caption: 'Device', alignment: 'center', headerFilter: { allowSelectAll: true } },
-                    { dataField: 'deviceCategory', caption: 'Kategori Media', alignment: 'center', headerFilter: { allowSelectAll: true } },
+                    { dataField: 'groupName', caption: 'Perangkat', alignment: 'center', minWidth: 120, headerFilter: { allowSelectAll: true } },
+                    { dataField: 'deviceKey', caption: 'Device Key', alignment: 'center', visible: false },
+                    { dataField: 'deviceId', caption: 'Device ID', alignment: 'center', visible: false },
+                    { dataField: 'deviceCategory', caption: 'Kategori Media', alignment: 'center', visible: false, headerFilter: { allowSelectAll: true } },
                     { dataField: 'location', caption: 'Lokasi', alignment: 'center', visible: false },
                     {
-                        dataField: 'anomalyType', caption: 'Type', alignment: 'center',
+                        dataField: 'anomalyType', caption: 'Tipe', alignment: 'center', minWidth: 105,
                         headerFilter: { dataSource: [{ text: 'OVERLOAD', value: 'OVERLOAD' }, { text: 'DEVICE DROP', value: 'DROP' }, { text: 'DEVICE OFFLINE', value: 'DEVICE_OFFLINE' }, { text: 'DEVICE OFFLINE (legacy)', value: 'DEVICE_DROP' }] },
                         cellTemplate: function(container, options) {
                             var v = options.value;
@@ -1487,7 +1713,7 @@
                         }
                     },
                     {
-                        dataField: 'severity', caption: 'Severity', alignment: 'center',
+                        dataField: 'severity', caption: 'Keparahan', alignment: 'center', minWidth: 82,
                         headerFilter: { dataSource: [{ text: 'Critical', value: 'critical' }, { text: 'High', value: 'high' }, { text: 'Medium', value: 'medium' }, { text: 'Low', value: 'low' }] },
                         cellTemplate: function(container, options) {
                             var v = options.value || 'medium';
@@ -1495,7 +1721,7 @@
                         }
                     },
                     {
-                        dataField: 'powerValue', caption: 'Power (W)', dataType: 'number', alignment: 'center',
+                        dataField: 'powerValue', caption: 'Daya (W)', dataType: 'number', alignment: 'center', minWidth: 92,
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             var isDeviceDrop = options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP';
@@ -1504,27 +1730,27 @@
                         }
                     },
                     {
-                        dataField: 'thresholdValue', caption: 'Threshold (W)', dataType: 'number', alignment: 'center',
+                        dataField: 'thresholdValue', caption: 'Threshold (W)', dataType: 'number', alignment: 'center', minWidth: 105,
                         cellTemplate: function(container, options) {
-                            $('<span>').text(options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP' ? '—' : formatNumber(options.value) + ' W').appendTo(container);
+                            $('<span>').text(options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP' ? 'Tidak berlaku' : formatNumber(options.value) + ' W').appendTo(container);
                         }
                     },
                     {
-                        dataField: 'deviation', caption: 'Deviation', dataType: 'number', alignment: 'center',
+                        dataField: 'deviation', caption: 'Deviasi', dataType: 'number', alignment: 'center', minWidth: 82,
                         cellTemplate: function(container, options) {
                             var v = options.value;
-                            if (options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP') { $('<span>').text('—').appendTo(container); return; }
+                            if (options.data.anomalyType === 'DEVICE_OFFLINE' || options.data.anomalyType === 'DEVICE_DROP') { $('<span>').addClass('text-muted').text('Tidak berlaku').appendTo(container); return; }
                             var cls = v > 100 ? 'text-danger' : v > 50 ? 'text-warning' : 'text-success';
                             $('<span>').addClass('anomaly-deviation ' + cls).text(fmt(v, 1) + '%').appendTo(container);
                         }
                     },
                     {
-                        dataField: 'thresholdMode', caption: 'Mode', alignment: 'center',
+                        dataField: 'thresholdMode', caption: 'Mode', alignment: 'center', visible: false,
                         headerFilter: { dataSource: [{ text: 'MANUAL', value: 'manual' }, { text: 'EMA', value: 'ema' }] },
-                        cellTemplate: function(container, options) { $('<span>').addClass('badge bg-info').text(options.value.toUpperCase()).appendTo(container); }
+                        cellTemplate: function(container, options) { $('<span>').addClass('badge bg-info').text((options.value || 'manual').toUpperCase()).appendTo(container); }
                     },
                     {
-                        dataField: 'durationMinutes', caption: 'Durasi', dataType: 'number', alignment: 'center',
+                        dataField: 'durationMinutes', caption: 'Durasi', dataType: 'number', alignment: 'center', minWidth: 82,
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             if (v == null || v === undefined) { $('<span>').addClass('text-muted small fst-italic').text('ongoing').appendTo(container); return; }
@@ -1535,7 +1761,7 @@
                         }
                     },
                     {
-                        dataField: 'responseTimeMinutes', caption: 'Response', dataType: 'number', alignment: 'center',
+                        dataField: 'responseTimeMinutes', caption: 'Response', dataType: 'number', alignment: 'center', minWidth: 82,
                         cellTemplate: function(container, options) {
                             var v = options.value;
                             if (v == null || v === undefined) { $('<span>').text('-').appendTo(container); return; }
@@ -1547,7 +1773,7 @@
                         }
                     },
                     {
-                        dataField: 'anomalyCostImpact', caption: 'Dampak Biaya', dataType: 'number', alignment: 'center',
+                        dataField: 'anomalyCostImpact', caption: 'Dampak Biaya', dataType: 'number', alignment: 'center', visible: false,
                         cellTemplate: function(container, options) {
                             var v = options.value || 0;
                             var data = options.row.data;
@@ -1556,7 +1782,7 @@
                         }
                     },
                     {
-                        dataField: 'revenueLoss', caption: 'Revenue Loss', dataType: 'number', alignment: 'center',
+                        dataField: 'revenueLoss', caption: 'Revenue Loss', dataType: 'number', alignment: 'center', visible: false,
                         cellTemplate: function(container, options) {
                             var v = options.value || 0;
                             var data = options.row.data;
@@ -1568,12 +1794,12 @@
                         }
                     },
                     {
-                        dataField: 'isResolved', caption: 'Status', dataType: 'boolean', alignment: 'center',
+                        dataField: 'isResolved', caption: 'Status', dataType: 'boolean', alignment: 'center', minWidth: 95,
                         headerFilter: { dataSource: [{ text: 'New', value: false }, { text: 'Resolved', value: true }] },
                         cellTemplate: function(container, options) {
                             var data = options.row.data;
-                            if (data.isResolved) $('<span>').addClass('badge bg-success').html('<i class="fas fa-check-double"></i> Resolved').appendTo(container);
-                            else if (data.acknowledged) $('<span>').addClass('badge bg-info').html('<i class="fas fa-check"></i> Acknowledged').appendTo(container);
+                            if (data.isResolved) $('<span>').addClass('badge bg-success').html('<i class="fas fa-check-double"></i> Selesai').appendTo(container);
+                            else if (data.acknowledged) $('<span>').addClass('badge bg-info').html('<i class="fas fa-check"></i> Telah Ditangani').appendTo(container);
                             else $('<span>').addClass('badge bg-secondary').html('<i class="fas fa-circle"></i> New').appendTo(container);
                         }
                     },
@@ -1620,7 +1846,10 @@
                                             previousBilling: item.previousBilling != null ? item.previousBilling : item.PreviousBilling,
                                             previousBillingPeriod: item.previousBillingPeriod || item.PreviousBillingPeriod,
                                             previousErpBillingId: item.previousErpBillingId != null ? item.previousErpBillingId : item.PreviousErpBillingId,
-                                            thresholdValue: item.thresholdValue || item.ThresholdValue || 0,
+                                             anomalyType: item.anomalyType || item.AnomalyType || 'BILLING_VARIANCE',
+                                             thresholdValue: item.thresholdValue != null ? item.thresholdValue : (item.ThresholdValue != null ? item.ThresholdValue : 0),
+                                             deviation: item.deviation != null ? item.deviation : (item.Deviation != null ? item.Deviation : 0),
+                                             thresholdMode: item.thresholdMode || item.ThresholdMode || 'manual',
                                             acknowledged: item.acknowledged || item.Acknowledged || false,
                                             isResolved: item.isResolved || item.IsResolved || false
                                         };
@@ -1660,6 +1889,9 @@
                 columnAutoWidth: true,
                 loadPanel: { enabled: true, text: 'Memuat anomaly tagihan...' },
                 noDataText: 'Tidak ada anomaly tagihan',
+                onContentReady: function(e) {
+                    fitAnomalyGridColumns(e.component);
+                },
                 onToolbarPreparing: function(e) {
                     e.toolbarOptions.items.push({ location: 'after', widget: 'dxButton', options: { text: 'Columns', onClick: function() { billingDataGrid.showColumnChooser(); } } });
                     e.toolbarOptions.items.push({ location: 'after', widget: 'dxButton', options: { text: 'Clear', onClick: function() { billingDataGrid.clearFilter(); billingDataGrid.refresh(); } } });
@@ -1674,31 +1906,57 @@
                             var data = options.data;
                             $('<button>').addClass('btn btn-sm btn-info').attr('title', 'Lihat detail').html('<i class="fas fa-eye"></i>')
                                 .on('click', function(e) { e.stopPropagation(); openDetailModal(data.id); }).appendTo(container);
+                            var billingType = String(data.billingAnomalyType || '').toUpperCase();
+                            var isPeriodOverPeriod = billingType.indexOf('PERIOD_OVER_PERIOD') >= 0;
+                            var canResend = @isMasterAdmin.ToString().ToLowerInvariant() && data.id && isPeriodOverPeriod && !data.isResolved;
+                            if (@isMasterAdmin.ToString().ToLowerInvariant() && data.id && isPeriodOverPeriod) {
+                                $('<button>').addClass('btn btn-sm btn-outline-warning ms-1' + (canResend ? '' : ' disabled'))
+                                    .prop('disabled', !canResend)
+                                    .attr('title', canResend ? 'Kirim ulang notifikasi' : 'Anomaly sudah terkonfirmasi')
+                                    .html('<i class="fas fa-paper-plane"></i>')
+                                    .on('click', function(e) {
+                                        if (!canResend) return;
+                                        e.stopPropagation();
+                                        resendBillingNotification(data.id, this);
+                                    }).appendTo(container);
+                            }
                         }
                     },
-                    { dataField: 'id', caption: '#', width: 80, alignment: 'center' },
-                    { dataField: 'detectedTime', caption: 'Waktu Deteksi', dataType: 'datetime', format: 'dd/MM/yyyy HH:mm:ss', width: 155 },
-                    { dataField: 'deviceKey', caption: 'Perangkat', minWidth: 150 },
-                    { dataField: 'groupName', caption: 'Grup', minWidth: 130 },
-                    { dataField: 'deviceCategory', caption: 'Kategori', minWidth: 110 },
-                    { dataField: 'billingPeriod', caption: 'Periode Tagihan', dataType: 'date', format: 'MM/yyyy', width: 120 },
-                    { dataField: 'billingAnomalyType', caption: 'Subtype', minWidth: 180 },
-                    { dataField: 'estimatedBilling', caption: 'Estimasi Sistem', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 145 },
-                    { dataField: 'actualBilling', caption: 'Aktual ERP', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 135 },
+                    { dataField: 'id', caption: '#', width: 48, alignment: 'center' },
+                    { dataField: 'detectedTime', caption: 'Waktu Deteksi', dataType: 'datetime', format: 'dd/MM/yyyy HH:mm', width: 150, minWidth: 140 },
+                    { dataField: 'deviceKey', caption: 'Perangkat', width: 135, minWidth: 120 },
+                    { dataField: 'groupName', caption: 'Grup', width: 165, minWidth: 140 },
+                    { dataField: 'deviceCategory', caption: 'Kategori', width: 100, minWidth: 90 },
+                    { dataField: 'billingPeriod', caption: 'Periode Tagihan', dataType: 'date', format: 'MMMM yyyy', width: 145, minWidth: 135 },
                     {
-                        dataField: 'billingDifference', caption: 'Selisih', dataType: 'number', alignment: 'right', minWidth: 130,
+                        dataField: 'billingAnomalyType', caption: 'Subtype', width: 195, minWidth: 175,
+                        cellTemplate: function(container, options) {
+                            var value = String(options.value || '').toUpperCase();
+                            var isPeriod = value.indexOf('PERIOD_OVER_PERIOD') >= 0;
+                            $('<span>').addClass('badge ' + (isPeriod ? 'bg-danger' : 'bg-primary')).css({ 'font-size': '0.75rem', 'white-space': 'normal', 'line-height': '1.35' }).text(value || '-').appendTo(container);
+                        }
+                    },
+                    { dataField: 'estimatedBilling', caption: 'Estimasi Sistem', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', width: 138, minWidth: 125 },
+                    { dataField: 'actualBilling', caption: 'Aktual ERP', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', width: 128, minWidth: 115 },
+                    { dataField: 'previousBilling', caption: 'Tagihan Sebelumnya', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', width: 150, minWidth: 135 },
+                    {
+                        dataField: 'billingDifference', caption: 'Selisih', dataType: 'number', alignment: 'right', width: 180, minWidth: 160,
                         cellTemplate: function(container, options) {
                             var value = options.value;
-                            var cls = value >= 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
-                            $('<span>').addClass(cls).text('Rp ' + formatNumber(Math.abs(value || 0)) + (value >= 0 ? ' ↑' : ' ↓')).appendTo(container);
+                             var cls = value > 0 ? 'text-danger fw-bold' : value < 0 ? 'text-success fw-bold' : 'text-muted fw-bold';
+                             var direction = value > 0 ? '<span class="text-danger" title="Lebih tinggi">&#x1F53A;</span>' : value < 0 ? 'lebih rendah' : 'sama';
+                             $('<span>').addClass(cls).css('white-space', 'nowrap').html('Rp ' + formatNumber(Math.abs(value || 0)) + ' ' + direction).appendTo(container);
                         }
                     },
                     {
-                        dataField: 'billingDifferencePercent', caption: 'Selisih %', dataType: 'number', alignment: 'right', minWidth: 95,
+                        dataField: 'billingDifferencePercent', caption: 'Selisih %', dataType: 'number', alignment: 'right', width: 92, minWidth: 85,
                         cellTemplate: function(container, options) { $('<span>').text(options.value == null ? '-' : fmt(Math.abs(options.value), 2) + '%').appendTo(container); }
                     },
-                    { dataField: 'erpBillingId', caption: 'ERP Billing ID', dataType: 'number', alignment: 'center', minWidth: 115 },
-                    { dataField: 'thresholdValue', caption: 'Threshold', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 110 },
+                    { dataField: 'erpBillingId', caption: 'ERP Billing ID', dataType: 'number', alignment: 'center', minWidth: 115, visible: false },
+                    { dataField: 'previousErpBillingId', caption: 'ERP ID Sebelumnya', dataType: 'number', alignment: 'center', minWidth: 140, visible: false },
+                    { dataField: 'thresholdValue', caption: 'Threshold Selisih', dataType: 'number', format: { type: 'fixedPoint', precision: 0 }, alignment: 'right', minWidth: 135, visible: false },
+                    { dataField: 'deviation', caption: 'Deviasi', dataType: 'number', alignment: 'right', minWidth: 95, visible: false, cellTemplate: function(container, options) { $('<span>').text(options.value == null ? '-' : fmt(options.value, 2) + '%').appendTo(container); } },
+                    { dataField: 'thresholdMode', caption: 'Mode Threshold', alignment: 'center', minWidth: 125, visible: false, cellTemplate: function(container, options) { $('<span>').addClass('badge bg-info').text((options.value || 'manual').toUpperCase()).appendTo(container); } },
                     {
                         dataField: 'severity', caption: 'Keparahan', alignment: 'center',
                         cellTemplate: function(container, options) { $('<span>').addClass('severity-badge ' + severityClass(options.value)).text(options.value || 'medium').appendTo(container); }
@@ -1714,6 +1972,33 @@
                     }
                 ]
             }).dxDataGrid('instance');
+        }
+
+        function resendBillingNotification(anomalyId, button) {
+            var isEnglish = isEnglishUi();
+            if (!anomalyId || !button) return;
+            if (!confirm(isEnglish ? 'Resend the billing anomaly notification?' : 'Kirim ulang notifikasi anomaly tagihan?')) return;
+            var $button = $(button);
+            var originalHtml = $button.html();
+            $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            $.ajax({
+                url: '/api/Api/billing-anomalies/' + anomalyId + '/notify-confirmation',
+                method: 'POST',
+                headers: { 'RequestVerificationToken': $('meta[name="csrf-token"]').attr('content') },
+                dataType: 'json'
+            }).done(function(response) {
+                if (response.success) {
+                    showNotification(isEnglish ? 'Notification added to the outbox and will be sent by the background worker.' : 'Notifikasi masuk ke outbox dan akan dikirim oleh proses latar belakang. Status SMTP/provider belum dapat dianggap berhasil.', 'info');
+                    if (billingDataGrid) billingDataGrid.refresh();
+                } else {
+                    showNotification(response.message || (isEnglish ? 'Failed to queue notification.' : 'Gagal memasukkan notifikasi ke antrean.'), 'danger');
+                }
+            }).fail(function(xhr) {
+                var message = xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error);
+                showNotification(message || (isEnglish ? 'Unable to resend notification.' : 'Tidak dapat mengirim ulang notifikasi.'), 'danger');
+            }).always(function() {
+                $button.prop('disabled', false).html(originalHtml);
+            });
         }
 
         // ============================================
@@ -1820,7 +2105,7 @@
             return labels[key] || severity || '-';
         }
 
-        // Clean up chart when modal is hidden — replace container DOM to fully reset Chart.js state
+        // Clean up chart when modal is hidden &mdash; replace container DOM to fully reset Chart.js state
         $('#detailModal').on('hidden.bs.modal', function() {
             stopDetailSnapshotPolling();
             currentDetailId = null;
@@ -1937,7 +2222,7 @@
             if (isOverload && cost > 0) {
                 $('#detailAnomalyCostImpact').text('Rp ' + formatNumber(cost)).addClass('text-danger');
                 $('#detailRevenueLoss').text('-').removeClass('text-danger');
-                $('#detailFinancialNote').text('Dampak biaya energi akibat beban berlebih, dihitung dari selisih daya × 0,25 jam × tarif.');
+                $('#detailFinancialNote').text('Dampak biaya energi akibat beban berlebih, dihitung dari selisih daya &times; 0,25 jam &times; tarif.');
             } else if (isDrop) {
                 $('#detailAnomalyCostImpact').text('-').removeClass('text-danger');
                 $('#detailRevenueLoss').text('Rp ' + formatNumber(revenue) + (data.isResolved ? '' : ' *')).addClass('text-danger');
@@ -1951,7 +2236,7 @@
                 $('#detailFinancialNote').text('Dampak keuangan untuk jenis anomali ini tidak dapat diperkirakan.');
             }
 
-            // Chart rendering deferred to 'shown.bs.modal' event — see openDetailModal()
+            // Chart rendering deferred to 'shown.bs.modal' event &mdash; see openDetailModal()
         }
 
         function renderTypeBadge(type) {
@@ -2023,12 +2308,12 @@
             if (currentDetailSnapshotStatus === 'complete' || afterData.length >= 50) statusLabel = 'Snapshot lengkap';
             else if (afterData.length > 0) statusLabel = 'Mengumpulkan sampel pasca-anomali';
             else statusLabel = 'Menunggu sampel pertama setelah anomali';
-            $('#detailSnapshotStatus').text(statusLabel + ' · ' + beforeData.length + ' titik sebelum anomaly');
+            $('#detailSnapshotStatus').text(statusLabel + ' &middot; ' + beforeData.length + ' titik sebelum anomaly');
             $('#detailSnapshotProgress').text(Math.min(afterData.length, 50) + ' / 50 titik sesudah anomaly');
             $('#detailSnapshotProgressBar').css('width', Math.min(afterData.length, 50) * 2 + '%');
             $('#detailSnapshotLiveBadge').toggleClass('d-none', currentDetailSnapshotStatus === 'complete' || afterData.length >= 50);
 
-            // Build Chart.js datasets — same style as All Charts page
+            // Build Chart.js datasets &mdash; same style as All Charts page
             var datasets = [{
                 label: 'Power (W)',
                 data: powerArr,
@@ -2090,7 +2375,7 @@
                 });
             }
 
-            // Chart.js annotation plugin for anomaly marker — use a custom plugin instead
+            // Chart.js annotation plugin for anomaly marker &mdash; use a custom plugin instead
             var anomalyMarkerPlugin = {
                 id: 'anomalyMarker',
                 afterDraw: function(chart) {
@@ -2113,7 +2398,7 @@
                     ctx.fillStyle = '#dc3545';
                     ctx.font = 'bold 11px sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.fillText('⚡ Anomali', x, yAxis.top - 6);
+                    ctx.fillText('\u26A1 Anomali', x, yAxis.top - 6);
                     ctx.restore();
                 }
             };
@@ -2167,7 +2452,7 @@
                                     var lbl = ctx.dataset.label || '';
                                     var val = ctx.parsed.y;
                                     if (lbl) lbl += ': ';
-                                    if (val == null) return lbl + '—';
+                                    if (val == null) return lbl + '&mdash;';
                                     return lbl + val.toLocaleString('id-ID', { maximumFractionDigits: 0 }) + ' W';
                                 }
                             }
@@ -2180,7 +2465,7 @@
         }
 
         function updateAnomalyMarker(anomalyTime, argField) {
-            // No longer needed — Chart.js plugin handles anomaly marker inline
+            // No longer needed &mdash; Chart.js plugin handles anomaly marker inline
         }
 
         // ============================================
@@ -2285,7 +2570,7 @@
         function generateMonthlyReport() {
             var year = parseInt($('#reportYear').val());
             var month = parseInt($('#reportMonth').val());
-            $('#monthlyReportEmpty').removeClass('d-none').html('<i class="fas fa-spinner fa-spin me-1"></i> Membuat laporan ' + $('#reportMonth option:selected').text() + ' ' + year + '…');
+            $('#monthlyReportEmpty').removeClass('d-none').html('<i class="fas fa-spinner fa-spin me-1"></i> Membuat laporan ' + $('#reportMonth option:selected').text() + ' ' + year + '&hellip;');
             $('#monthlyReportContainer').addClass('d-none');
             $('#btnGenerateReport').prop('disabled', true);
             $.ajax({
@@ -2448,7 +2733,7 @@
                 paging: { pageSize: 10 },
                 showBorders: true,
                 rowAlternationEnabled: true,
-                searchPanel: { visible: true, placeholder: 'Cari operator, perangkat, atau tindakan…' },
+                searchPanel: { visible: true, placeholder: 'Cari operator, perangkat, atau tindakan&hellip;' },
                 filterRow: { visible: true },
                 noDataText: 'Belum ada tindakan operator pada periode ini.'
             });
@@ -2542,6 +2827,39 @@
                     $('#clearAllModal').modal('hide');
                     $('#btnConfirmClearAll').prop('disabled', false).html('<i class="fas fa-trash-alt"></i> Clear All');
                     showNotification('Error clearing logs', 'danger');
+                }
+            });
+        }
+
+        var billingAdminAction = null;
+        function executeBillingAdminAction() {
+            var isClear = billingAdminAction === 'clear';
+            var button = $('#btnConfirmBillingAdminAction');
+            button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Memproses...');
+            $.ajax({
+                url: isClear ? '/api/Api/billing-anomaly-logs/clear-all' : '/api/Api/billing-anomaly-logs/rescan',
+                method: isClear ? 'DELETE' : 'POST',
+                timeout: 120000,
+                success: function(response) {
+                    $('#billingAdminModal').modal('hide');
+                    button.prop('disabled', false);
+                    billingAdminAction = null;
+                    if (billingDataGrid) billingDataGrid.refresh();
+                    if (dataGrid) dataGrid.refresh();
+                    loadDashboard();
+                    showNotification(isClear
+                        ? 'Log anomaly tagihan yang dihapus: ' + (response.deleted || 0)
+                        : 'Scan selesai. Diperbarui: ' + (response.updated || 0) +
+                            ', dibuat ulang: ' + (response.recreated || 0) +
+                            ', anomaly ditemukan: ' + (response.anomaliesDetected || 0) +
+                            ', dihapus: ' + (response.removed || 0), 'success');
+                },
+                error: function(xhr) {
+                    $('#billingAdminModal').modal('hide');
+                    button.prop('disabled', false);
+                    billingAdminAction = null;
+                    var message = xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message);
+                    showNotification(message || 'Aksi anomaly tagihan gagal dijalankan.', 'danger');
                 }
             });
         }

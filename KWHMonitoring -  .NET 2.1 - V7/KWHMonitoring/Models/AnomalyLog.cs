@@ -89,8 +89,8 @@ namespace KWHMonitoring.Models
         public string Notes { get; set; } = string.Empty;
 
         // Billing anomaly details. Nullable so existing device anomalies remain unchanged.
-        [Column("BillingAnomalyType", TypeName = "nvarchar(30)")]
-        [MaxLength(30)]
+        [Column("BillingAnomalyType", TypeName = "nvarchar(100)")]
+        [MaxLength(100)]
         public string BillingAnomalyType { get; set; }
 
         [Column("EstimatedBilling", TypeName = "decimal(18,2)")]
@@ -104,6 +104,12 @@ namespace KWHMonitoring.Models
 
         [Column("BillingDifferencePercent", TypeName = "decimal(18,4)")]
         public decimal? BillingDifferencePercent { get; set; }
+
+        [Column("PeriodDifference", TypeName = "decimal(18,2)")]
+        public decimal? PeriodDifference { get; set; }
+
+        [Column("PeriodDifferencePercent", TypeName = "decimal(18,4)")]
+        public decimal? PeriodDifferencePercent { get; set; }
 
         [Column("BillingPeriod", TypeName = "date")]
         public DateTime? BillingPeriod { get; set; }

@@ -12,7 +12,8 @@ namespace KWHMonitoring.Services
             decimal estimatedBilling,
             ErpBillingRecord erpBilling,
             ErpBillingRecord previousErpBilling = null,
-            bool persistAnomaly = true);
+            bool persistAnomaly = false,
+            DeviceSettings effectiveSettings = null);
     }
 
     public class BillingAnomalyEvaluation

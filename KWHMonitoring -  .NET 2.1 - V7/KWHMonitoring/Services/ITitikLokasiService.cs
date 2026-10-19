@@ -25,5 +25,11 @@ namespace KWHMonitoring.Services
         /// </summary>
         Task<Dictionary<string, List<ErpBillingRecord>>> GetBillingHistoryAsync(
             IEnumerable<string> deviceKeys, DateTime fromPeriod, DateTime toPeriodExclusive);
+
+        /// <summary>
+        /// Mengambil seluruh histori tagihan ERP untuk seluruh lokasi yang tersedia.
+        /// Digunakan oleh proses rescan agar anomaly yang sebelumnya dihapus dapat dibuat kembali.
+        /// </summary>
+        Task<Dictionary<string, List<ErpBillingRecord>>> GetAllBillingHistoryAsync();
     }
 }

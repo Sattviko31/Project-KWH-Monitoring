@@ -96,6 +96,45 @@ namespace KWHMonitoring.Models
         [Column("BillingAnomalyThreshold", TypeName = "decimal(18,2)")]
         public decimal? BillingAnomalyThreshold { get; set; }
 
+        // Billing anomaly threshold can be configured as a nominal amount or percentage.
+        [Column("BillingAnomalyThresholdMode", TypeName = "varchar(20)")]
+        [MaxLength(20)]
+        public string BillingAnomalyThresholdMode { get; set; } = "AMOUNT";
+
+        [Column("BillingAnomalyThresholdPercent", TypeName = "decimal(9,4)")]
+        public decimal? BillingAnomalyThresholdPercent { get; set; }
+
+        // Candidate-trend tolerance can be configured as a nominal amount or percentage.
+        [Column("BillingTrendToleranceMode", TypeName = "varchar(20)")]
+        [MaxLength(20)]
+        public string BillingTrendToleranceMode { get; set; } = "PERCENTAGE";
+
+        [Column("BillingTrendToleranceAmount", TypeName = "decimal(18,2)")]
+        public decimal? BillingTrendToleranceAmount { get; set; }
+
+        [Column("BillingTrendTolerancePercent", TypeName = "decimal(9,4)")]
+        public decimal? BillingTrendTolerancePercent { get; set; } = 10m;
+
+        // Nominal monthly billing budget. BudgetKWh remains an energy budget and is not replaced.
+        [Column("MonthlyBillingBudgetAmount", TypeName = "decimal(18,2)")]
+        public decimal? MonthlyBillingBudgetAmount { get; set; }
+
+        [Column("MonthlyBillingBudgetSource", TypeName = "varchar(20)")]
+        [MaxLength(20)]
+        public string MonthlyBillingBudgetSource { get; set; } = "MANUAL";
+
+        [Column("MonthlyBillingBudgetManualOverride")]
+        public bool MonthlyBillingBudgetManualOverride { get; set; } = false;
+
+        [Column("MonthlyBillingBudgetTrendProfileId")]
+        public long? MonthlyBillingBudgetTrendProfileId { get; set; }
+
+        [Column("MonthlyBillingBudgetBaselineVersion")]
+        public int? MonthlyBillingBudgetBaselineVersion { get; set; }
+
+        [Column("MonthlyBillingBudgetUpdatedAt", TypeName = "datetime2")]
+        public DateTime? MonthlyBillingBudgetUpdatedAt { get; set; }
+
         // Optional PLN billing cycle. Disabled/null keeps the existing calendar-month behavior.
         [Column("BillingCutoffEnabled")]
         public bool BillingCutoffEnabled { get; set; } = false;
