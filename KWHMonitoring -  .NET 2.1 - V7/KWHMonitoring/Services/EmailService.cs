@@ -46,34 +46,28 @@ namespace KWHMonitoring.Services
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"" />
     <title>{WebUtility.HtmlEncode(title)}</title>
 </head>
-<body style=""margin:0;padding:0;background-color:#f4f6fb;"">
-    <table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" bgcolor=""#f4f6fb"" style=""background-color:#f4f6fb;"">
+<body style=""margin:0;padding:0;background-color:#eef1f5;"">
+    <table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" bgcolor=""#eef1f5"" style=""background-color:#eef1f5;"">
         <tr>
             <td align=""center"" style=""padding:40px 20px;"">
-                <table role=""presentation"" width=""600"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""width:600px;max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;"">
+                <table role=""presentation"" width=""600"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""width:600px;max-width:600px;background-color:#ffffff;border:1px solid #d0d5dd;overflow:hidden;font-family:Arial,Helvetica,sans-serif;"">
                     <tr>
-                        <td style=""padding:40px 40px 0 40px;text-align:center;"">
-                            <table role=""presentation"" cellspacing=""0"" cellpadding=""0"" border=""0"" align=""center"" style=""margin:0 auto;background-color:{accentColor};border-radius:16px;"">
-                                <tr>
-                                    <td style=""width:64px;height:64px;text-align:center;vertical-align:middle;"">
-                                        <span style=""font-size:30px;color:#ffffff;line-height:64px;"">&#9889;</span>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td style=""padding:28px 32px;background-color:#172b4d;color:#ffffff;text-align:left;border-bottom:4px solid {accentColor};"">
+                            <div style=""font-size:12px;letter-spacing:1.4px;font-weight:700;"">KWH MONITORING SYSTEM</div>
                         </td>
                     </tr>
                     <tr>
-                        <td style=""padding:24px 40px 0 40px;text-align:center;"">
-                            <h1 style=""margin:0;font-size:24px;font-weight:700;color:#1a1d23;font-family:Arial,Helvetica,sans-serif;"">{WebUtility.HtmlEncode(title)}</h1>
+                        <td style=""padding:24px 32px 0 32px;text-align:left;"">
+                            <h1 style=""margin:0;font-size:24px;font-weight:700;color:#172b4d;font-family:Arial,Helvetica,sans-serif;"">{WebUtility.HtmlEncode(title)}</h1>
                         </td>
                     </tr>
                     <tr>
-                        <td style=""padding:24px 40px 32px 40px;font-size:16px;line-height:1.7;color:#495057;"">
+                        <td style=""padding:24px 32px 32px 32px;font-size:15px;line-height:1.7;color:#344054;"">
                             {contentHtml}
                         </td>
                     </tr>
                     <tr>
-                        <td style=""padding:0 40px 40px 40px;border-top:1px solid #e9ecef;"">
+                        <td style=""padding:0 32px 28px 32px;border-top:1px solid #d0d5dd;"">
                             <table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" border=""0"" style=""padding-top:24px;"">
                                 <tr>
                                     <td style=""font-size:12px;color:#6c757d;text-align:center;line-height:1.6;font-family:Arial,Helvetica,sans-serif;"">

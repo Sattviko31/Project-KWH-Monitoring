@@ -70,6 +70,7 @@ namespace KWHMonitoring.Models
         public DbSet<BillingNotificationOutbox> BillingNotificationOutbox { get; set; }
         public DbSet<BillingConfirmationRecipient> BillingConfirmationRecipients { get; set; }
         public DbSet<BillingAnomalyNote> BillingAnomalyNotes { get; set; }
+        public DbSet<BillingEstimateSnapshot> BillingEstimateSnapshots { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -359,6 +360,35 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.CreatedAt).HasColumnType("datetime2");
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2");
                 entity.HasIndex(x => new { x.EventKey, x.Channel, x.NotificationType }).IsUnique().HasName("IX_BillingOutbox_Event_Channel_Type");
+            });
+
+            modelBuilder.Entity<BillingEstimateSnapshot>(entity =>
+            {
+                entity.ToTable("BillingEstimateSnapshots");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.ReportType).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.PeriodStart).HasColumnType("datetime2");
+                entity.Property(x => x.PeriodEnd).HasColumnType("datetime2");
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(100)").HasMaxLength(100).IsRequired();
+                entity.Property(x => x.GroupName).HasColumnType("varchar(100)").HasMaxLength(100);
+                entity.Property(x => x.KodeLokasi).HasColumnType("varchar(100)").HasMaxLength(100);
+                entity.Property(x => x.IDPelanggan).HasColumnType("varchar(100)").HasMaxLength(100);
+                entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.WbpKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.LwbpKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.FlatTariffPerKWh).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.TariffWBP).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.TariffLWBP).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.WbpCost).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.LwbpCost).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.EstimatedCost).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.TariffMode).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.DataStatus).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+                entity.Property(x => x.SentAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.ReportType, x.PeriodStart, x.PeriodEnd, x.DeviceKey })
+                    .IsUnique()
+                    .HasName("IX_BillingEstimateSnapshots_Report_Period_Device");
             });
 
             modelBuilder.Entity<AnomalyMonthlyReport>(entity =>

@@ -114,14 +114,6 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("BillingDifferencePercent")
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<decimal?>("PeriodDifference")
-                        .HasColumnName("PeriodDifference")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("PeriodDifferencePercent")
-                        .HasColumnName("PeriodDifferencePercent")
-                        .HasColumnType("decimal(18,4)");
-
                     b.Property<DateTime?>("BillingPeriod")
                         .HasColumnName("BillingPeriod")
                         .HasColumnType("date");
@@ -173,6 +165,14 @@ namespace KWHMonitoring.Migrations
                         .HasColumnName("OperatorNotes")
                         .HasColumnType("nvarchar(1000)")
                         .HasMaxLength(1000);
+
+                    b.Property<decimal?>("PeriodDifference")
+                        .HasColumnName("PeriodDifference")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PeriodDifferencePercent")
+                        .HasColumnName("PeriodDifferencePercent")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("PowerValue")
                         .HasColumnName("PowerValue")
@@ -592,6 +592,80 @@ namespace KWHMonitoring.Migrations
                         .HasName("IX_BillingConfirmationTokens_Hash_Purpose");
 
                     b.ToTable("BillingConfirmationTokens");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.BillingEstimateSnapshot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<DateTime>("CalculatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DataStatus")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<decimal>("EnergyKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("EstimatedCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("FlatTariffPerKWh")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("LwbpCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("LwbpKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("TariffLWBP")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TariffMode")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal>("TariffWBP")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("WbpCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("WbpKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReportType", "PeriodStart", "PeriodEnd", "DeviceKey")
+                        .IsUnique()
+                        .HasName("IX_BillingEstimateSnapshots_Report_Period_Device");
+
+                    b.ToTable("BillingEstimateSnapshots");
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.BillingNotificationOutbox", b =>

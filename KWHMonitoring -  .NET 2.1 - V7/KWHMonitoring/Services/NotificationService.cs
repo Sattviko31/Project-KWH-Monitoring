@@ -21,6 +21,7 @@ namespace KWHMonitoring.Services
         private readonly ILogger<NotificationService> _logger;
         private readonly AesEncryptionService _encryption;
         private readonly IDeviceSettingsService _deviceSettingsService;
+        private readonly ITitikLokasiService _titikLokasiService;
         private NotificationSettings _settings;
         private DateTime _settingsLoadedAt = DateTime.MinValue;
         private static readonly TimeSpan _settingsTTL = TimeSpan.FromMinutes(5);
@@ -29,13 +30,14 @@ namespace KWHMonitoring.Services
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger, AesEncryptionService encryption, IDeviceSettingsService deviceSettingsService)
+        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger, AesEncryptionService encryption, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
         {
             _context = context;
             _settingsCache = settingsCache;
             _logger = logger;
             _encryption = encryption;
             _deviceSettingsService = deviceSettingsService;
+            _titikLokasiService = titikLokasiService;
             // Lazy-load settings on first use, not in constructor
             _settings = null;
         }
@@ -244,10 +246,8 @@ namespace KWHMonitoring.Services
             var isOverload = anomalyType == "OVERLOAD";
             var isDeviceOffline = anomalyType == "DEVICE_OFFLINE" || anomalyType == "DEVICE_DROP";
             var alertColor = isOverload ? "#dc3545" : "#ffc107";
-            var alertGradient = isOverload
-                ? "linear-gradient(135deg, #dc3545 0%, #c82333 100%)"
-                : "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)";
-            var alertIcon = isOverload ? "🔴" : "🟡";
+            var alertGradient = alertColor;
+            var alertIcon = "ALERT";
             var alertLabel = isOverload ? "OVERLOAD" : isDeviceOffline ? "DEVICE OFFLINE" : "DEVICE DROP";
             var severityPct = Math.Abs(deviation);
             var severityLevel = isDeviceOffline ? "HIGH" : severityPct > 50 ? "CRITICAL" : severityPct > 20 ? "HIGH" : severityPct > 10 ? "MEDIUM" : "LOW";
@@ -271,9 +271,10 @@ namespace KWHMonitoring.Services
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
-                    <div style='background: {alertGradient}; color: white; padding: 25px; text-align: center;'>
-                        <h1 style='margin: 0; font-size: 24px;'>⚠️ KWH MONITORING</h1>
-                        <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>Instant Alert - {alertLabel}</p>
+                    <div style='background: {alertGradient}; color: white; padding: 25px; text-align: left;'>
+                        <div style='font-size: 12px; letter-spacing: 1.4px; font-weight: 700;'>KWH MONITORING SYSTEM</div>
+                        <h1 style='margin: 10px 0 0; font-size: 24px;'>{alertIcon}: {alertLabel}</h1>
+                        <p style='margin: 7px 0 0; font-size: 14px;'>Notifikasi kejadian yang memerlukan perhatian operator</p>
                     </div>
 
                     <!-- Alert Info -->
@@ -337,8 +338,8 @@ namespace KWHMonitoring.Services
                         </table>
 
                         <!-- Recent Anomaly Summary (24h) -->
-                        <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #856404;'>⚠️ Anomaly Summary (Last 24 Hours)</h4>
+                        <div style='margin-top: 20px; padding: 15px; background-color: #fff8f7; border: 1px solid #f2b8b5;'>
+                            <h4 style='margin: 0 0 10px 0; color: #7a271a;'>RINGKASAN ANOMALI (24 JAM TERAKHIR)</h4>
                             <table style='width: 100%;'>
                                 <tr>
                                     <td style='padding: 5px;'><strong>Total Anomalies:</strong></td>
@@ -359,7 +360,7 @@ namespace KWHMonitoring.Services
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
-                        <p style='margin: 0;'>⚠️ KWH Monitoring System - Instant Alert</p>
+                        <p style='margin: 0;'>KWH Monitoring System - Notifikasi Alert</p>
                         <p style='margin: 5px 0 0 0; opacity: 0.7;'>Generated at {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
                 </div>";
@@ -656,6 +657,10 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendRealtimeHourlyReportAsync(bool isTest = true)
         {
+            await SendAccuratePeriodicReportAsync("hourly", isTest);
+            return;
+
+#if false
             EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
@@ -890,6 +895,7 @@ namespace KWHMonitoring.Services
             }
 
             _logger.LogInformation("Realtime hourly report sent successfully");
+#endif
         }
 
         // ============================================
@@ -959,6 +965,10 @@ namespace KWHMonitoring.Services
 
         public async Task SendRealtimeDailyReportAsync(bool isTest = true)
         {
+            await SendAccuratePeriodicReportAsync("daily", isTest);
+            return;
+
+#if false
             EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
@@ -1221,6 +1231,7 @@ namespace KWHMonitoring.Services
             }
 
             _logger.LogInformation("Realtime daily report sent successfully");
+#endif
         }
 
         // ============================================
@@ -1295,6 +1306,10 @@ namespace KWHMonitoring.Services
         // ============================================
         public async Task SendRealtimeMonthlyReportAsync(bool isTest = true)
         {
+            await SendAccuratePeriodicReportAsync("monthly", isTest);
+            return;
+
+#if false
             EnsureSettingsLoaded();
             if (!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 return;
@@ -1565,11 +1580,440 @@ namespace KWHMonitoring.Services
             }
 
             _logger.LogInformation("Realtime monthly report sent successfully");
+#endif
         }
 
         // ============================================
         // REPORT RECIPIENTS — all active Operator/Admin users
         // ============================================
+
+        /// <summary>
+        /// Builds the current formal report format from the persisted aggregation tables.
+        /// Hourly, daily, and monthly reports intentionally use completed periods so that
+        /// recipients do not receive partial/in-flight data.
+        /// </summary>
+        private async Task SendFormalPeriodicReportAsync(string reportType, bool isTest)
+        {
+            EnsureSettingsLoaded();
+            if ((!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
+                || (!isTest && !IsReportEnabled(reportType)))
+            {
+                return;
+            }
+
+            var now = DateTime.Now;
+            var tariffPerKWh = await GetTariffPerKWhAsync();
+            DateTime periodStart;
+            DateTime periodEnd;
+            string periodLabel;
+            string subject;
+            List<EnergyReportRow> energyRows;
+
+            if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase))
+            {
+                periodEnd = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
+                periodStart = periodEnd.AddHours(-1);
+                periodLabel = string.Format("{0:dd MMMM yyyy HH:mm}–{1:HH:mm}", periodStart, periodEnd);
+                subject = string.Format("[KWH Monitoring] Laporan Energi Per Jam - {0:dd/MM/yyyy HH:mm}", periodStart);
+
+                energyRows = await _context.HourlyEnergy
+                    .Where(x => x.Hour >= periodStart && x.Hour < periodEnd)
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new EnergyReportRow
+                    {
+                        DeviceKey = g.Key,
+                        EnergyKWh = g.Sum(x => x.EnergyKWh),
+                        DataTimestamp = g.Max(x => x.CalculatedAt)
+                    })
+                    .OrderByDescending(x => x.EnergyKWh)
+                    .ToListAsync();
+            }
+            else if (string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase))
+            {
+                periodEnd = now.Date;
+                periodStart = periodEnd.AddDays(-1);
+                periodLabel = string.Format("{0:dddd, dd MMMM yyyy}", periodStart);
+                subject = string.Format("[KWH Monitoring] Laporan Energi Harian - {0:dd/MM/yyyy}", periodStart);
+
+                energyRows = await _context.DailyEnergy
+                    .Where(x => x.Date >= periodStart && x.Date < periodEnd)
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new EnergyReportRow
+                    {
+                        DeviceKey = g.Key,
+                        EnergyKWh = g.Sum(x => x.EnergyKWh),
+                        DataTimestamp = g.Max(x => x.CalculatedAt)
+                    })
+                    .OrderByDescending(x => x.EnergyKWh)
+                    .ToListAsync();
+            }
+            else
+            {
+                periodEnd = new DateTime(now.Year, now.Month, 1);
+                periodStart = periodEnd.AddMonths(-1);
+                periodLabel = string.Format("{0:MMMM yyyy}", periodStart);
+                subject = string.Format("[KWH Monitoring] Laporan Energi Bulanan - {0:MMMM yyyy}", periodStart);
+
+                energyRows = await _context.MonthlyEnergy
+                    .Where(x => x.Year == periodStart.Year && x.Month == periodStart.Month)
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new EnergyReportRow
+                    {
+                        DeviceKey = g.Key,
+                        EnergyKWh = g.Sum(x => x.EnergyKWh),
+                        DataTimestamp = g.Max(x => x.CalculatedAt)
+                    })
+                    .OrderByDescending(x => x.EnergyKWh)
+                    .ToListAsync();
+            }
+
+            var anomalies = await _context.AnomalyLogs
+                .Where(x => x.DetectedTime >= periodStart && x.DetectedTime < periodEnd)
+                .OrderByDescending(x => x.DetectedTime)
+                .ToListAsync();
+
+            var totalKWh = Math.Round(energyRows.Sum(x => x.EnergyKWh), 2);
+            var estimatedCost = Math.Round(totalKWh * tariffPerKWh, 2);
+            var latestData = energyRows.Count == 0
+                ? "Tidak tersedia"
+                : energyRows.Max(x => x.DataTimestamp).ToString("dd/MM/yyyy HH:mm:ss");
+            var dataCoverage = energyRows.Count == 0
+                ? "Tidak ada data agregasi untuk periode ini"
+                : string.Format("{0} perangkat dengan data agregasi", energyRows.Count);
+
+            var anomalySummary = BuildFormalAnomalySummary(anomalies);
+            var detailRows = BuildFormalEnergyRows(energyRows, tariffPerKWh);
+            var reportTitle = string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase)
+                ? "Laporan Energi Per Jam"
+                : string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase)
+                    ? "Laporan Energi Harian"
+                    : "Laporan Energi Bulanan";
+            var body = BuildFormalReportHtml(
+                reportTitle,
+                periodLabel,
+                periodStart,
+                periodEnd,
+                totalKWh,
+                estimatedCost,
+                tariffPerKWh,
+                energyRows.Count,
+                latestData,
+                dataCoverage,
+                anomalySummary,
+                detailRows,
+                now,
+                isTest);
+
+            if (_settings.EnableEmailNotification)
+            {
+                await SendEmailAsync(subject, body);
+            }
+
+            if (_settings.EnableWhatsAppNotification)
+            {
+                var whatsappMessage = string.Format(
+                    "KWH MONITORING - {0}\nPeriode: {1}\nTotal energi: {2:N2} kWh\nEstimasi biaya: Rp {3:N0}\nPerangkat dengan data: {4}\nAnomali: {5}\nDibuat: {6:dd/MM/yyyy HH:mm:ss}",
+                    reportTitle,
+                    periodLabel,
+                    totalKWh,
+                    estimatedCost,
+                    energyRows.Count,
+                    anomalies.Count,
+                    now);
+                await SendWablasAsync(whatsappMessage);
+            }
+
+            _logger.LogInformation("Formal {ReportType} report sent for period {PeriodStart} - {PeriodEnd}", reportType, periodStart, periodEnd);
+        }
+
+        private async Task SendAccuratePeriodicReportAsync(string reportType, bool isTest)
+        {
+            EnsureSettingsLoaded();
+            if ((!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
+                || (!isTest && !IsReportEnabled(reportType)))
+                return;
+
+            var now = DateTime.Now;
+            DateTime periodStart;
+            DateTime periodEnd;
+            string periodLabel;
+            string reportTitle;
+
+            if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase))
+            {
+                periodEnd = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
+                periodStart = periodEnd.AddHours(-1);
+                periodLabel = string.Format("{0:dd/MM/yyyy HH:mm} - {1:HH:mm}", periodStart, periodEnd);
+                reportTitle = "Laporan Estimasi Tagihan Per Jam";
+            }
+            else if (string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase))
+            {
+                periodEnd = now.Date;
+                periodStart = periodEnd.AddDays(-1);
+                periodLabel = periodStart.ToString("dddd, dd MMMM yyyy");
+                reportTitle = "Laporan Estimasi Tagihan Harian";
+            }
+            else
+            {
+                periodEnd = new DateTime(now.Year, now.Month, 1);
+                periodStart = periodEnd.AddMonths(-1);
+                periodLabel = periodStart.ToString("MMMM yyyy");
+                reportTitle = "Laporan Estimasi Tagihan Bulanan";
+            }
+
+            var sourceRows = await GetAccurateEnergyRowsAsync(reportType, periodStart, periodEnd);
+            var deviceKeys = sourceRows.Select(x => x.DeviceKey).Distinct().ToList();
+            var settingsMap = await _deviceSettingsService.GetAllEffectiveAsync();
+            var registryMap = await _context.DeviceRegistry.AsNoTracking()
+                .Where(x => deviceKeys.Contains(x.DeviceKey))
+                .ToDictionaryAsync(x => x.DeviceKey, StringComparer.OrdinalIgnoreCase);
+            var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(deviceKeys);
+            var hourlyRows = await _context.HourlyEnergy.AsNoTracking()
+                .Where(x => x.Hour >= periodStart && x.Hour < periodEnd)
+                .Select(x => new { x.DeviceKey, x.Hour, x.EnergyKWh, x.CalculatedAt })
+                .ToListAsync();
+
+            var snapshots = new List<BillingEstimateSnapshot>();
+            foreach (var source in sourceRows)
+            {
+                settingsMap.TryGetValue(source.DeviceKey, out var settings);
+                settings = settings ?? new DeviceSettings { DeviceKey = source.DeviceKey };
+                registryMap.TryGetValue(source.DeviceKey, out var registry);
+                lokasiMap.TryGetValue(source.DeviceKey, out var lokasi);
+
+                var flatTariff = settings.TariffPerKWh > 0 ? settings.TariffPerKWh : 1500m;
+                var useWbp = settings.TariffWBP > 0 && settings.TariffLWBP > 0;
+                var deviceHourly = hourlyRows.Where(x => x.DeviceKey == source.DeviceKey).ToList();
+                var wbpKWh = deviceHourly.Where(x => IsWbpHour(x.Hour.Hour, settings)).Sum(x => x.EnergyKWh);
+                var lwbpKWh = deviceHourly.Where(x => !IsWbpHour(x.Hour.Hour, settings)).Sum(x => x.EnergyKWh);
+
+                if (deviceHourly.Count == 0 || Math.Abs(wbpKWh + lwbpKWh - source.EnergyKWh) > 0.01m)
+                {
+                    wbpKWh = useWbp ? Math.Round(source.EnergyKWh * 0m, 4) : 0m;
+                    lwbpKWh = source.EnergyKWh;
+                }
+
+                var energy = Math.Round(source.EnergyKWh, 4);
+                var wbpCost = useWbp ? Math.Round(wbpKWh * settings.TariffWBP, 2) : Math.Round(energy * flatTariff, 2);
+                var lwbpCost = useWbp ? Math.Round(lwbpKWh * settings.TariffLWBP, 2) : 0m;
+                var totalCost = Math.Round(wbpCost + lwbpCost, 2);
+                var dataStatus = source.DataTimestamp == default(DateTime) ? "MISSING_TIMESTAMP" : "AVAILABLE";
+
+                snapshots.Add(new BillingEstimateSnapshot
+                {
+                    ReportType = reportType.ToUpperInvariant(),
+                    PeriodStart = periodStart,
+                    PeriodEnd = periodEnd,
+                    DeviceKey = source.DeviceKey,
+                    GroupName = string.IsNullOrWhiteSpace(registry?.GroupName) ? source.DeviceKey : registry.GroupName,
+                    KodeLokasi = lokasi?.KodeLokasi ?? string.Empty,
+                    IDPelanggan = lokasi?.IDPelanggan ?? string.Empty,
+                    EnergyKWh = energy,
+                    WbpKWh = Math.Round(wbpKWh, 4),
+                    LwbpKWh = Math.Round(lwbpKWh, 4),
+                    FlatTariffPerKWh = flatTariff,
+                    TariffWBP = useWbp ? settings.TariffWBP : flatTariff,
+                    TariffLWBP = useWbp ? settings.TariffLWBP : flatTariff,
+                    WbpCost = wbpCost,
+                    LwbpCost = lwbpCost,
+                    EstimatedCost = totalCost,
+                    TariffMode = useWbp ? "WBP_LWBP" : "FLAT",
+                    DataStatus = dataStatus,
+                    CalculatedAt = now
+                });
+            }
+
+            await SaveBillingEstimateSnapshotsAsync(snapshots);
+            var totalKWh = Math.Round(snapshots.Sum(x => x.EnergyKWh), 4);
+            var reportTotalCost = Math.Round(snapshots.Sum(x => x.EstimatedCost), 2);
+            var tariffModes = snapshots.GroupBy(x => x.TariffMode).OrderBy(x => x.Key)
+                .Select(x => string.Format("{0}: {1}", x.Key, x.Count())).ToList();
+            var latestData = snapshots.Count == 0 ? "Tidak tersedia" : snapshots.Max(x => x.CalculatedAt).ToString("dd/MM/yyyy HH:mm:ss");
+            var rowsHtml = BuildAccurateBillingRows(snapshots);
+            var subject = string.Format("[KWH Monitoring] {0} - {1}", reportTitle, periodLabel);
+            var body = BuildAccurateBillingReportHtml(reportTitle, periodLabel, periodStart, periodEnd, snapshots, totalKWh, reportTotalCost, latestData, tariffModes, now, isTest, rowsHtml);
+
+            if (_settings.EnableEmailNotification)
+                await SendEmailAsync(subject, body);
+
+            foreach (var snapshot in snapshots)
+                snapshot.SentAt = now;
+            await _context.SaveChangesAsync();
+
+            if (_settings.EnableWhatsAppNotification)
+            {
+                await SendWablasAsync(string.Format("KWH MONITORING - {0}\nPeriode: {1}\nTotal energi: {2:N4} kWh\nTotal estimasi: Rp {3:N2}\nPerangkat: {4}\nTarif: {5}", reportTitle, periodLabel, totalKWh, reportTotalCost, snapshots.Count, string.Join(", ", tariffModes)));
+            }
+        }
+
+        private async Task<List<EnergyReportRow>> GetAccurateEnergyRowsAsync(string reportType, DateTime periodStart, DateTime periodEnd)
+        {
+            if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase))
+            {
+                return await _context.HourlyEnergy.AsNoTracking()
+                    .Where(x => x.Hour >= periodStart && x.Hour < periodEnd)
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
+                    .OrderByDescending(x => x.EnergyKWh).ToListAsync();
+            }
+            if (string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase))
+            {
+                return await _context.DailyEnergy.AsNoTracking()
+                    .Where(x => x.Date >= periodStart && x.Date < periodEnd)
+                    .GroupBy(x => x.DeviceKey)
+                    .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
+                    .OrderByDescending(x => x.EnergyKWh).ToListAsync();
+            }
+            return await _context.MonthlyEnergy.AsNoTracking()
+                .Where(x => x.Year == periodStart.Year && x.Month == periodStart.Month)
+                .GroupBy(x => x.DeviceKey)
+                .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
+                .OrderByDescending(x => x.EnergyKWh).ToListAsync();
+        }
+
+        private static bool IsWbpHour(int hour, DeviceSettings settings)
+        {
+            var start = settings.WbpStartHour;
+            var end = settings.WbpEndHour;
+            return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+        }
+
+        private async Task SaveBillingEstimateSnapshotsAsync(List<BillingEstimateSnapshot> snapshots)
+        {
+            foreach (var snapshot in snapshots)
+            {
+                var existing = await _context.BillingEstimateSnapshots.FirstOrDefaultAsync(x =>
+                    x.ReportType == snapshot.ReportType && x.PeriodStart == snapshot.PeriodStart &&
+                    x.PeriodEnd == snapshot.PeriodEnd && x.DeviceKey == snapshot.DeviceKey);
+                if (existing == null)
+                {
+                    _context.BillingEstimateSnapshots.Add(snapshot);
+                }
+                else
+                {
+                    existing.EnergyKWh = snapshot.EnergyKWh;
+                    existing.GroupName = snapshot.GroupName;
+                    existing.KodeLokasi = snapshot.KodeLokasi;
+                    existing.IDPelanggan = snapshot.IDPelanggan;
+                    existing.WbpKWh = snapshot.WbpKWh;
+                    existing.LwbpKWh = snapshot.LwbpKWh;
+                    existing.FlatTariffPerKWh = snapshot.FlatTariffPerKWh;
+                    existing.TariffWBP = snapshot.TariffWBP;
+                    existing.TariffLWBP = snapshot.TariffLWBP;
+                    existing.WbpCost = snapshot.WbpCost;
+                    existing.LwbpCost = snapshot.LwbpCost;
+                    existing.EstimatedCost = snapshot.EstimatedCost;
+                    existing.TariffMode = snapshot.TariffMode;
+                    existing.DataStatus = snapshot.DataStatus;
+                    existing.CalculatedAt = snapshot.CalculatedAt;
+                    existing.SentAt = null;
+                    snapshot.Id = existing.Id;
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
+
+        private string BuildAccurateBillingRows(List<BillingEstimateSnapshot> snapshots)
+        {
+            if (snapshots.Count == 0)
+                return "<tr><td colspan='11' style='padding:16px;text-align:center;color:#667085;'>Tidak ada data energi untuk periode ini.</td></tr>";
+            var builder = new StringBuilder();
+            foreach (var x in snapshots)
+            {
+                builder.AppendFormat("<tr><td class='text strong'>{0}</td><td class='text'>{1}</td><td class='text'>{2}</td><td class='num'>{3:N4}</td><td class='text'>{4}</td><td class='num'>{5:N2}</td><td class='num'>{6:N2}</td><td class='num'>Rp {7:N2}</td><td class='num strong'>Rp {8:N2}</td><td class='text'>{9}</td><td class='text nowrap'>{10}</td></tr>", Html(x.GroupName), Html(x.KodeLokasi), Html(x.IDPelanggan), x.EnergyKWh, Html(x.TariffMode), x.WbpKWh, x.LwbpKWh, x.FlatTariffPerKWh, x.EstimatedCost, Html(x.DataStatus), x.CalculatedAt.ToString("dd/MM/yyyy HH:mm:ss"));
+            }
+            return builder.ToString();
+        }
+
+        private string BuildAccurateBillingReportHtml(string title, string periodLabel, DateTime periodStart, DateTime periodEnd, List<BillingEstimateSnapshot> snapshots, decimal totalKWh, decimal totalCost, string latestData, List<string> tariffModes, DateTime generatedAt, bool isTest, string rows)
+        {
+            return string.Format(@"<!DOCTYPE html><html lang='id'><head><meta charset='UTF-8'><title>{0}</title><style>table{{font-family:Arial,sans-serif;}}.billing-table{{table-layout:fixed;}}.billing-table th,.billing-table td{{padding:7px 6px;border:1px solid #d9dee8;vertical-align:middle;line-height:1.35;}}.billing-table th{{font-size:10px;text-align:center;white-space:normal;}}.billing-table td{{font-size:10px;}}.billing-table .text{{text-align:left;word-break:break-word;}}.billing-table .num{{text-align:right;white-space:nowrap;}}.billing-table .strong{{font-weight:700;}}.billing-table .nowrap{{white-space:nowrap;}}.billing-table tbody tr:nth-child(even){{background:#f8fafc;}}</style></head><body style='margin:0;background:#eef1f5;font-family:Arial,sans-serif;color:#1f2937;'><table width='100%' cellpadding='0' cellspacing='0'><tr><td align='center' style='padding:24px 10px;'><table width='1100' style='max-width:1100px;background:#fff;border:1px solid #d0d5dd;border-collapse:collapse;'><tr><td colspan='11' style='padding:24px;background:#172b4d;color:#fff;border-bottom:4px solid #0b6e99;'><div style='font-size:12px;letter-spacing:1.3px;font-weight:bold;'>KWH MONITORING SYSTEM</div><h1 style='margin:8px 0 0;font-size:23px;'>{1}{2}</h1><div style='margin-top:7px;'>Periode: {3}</div></td></tr><tr><td colspan='11' style='padding:20px;'><table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;font-size:13px;'><tr><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Rentang waktu</td><td style='padding:8px;border:1px solid #d0d5dd;'>{4:dd/MM/yyyy HH:mm:ss} s.d. {5:dd/MM/yyyy HH:mm:ss}</td><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Data terakhir</td><td style='padding:8px;border:1px solid #d0d5dd;'>{6}</td></tr><tr><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Total perangkat</td><td style='padding:8px;border:1px solid #d0d5dd;'>{7}</td><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Mode tarif</td><td style='padding:8px;border:1px solid #d0d5dd;'>{8}</td></tr></table><p style='font-size:18px;font-weight:bold;color:#172b4d;margin:22px 0 8px;'>Rekapitulasi</p><table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;'><tr><td style='padding:14px;border:1px solid #d0d5dd;background:#f8fafc;'><small>Total energi</small><br><strong>{9:N4} kWh</strong></td><td style='padding:14px;border:1px solid #d0d5dd;background:#f8fafc;'><small>Total estimasi tagihan</small><br><strong>Rp {10:N2}</strong></td></tr></table><p style='font-size:18px;font-weight:bold;color:#172b4d;margin:22px 0 8px;'>Rincian per perangkat</p><div style='overflow-x:auto;width:100%;'><table class='billing-table' width='100%' cellpadding='0' cellspacing='0'><colgroup><col style='width:15%;'><col style='width:10%;'><col style='width:10%;'><col style='width:10%;'><col style='width:7%;'><col style='width:8%;'><col style='width:8%;'><col style='width:10%;'><col style='width:11%;'><col style='width:6%;'><col style='width:15%;'></colgroup><thead><tr style='background:#172b4d;color:#fff;'><th>Nama perangkat</th><th>Kode lokasi</th><th>ID pelanggan</th><th>Energi (kWh)</th><th>Mode</th><th>WBP (kWh)</th><th>LWBP (kWh)</th><th>Tarif flat</th><th>Estimasi</th><th>Status</th><th>Dihitung</th></tr></thead><tbody>{11}</tbody></table></div><p style='margin:18px 0 0;font-size:12px;color:#667085;'>Rekonsiliasi: total energi dan total tagihan pada laporan ini dihitung dari penjumlahan baris perangkat yang disimpan di database. Nama perangkat menggunakan GroupName, sedangkan Kode lokasi dan ID pelanggan berasal dari master ERP. Tarif flat adalah Rp {12:N2}/kWh bila tarif WBP/LWBP tidak lengkap. Jika data jam tidak tersedia atau tidak sama dengan agregasi periode, sistem menggunakan energi periode sebagai LWBP agar total biaya tetap konsisten dan status sumber tetap dapat diaudit.</p></td></tr><tr><td colspan='11' style='padding:15px 20px;background:#f2f4f7;border-top:1px solid #d0d5dd;font-size:11px;color:#667085;'>Dibuat otomatis pada {13:dd/MM/yyyy HH:mm:ss}. Snapshot disimpan pada BillingEstimateSnapshots.</td></tr></table></td></tr></table></body></html>", Html(title), Html(title), isTest ? " <span style='font-size:11px;color:#ffe08a;'>[TEST]</span>" : "", Html(periodLabel), periodStart, periodEnd, Html(latestData), snapshots.Count, Html(string.Join(", ", tariffModes)), totalKWh, totalCost, rows, snapshots.Count == 0 ? 0m : snapshots.Min(x => x.FlatTariffPerKWh), generatedAt);
+        }
+
+        private bool IsReportEnabled(string reportType)
+        {
+            if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase)) return _settings.SendHourlyReport;
+            if (string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase)) return _settings.SendDailyReport;
+            return _settings.SendMonthlyReport;
+        }
+
+        private string BuildFormalEnergyRows(List<EnergyReportRow> rows, decimal tariffPerKWh)
+        {
+            if (rows.Count == 0)
+            {
+                return "<tr><td colspan='4' style='padding:14px;text-align:center;color:#667085;'>Tidak ada data energi agregasi.</td></tr>";
+            }
+
+            var builder = new StringBuilder();
+            foreach (var row in rows)
+            {
+                builder.Append("<tr>");
+                builder.AppendFormat("<td style='padding:10px;border:1px solid #d0d5dd;'>{0}</td>", Html(row.DeviceKey));
+                builder.AppendFormat("<td style='padding:10px;border:1px solid #d0d5dd;text-align:right;'>{0:N2}</td>", row.EnergyKWh);
+                builder.AppendFormat("<td style='padding:10px;border:1px solid #d0d5dd;text-align:right;'>Rp {0:N0}</td>", row.EnergyKWh * tariffPerKWh);
+                builder.AppendFormat("<td style='padding:10px;border:1px solid #d0d5dd;'>{0:dd/MM/yyyy HH:mm:ss}</td>", row.DataTimestamp);
+                builder.Append("</tr>");
+            }
+            return builder.ToString();
+        }
+
+        private string BuildFormalAnomalySummary(List<AnomalyLog> anomalies)
+        {
+            if (anomalies.Count == 0)
+            {
+                return "<p style='margin:0;color:#146c43;'>Tidak terdapat anomali yang tercatat pada periode laporan.</p>";
+            }
+
+            var groups = anomalies
+                .GroupBy(x => string.IsNullOrWhiteSpace(x.AnomalyType) ? "OTHER" : x.AnomalyType)
+                .OrderByDescending(x => x.Count())
+                .Select(x => string.Format("<li><strong>{0}</strong>: {1} kejadian</li>", Html(x.Key), x.Count()));
+            return string.Format("<p style='margin:0 0 6px;color:#7a271a;'>Terdapat <strong>{0}</strong> kejadian anomali pada periode laporan.</p><ul style='margin:0;padding-left:20px;color:#7a271a;'>{1}</ul>", anomalies.Count, string.Join("", groups));
+        }
+
+        private string BuildFormalReportHtml(
+            string title,
+            string periodLabel,
+            DateTime periodStart,
+            DateTime periodEnd,
+            decimal totalKWh,
+            decimal estimatedCost,
+            decimal tariffPerKWh,
+            int deviceCount,
+            string latestData,
+            string dataCoverage,
+            string anomalySummary,
+            string detailRows,
+            DateTime generatedAt,
+            bool isTest)
+        {
+            var testLabel = isTest ? "<span style='display:inline-block;margin-left:8px;padding:3px 8px;background:#fff4cc;color:#7a4d00;font-size:11px;font-weight:700;'>TEST</span>" : "";
+            return string.Format(@"<!DOCTYPE html><html lang='id'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>{0}</title></head>
+<body style='margin:0;background:#eef1f5;font-family:Arial,Helvetica,sans-serif;color:#1f2937;'>
+<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background:#eef1f5;'><tr><td align='center' style='padding:28px 12px;'>
+<table role='presentation' width='680' cellspacing='0' cellpadding='0' style='width:680px;max-width:680px;background:#ffffff;border:1px solid #d0d5dd;'>
+<tr><td style='padding:24px 28px;background:#172b4d;color:#ffffff;border-bottom:4px solid #0b6e99;'><div style='font-size:12px;letter-spacing:1.4px;font-weight:700;'>KWH MONITORING SYSTEM</div><h1 style='margin:10px 0 0;font-size:24px;font-weight:600;'>{1}{2}</h1><div style='margin-top:8px;color:#dbeafe;font-size:13px;'>Laporan operasional dan konsumsi energi</div></td></tr>
+<tr><td style='padding:24px 28px;'><table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse;font-size:13px;'><tr><td style='padding:8px 10px;background:#f2f4f7;border:1px solid #d0d5dd;font-weight:700;width:150px;'>Periode laporan</td><td style='padding:8px 10px;border:1px solid #d0d5dd;'>{3}</td></tr><tr><td style='padding:8px 10px;background:#f2f4f7;border:1px solid #d0d5dd;font-weight:700;'>Rentang waktu</td><td style='padding:8px 10px;border:1px solid #d0d5dd;'>{4:dd/MM/yyyy HH:mm:ss} s.d. {5:dd/MM/yyyy HH:mm:ss}</td></tr><tr><td style='padding:8px 10px;background:#f2f4f7;border:1px solid #d0d5dd;font-weight:700;'>Cakupan data</td><td style='padding:8px 10px;border:1px solid #d0d5dd;'>{6}</td></tr><tr><td style='padding:8px 10px;background:#f2f4f7;border:1px solid #d0d5dd;font-weight:700;'>Data terakhir dihitung</td><td style='padding:8px 10px;border:1px solid #d0d5dd;'>{7}</td></tr></table>
+<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='margin-top:20px;border-collapse:separate;border-spacing:8px 0;'><tr><td style='padding:14px;background:#f8fafc;border:1px solid #d0d5dd;'><div style='font-size:12px;color:#667085;'>TOTAL ENERGI</div><strong style='font-size:20px;color:#172b4d;'>{8:N2} kWh</strong></td><td style='padding:14px;background:#f8fafc;border:1px solid #d0d5dd;'><div style='font-size:12px;color:#667085;'>ESTIMASI BIAYA</div><strong style='font-size:20px;color:#172b4d;'>Rp {9:N0}</strong></td><td style='padding:14px;background:#f8fafc;border:1px solid #d0d5dd;'><div style='font-size:12px;color:#667085;'>PERANGKAT</div><strong style='font-size:20px;color:#172b4d;'>{10}</strong></td></tr></table>
+<p style='margin:22px 0 8px;font-size:16px;font-weight:700;color:#172b4d;'>Rincian konsumsi per perangkat</p><p style='margin:0 0 10px;font-size:12px;color:#667085;'>Tarif acuan: Rp {11:N0} per kWh. Nilai biaya merupakan estimasi berdasarkan energi agregasi yang tersedia.</p>
+<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse;font-size:12px;'><thead><tr style='background:#172b4d;color:#ffffff;'><th style='padding:10px;text-align:left;border:1px solid #172b4d;'>Perangkat</th><th style='padding:10px;text-align:right;border:1px solid #172b4d;'>Energi (kWh)</th><th style='padding:10px;text-align:right;border:1px solid #172b4d;'>Estimasi biaya</th><th style='padding:10px;text-align:left;border:1px solid #172b4d;'>Data dihitung</th></tr></thead><tbody>{12}</tbody></table>
+<p style='margin:22px 0 8px;font-size:16px;font-weight:700;color:#172b4d;'>Pemantauan anomali</p><div style='padding:14px;background:#fff8f7;border:1px solid #f2b8b5;'>{13}</div>
+<p style='margin:22px 0 0;font-size:12px;line-height:1.6;color:#667085;'>Catatan: laporan ini menggunakan tabel agregasi energi terbaru (HourlyEnergy, DailyEnergy, atau MonthlyEnergy) sesuai jenis laporan. Data yang belum tersedia pada sumber agregasi tidak diperkirakan dari snapshot monitoring.</p></td></tr>
+<tr><td style='padding:18px 28px;background:#f2f4f7;border-top:1px solid #d0d5dd;color:#667085;font-size:11px;'>Dibuat otomatis oleh KWH Monitoring System pada {14:dd/MM/yyyy HH:mm:ss}. Harap tidak membalas email ini.</td></tr></table></td></tr></table></body></html>", Html(title), Html(title), testLabel, Html(periodLabel), periodStart, periodEnd, Html(dataCoverage), Html(latestData), totalKWh, estimatedCost, deviceCount, tariffPerKWh, detailRows, anomalySummary, generatedAt);
+        }
+
+        private static string Html(string value)
+        {
+            return WebUtility.HtmlEncode(value ?? "-");
+        }
+
+        private sealed class EnergyReportRow
+        {
+            public string DeviceKey { get; set; }
+            public decimal EnergyKWh { get; set; }
+            public DateTime DataTimestamp { get; set; }
+        }
+
         public async Task<List<string>> GetReportRecipientEmailsAsync()
         {
             try
