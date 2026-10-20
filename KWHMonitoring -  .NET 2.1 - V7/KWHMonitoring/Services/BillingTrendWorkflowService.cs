@@ -183,12 +183,14 @@ namespace KWHMonitoring.Services
                     {
                         var values = await _context.BillingTrendConfirmations
                             .Where(x => x.TrendProfileId == profile.Id && x.Decision == "VALID")
+                            .OrderByDescending(x => x.BillingPeriod)
+                            .ThenByDescending(x => x.Id)
                             .Select(x => x.ObservedAmount)
+                            .Take(RequiredConfirmations - 1)
                             .ToListAsync();
                         values.Add(observedAmount);
-                        values.Sort();
-                        var median = values[values.Count / 2];
-                        profile.ActiveBaselineAmount = Math.Round(median, 2, MidpointRounding.AwayFromZero);
+                        var average = values.Average();
+                        profile.ActiveBaselineAmount = average;
                         profile.BaselineVersion++;
                         profile.AcceptedAt = DateTime.UtcNow;
                         result.BaselineAccepted = true;
@@ -604,18 +606,24 @@ namespace KWHMonitoring.Services
             var amount = BillingConfigurationResolver.ResolveBudget(baseline, settings.MonthlyBillingBudgetAmount);
             var key = deviceKey + ":TREND_AUTO:" + profile.BaselineVersion;
             var exists = await _context.BillingBudgetHistories.AnyAsync(x => x.IdempotencyKey == key);
-            if (exists) return;
-            _context.BillingBudgetHistories.Add(new BillingBudgetHistory
+            if (!exists)
             {
-                DeviceKey = deviceKey,
-                PreviousAmount = settings.MonthlyBillingBudgetAmount,
-                Amount = amount,
-                Source = amount == BillingConfigurationResolver.InvalidConfigurationFallback ? "FALLBACK" : "TREND_AUTO",
-                TrendProfileId = profile.Id,
-                BaselineVersion = profile.BaselineVersion,
-                IdempotencyKey = key,
-                ChangedBy = "billing-trend-workflow"
-            });
+                _context.BillingBudgetHistories.Add(new BillingBudgetHistory
+                {
+                    DeviceKey = deviceKey,
+                    PreviousAmount = settings.MonthlyBillingBudgetAmount,
+                    Amount = amount,
+                    Source = amount == BillingConfigurationResolver.InvalidConfigurationFallback ? "FALLBACK" : "TREND_AUTO",
+                    TrendProfileId = profile.Id,
+                    BaselineVersion = profile.BaselineVersion,
+                    IdempotencyKey = key,
+                    ChangedBy = "billing-trend-workflow"
+                });
+            }
+
+            // Hydrate DeviceSettings even when the history row already exists.
+            // This keeps Settings Per Device displayable if an earlier transaction
+            // created the idempotency record before the settings row was persisted.
             settings.MonthlyBillingBudgetAmount = amount;
             settings.MonthlyBillingBudgetSource = amount == BillingConfigurationResolver.InvalidConfigurationFallback ? "FALLBACK" : "TREND_AUTO";
             settings.MonthlyBillingBudgetTrendProfileId = profile.Id;

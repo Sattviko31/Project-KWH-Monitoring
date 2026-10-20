@@ -12,52 +12,159 @@
 
 <style>
 .device-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.42rem;
+}
+.device-settings-group {
+    min-width: 0;
+    padding: 0.34rem 0.38rem 0.38rem;
+    border: 1px solid rgba(108, 117, 125, 0.28);
+    border-radius: 0.4rem;
+    background: rgba(15, 23, 42, 0.18);
+}
+.device-settings-group-title {
     display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
+    align-items: center;
+    min-height: 1rem;
+    padding-bottom: 0.18rem;
+    margin-bottom: 0.28rem;
+    border-bottom: 1px solid rgba(108, 117, 125, 0.24);
+    color: #a9c7e8;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 .device-form-group {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.375rem 0.5rem;
+    gap: 0.22rem 0.34rem;
+    align-items: end;
+    margin-bottom: 0.28rem;
+}
+.device-form-group-single {
+    grid-template-columns: 1fr;
+}
+.device-form-group:last-child {
+    margin-bottom: 0;
 }
 .device-form-row {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: 0.06rem;
+    min-width: 0;
 }
 .device-label {
-    font-size: 0.7rem;
+    font-size: 0.63rem;
     font-weight: 600;
     color: #6c757d;
     margin-bottom: 0;
-    line-height: 1.2;
+    line-height: 1.15;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 [data-bs-theme="dark"] .device-label {
     color: #adb5bd;
 }
 .device-settings-card .card-body {
-    padding: 0.5rem;
+    padding: 0.36rem;
 }
 .device-settings-card .form-control-sm,
 .device-settings-card .form-select-sm {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.4rem;
-    height: calc(1.5em + 0.4rem + 2px);
+    width: 100%;
+    min-width: 0;
+    font-size: 0.69rem;
+    padding: 0.14rem 0.3rem;
+    height: calc(1.35em + 0.3rem + 2px);
 }
 .device-settings-card .form-check-input {
     width: 2em;
     height: 1em;
+    flex: 0 0 auto;
 }
 .device-settings-card .form-check-label {
-    font-size: 0.7rem;
-    margin-left: 0.25rem;
+    font-size: 0.64rem;
+    margin-left: 0.2rem;
+    line-height: 1.1;
+}
+.device-settings-card .form-check.form-switch {
+    display: flex;
+    align-items: center;
+    min-height: calc(1.35em + 0.3rem + 2px);
+    margin: 0;
+}
+.device-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.28rem;
+    align-items: end;
+}
+.device-pair > .device-form-row,
+.device-pair > .device-action-row {
+    min-width: 0;
+}
+.device-action-row {
+    display: flex;
+    align-items: center;
+    min-height: calc(1.35em + 0.3rem + 2px);
+}
+.device-action-row .form-check {
+    width: 100%;
+}
+.device-budget-source {
+    display: block;
+    margin-top: 0.08rem;
+    color: #7ea6d8;
+    font-size: 0.56rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.device-settings-card .device-form-row.align-self-center {
+    align-self: stretch;
+    justify-content: end;
+}
+.device-settings-card .card-footer {
+    min-height: 2.2rem;
+    padding: 0.28rem 0.42rem !important;
+    gap: 0.35rem;
+}
+.device-settings-card .card-footer .btn {
+    padding: 0.18rem 0.35rem;
+    font-size: 0.64rem;
+    white-space: nowrap;
+}
+.device-settings-card .status-text {
+    font-size: 0.62rem !important;
+    line-height: 1.1;
 }
 #deviceSettingsGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+    gap: 0.7rem;
+    align-items: stretch;
+}
+.device-settings-card > .card {
+    display: flex;
+    flex-direction: column;
+}
+.device-settings-card > .card > .card-body {
+    flex: 1 1 auto;
+}
+@@media (max-width: 420px) {
+    #deviceSettingsGrid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+    }
+    .device-form-group {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .device-pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 </style>
 
@@ -92,7 +199,7 @@
                         var settings = deviceSettings.ContainsKey(device.DeviceKey) ? deviceSettings[device.DeviceKey] : new KWHMonitoring.Models.DeviceSettings { DeviceKey = device.DeviceKey };
                         var safeKey = device.DeviceKey.Replace("-", "_");
                         <div class="device-settings-card" data-device-key="@device.DeviceKey" data-safe-key="@safeKey">
-                            <div class="card shadow-sm h-100 border-0" data-card-help="Pengaturan Perangkat|Konfigurasi khusus perangkat: kapasitas, ambang batas beban, tarif, anggaran, waktu henti, dan kontrol.|BEBAN (%) = Daya ÷ Kapasitas Maksimum × 100 · Biaya = kWh × Tarif|Perubahan disimpan melalui tombol Simpan dan memengaruhi kartu/grafik perangkat ini.">
+                            <div class="card shadow-sm h-100 border-0">
                                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
                                     <h6 class="mb-0 text-truncate" style="font-size: 0.9rem;">
                                         <i class="fas fa-plug"></i> @device.GroupName
@@ -101,102 +208,91 @@
                                 </div>
                                 <div class="card-body p-2">
                                     <div class="device-form-grid">
-                                        <div class="device-form-row">
-                                            <label class="device-label">Kategori</label>
-                                            <select class="form-select form-select-sm device-category" data-field="DeviceCategory">
-                                                @foreach (var cat in categoryOptions)
-                                                {
-                                                    var isSelected = settings.DeviceCategory == cat;
-                                                    <option value="@cat" selected="@(isSelected ? "selected" : null)">@cat</option>
-                                                }
-                                                @if (!categoryOptions.Contains(settings.DeviceCategory))
-                                                {
-                                                    <option value="@settings.DeviceCategory" selected="selected">@settings.DeviceCategory</option>
-                                                }
-                                            </select>
-                                        </div>
-                                        <div class="device-form-group">
+                                        <div class="device-settings-group">
+                                            <div class="device-settings-group-title">Perangkat &amp; Tarif</div>
                                             <div class="device-form-row">
-                                                <input type="hidden" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)">
-                                                <label class="device-label">Tarif (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@FormatNoTrailingZeros(settings.TariffPerKWh)" min="0" step="50">
-                                            </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Tarif efektif per kWh</label>
-                                                <small class="text-muted">Kapasitas maksimum diatur dari data konfigurasi perangkat.</small>
-                                            </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row">
-                                                <label class="device-label">Tarif WBP (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffWBP" value="@FormatNoTrailingZeros(settings.TariffWBP)" min="0" step="50" placeholder="0 = tarif tetap">
-                                            </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Tarif LWBP (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="TariffLWBP" value="@FormatNoTrailingZeros(settings.TariffLWBP)" min="0" step="50" placeholder="0 = tarif tetap">
-                                            </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row">
-                                                <label class="device-label">Awal WBP</label>
-                                                <select class="form-select form-select-sm" data-field="WbpStartHour">
-                                                    @for (var h = 0; h < 24; h++)
+                                                <label class="device-label">Kategori</label>
+                                                <select class="form-select form-select-sm device-category" data-field="DeviceCategory">
+                                                    @foreach (var cat in categoryOptions)
                                                     {
-                                                        <option value="@h" selected="@(settings.WbpStartHour == h ? "selected" : null)">@(h.ToString("D2")):00</option>
+                                                        var isSelected = settings.DeviceCategory == cat;
+                                                        <option value="@cat" selected="@(isSelected ? "selected" : null)">@cat</option>
+                                                    }
+                                                    @if (!categoryOptions.Contains(settings.DeviceCategory))
+                                                    {
+                                                        <option value="@settings.DeviceCategory" selected="selected">@settings.DeviceCategory</option>
                                                     }
                                                 </select>
                                             </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Akhir WBP</label>
-                                                <select class="form-select form-select-sm" data-field="WbpEndHour">
-                                                    @for (var h = 0; h < 24; h++)
-                                                    {
-                                                        <option value="@h" selected="@(settings.WbpEndHour == h ? "selected" : null)">@(h.ToString("D2")):00</option>
-                                                    }
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row">
-                                                <label class="device-label">Anggaran Bulanan (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="BudgetRupiah" value="@FormatNoTrailingZeros(settings.BudgetKWh * settings.TariffPerKWh)" min="0" step="1000" placeholder="0 = nonaktif">
-                                                <input type="hidden" data-field="BudgetKWh" value="@FormatNoTrailingZeros(settings.BudgetKWh)">
-                                            </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Luas (m²)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="SurfaceArea" value="@FormatNoTrailingZeros(settings.SurfaceArea)" min="0" step="0.1" placeholder="0 = tidak tersedia">
-                                            </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row align-self-center">
-                                                <div class="form-check form-switch">
-                                                    <input class="form-check-input" type="checkbox" data-field="BillingCutoffEnabled" @(settings.BillingCutoffEnabled ? "checked" : "")>
-                                                    <label class="form-check-label device-label">Cutoff Meter PLN</label>
+                                            <div class="device-form-group device-form-group-single">
+                                                <div class="device-form-row">
+                                                    <input type="hidden" data-field="MaxCapacity" value="@FormatNoTrailingZeros(settings.MaxCapacity)">
+                                                    <label class="device-label">Tarif (Rp/kWh)</label>
+                                                    <input type="number" class="form-control form-control-sm" data-field="TariffPerKWh" value="@FormatNoTrailingZeros(settings.TariffPerKWh)" min="0" step="50">
                                                 </div>
-                                                <small class="text-muted">Nonaktif = periode tanggal 1 sampai akhir bulan.</small>
                                             </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Tanggal Cutoff (25–31)</label>
-                                                <select class="form-select form-select-sm" data-field="BillingCutoffDay" @(settings.BillingCutoffEnabled ? "" : "disabled")>
-                                                    <option value="" selected="@(!settings.BillingCutoffDay.HasValue ? "selected" : null)">Tidak digunakan</option>
-                                                    @for (var cutoffDay = 25; cutoffDay <= 31; cutoffDay++)
-                                                    {
-                                                        <option value="@cutoffDay" selected="@(settings.BillingCutoffDay == cutoffDay ? "selected" : null)">@cutoffDay</option>
-                                                    }
-                                                </select>
+                                            <div class="device-form-group">
+                                                <div class="device-form-row">
+                                                    <label class="device-label">Tarif WBP (Rp)</label>
+                                                    <input type="number" class="form-control form-control-sm" data-field="TariffWBP" value="@FormatNoTrailingZeros(settings.TariffWBP)" min="0" step="50">
+                                                </div>
+                                                <div class="device-form-row">
+                                                    <label class="device-label">Tarif LWBP (Rp)</label>
+                                                    <input type="number" class="form-control form-control-sm" data-field="TariffLWBP" value="@FormatNoTrailingZeros(settings.TariffLWBP)" min="0" step="50">
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row">
-                                                <label class="device-label">Pendapatan per Jam (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000" placeholder="0 = tidak tersedia">
-                                            </div>
-                                        </div>
+                                         </div>
+                                         <div class="device-settings-group">
+                                             <div class="device-settings-group-title">Billing &amp; Anggaran</div>
+                                             <div class="device-pair">
+                                                 <div class="device-form-row device-budget-input">
+                                                     <label class="device-label">Anggaran Bulanan (Rp)</label>
+                                                      <input type="number" class="form-control form-control-sm" data-field="MonthlyBillingBudgetAmount" value="@(settings.MonthlyBillingBudgetAmount.HasValue ? FormatNoTrailingZeros(settings.MonthlyBillingBudgetAmount.Value) : string.Empty)" min="0" step="1000" @(!settings.MonthlyBillingBudgetManualOverride ? "disabled" : "")>
+                                                     <small class="device-budget-source">Sumber: @(settings.MonthlyBillingBudgetManualOverride ? "Manual" : (settings.MonthlyBillingBudgetSource ?? "Trend"))</small>
+                                                     <input type="hidden" data-field="BudgetKWh" value="@FormatNoTrailingZeros(settings.BudgetKWh)">
+                                                 </div>
+                                                 <div class="device-action-row">
+                                                     <div class="form-check form-switch">
+                                                         <input class="form-check-input" type="checkbox" data-field="MonthlyBillingBudgetAuto" @(!settings.MonthlyBillingBudgetManualOverride ? "checked" : "")>
+                                                         <label class="form-check-label device-label">Otomatis dari trend</label>
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div class="device-pair">
+                                                 <div class="device-form-row">
+                                                     <label class="device-label">Luas (m²)</label>
+                                                     <input type="number" class="form-control form-control-sm" data-field="SurfaceArea" value="@FormatNoTrailingZeros(settings.SurfaceArea)" min="0" step="0.1">
+                                                 </div>
+                                                 <div class="device-form-row">
+                                                     <label class="device-label">Pendapatan per Jam (Rp)</label>
+                                                     <input type="number" class="form-control form-control-sm" data-field="RevenuePerHour" value="@FormatNoTrailingZeros(settings.RevenuePerHour)" min="0" step="1000">
+                                                 </div>
+                                             </div>
+                                             <div class="device-pair">
+                                                 <div class="device-action-row">
+                                                     <div class="form-check form-switch">
+                                                         <input class="form-check-input" type="checkbox" data-field="BillingCutoffEnabled" @(settings.BillingCutoffEnabled ? "checked" : "")>
+                                                         <label class="form-check-label device-label">Cutoff Meter PLN</label>
+                                                     </div>
+                                                 </div>
+                                                 <div class="device-form-row">
+                                                     <label class="device-label">Tanggal Cutoff (25-31)</label>
+                                                     <select class="form-select form-select-sm" data-field="BillingCutoffDay" @(settings.BillingCutoffEnabled ? "" : "disabled")>
+                                                         <option value="" selected="@(!settings.BillingCutoffDay.HasValue ? "selected" : null)">Tidak digunakan</option>
+                                                         @for (var cutoffDay = 25; cutoffDay <= 31; cutoffDay++)
+                                                         {
+                                                             <option value="@cutoffDay" selected="@(settings.BillingCutoffDay == cutoffDay ? "selected" : null)">@cutoffDay</option>
+                                                         }
+                                                     </select>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         <div class="device-settings-group">
+                                            <div class="device-settings-group-title">Threshold Billing</div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
                                                 <label class="device-label">Ambang Selisih Tagihan (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="BillingAnomalyThreshold" value="@(settings.BillingAnomalyThreshold.HasValue ? FormatNoTrailingZeros(settings.BillingAnomalyThreshold.Value) : string.Empty)" min="0" step="1000" placeholder="Kosong = global">
-                                                <small class="text-muted">Dipakai khusus perangkat ini. Kosong memakai threshold global.</small>
+                                                <input type="number" class="form-control form-control-sm" data-field="BillingAnomalyThreshold" value="@(settings.BillingAnomalyThreshold.HasValue ? FormatNoTrailingZeros(settings.BillingAnomalyThreshold.Value) : string.Empty)" min="0" step="1000">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
@@ -209,19 +305,7 @@
                                             </div>
                                             <div class="device-form-row">
                                                 <label class="device-label">Threshold Persentase (%)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="BillingAnomalyThresholdPercent" value="@(settings.BillingAnomalyThresholdPercent.HasValue ? FormatNoTrailingZeros(settings.BillingAnomalyThresholdPercent.Value) : string.Empty)" min="0" max="1000" step="0.01" placeholder="Kosong = fallback">
-                                            </div>
-                                        </div>
-                                        <div class="device-form-group">
-                                            <div class="device-form-row">
-                                                <label class="device-label">Budget Tagihan Bulanan (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="MonthlyBillingBudgetAmount" value="@(settings.MonthlyBillingBudgetAmount.HasValue ? FormatNoTrailingZeros(settings.MonthlyBillingBudgetAmount.Value) : string.Empty)" min="0" step="1000" placeholder="Masukkan budget manual">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input class="form-check-input" type="checkbox" data-field="MonthlyBillingBudgetAuto"
-                                                           @(settings.MonthlyBillingBudgetManualOverride ? "" : "checked")>
-                                                    <label class="form-check-label device-label">Isi otomatis dari nilai trend</label>
-                                                </div>
-                                                <small class="text-muted">Aktif: baseline trend yang diterima akan mengisi budget. Nonaktif: budget diatur manual.</small>
+                                                <input type="number" class="form-control form-control-sm" data-field="BillingAnomalyThresholdPercent" value="@(settings.BillingAnomalyThresholdPercent.HasValue ? FormatNoTrailingZeros(settings.BillingAnomalyThresholdPercent.Value) : string.Empty)" min="0" max="1000" step="0.01">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
@@ -237,14 +321,10 @@
                                                 <input type="number" class="form-control form-control-sm" data-field="BillingTrendTolerancePercent" value="@(settings.BillingTrendTolerancePercent.HasValue ? FormatNoTrailingZeros(settings.BillingTrendTolerancePercent.Value) : string.Empty)" min="0" max="1000" step="0.01">
                                             </div>
                                         </div>
-                                        <div class="device-form-group">
+                                        <div class="device-form-group device-form-group-single">
                                             <div class="device-form-row">
                                                 <label class="device-label">Toleransi Trend (Rp)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="BillingTrendToleranceAmount" value="@(settings.BillingTrendToleranceAmount.HasValue ? FormatNoTrailingZeros(settings.BillingTrendToleranceAmount.Value) : string.Empty)" min="0" step="1000">
-                                            </div>
-                                            <div class="device-form-row">
-                                                <label class="device-label">Budget Billing (Rp)</label>
-                                                <input type="number" class="form-control form-control-sm" data-field="MonthlyBillingBudgetAmount" value="@(settings.MonthlyBillingBudgetAmount.HasValue ? FormatNoTrailingZeros(settings.MonthlyBillingBudgetAmount.Value) : string.Empty)" min="0" step="1000" placeholder="Kosong = trend/fallback">
                                             </div>
                                         </div>
                                         <div class="device-form-group">
@@ -259,14 +339,17 @@
                                         </div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
-                                                <label class="device-label">Upper Line ↑ (%)</label>
+                                                <label class="device-label">Upper Line (%)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="EmaUpperThreshold" value="@settings.EmaUpperThreshold" min="0" max="1000">
                                             </div>
                                             <div class="device-form-row">
-                                                <label class="device-label">Lower Line ↓ (%)</label>
+                                                <label class="device-label">Lower Line (%)</label>
                                                 <input type="number" class="form-control form-control-sm" data-field="EmaLowerThreshold" value="@settings.EmaLowerThreshold" min="0" max="100">
                                             </div>
                                         </div>
+                                        </div>
+                                        <div class="device-settings-group">
+                                            <div class="device-settings-group-title">Waktu &amp; Kendali</div>
                                         <div class="device-form-group">
                                             <div class="device-form-row">
                                                 <label class="device-label">Mulai</label>
@@ -295,14 +378,14 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="device-form-group">
+                                        <div class="device-form-group device-form-group-single">
                                             <div class="device-form-row align-self-center">
                                                 <div class="form-check form-switch">
                                                     <input class="form-check-input" type="checkbox" data-field="InvertRelayCommand" @(settings.InvertRelayCommand ? "checked" : "")>
                                                     <label class="form-check-label device-label">Invers Perintah</label>
                                                 </div>
-                                                <small class="text-muted">ON/OFF dibalik untuk relay Normally Close.</small>
                                             </div>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -358,7 +441,11 @@
                 tariffLWBP: numberValue($card, 'TariffLWBP', 0),
                 wbpStartHour: integerValue($card, 'WbpStartHour', 0),
                 wbpEndHour: integerValue($card, 'WbpEndHour', 0),
-                budgetKWh: numberValue($card, 'BudgetRupiah', 0) / Math.max(numberValue($card, 'TariffPerKWh', 0), 1),
+                budgetKWh: (function() {
+                    var monthlyBudget = nullableNumberValue($card, 'MonthlyBillingBudgetAmount');
+                    var tariff = numberValue($card, 'TariffPerKWh', 0);
+                    return monthlyBudget !== null && tariff > 0 ? monthlyBudget / tariff : numberValue($card, 'BudgetKWh', 0);
+                })(),
                 surfaceArea: numberValue($card, 'SurfaceArea', 0),
                 revenuePerHour: numberValue($card, 'RevenuePerHour', 0),
                 billingAnomalyThreshold: (function() {

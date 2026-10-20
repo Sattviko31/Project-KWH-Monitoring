@@ -45,6 +45,7 @@
         'Kapasitas Maksimum (W)': ['Kapasitas Maksimum (W)', 'Maximum Capacity (W)'],
         'Awal WBP': ['Awal WBP', 'WBP Start'], 'Akhir WBP': ['Akhir WBP', 'WBP End'],
         'Anggaran Bulanan (Rp)': ['Anggaran Bulanan (Rp)', 'Monthly Budget (IDR)'],
+        'Budget Tagihan Bulanan (Rp)': ['Budget Tagihan Bulanan (Rp)', 'Monthly Billing Budget (IDR)'],
         'Pendapatan per Jam (Rp)': ['Pendapatan per Jam (Rp)', 'Revenue per Hour (IDR)'],
         'Batas Atas (%)': ['Batas Atas (%)', 'Upper Limit (%)'], 'Batas Bawah (%)': ['Batas Bawah (%)', 'Lower Limit (%)'],
         'Mulai': ['Mulai', 'Start'], 'Selesai': ['Selesai', 'End'], 'Mode Kendali': ['Mode Kendali', 'Control Mode'],

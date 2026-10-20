@@ -887,12 +887,21 @@ namespace KWHMonitoring.Controllers
                 var wbpResult = CalculateWbpLwbp(hourlyKwhByHour, representativeSettings);
                 var wasteResult = CalculateWaste(hourlyKwhByHour, representativeSettings);
 
-                // Budget vs Actual
+                // Energy budget remains separate from the nominal monthly billing budget.
                 decimal budgetKWh = representativeSettings.BudgetKWh;
                 decimal budgetVariance = budgetKWh > 0 ? Math.Round(monthKWh - budgetKWh, 2) : 0;
                 decimal budgetVariancePct = budgetKWh > 0 ? Math.Round((monthKWh - budgetKWh) / budgetKWh * 100, 1) : 0;
                 decimal budgetCost = budgetKWh > 0 ? Math.Round(budgetKWh * tariffPerKWh, 0) : 0;
                 decimal actualCost = Math.Round(monthKWh * tariffPerKWh, 0);
+
+                // Monthly billing budget is the trend/manual nominal amount in rupiah.
+                decimal monthlyBillingBudgetAmount = representativeSettings.MonthlyBillingBudgetAmount ?? 0m;
+                decimal monthlyBillingBudgetVariance = monthlyBillingBudgetAmount > 0
+                    ? Math.Round(actualCost - monthlyBillingBudgetAmount, 0)
+                    : 0;
+                decimal monthlyBillingBudgetVariancePct = monthlyBillingBudgetAmount > 0
+                    ? Math.Round((actualCost - monthlyBillingBudgetAmount) / monthlyBillingBudgetAmount * 100, 1)
+                    : 0;
 
                 // Period comparison (MoM, YoY)
                 var lastMonth = startDate.AddMonths(-1);
@@ -988,7 +997,12 @@ namespace KWHMonitoring.Controllers
                     // Financial: Budget vs Actual
                     budget = new
                     {
-                        configured = budgetKWh > 0,
+                        configured = monthlyBillingBudgetAmount > 0 || budgetKWh > 0,
+                        monthlyBillingBudgetAmount,
+                        monthlyBillingBudgetSource = representativeSettings.MonthlyBillingBudgetSource,
+                        monthlyBillingBudgetManualOverride = representativeSettings.MonthlyBillingBudgetManualOverride,
+                        monthlyBillingBudgetVariance,
+                        monthlyBillingBudgetVariancePct,
                         budgetKWh, actualKWh = monthKWh, variance = budgetVariance, variancePercent = budgetVariancePct,
                         budgetCost, actualCost
                     },

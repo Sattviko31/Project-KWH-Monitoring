@@ -44,6 +44,8 @@ namespace KWHMonitoring.Services
 
             NormalizeBillingConfigurationDefaults(deviceSettings);
 
+            await PopulateAutomaticBudgetAsync(deviceSettings);
+
             NormalizeBillingCutoff(deviceSettings);
 
             // WBP/LWBP: if both 0, not configured — keep 0 to signal "use flat tariff"
@@ -70,6 +72,8 @@ namespace KWHMonitoring.Services
 
                 NormalizeBillingConfigurationDefaults(setting);
 
+                await PopulateAutomaticBudgetAsync(setting);
+
                 // WBP/LWBP: if both 0, not configured — keep 0
                 if (setting.WbpStartHour < 0 || setting.WbpStartHour > 23)
                     setting.WbpStartHour = 18;
@@ -79,6 +83,36 @@ namespace KWHMonitoring.Services
                 NormalizeBillingCutoff(setting);
 
                 result[setting.DeviceKey] = setting;
+            }
+
+            // A device can already have an active billing trend before its
+            // DeviceSettings row exists. Include that device in the effective
+            // settings so the trend budget is visible in Settings per Device.
+            var activeTrendDevices = await _context.BillingTrendProfiles
+                .AsNoTracking()
+                .Where(x => x.Status == "ACTIVE"
+                    && x.ActiveBaselineAmount.HasValue
+                    && x.ActiveBaselineAmount.Value > 0m)
+                .Select(x => x.DeviceKey)
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var deviceKey in activeTrendDevices)
+            {
+                if (string.IsNullOrWhiteSpace(deviceKey) || result.ContainsKey(deviceKey))
+                    continue;
+
+                var setting = new DeviceSettings
+                {
+                    DeviceKey = deviceKey,
+                    DeviceCategory = "Billboard",
+                    ControlMode = "OnOff"
+                };
+
+                NormalizeBillingConfigurationDefaults(setting);
+                await PopulateAutomaticBudgetAsync(setting);
+                NormalizeBillingCutoff(setting);
+                result[deviceKey] = setting;
             }
 
             return result;
@@ -120,6 +154,17 @@ namespace KWHMonitoring.Services
                 SurfaceArea = effective.SurfaceArea,
                 RevenuePerHour = effective.RevenuePerHour,
                 BillingAnomalyThreshold = effective.BillingAnomalyThreshold,
+                BillingAnomalyThresholdMode = effective.BillingAnomalyThresholdMode,
+                BillingAnomalyThresholdPercent = effective.BillingAnomalyThresholdPercent,
+                BillingTrendToleranceMode = effective.BillingTrendToleranceMode,
+                BillingTrendToleranceAmount = effective.BillingTrendToleranceAmount,
+                BillingTrendTolerancePercent = effective.BillingTrendTolerancePercent,
+                MonthlyBillingBudgetAmount = effective.MonthlyBillingBudgetAmount,
+                MonthlyBillingBudgetSource = effective.MonthlyBillingBudgetSource,
+                MonthlyBillingBudgetManualOverride = effective.MonthlyBillingBudgetManualOverride,
+                MonthlyBillingBudgetTrendProfileId = effective.MonthlyBillingBudgetTrendProfileId,
+                MonthlyBillingBudgetBaselineVersion = effective.MonthlyBillingBudgetBaselineVersion,
+                MonthlyBillingBudgetUpdatedAt = effective.MonthlyBillingBudgetUpdatedAt,
                 BillingCutoffEnabled = effective.BillingCutoffEnabled,
                 BillingCutoffDay = effective.BillingCutoffDay,
                 CreatedAt = DateTime.UtcNow,
@@ -210,6 +255,37 @@ namespace KWHMonitoring.Services
 
             if (!settings.BillingCutoffDay.HasValue || settings.BillingCutoffDay.Value < 25 || settings.BillingCutoffDay.Value > 31)
                 throw new ArgumentOutOfRangeException(nameof(settings.BillingCutoffDay), "Tanggal cutoff harus berada pada rentang 25 sampai 31 ketika cutoff diaktifkan.");
+        }
+
+        private async Task PopulateAutomaticBudgetAsync(DeviceSettings settings)
+        {
+            if (settings.MonthlyBillingBudgetManualOverride)
+                return;
+
+            var baseline = await _context.BillingTrendProfiles
+                .AsNoTracking()
+                .Where(x => x.DeviceKey == settings.DeviceKey
+                    && x.Status == "ACTIVE"
+                    && x.ActiveBaselineAmount.HasValue
+                    && x.ActiveBaselineAmount.Value > 0m)
+                .OrderByDescending(x => x.BaselineVersion)
+                .ThenByDescending(x => x.UpdatedAt)
+                .Select(x => new { x.Id, x.BaselineVersion, x.ActiveBaselineAmount })
+                .FirstOrDefaultAsync();
+
+            if (baseline == null)
+                return;
+
+            if (settings.MonthlyBillingBudgetAmount.HasValue
+                && string.Equals(settings.MonthlyBillingBudgetSource, "TREND_AUTO", StringComparison.OrdinalIgnoreCase)
+                && settings.MonthlyBillingBudgetBaselineVersion.HasValue
+                && settings.MonthlyBillingBudgetBaselineVersion.Value >= baseline.BaselineVersion)
+                return;
+
+            settings.MonthlyBillingBudgetAmount = Math.Round(baseline.ActiveBaselineAmount.Value, 2, MidpointRounding.AwayFromZero);
+            settings.MonthlyBillingBudgetSource = "TREND_AUTO";
+            settings.MonthlyBillingBudgetTrendProfileId = baseline.Id;
+            settings.MonthlyBillingBudgetBaselineVersion = baseline.BaselineVersion;
         }
 
         private static void NormalizeBillingConfigurationDefaults(DeviceSettings settings)
