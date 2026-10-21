@@ -10,6 +10,7 @@ namespace KWHMonitoring.Models
         public string SenderEmail { get; set; }
         public string SenderPassword { get; set; }
         public bool EnableEmailNotification { get; set; } = false;
+        public string PublicBaseUrl { get; set; }
 
         // Wablas WhatsApp Settings
         public string WablasServerUrl { get; set; }

@@ -1795,6 +1795,353 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        [HttpGet("report-pdf")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DownloadReportPdf(string type, long start, long end, long at, long exp, string sig)
+        {
+            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(sig) || exp <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+                return BadRequest("Link laporan tidak valid atau sudah kedaluwarsa.");
+
+            DateTime periodStart;
+            DateTime periodEnd;
+            DateTime calculatedAt;
+            try
+            {
+                periodStart = new DateTime(start, DateTimeKind.Local);
+                periodEnd = new DateTime(end, DateTimeKind.Local);
+                calculatedAt = new DateTime(at, DateTimeKind.Local);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return BadRequest("Periode laporan tidak valid.");
+            }
+
+            var payload = string.Join("|", type, start, end, at, exp);
+            var configuration = _serviceProvider.GetRequiredService<IConfiguration>();
+            var secret = configuration["Encryption:Key"] ?? string.Empty;
+            string expectedSignature;
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)))
+            {
+                expectedSignature = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)))
+                    .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            }
+            if (!FixedTimeEquals(expectedSignature, sig))
+                return Unauthorized();
+
+            var snapshots = await _context.BillingEstimateSnapshots.AsNoTracking()
+                .Where(x => x.ReportType == type.ToUpperInvariant() && x.CalculatedAt == calculatedAt)
+                .OrderBy(x => x.GroupName)
+                .ToListAsync();
+            if (snapshots.Count == 0)
+                return NotFound("Snapshot laporan tidak tersedia.");
+
+            var billingHistory = await _titikLokasiService.GetBillingHistoryAsync(
+                snapshots.Select(x => x.DeviceKey),
+                periodStart.AddMonths(-2),
+                periodEnd.AddMonths(3));
+            var billingRows = snapshots.Select(x =>
+            {
+                // Tagihan ERP berada satu bulan setelah periode konsumsi.
+                // Laporan September memakai ERP Oktober sebagai aktual periode
+                // ini dan ERP September sebagai aktual sebelumnya.
+                // The requested report period is authoritative for PDF output.
+                // Do not derive the ERP month from a stale snapshot period.
+                var reportPeriod = new DateTime(periodStart.Year, periodStart.Month, 1);
+                var paymentPeriod = reportPeriod.AddMonths(1);
+                var previousPaymentPeriod = reportPeriod;
+                var history = billingHistory.TryGetValue(x.DeviceKey, out var rows) ? rows : new List<ErpBillingRecord>();
+                var actual = history.Where(r => r.TagihanListrikID > 0 && r.JumlahTagihan >= 0m
+                        && r.Periode.Year == paymentPeriod.Year && r.Periode.Month == paymentPeriod.Month)
+                    .OrderByDescending(r => r.Periode).ThenByDescending(r => r.TagihanListrikID).FirstOrDefault();
+                var previous = history.Where(r => r.TagihanListrikID > 0 && r.JumlahTagihan >= 0m
+                        && r.Periode.Year == previousPaymentPeriod.Year && r.Periode.Month == previousPaymentPeriod.Month)
+                    .OrderByDescending(r => r.Periode).ThenByDescending(r => r.TagihanListrikID).FirstOrDefault();
+                return new ReportPdfRow
+                {
+                    Device = x.GroupName ?? x.DeviceKey,
+                    Location = x.KodeLokasi,
+                    Customer = x.IDPelanggan,
+                    // BillingPeriodLabel is [NotMapped] and is not restored when
+                    // snapshots are loaded from the database. Build the displayed
+                    // cutoff period from the persisted snapshot dates instead.
+                    Period = FormatBillingPeriodForPdf(x, periodStart, periodEnd),
+                    Energy = x.EnergyKWh,
+                    Estimate = x.EstimatedCost,
+                    Actual = actual == null ? (decimal?)null : actual.JumlahTagihan,
+                    Previous = previous == null ? (decimal?)null : previous.JumlahTagihan,
+                    // Keep PDF comparison semantics identical to the email:
+                    // estimate minus actual ERP, expressed as a percentage of actual ERP.
+                    EstimateDifference = actual == null ? (decimal?)null : x.EstimatedCost - actual.JumlahTagihan,
+                    ActualDifference = actual == null || previous == null ? (decimal?)null : actual.JumlahTagihan - previous.JumlahTagihan,
+                    Status = x.DataStatus
+                };
+            }).ToList();
+
+            var pdf = BuildReportPdf(type, periodStart, periodEnd, snapshots, billingRows);
+            return File(pdf, "application/pdf", string.Format("KWH_Report_{0}_{1:yyyyMMddHHmmss}.pdf", type, periodStart));
+        }
+
+        private static bool FixedTimeEquals(string left, string right)
+        {
+            var leftBytes = Encoding.UTF8.GetBytes(left ?? string.Empty);
+            var rightBytes = Encoding.UTF8.GetBytes(right ?? string.Empty);
+            return leftBytes.Length == rightBytes.Length && CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+        }
+
+        private sealed class ReportPdfRow
+        {
+            public string Device { get; set; }
+            public string Location { get; set; }
+            public string Customer { get; set; }
+            public string Period { get; set; }
+            public decimal Energy { get; set; }
+            public decimal Estimate { get; set; }
+            public decimal? Actual { get; set; }
+            public decimal? Previous { get; set; }
+            public decimal? EstimateDifference { get; set; }
+            public decimal? ActualDifference { get; set; }
+            public string Status { get; set; }
+        }
+
+        private static string FormatBillingPeriodForPdf(BillingEstimateSnapshot snapshot, DateTime fallbackStart, DateTime fallbackEnd)
+        {
+            var start = snapshot.PeriodStart;
+            var end = snapshot.PeriodEnd;
+            if (start == default(DateTime) || end <= start)
+            {
+                start = fallbackStart;
+                end = fallbackEnd;
+            }
+
+            // PeriodEnd is the exclusive boundary of the billing interval.
+            // Display the last included calendar date so the cutoff is clear.
+            var displayedEnd = end.Date.AddDays(-1);
+            if (displayedEnd < start.Date) displayedEnd = end.Date;
+            return string.Format(CultureInfo.InvariantCulture, "{0:dd/MM/yyyy} s.d. {1:dd/MM/yyyy}", start, displayedEnd);
+        }
+
+        private static byte[] BuildReportPdf(string reportType, DateTime periodStart, DateTime periodEnd, List<BillingEstimateSnapshot> snapshots, List<ReportPdfRow> rows)
+        {
+            var monthly = string.Equals(reportType, "monthly", StringComparison.OrdinalIgnoreCase);
+            // Monthly reports contain eleven columns. Use A3 landscape so the
+            // financial comparison remains readable instead of shrinking to 6pt.
+            // Other reports remain A4 landscape.
+            var pageWidth = monthly ? 1190.55f : 841.89f;
+            var pageHeight = monthly ? 841.89f : 595.28f;
+            const float pageMargin = 24f;
+            var contentWidth = pageWidth - (pageMargin * 2);
+            var tableRowHeight = monthly ? 33f : 28f;
+            var tableHeaderHeight = monthly ? 52f : 40f;
+            var tableTop = pageHeight - (monthly ? 327f : 260f);
+            const float footerY = 30f;
+            var rowsPerPage = Math.Max(1, (int)Math.Floor((tableTop - footerY - 10f - tableHeaderHeight) / tableRowHeight));
+            var pageCount = Math.Max(1, (int)Math.Ceiling(rows.Count / (double)rowsPerPage));
+            var pageContents = new List<string>();
+            for (var page = 0; page < pageCount; page++)
+            {
+                var content = new StringBuilder();
+                PdfRect(content, 0, 0, pageWidth, pageHeight, "0.95 0.96 0.98", false);
+                PdfRect(content, pageMargin, pageMargin, contentWidth, pageHeight - (pageMargin * 2), "1 1 1", true);
+                var headerHeight = monthly ? 124f : 104f;
+                PdfRect(content, pageMargin, pageHeight - headerHeight, contentWidth, headerHeight, "0.09 0.17 0.30", true);
+                PdfRect(content, pageMargin, pageHeight - headerHeight, 7f, headerHeight, "0.08 0.43 0.60", false);
+                PdfTextBold(content, pageMargin + 22, pageHeight - 36, "KWH MONITORING SYSTEM", 10, "1 1 1");
+                PdfTextBold(content, pageMargin + 22, pageHeight - 61, "LAPORAN KONSUMSI & ESTIMASI TAGIHAN", 18, "1 1 1");
+                PdfText(content, pageMargin + 22, pageHeight - 78, monthly ? "LAPORAN BULANAN" : "LAPORAN OPERASIONAL", 8, "0.72 0.86 0.94");
+                PdfText(content, pageMargin + 22, pageHeight - 96, string.Format("Periode laporan: {0:dd/MM/yyyy} s.d. {1:dd/MM/yyyy}", periodStart, periodEnd), 9, "0.86 0.91 1");
+                // if (monthly)
+                // {
+                //     PdfText(content, pageMargin + 22, pageHeight - 113, string.Format("Periode ERP: aktual {0:MM/yyyy} | pembanding {1:MM/yyyy}", periodStart.AddMonths(1), periodStart), 9, "0.86 0.91 1");
+                // }
+                PdfRect(content, pageWidth - pageMargin - 176, pageHeight - 86, 142f, 34f, "0.12 0.25 0.39", true);
+                PdfTextBold(content, pageWidth - pageMargin - 162, pageHeight - 67, "DOKUMEN RESMI", 8, "1 1 1");
+                PdfText(content, pageWidth - pageMargin - 162, pageHeight - 80, string.Format("Dicetak {0:dd/MM/yyyy HH:mm}", DateTime.Now), 7, "0.76 0.86 0.94");
+
+                var totalEnergy = snapshots.Sum(snapshot => snapshot.EnergyKWh);
+                var totalEstimate = snapshots.Sum(snapshot => snapshot.EstimatedCost);
+                var cardGap = 10f;
+                var cardWidth = (contentWidth - (cardGap * 2)) / 3f;
+                var metadataY = pageHeight - (monthly ? 206f : 180f);
+                var metadataHeight = monthly ? 42f : 36f;
+                PdfRect(content, pageMargin, metadataY, contentWidth, metadataHeight, "0.96 0.98 1", true);
+                PdfTextBold(content, pageMargin + 12, metadataY + metadataHeight - 15, "INFORMASI LAPORAN", 8, "0.09 0.17 0.30");
+                PdfText(content, pageMargin + 150, metadataY + metadataHeight - 15, monthly ? "Perbandingan estimasi, tagihan ERP aktual, dan tagihan periode sebelumnya" : "Ringkasan konsumsi dan estimasi biaya energi", 8, "0.25 0.32 0.40");
+                PdfText(content, pageMargin + 12, metadataY + 10, string.Format("Data perangkat: {0} | Dihitung: {1:dd/MM/yyyy HH:mm}", snapshots.Count, snapshots.Max(x => x.CalculatedAt)), 7, "0.40 0.45 0.52");
+                var cardY = pageHeight - (monthly ? 278f : 238f);
+                var cardHeight = monthly ? 56f : 48f;
+                PdfCard(content, pageMargin, cardY, cardWidth, cardHeight, "TOTAL ENERGI", string.Format("{0:N4} kWh", totalEnergy), "0.08 0.43 0.60");
+                PdfCard(content, pageMargin + cardWidth + cardGap, cardY, cardWidth, cardHeight, "TOTAL ESTIMASI TAGIHAN", string.Format("Rp {0:N2}", totalEstimate), "0.12 0.55 0.42");
+                PdfCard(content, pageMargin + ((cardWidth + cardGap) * 2), cardY, cardWidth, cardHeight, "TOTAL PERANGKAT", snapshots.Count.ToString(CultureInfo.InvariantCulture), "0.92 0.55 0.20");
+
+                var baseColumns = monthly
+                    ? new[] { 155f, 84f, 112f, 118f, 78f, 104f, 112f, 112f, 82f, 82f, 72f }
+                    : new[] { 210f, 110f, 135f, 175f, 105f, 125f, 85f };
+                var baseWidth = baseColumns.Sum();
+                var columnScale = contentWidth / baseWidth;
+                var columns = baseColumns.Select(width => width * columnScale).ToArray();
+                var headers = monthly
+                    ? new[] { "Perangkat", "Kode lokasi", "ID pelanggan", "Cutoff", "Energi (kWh)", "Estimasi (Rp)", "Tagihan Aktual", "Tagihan Sebelumnya", "Selisih estimasi", "Selisih Tagihan", "Status" }
+                    : new[] { "Nama perangkat", "Kode lokasi", "ID pelanggan", "Periode", "Energi (kWh)", "Estimasi", "Status" };
+                // Keep the table readable without allowing long values to
+                // collide with adjacent columns.
+                var tableFontSize = monthly ? 9 : 8;
+                var tableHeaderFontSize = monthly ? 10 : 9;
+                var cursorX = pageMargin;
+                for (var c = 0; c < columns.Length; c++)
+                {
+                    PdfRect(content, cursorX, tableTop - tableHeaderHeight, columns[c], tableHeaderHeight, "0.09 0.17 0.30", true);
+                    var headerLines = headers[c].Split(new[] { '\n' }, StringSplitOptions.None);
+                    for (var h = 0; h < headerLines.Length; h++)
+                    {
+                        PdfTextBold(content, cursorX + 5, tableTop - 18 - (h * 12), FitPdfText(headerLines[h], columns[c] - 10), tableHeaderFontSize, "1 1 1");
+                    }
+                    cursorX += columns[c];
+                }
+                var first = page * rowsPerPage;
+                var last = Math.Min(rows.Count, first + rowsPerPage);
+                for (var r = first; r < last; r++)
+                {
+                    var row = rows[r];
+                    var y = tableTop - tableHeaderHeight - ((r - first + 1) * tableRowHeight);
+                    cursorX = pageMargin;
+                    var values = monthly
+                        ? new[] { row.Device, row.Location, row.Customer, row.Period, row.Energy.ToString("N4"), FormatPdfMoney(row.Estimate), FormatPdfMoney(row.Actual), FormatPdfMoney(row.Previous), FormatPdfPercent(row.EstimateDifference, row.Actual), FormatPdfPercent(row.ActualDifference, row.Previous), row.Status }
+                        : new[] { row.Device, row.Location, row.Customer, row.Period, row.Energy.ToString("N4"), FormatPdfMoney(row.Estimate), row.Status };
+                    for (var c = 0; c < columns.Length; c++)
+                    {
+                        var rowColor = r % 2 == 0 ? "1 1 1" : "0.97 0.98 0.99";
+                        var isStatusCell = c == columns.Length - 1;
+                        var cellColor = isStatusCell ? GetPdfStatusColor(row.Status) : rowColor;
+                        PdfRect(content, cursorX, y, columns[c], tableRowHeight, cellColor, true);
+                        if (isStatusCell)
+                        {
+                            PdfTextBold(content, cursorX + 5, y + (monthly ? 11 : 9), FitPdfText(values[c], columns[c] - 10), tableFontSize, "1 1 1");
+                        }
+                        else
+                        {
+                            PdfText(content, cursorX + 5, y + (monthly ? 11 : 9), FitPdfText(values[c], columns[c] - 10), tableFontSize, "0.12 0.16 0.22");
+                        }
+                        cursorX += columns[c];
+                    }
+                }
+                PdfRect(content, pageMargin, footerY + 12, contentWidth, 0.8f, "0.08 0.43 0.60", false);
+                PdfTextBold(content, pageMargin, footerY, string.Format("KWH Monitoring System  |  Halaman {0}/{1}", page + 1, pageCount), 7, "0.25 0.32 0.40");
+                PdfText(content, pageWidth - pageMargin - 220, footerY, "Dokumen dibuat otomatis", 7, "0.40 0.45 0.52");
+                pageContents.Add(content.ToString());
+            }
+
+            var objects = new List<string>
+            {
+                string.Empty,
+                string.Empty,
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
+            };
+            var kids = new List<string>();
+            for (var i = 0; i < pageContents.Count; i++)
+            {
+                var pageObject = 5 + (i * 2);
+                var contentObject = pageObject + 1;
+                kids.Add(string.Format("{0} 0 R", pageObject));
+                objects.Add(string.Format(CultureInfo.InvariantCulture, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {0} {1}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {2} 0 R >>", pageWidth, pageHeight, contentObject));
+                objects.Add(string.Format("<< /Length {0} >>\nstream\n{1}\nendstream", Encoding.ASCII.GetByteCount(pageContents[i]), pageContents[i]));
+            }
+            objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+            objects[1] = string.Format("<< /Type /Pages /Kids [{0}] /Count {1} >>", string.Join(" ", kids), pageContents.Count);
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream, Encoding.ASCII, 1024, true))
+            {
+                writer.WriteLine("%PDF-1.4");
+                writer.Flush();
+                var offsets = new List<long> { 0 };
+                for (var i = 0; i < objects.Count; i++)
+                {
+                    offsets.Add(stream.Position);
+                    writer.WriteLine(string.Format("{0} 0 obj", i + 1));
+                    writer.WriteLine(objects[i]);
+                    writer.WriteLine("endobj");
+                    writer.Flush();
+                }
+                var xref = stream.Position;
+                writer.WriteLine("xref");
+                writer.WriteLine(string.Format("0 {0}", objects.Count + 1));
+                writer.WriteLine("0000000000 65535 f ");
+                for (var i = 1; i < offsets.Count; i++) writer.WriteLine(string.Format("{0:0000000000} 00000 n ", offsets[i]));
+                writer.WriteLine("trailer");
+                writer.WriteLine(string.Format("<< /Size {0} /Root 1 0 R >>", objects.Count + 1));
+                writer.WriteLine("startxref");
+                writer.WriteLine(xref);
+                writer.WriteLine("%%EOF");
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private static string FormatPdfMoney(decimal? value)
+        {
+            return value.HasValue ? string.Format("Rp {0:N0}", value.Value) : "-";
+        }
+
+        private static string FormatPdfPercent(decimal? difference, decimal? basis)
+        {
+            return difference.HasValue && basis.HasValue && basis.Value != 0m
+                ? string.Format("{0:N2}%", difference.Value / basis.Value * 100m)
+                : "-";
+        }
+
+        private static string FitPdfText(string value, float width)
+        {
+            var max = Math.Max(8, (int)(width / 4.2f));
+            value = value ?? string.Empty;
+            return value.Length <= max ? value : value.Substring(0, Math.Max(1, max - 1)) + "…";
+        }
+
+        private static void PdfCard(StringBuilder content, float x, float y, float width, float height, string label, string value, string accentColor)
+        {
+            PdfRect(content, x, y, width, height, "0.98 0.99 1", true);
+            PdfRect(content, x, y, 6f, height, accentColor, false);
+            PdfTextBold(content, x + 16, y + height - 17, label, 8, "0.25 0.32 0.40");
+            PdfTextBold(content, x + 16, y + 14, value, 14, "0.09 0.17 0.30");
+        }
+
+        private static string GetPdfStatusColor(string status)
+        {
+            if (string.Equals(status, "VALID", StringComparison.OrdinalIgnoreCase)) return "0.12 0.55 0.42";
+            if (string.Equals(status, "ANOMALI", StringComparison.OrdinalIgnoreCase)) return "0.80 0.25 0.25";
+            if (string.Equals(status, "WARNING", StringComparison.OrdinalIgnoreCase) || string.Equals(status, "PERLU CEK", StringComparison.OrdinalIgnoreCase)) return "0.92 0.55 0.12";
+            return "0.32 0.42 0.54";
+        }
+
+        private static void PdfRect(StringBuilder content, float x, float y, float width, float height, string color, bool stroke)
+        {
+            content.Append(color).Append(" rg ").Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(y.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(width.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(height.ToString(CultureInfo.InvariantCulture)).Append(" re f ");
+            if (stroke) content.Append("0.78 0.81 0.86 RG 0.5 w ").Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(y.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(width.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(height.ToString(CultureInfo.InvariantCulture)).Append(" re S ");
+        }
+
+        private static void PdfText(StringBuilder content, float x, float y, string text, int size, string color)
+        {
+            var safe = (text ?? string.Empty).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+            safe = new string(safe.Select(ch => ch <= 127 ? ch : '?').ToArray());
+            content.Append(color).Append(" rg BT /F1 ").Append(size).Append(" Tf ")
+                .Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(y.ToString(CultureInfo.InvariantCulture)).Append(" Td (").Append(safe).Append(") Tj ET ");
+        }
+
+        private static void PdfTextBold(StringBuilder content, float x, float y, string text, int size, string color)
+        {
+            var safe = (text ?? string.Empty).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+            safe = new string(safe.Select(ch => ch <= 127 ? ch : '?').ToArray());
+            content.Append(color).Append(" rg BT /F2 ").Append(size).Append(" Tf ")
+                .Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
+                .Append(y.ToString(CultureInfo.InvariantCulture)).Append(" Td (").Append(safe).Append(") Tj ET ");
+        }
+
         // ============================================
         // USAGE STATISTICS PER DEVICE
         // ============================================

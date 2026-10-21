@@ -4,10 +4,12 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Mail;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using KWHMonitoring.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -22,6 +24,7 @@ namespace KWHMonitoring.Services
         private readonly AesEncryptionService _encryption;
         private readonly IDeviceSettingsService _deviceSettingsService;
         private readonly ITitikLokasiService _titikLokasiService;
+        private readonly IConfiguration _configuration;
         private NotificationSettings _settings;
         private DateTime _settingsLoadedAt = DateTime.MinValue;
         private static readonly TimeSpan _settingsTTL = TimeSpan.FromMinutes(5);
@@ -30,7 +33,7 @@ namespace KWHMonitoring.Services
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger, AesEncryptionService encryption, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService)
+        public NotificationService(ApplicationDbContext context, AppSettingsCache settingsCache, ILogger<NotificationService> logger, AesEncryptionService encryption, IDeviceSettingsService deviceSettingsService, ITitikLokasiService titikLokasiService, IConfiguration configuration)
         {
             _context = context;
             _settingsCache = settingsCache;
@@ -38,6 +41,7 @@ namespace KWHMonitoring.Services
             _encryption = encryption;
             _deviceSettingsService = deviceSettingsService;
             _titikLokasiService = titikLokasiService;
+            _configuration = configuration;
             // Lazy-load settings on first use, not in constructor
             _settings = null;
         }
@@ -89,6 +93,7 @@ namespace KWHMonitoring.Services
                     SmtpPort = int.TryParse(GetVal(settingsRecord, "Notification.SmtpPort", "587"), out var port) ? port : 587,
                     SenderEmail = GetVal(settingsRecord, "Notification.SenderEmail", null),
                     SenderPassword = senderPassword,
+                    PublicBaseUrl = _configuration["PublicBaseUrl"],
                     EnableEmailNotification = bool.TryParse(GetVal(settingsRecord, "Notification.EnableEmail", "false"), out var emailOn) && emailOn,
 
                     WablasServerUrl = GetVal(settingsRecord, "Notification.WablasServerUrl", null),
@@ -267,7 +272,7 @@ namespace KWHMonitoring.Services
             var panelFreq = panelData?.Frekuensi_Hz ?? 0;
             var panelEnergy = panelData?.Total_Energy_Wh ?? 0;
 
-            var subject = $"⚠️ {alertLabel} Alert - {groupName}";
+            var subject = $" {alertLabel} Alert - {groupName}";
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
@@ -279,14 +284,14 @@ namespace KWHMonitoring.Services
 
                     <!-- Alert Info -->
                     <div style='padding: 20px; background-color: #f8f9fa; border-bottom: 3px solid {alertColor};'>
-                        <p style='margin: 0; font-size: 14px;'><strong>📅 Time:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>🖥️ Device:</strong> {groupName}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>📊 Severity:</strong> <span style='background-color: {severityColor}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px;'>{severityLevel}</span></p>
+                        <p style='margin: 0; font-size: 14px;'><strong> Time:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Device:</strong> {groupName}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Severity:</strong> <span style='background-color: {severityColor}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px;'>{severityLevel}</span></p>
                     </div>
 
                     <!-- Alert Detail Cards -->
                     <div style='padding: 20px;'>
-                        <h3 style='color: #333; border-bottom: 2px solid {alertColor}; padding-bottom: 10px;'>⚠️ Alert Details</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid {alertColor}; padding-bottom: 10px;'> Alert Details</h3>
                         <table style='width: 100%; border-collapse: collapse;'>
                             <tr>
                                 <td style='padding: 10px;'>
@@ -311,7 +316,7 @@ namespace KWHMonitoring.Services
                         </table>
 
                         <!-- Device Status -->
-                        <h3 style='color: #333; border-bottom: 2px solid {alertColor}; padding-bottom: 10px; margin-top: 25px;'>🖥️ Device Status</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid {alertColor}; padding-bottom: 10px; margin-top: 25px;'> Device Status</h3>
                         <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                             <thead>
                                 <tr style='background-color: {alertColor}; color: white;'>
@@ -374,35 +379,35 @@ namespace KWHMonitoring.Services
             {
                 var whatsappMessage = string.Format(
                     "{0} *{1}INSTANT ALERT*\n\n" +
-                    "🖥️ Device: *{2}*\n" +
-                    "📊 Type: *{3}*\n" +
-                    "⚡ {17}: *{4:N0} W*\n" +
-                    "📏 Threshold: *{18}*\n" +
-                    "📈 Deviation: *{19}*\n" +
+                    " Device: *{2}*\n" +
+                    " Type: *{3}*\n" +
+                    " {17}: *{4:N0} W*\n" +
+                    " Threshold: *{18}*\n" +
+                    " Deviation: *{19}*\n" +
                     "{20}" +
-                    "🏷️ Severity: *{7}*\n" +
-                    "🕐 Time: *{8:dd/MM/yyyy HH:mm:ss}*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "🖥️ *DEVICE STATUS*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "🔌 Voltage: *{9:N0} V*\n" +
-                    "⚡ Current: *{10:N0} A*\n" +
-                    "📏 PF: *{11:N2}*\n" +
-                    "🔄 Freq: *{12:N0} Hz*\n" +
-                    "🔋 Energy: *{13:N0} Wh*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "⚠️ *ANOMALY (24h)*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "📊 Total: *{14}*\n" +
-                    "🔴 Overload: *{15}*\n" +
-                    "🟡 Drop: *{16}*\n\n" +
+                    " Severity: *{7}*\n" +
+                    " Time: *{8:dd/MM/yyyy HH:mm:ss}*\n\n" +
+                    "\n" +
+                    " *DEVICE STATUS*\n" +
+                    "\n\n" +
+                    " Voltage: *{9:N0} V*\n" +
+                    " Current: *{10:N0} A*\n" +
+                    " PF: *{11:N2}*\n" +
+                    " Freq: *{12:N0} Hz*\n" +
+                    " Energy: *{13:N0} Wh*\n\n" +
+                    "\n" +
+                    " *ANOMALY (24h)*\n" +
+                    "\n\n" +
+                    " Total: *{14}*\n" +
+                    " Overload: *{15}*\n" +
+                    " Drop: *{16}*\n\n" +
                     "_KWH Monitoring System_",
                     alertIcon, isTest ? "[TEST] " : "", groupName, alertLabel,
                     powerValue, thresholdValue, deviation, severityLevel,
                     now, panelVoltage, panelCurrent, panelPF, panelFreq, panelEnergy,
                     recentAnomalies.Count, recentOverloadCount, recentDropCount,
                     powerLabel, thresholdDisplay, deviationDisplay,
-                    isDeviceOffline && !string.IsNullOrWhiteSpace(anomalyContext) ? "📡 " + anomalyContext + "\n" : string.Empty);
+                    isDeviceOffline && !string.IsNullOrWhiteSpace(anomalyContext) ? " " + anomalyContext + "\n" : string.Empty);
                 await SendWablasAsync(whatsappMessage);
             }
 
@@ -448,25 +453,25 @@ namespace KWHMonitoring.Services
 
             var downtimePeriod = string.Format("{0:D2}:00 - {1:D2}:00", startHour, endHour);
 
-            var subject = $"🔴 POWER ALERT - Listrik menyala saat jam mati! - {groupName}";
+            var subject = $" POWER ALERT - Listrik menyala saat jam mati! - {groupName}";
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
                     <div style='background: linear-gradient(135deg, #dc3545 0%, #6f1e1e 100%); color: white; padding: 25px; text-align: center;'>
-                        <h1 style='margin: 0; font-size: 24px;'>🔴 KWH MONITORING</h1>
+                        <h1 style='margin: 0; font-size: 24px;'> KWH MONITORING</h1>
                         <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>Power Alert - Listrik Menyala Saat Jam Mati</p>
                     </div>
 
                     <!-- Alert Info -->
                     <div style='padding: 20px; background-color: #f8d7da; border-bottom: 3px solid #dc3545;'>
-                        <p style='margin: 0; font-size: 14px;'><strong>📅 Time:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>🖥️ Device:</strong> {groupName}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>📊 Severity:</strong> <span style='background-color: #dc3545; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px;'>CRITICAL</span></p>
+                        <p style='margin: 0; font-size: 14px;'><strong> Time:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Device:</strong> {groupName}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Severity:</strong> <span style='background-color: #dc3545; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px;'>CRITICAL</span></p>
                     </div>
 
                     <!-- Alert Detail Cards -->
                     <div style='padding: 20px;'>
-                        <h3 style='color: #333; border-bottom: 2px solid #dc3545; padding-bottom: 10px;'>⚠️ Alert Details</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #dc3545; padding-bottom: 10px;'> Alert Details</h3>
                         <table style='width: 100%; border-collapse: collapse;'>
                             <tr>
                                 <td style='padding: 10px;'>
@@ -492,12 +497,12 @@ namespace KWHMonitoring.Services
 
                         <!-- Warning Box -->
                         <div style='margin-top: 20px; padding: 15px; background-color: #f8d7da; border-left: 4px solid #dc3545; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #721c24;'>⚡ Perhatian!</h4>
+                            <h4 style='margin: 0 0 10px 0; color: #721c24;'> Perhatian!</h4>
                             <p style='margin: 0; color: #721c24;'>Listrik seharusnya mati pada periode <strong>{downtimePeriod}</strong>, tetapi terdeteksi power <strong>{powerValue:N0} W</strong>. Silakan periksa perangkat segera.</p>
                         </div>
 
                         <!-- Device Status -->
-                        <h3 style='color: #333; border-bottom: 2px solid #dc3545; padding-bottom: 10px; margin-top: 25px;'>🖥️ Device Status</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #dc3545; padding-bottom: 10px; margin-top: 25px;'> Device Status</h3>
                         <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                             <thead>
                                 <tr style='background-color: #dc3545; color: white;'>
@@ -525,7 +530,7 @@ namespace KWHMonitoring.Services
 
                         <!-- Recent Anomaly Summary (24h) -->
                         <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #856404;'>⚠️ Anomaly Summary (Last 24 Hours)</h4>
+                            <h4 style='margin: 0 0 10px 0; color: #856404;'> Anomaly Summary (Last 24 Hours)</h4>
                             <table style='width: 100%;'>
                                 <tr>
                                     <td style='padding: 5px;'><strong>Total Anomalies:</strong></td>
@@ -545,7 +550,7 @@ namespace KWHMonitoring.Services
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
-                        <p style='margin: 0;'>🔴 KWH Monitoring System - Downtime Power Alert</p>
+                        <p style='margin: 0;'> KWH Monitoring System - Downtime Power Alert</p>
                         <p style='margin: 5px 0 0 0; opacity: 0.7;'>Generated at {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
                 </div>";
@@ -558,26 +563,26 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "🔴 *POWER ALERT*\n\n" +
-                    "🖥️ Device: *{0}*\n" +
-                    "⚡ Power: *{1:N0} W*\n" +
-                    "🕐 Jam Mati: *{2}*\n" +
-                    "🏷️ Status: *SEHARUSNYA MATI TAPI MASIH MENYALA*\n" +
-                    "🕐 Time: *{3:dd/MM/yyyy HH:mm:ss}*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "🖥️ *DEVICE STATUS*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "🔌 Voltage: *{4:N0} V*\n" +
-                    "⚡ Current: *{5:N0} A*\n" +
-                    "📏 PF: *{6:N2}*\n" +
-                    "🔄 Freq: *{7:N0} Hz*\n" +
-                    "🔋 Energy: *{8:N0} Wh*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "⚠️ *ANOMALY (24h)*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "📊 Total: *{9}*\n" +
-                    "🔴 Overload: *{10}*\n" +
-                    "🟡 Drop: *{11}*\n\n" +
+                    " *POWER ALERT*\n\n" +
+                    " Device: *{0}*\n" +
+                    " Power: *{1:N0} W*\n" +
+                    " Jam Mati: *{2}*\n" +
+                    " Status: *SEHARUSNYA MATI TAPI MASIH MENYALA*\n" +
+                    " Time: *{3:dd/MM/yyyy HH:mm:ss}*\n\n" +
+                    "\n" +
+                    " *DEVICE STATUS*\n" +
+                    "\n\n" +
+                    " Voltage: *{4:N0} V*\n" +
+                    " Current: *{5:N0} A*\n" +
+                    " PF: *{6:N2}*\n" +
+                    " Freq: *{7:N0} Hz*\n" +
+                    " Energy: *{8:N0} Wh*\n\n" +
+                    "\n" +
+                    " *ANOMALY (24h)*\n" +
+                    "\n\n" +
+                    " Total: *{9}*\n" +
+                    " Overload: *{10}*\n" +
+                    " Drop: *{11}*\n\n" +
                     "_KWH Monitoring System_",
                     groupName, powerValue, downtimePeriod,
                     now, panelVoltage, panelCurrent, panelPF, panelFreq, panelEnergy,
@@ -637,12 +642,12 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "📋 *HOURLY REPORT*\n\n" +
-                    "🕐 Period: {0:HH:mm} - {1:HH:mm}\n\n" +
-                    "📊 Total Anomalies: {2}\n" +
-                    "🔴 Overload: {3}\n" +
-                    "🟡 Device Drop: {4}\n" +
-                    "🖥️ Affected Devices: {5}\n\n" +
+                    " *HOURLY REPORT*\n\n" +
+                    " Period: {0:HH:mm} - {1:HH:mm}\n\n" +
+                    " Total Anomalies: {2}\n" +
+                    " Overload: {3}\n" +
+                    " Device Drop: {4}\n" +
+                    " Affected Devices: {5}\n\n" +
                     "_KWH Monitoring System_",
                     oneHourAgo, DateTime.Now, anomalies.Count, overloadCount, dropCount, deviceCount);
                 await SendWablasAsync(whatsappMessage);
@@ -732,24 +737,24 @@ namespace KWHMonitoring.Services
                 panelRows.Append($"</tr>");
             }
 
-            var subject = $"⚡ Hourly Report - {now:dd/MM/yyyy HH:mm}";
+            var subject = $" Hourly Report - {now:dd/MM/yyyy HH:mm}";
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
                     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; text-align: center;'>
-                        <h1 style='margin: 0; font-size: 24px;'>⚡ KWH MONITORING</h1>
+                        <h1 style='margin: 0; font-size: 24px;'> KWH MONITORING</h1>
                         <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>Hourly Report - Realtime Dashboard</p>
                     </div>
 
                     <!-- Report Info -->
                     <div style='padding: 20px; background-color: #f8f9fa; border-bottom: 3px solid #667eea;'>
-                        <p style='margin: 0; font-size: 14px;'><strong>📅 Period:</strong> {oneHourAgo:dd/MM/yyyy HH:mm} - {now:dd/MM/yyyy HH:mm}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>🕐 Generated:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
+                        <p style='margin: 0; font-size: 14px;'><strong> Period:</strong> {oneHourAgo:dd/MM/yyyy HH:mm} - {now:dd/MM/yyyy HH:mm}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Generated:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
 
                     <!-- Summary Cards -->
                     <div style='padding: 20px;'>
-                        <h3 style='color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px;'>📊 Summary Dashboard</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px;'> Summary Dashboard</h3>
                         <table style='width: 100%; border-collapse: collapse;'>
                             <tr>
                                 <td style='padding: 10px;'>
@@ -815,7 +820,7 @@ namespace KWHMonitoring.Services
 
                         <!-- Anomaly Summary -->
                         <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #856404;'>⚠️ Anomaly Summary (Last 1 Hour)</h4>
+                            <h4 style='margin: 0 0 10px 0; color: #856404;'> Anomaly Summary (Last 1 Hour)</h4>
                             <table style='width: 100%;'>
                                 <tr>
                                     <td style='padding: 5px;'><strong>Total Anomalies:</strong></td>
@@ -833,7 +838,7 @@ namespace KWHMonitoring.Services
                         </div>
 
                         <!-- Panel Details Table -->
-                        <h3 style='color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-top: 25px;'>📋 Panel Details</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-top: 25px;'> Panel Details</h3>
                         <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                             <thead>
                                 <tr style='background-color: #667eea; color: white;'>
@@ -853,7 +858,7 @@ namespace KWHMonitoring.Services
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
-                        <p style='margin: 0;'>⚡ KWH Monitoring System - Automated Hourly Report</p>
+                        <p style='margin: 0;'> KWH Monitoring System - Automated Hourly Report</p>
                         <p style='margin: 5px 0 0 0; opacity: 0.7;'>Generated at {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
                 </div>";
@@ -866,27 +871,27 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "⚡ *{0}HOURLY REPORT*\n\n" +
-                    "📅 Period: {1:HH:mm} - {2:HH:mm}\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "📊 *SUMMARY DASHBOARD*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "🖥️ Active Panels: *{3}*\n" +
-                    "⚡ Total Power: *{4:N0} W*\n" +
-                    "🔋 Total Energy: *{5:N0} Wh*\n" +
-                    "📏 Avg PF: *{6:N2}*\n" +
-                    "🔌 Avg Voltage: *{7:N0} V*\n" +
-                    "🔄 Avg Frequency: *{8:N0} Hz*\n" +
-                    "⚡ kWh (1h): *{9:N2}*\n" +
-                    "📅 Today: *{10:N2} kWh*\n" +
-                    "💰 Est. Cost (Today): *Rp {11:N0}*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "⚠️ *ANOMALY (1h)*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "📊 Total: *{12}*\n" +
-                    "🔴 Overload: *{13}*\n" +
-                    "🟡 Drop: *{14}*\n" +
-                    "🖥️ Devices: *{15}*\n\n" +
+                    " *{0}HOURLY REPORT*\n\n" +
+                    " Period: {1:HH:mm} - {2:HH:mm}\n\n" +
+                    "\n" +
+                    " *SUMMARY DASHBOARD*\n" +
+                    "\n\n" +
+                    " Active Panels: *{3}*\n" +
+                    " Total Power: *{4:N0} W*\n" +
+                    " Total Energy: *{5:N0} Wh*\n" +
+                    " Avg PF: *{6:N2}*\n" +
+                    " Avg Voltage: *{7:N0} V*\n" +
+                    " Avg Frequency: *{8:N0} Hz*\n" +
+                    " kWh (1h): *{9:N2}*\n" +
+                    " Today: *{10:N2} kWh*\n" +
+                    " Est. Cost (Today): *Rp {11:N0}*\n\n" +
+                    "\n" +
+                    " *ANOMALY (1h)*\n" +
+                    "\n\n" +
+                    " Total: *{12}*\n" +
+                    " Overload: *{13}*\n" +
+                    " Drop: *{14}*\n" +
+                    " Devices: *{15}*\n\n" +
                     "_KWH Monitoring System_",
                     isTest ? "[TEST] " : "", oneHourAgo, now, validPanels.Count, totalDaya, totalEnergy, avgPowerFactor,
                     avgVoltage, avgFrequency, hourKWh, todayKWh, estimatedCostToday,
@@ -949,12 +954,12 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "📋 *DAILY REPORT*\n\n" +
-                    "📅 Date: {0:dddd, dd MMMM yyyy}\n\n" +
-                    "📊 Total Anomalies: {1}\n" +
-                    "🔴 Overload: {2}\n" +
-                    "🟡 Device Drop: {3}\n" +
-                    "🖥️ Affected Devices: {4}\n\n" +
+                    " *DAILY REPORT*\n\n" +
+                    " Date: {0:dddd, dd MMMM yyyy}\n\n" +
+                    " Total Anomalies: {1}\n" +
+                    " Overload: {2}\n" +
+                    " Device Drop: {3}\n" +
+                    " Affected Devices: {4}\n\n" +
                     "_KWH Monitoring System_",
                     yesterday, anomalies.Count, overloadCount, dropCount, deviceCount);
                 await SendWablasAsync(whatsappMessage);
@@ -1044,24 +1049,24 @@ namespace KWHMonitoring.Services
                 panelRows.Append($"</tr>");
             }
 
-            var subject = $"⚡ Daily Report - {now:dd/MM/yyyy}";
+            var subject = $" Daily Report - {now:dd/MM/yyyy}";
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
                     <div style='background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 25px; text-align: center;'>
-                        <h1 style='margin: 0; font-size: 24px;'>⚡ KWH MONITORING</h1>
+                        <h1 style='margin: 0; font-size: 24px;'> KWH MONITORING</h1>
                         <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>Daily Report - Realtime Dashboard</p>
                     </div>
 
                     <!-- Report Info -->
                     <div style='padding: 20px; background-color: #f8f9fa; border-bottom: 3px solid #11998e;'>
-                        <p style='margin: 0; font-size: 14px;'><strong>📅 Date:</strong> {now:dddd, dd MMMM yyyy}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>🕐 Generated:</strong> {now:HH:mm:ss} (Realtime)</p>
+                        <p style='margin: 0; font-size: 14px;'><strong> Date:</strong> {now:dddd, dd MMMM yyyy}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Generated:</strong> {now:HH:mm:ss} (Realtime)</p>
                     </div>
 
                     <!-- Summary Cards -->
                     <div style='padding: 20px;'>
-                        <h3 style='color: #333; border-bottom: 2px solid #11998e; padding-bottom: 10px;'>📊 Summary Dashboard</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #11998e; padding-bottom: 10px;'> Summary Dashboard</h3>
                         <table style='width: 100%; border-collapse: collapse;'>
                             <tr>
                                 <td style='padding: 10px;'>
@@ -1147,7 +1152,7 @@ namespace KWHMonitoring.Services
 
                         <!-- Anomaly Summary -->
                         <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #856404;'>⚠️ Anomaly Summary (Today)</h4>
+                            <h4 style='margin: 0 0 10px 0; color: #856404;'> Anomaly Summary (Today)</h4>
                             <table style='width: 100%;'>
                                 <tr>
                                     <td style='padding: 5px;'><strong>Total Anomalies:</strong></td>
@@ -1165,7 +1170,7 @@ namespace KWHMonitoring.Services
                         </div>
 
                         <!-- Panel Details Table -->
-                        <h3 style='color: #333; border-bottom: 2px solid #11998e; padding-bottom: 10px; margin-top: 25px;'>📋 Panel Details</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #11998e; padding-bottom: 10px; margin-top: 25px;'> Panel Details</h3>
                         <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                             <thead>
                                 <tr style='background-color: #11998e; color: white;'>
@@ -1186,7 +1191,7 @@ namespace KWHMonitoring.Services
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
-                        <p style='margin: 0;'>⚡ KWH Monitoring System - Automated Daily Report</p>
+                        <p style='margin: 0;'> KWH Monitoring System - Automated Daily Report</p>
                         <p style='margin: 5px 0 0 0; opacity: 0.7;'>Generated at {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
                 </div>";
@@ -1199,30 +1204,30 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "⚡ *{0}DAILY REPORT*\n\n" +
-                    "📅 Date: *{1:dddd, dd MMMM yyyy}*\n" +
-                    "🕐 Time: {1:HH:mm:ss} (Realtime)\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "📊 *SUMMARY DASHBOARD*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "🖥️ Active Panels: *{2}*\n" +
-                    "⚡ Total Power: *{3:N0} W*\n" +
-                    "🔋 Total Energy: *{4:N0} Wh*\n" +
-                    "🔌 Aktif Energy: *{5:N0} Wh*\n" +
-                    "📊 Total W1M: *{6:N0} Wh*\n" +
-                    "📏 Avg PF: *{7:N2}*\n" +
-                    "🔌 Avg Voltage: *{8:N0} V*\n" +
-                    "🔄 Avg Freq: *{9:N0} Hz*\n" +
-                    "⚡ Today: *{10:N2} kWh*\n" +
-                    "📅 Month: *{11:N2} kWh*\n" +
-                    "💰 Est. Cost (Month): *Rp {12:N0}*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "⚠️ *ANOMALY (TODAY)*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "📊 Total: *{13}*\n" +
-                    "🔴 Overload: *{14}*\n" +
-                    "🟡 Drop: *{15}*\n" +
-                    "🖥️ Devices: *{16}*\n\n" +
+                    " *{0}DAILY REPORT*\n\n" +
+                    " Date: *{1:dddd, dd MMMM yyyy}*\n" +
+                    " Time: {1:HH:mm:ss} (Realtime)\n\n" +
+                    "\n" +
+                    " *SUMMARY DASHBOARD*\n" +
+                    "\n\n" +
+                    " Active Panels: *{2}*\n" +
+                    " Total Power: *{3:N0} W*\n" +
+                    " Total Energy: *{4:N0} Wh*\n" +
+                    " Aktif Energy: *{5:N0} Wh*\n" +
+                    " Total W1M: *{6:N0} Wh*\n" +
+                    " Avg PF: *{7:N2}*\n" +
+                    " Avg Voltage: *{8:N0} V*\n" +
+                    " Avg Freq: *{9:N0} Hz*\n" +
+                    " Today: *{10:N2} kWh*\n" +
+                    " Month: *{11:N2} kWh*\n" +
+                    " Est. Cost (Month): *Rp {12:N0}*\n\n" +
+                    "\n" +
+                    " *ANOMALY (TODAY)*\n" +
+                    "\n\n" +
+                    " Total: *{13}*\n" +
+                    " Overload: *{14}*\n" +
+                    " Drop: *{15}*\n" +
+                    " Devices: *{16}*\n\n" +
                     "_KWH Monitoring System_",
                     isTest ? "[TEST] " : "", now, validPanels.Count, totalDaya, totalEnergy, totalEnergiAktif, totalW1M, avgPowerFactor,
                     avgVoltage, avgFrequency, todayKWh, monthKWh, estimatedCostMonth,
@@ -1286,12 +1291,12 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "📋 *MONTHLY REPORT*\n\n" +
-                    "📅 Period: {0}\n\n" +
-                    "📊 Total Anomalies: {1}\n" +
-                    "🔴 Overload: {2}\n" +
-                    "🟡 Device Drop: {3}\n" +
-                    "🖥️ Affected Devices: {4}\n\n" +
+                    " *MONTHLY REPORT*\n\n" +
+                    " Period: {0}\n\n" +
+                    " Total Anomalies: {1}\n" +
+                    " Overload: {2}\n" +
+                    " Device Drop: {3}\n" +
+                    " Affected Devices: {4}\n\n" +
                     "_KWH Monitoring System_",
                     monthName, anomalies.Count, overloadCount, dropCount, deviceCount);
                 await SendWablasAsync(whatsappMessage);
@@ -1390,25 +1395,25 @@ namespace KWHMonitoring.Services
 
             var daysInPrevMonth = DateTime.DaysInMonth(firstDayOfPrevMonth.Year, firstDayOfPrevMonth.Month);
 
-            var subject = $"⚡ Monthly Report - {monthName}";
+            var subject = $" Monthly Report - {monthName}";
             var message = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;'>
                     <!-- Header -->
                     <div style='background: linear-gradient(135deg, #e65100 0%, #ff6d00 100%); color: white; padding: 25px; text-align: center;'>
-                        <h1 style='margin: 0; font-size: 24px;'>⚡ KWH MONITORING</h1>
+                        <h1 style='margin: 0; font-size: 24px;'> KWH MONITORING</h1>
                         <p style='margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;'>Monthly Report - {monthName}</p>
                     </div>
 
                     <!-- Report Info -->
                     <div style='padding: 20px; background-color: #f8f9fa; border-bottom: 3px solid #e65100;'>
-                        <p style='margin: 0; font-size: 14px;'><strong>📅 Period:</strong> {reportStart:dd/MM/yyyy} - {reportEnd:dd/MM/yyyy}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>🕐 Generated:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
-                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong>📊 Total Days:</strong> {daysInPrevMonth} days</p>
+                        <p style='margin: 0; font-size: 14px;'><strong> Period:</strong> {reportStart:dd/MM/yyyy} - {reportEnd:dd/MM/yyyy}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Generated:</strong> {now:dd/MM/yyyy HH:mm:ss}</p>
+                        <p style='margin: 5px 0 0 0; font-size: 14px;'><strong> Total Days:</strong> {daysInPrevMonth} days</p>
                     </div>
 
                     <!-- Summary Cards -->
                     <div style='padding: 20px;'>
-                        <h3 style='color: #333; border-bottom: 2px solid #e65100; padding-bottom: 10px;'>📊 Summary Dashboard</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #e65100; padding-bottom: 10px;'> Summary Dashboard</h3>
                         <table style='width: 100%; border-collapse: collapse;'>
                             <tr>
                                 <td style='padding: 10px;'>
@@ -1494,7 +1499,7 @@ namespace KWHMonitoring.Services
 
                         <!-- Anomaly Summary -->
                         <div style='margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;'>
-                            <h4 style='margin: 0 0 10px 0; color: #856404;'>⚠️ Anomaly Summary ({monthName})</h4>
+                            <h4 style='margin: 0 0 10px 0; color: #856404;'> Anomaly Summary ({monthName})</h4>
                             <table style='width: 100%;'>
                                 <tr>
                                     <td style='padding: 5px;'><strong>Total Anomalies:</strong></td>
@@ -1512,7 +1517,7 @@ namespace KWHMonitoring.Services
                         </div>
 
                         <!-- Panel Details Table -->
-                        <h3 style='color: #333; border-bottom: 2px solid #e65100; padding-bottom: 10px; margin-top: 25px;'>📋 Panel Details</h3>
+                        <h3 style='color: #333; border-bottom: 2px solid #e65100; padding-bottom: 10px; margin-top: 25px;'> Panel Details</h3>
                         <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                             <thead>
                                 <tr style='background-color: #e65100; color: white;'>
@@ -1533,7 +1538,7 @@ namespace KWHMonitoring.Services
 
                     <!-- Footer -->
                     <div style='background-color: #343a40; color: white; padding: 15px; text-align: center; font-size: 12px;'>
-                        <p style='margin: 0;'>⚡ KWH Monitoring System - Automated Monthly Report</p>
+                        <p style='margin: 0;'> KWH Monitoring System - Automated Monthly Report</p>
                         <p style='margin: 5px 0 0 0; opacity: 0.7;'>Generated at {now:dd/MM/yyyy HH:mm:ss}</p>
                     </div>
                 </div>";
@@ -1546,31 +1551,31 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "⚡ *{0}MONTHLY REPORT*\n\n" +
-                    "📅 Month: *{1}*\n" +
-                    "🕐 Period: {2:dd/MM/yyyy} - {3:dd/MM/yyyy}\n" +
-                    "📊 Total Days: {4} days\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "📊 *SUMMARY DASHBOARD*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "🖥️ Active Panels: *{5}*\n" +
-                    "⚡ Total Power: *{6:N0} W*\n" +
-                    "🔋 Total Energy: *{7:N0} Wh*\n" +
-                    "🔌 Aktif Energy: *{8:N0} Wh*\n" +
-                    "📊 Total W1M: *{9:N0} Wh*\n" +
-                    "📏 Avg PF: *{10:N2}*\n" +
-                    "🔌 Avg Voltage: *{11:N0} V*\n" +
-                    "🔄 Avg Freq: *{12:N0} Hz*\n" +
-                    "⚡ Month: *{13:N2} kWh*\n" +
-                    "📅 Year: *{14:N2} kWh*\n" +
-                    "💰 Est. Cost (Month): *Rp {15:N0}*\n\n" +
-                    "━━━━━━━━━━━━━━━━━━\n" +
-                    "⚠️ *ANOMALY ({16})*\n" +
-                    "━━━━━━━━━━━━━━━━━━\n\n" +
-                    "📊 Total: *{17}*\n" +
-                    "🔴 Overload: *{18}*\n" +
-                    "🟡 Drop: *{19}*\n" +
-                    "🖥️ Devices: *{20}*\n\n" +
+                    " *{0}MONTHLY REPORT*\n\n" +
+                    " Month: *{1}*\n" +
+                    " Period: {2:dd/MM/yyyy} - {3:dd/MM/yyyy}\n" +
+                    " Total Days: {4} days\n\n" +
+                    "\n" +
+                    " *SUMMARY DASHBOARD*\n" +
+                    "\n\n" +
+                    " Active Panels: *{5}*\n" +
+                    " Total Power: *{6:N0} W*\n" +
+                    " Total Energy: *{7:N0} Wh*\n" +
+                    " Aktif Energy: *{8:N0} Wh*\n" +
+                    " Total W1M: *{9:N0} Wh*\n" +
+                    " Avg PF: *{10:N2}*\n" +
+                    " Avg Voltage: *{11:N0} V*\n" +
+                    " Avg Freq: *{12:N0} Hz*\n" +
+                    " Month: *{13:N2} kWh*\n" +
+                    " Year: *{14:N2} kWh*\n" +
+                    " Est. Cost (Month): *Rp {15:N0}*\n\n" +
+                    "\n" +
+                    " *ANOMALY ({16})*\n" +
+                    "\n\n" +
+                    " Total: *{17}*\n" +
+                    " Overload: *{18}*\n" +
+                    " Drop: *{19}*\n" +
+                    " Devices: *{20}*\n\n" +
                     "_KWH Monitoring System_",
                     isTest ? "[TEST] " : "", monthName, reportStart, reportEnd, daysInPrevMonth,
                     validPanels.Count, totalDaya, totalEnergy, totalEnergiAktif, totalW1M,
@@ -1584,7 +1589,7 @@ namespace KWHMonitoring.Services
         }
 
         // ============================================
-        // REPORT RECIPIENTS — all active Operator/Admin users
+        // REPORT RECIPIENTS  all active Operator/Admin users
         // ============================================
 
         /// <summary>
@@ -1613,7 +1618,7 @@ namespace KWHMonitoring.Services
             {
                 periodEnd = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
                 periodStart = periodEnd.AddHours(-1);
-                periodLabel = string.Format("{0:dd MMMM yyyy HH:mm}–{1:HH:mm}", periodStart, periodEnd);
+                periodLabel = string.Format("{0:dd MMMM yyyy HH:mm}{1:HH:mm}", periodStart, periodEnd);
                 subject = string.Format("[KWH Monitoring] Laporan Energi Per Jam - {0:dd/MM/yyyy HH:mm}", periodStart);
 
                 energyRows = await _context.HourlyEnergy
@@ -1761,21 +1766,113 @@ namespace KWHMonitoring.Services
                 reportTitle = "Laporan Estimasi Tagihan Bulanan";
             }
 
-            var sourceRows = await GetAccurateEnergyRowsAsync(reportType, periodStart, periodEnd);
-            var deviceKeys = sourceRows.Select(x => x.DeviceKey).Distinct().ToList();
+            var activePanelKeys = await GetActivePanelDeviceKeysAsync();
+            var activePanelKeySet = new HashSet<string>(activePanelKeys, StringComparer.OrdinalIgnoreCase);
+            var sourceRows = (await GetAccurateEnergyRowsAsync(reportType, periodStart, periodEnd))
+                .Where(x => activePanelKeySet.Contains(x.DeviceKey))
+                .ToList();
+            var deviceKeys = activePanelKeys.ToList();
             var settingsMap = await _deviceSettingsService.GetAllEffectiveAsync();
+
+            Dictionary<string, BillingPeriod> monthlyPeriods = null;
+            List<DailyEnergy> monthlyDailyRows = null;
+            Dictionary<string, List<ErpBillingRecord>> billingHistory = null;
+            if (string.Equals(reportType, "monthly", StringComparison.OrdinalIgnoreCase))
+            {
+                monthlyPeriods = new Dictionary<string, BillingPeriod>(StringComparer.OrdinalIgnoreCase);
+                var discoveryStart = periodStart.AddMonths(-2);
+                var discoveryEnd = periodEnd;
+                monthlyDailyRows = await _context.DailyEnergy.AsNoTracking()
+                    .Where(x => x.Date >= discoveryStart && x.Date < discoveryEnd && x.EnergyKWh >= 0m && activePanelKeys.Contains(x.DeviceKey))
+                    .ToListAsync();
+                sourceRows = monthlyDailyRows
+                    .GroupBy(x => x.DeviceKey, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new EnergyReportRow
+                    {
+                        DeviceKey = g.Key,
+                        EnergyKWh = g.Sum(x => x.EnergyKWh),
+                        DataTimestamp = g.Max(x => x.CalculatedAt)
+                    })
+                    .OrderByDescending(x => x.EnergyKWh)
+                    .ToList();
+                foreach (var deviceKey in deviceKeys)
+                {
+                    settingsMap.TryGetValue(deviceKey, out var deviceSettings);
+                    var settings = deviceSettings ?? new DeviceSettings { DeviceKey = deviceKey };
+                    var resolved = BillingPeriodCalculator.Resolve(periodStart, settings.BillingCutoffEnabled, settings.BillingCutoffDay);
+                    monthlyPeriods[deviceKey] = resolved;
+                }
+                var historyStart = monthlyPeriods.Count == 0 ? periodStart.AddMonths(-2) : monthlyPeriods.Values.Min(x => x.Start).AddMonths(-2);
+                historyStart = new DateTime(historyStart.Year, historyStart.Month, 1);
+                var historyEnd = monthlyPeriods.Count == 0 ? periodEnd : monthlyPeriods.Values.Max(x => x.End);
+                historyEnd = new DateTime(historyEnd.Year, historyEnd.Month, 1).AddMonths(1);
+            }
+            // Cakupan laporan sengaja mengikuti daftar yang tampil di Panel Monitoring.
+            // DeviceRegistry, DeviceSettings, dan histori energi tidak boleh menambahkan
+            // device yang sudah tidak dipakai atau tidak tampil di panel.
+            deviceKeys = activePanelKeys.ToList();
+            if (monthlyPeriods != null)
+            {
+                foreach (var deviceKey in deviceKeys)
+                {
+                    if (monthlyPeriods.ContainsKey(deviceKey)) continue;
+                    settingsMap.TryGetValue(deviceKey, out var deviceSettings);
+                    var settings = deviceSettings ?? new DeviceSettings { DeviceKey = deviceKey };
+                    monthlyPeriods[deviceKey] = BillingPeriodCalculator.Resolve(
+                        periodStart,
+                        settings.BillingCutoffEnabled,
+                        settings.BillingCutoffDay);
+                }
+            }
+            var existingSourceKeys = new HashSet<string>(sourceRows.Select(x => x.DeviceKey), StringComparer.OrdinalIgnoreCase);
+            sourceRows.AddRange(deviceKeys
+                .Where(x => !existingSourceKeys.Contains(x))
+                .Select(x => new EnergyReportRow
+                {
+                    DeviceKey = x,
+                    EnergyKWh = 0m,
+                    DataTimestamp = default(DateTime)
+                }));
+            if (monthlyPeriods != null)
+            {
+                var historyStart = monthlyPeriods.Count == 0 ? periodStart.AddMonths(-2) : monthlyPeriods.Values.Min(x => x.Start).AddMonths(-2);
+                historyStart = new DateTime(historyStart.Year, historyStart.Month, 1);
+                var historyEnd = monthlyPeriods.Count == 0 ? periodEnd : monthlyPeriods.Values.Max(x => x.End);
+                // ERP menyimpan pembayaran pada bulan setelah periode konsumsi.
+                historyEnd = new DateTime(historyEnd.Year, historyEnd.Month, 1).AddMonths(2);
+                billingHistory = await _titikLokasiService.GetBillingHistoryAsync(deviceKeys, historyStart, historyEnd);
+            }
             var registryMap = await _context.DeviceRegistry.AsNoTracking()
                 .Where(x => deviceKeys.Contains(x.DeviceKey))
                 .ToDictionaryAsync(x => x.DeviceKey, StringComparer.OrdinalIgnoreCase);
             var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(deviceKeys);
+            var hourlyPeriodStart = monthlyPeriods == null || monthlyPeriods.Count == 0
+                ? periodStart
+                : monthlyPeriods.Values.Min(x => x.Start);
+            var hourlyPeriodEnd = monthlyPeriods == null || monthlyPeriods.Count == 0
+                ? periodEnd
+                : monthlyPeriods.Values.Max(x => x.End);
             var hourlyRows = await _context.HourlyEnergy.AsNoTracking()
-                .Where(x => x.Hour >= periodStart && x.Hour < periodEnd)
+                .Where(x => x.Hour >= hourlyPeriodStart && x.Hour < hourlyPeriodEnd && x.EnergyKWh >= 0m)
                 .Select(x => new { x.DeviceKey, x.Hour, x.EnergyKWh, x.CalculatedAt })
                 .ToListAsync();
 
             var snapshots = new List<BillingEstimateSnapshot>();
             foreach (var source in sourceRows)
             {
+                var devicePeriodStart = periodStart;
+                var devicePeriodEnd = periodEnd;
+                var deviceEnergy = source.EnergyKWh;
+                var deviceDataTimestamp = source.DataTimestamp;
+                if (monthlyPeriods != null && monthlyPeriods.TryGetValue(source.DeviceKey, out var devicePeriod))
+                {
+                    devicePeriodStart = devicePeriod.Start;
+                    devicePeriodEnd = devicePeriod.End;
+                    var deviceDaily = monthlyDailyRows.Where(x => x.DeviceKey.Equals(source.DeviceKey, StringComparison.OrdinalIgnoreCase)
+                        && x.Date >= devicePeriodStart && x.Date < devicePeriodEnd).ToList();
+                    deviceEnergy = deviceDaily.Sum(x => x.EnergyKWh);
+                    deviceDataTimestamp = deviceDaily.Count == 0 ? default(DateTime) : deviceDaily.Max(x => x.CalculatedAt);
+                }
                 settingsMap.TryGetValue(source.DeviceKey, out var settings);
                 settings = settings ?? new DeviceSettings { DeviceKey = source.DeviceKey };
                 registryMap.TryGetValue(source.DeviceKey, out var registry);
@@ -1783,27 +1880,32 @@ namespace KWHMonitoring.Services
 
                 var flatTariff = settings.TariffPerKWh > 0 ? settings.TariffPerKWh : 1500m;
                 var useWbp = settings.TariffWBP > 0 && settings.TariffLWBP > 0;
-                var deviceHourly = hourlyRows.Where(x => x.DeviceKey == source.DeviceKey).ToList();
+                var deviceHourly = hourlyRows.Where(x => x.DeviceKey == source.DeviceKey
+                    && x.Hour >= devicePeriodStart && x.Hour < devicePeriodEnd).ToList();
                 var wbpKWh = deviceHourly.Where(x => IsWbpHour(x.Hour.Hour, settings)).Sum(x => x.EnergyKWh);
                 var lwbpKWh = deviceHourly.Where(x => !IsWbpHour(x.Hour.Hour, settings)).Sum(x => x.EnergyKWh);
+                var hasTariffSplitData = !useWbp || (deviceHourly.Count > 0 && Math.Abs(wbpKWh + lwbpKWh - deviceEnergy) <= 0.01m);
 
-                if (deviceHourly.Count == 0 || Math.Abs(wbpKWh + lwbpKWh - source.EnergyKWh) > 0.01m)
+                if (!hasTariffSplitData)
                 {
-                    wbpKWh = useWbp ? Math.Round(source.EnergyKWh * 0m, 4) : 0m;
-                    lwbpKWh = source.EnergyKWh;
+                    wbpKWh = 0m;
+                    lwbpKWh = deviceEnergy;
                 }
 
-                var energy = Math.Round(source.EnergyKWh, 4);
+                var energy = Math.Round(deviceEnergy, 4);
                 var wbpCost = useWbp ? Math.Round(wbpKWh * settings.TariffWBP, 2) : Math.Round(energy * flatTariff, 2);
                 var lwbpCost = useWbp ? Math.Round(lwbpKWh * settings.TariffLWBP, 2) : 0m;
                 var totalCost = Math.Round(wbpCost + lwbpCost, 2);
-                var dataStatus = source.DataTimestamp == default(DateTime) ? "MISSING_TIMESTAMP" : "AVAILABLE";
+                var hasEnergyData = deviceDataTimestamp != default(DateTime) && deviceEnergy >= 0m;
+                var dataStatus = !hasEnergyData || !hasTariffSplitData
+                    ? "ANOMALI"
+                    : "VALID";
 
                 snapshots.Add(new BillingEstimateSnapshot
                 {
                     ReportType = reportType.ToUpperInvariant(),
-                    PeriodStart = periodStart,
-                    PeriodEnd = periodEnd,
+                    PeriodStart = devicePeriodStart,
+                    PeriodEnd = devicePeriodEnd,
                     DeviceKey = source.DeviceKey,
                     GroupName = string.IsNullOrWhiteSpace(registry?.GroupName) ? source.DeviceKey : registry.GroupName,
                     KodeLokasi = lokasi?.KodeLokasi ?? string.Empty,
@@ -1819,8 +1921,53 @@ namespace KWHMonitoring.Services
                     EstimatedCost = totalCost,
                     TariffMode = useWbp ? "WBP_LWBP" : "FLAT",
                     DataStatus = dataStatus,
-                    CalculatedAt = now
+                    CalculatedAt = now,
+                    BillingPeriodLabel = string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase)
+                        ? string.Format("{0:dd/MM/yyyy HH:mm} s.d. {1:HH:mm}", devicePeriodStart, devicePeriodEnd)
+                        : string.Format("{0:dd/MM/yyyy} s.d. {1:dd/MM/yyyy}", devicePeriodStart, devicePeriodEnd.AddDays(-1)),
                 });
+
+                if (billingHistory != null && billingHistory.TryGetValue(source.DeviceKey, out var history))
+                {
+                    // Tagihan ERP berada satu bulan setelah periode konsumsi.
+                    // Contoh: laporan Agustus memakai ERP September sebagai
+                    // aktual periode ini. Karena itu laporan September memakai
+                    // ERP Oktober sebagai aktual periode ini dan ERP September
+                    // sebagai aktual sebelumnya.
+                    // ERP mapping is based on the requested report month, not
+                    // the device cutoff start. A cutoff can begin in the prior
+                    // calendar month and must not shift the billing mapping.
+                    var reportPeriod = new DateTime(periodStart.Year, periodStart.Month, 1);
+                    var currentPaymentPeriod = reportPeriod.AddMonths(1);
+                    var previousPaymentPeriod = reportPeriod;
+                    var current = history.Where(x => x.TagihanListrikID > 0 && x.JumlahTagihan >= 0m
+                            && x.Periode.Year == currentPaymentPeriod.Year && x.Periode.Month == currentPaymentPeriod.Month)
+                        .OrderByDescending(x => x.Periode).ThenByDescending(x => x.TagihanListrikID).FirstOrDefault();
+                    var previous = history.Where(x => x.TagihanListrikID > 0 && x.JumlahTagihan >= 0m
+                            && x.Periode.Year == previousPaymentPeriod.Year && x.Periode.Month == previousPaymentPeriod.Month)
+                        .OrderByDescending(x => x.Periode).ThenByDescending(x => x.TagihanListrikID).FirstOrDefault();
+                    // Update the snapshot belonging to the current device. Using
+                    // the last list item here causes ERP values to be written to
+                    // the wrong device row in the monthly email/PDF.
+                    var snapshot = snapshots.FirstOrDefault(x =>
+                        string.Equals(x.DeviceKey, source.DeviceKey, StringComparison.OrdinalIgnoreCase));
+                    if (snapshot == null)
+                        continue;
+                    _logger.LogInformation(
+                        "Monthly ERP mapping for {DeviceKey}: report={ReportPeriod:yyyy-MM}, current={CurrentPeriod:yyyy-MM} ERP ID={CurrentId}, previous={PreviousPeriod:yyyy-MM} ERP ID={PreviousId}",
+                        source.DeviceKey,
+                        reportPeriod,
+                        currentPaymentPeriod,
+                        current == null ? 0L : current.TagihanListrikID,
+                        previousPaymentPeriod,
+                        previous == null ? 0L : previous.TagihanListrikID);
+                    snapshot.ActualBilling = current == null ? (decimal?)null : current.JumlahTagihan;
+                    snapshot.PreviousActualBilling = previous == null ? (decimal?)null : previous.JumlahTagihan;
+                    snapshot.EstimatedVsActualDifference = current == null ? (decimal?)null : snapshot.EstimatedCost - current.JumlahTagihan;
+                    snapshot.ActualVsPreviousDifference = current == null || previous == null ? (decimal?)null : current.JumlahTagihan - previous.JumlahTagihan;
+                    snapshot.BillingPeriodLabel = string.Format("{0:dd/MM/yyyy} s.d. {1:dd/MM/yyyy}", devicePeriodStart, devicePeriodEnd.AddDays(-1));
+                    snapshot.PreviousBillingPeriodLabel = previous == null ? string.Empty : previous.Periode.ToString("MM/yyyy");
+                }
             }
 
             await SaveBillingEstimateSnapshotsAsync(snapshots);
@@ -1829,9 +1976,10 @@ namespace KWHMonitoring.Services
             var tariffModes = snapshots.GroupBy(x => x.TariffMode).OrderBy(x => x.Key)
                 .Select(x => string.Format("{0}: {1}", x.Key, x.Count())).ToList();
             var latestData = snapshots.Count == 0 ? "Tidak tersedia" : snapshots.Max(x => x.CalculatedAt).ToString("dd/MM/yyyy HH:mm:ss");
-            var rowsHtml = BuildAccurateBillingRows(snapshots);
+            var rowsHtml = BuildAccurateBillingRows(reportType, snapshots);
             var subject = string.Format("[KWH Monitoring] {0} - {1}", reportTitle, periodLabel);
-            var body = BuildAccurateBillingReportHtml(reportTitle, periodLabel, periodStart, periodEnd, snapshots, totalKWh, reportTotalCost, latestData, tariffModes, now, isTest, rowsHtml);
+            var pdfUrl = BuildReportPdfUrl(reportType, periodStart, periodEnd, now);
+            var body = BuildAccurateBillingReportHtml(reportTitle, periodLabel, periodStart, periodEnd, snapshots, totalKWh, reportTotalCost, latestData, tariffModes, now, isTest, rowsHtml, pdfUrl);
 
             if (_settings.EnableEmailNotification)
                 await SendEmailAsync(subject, body);
@@ -1846,12 +1994,45 @@ namespace KWHMonitoring.Services
             }
         }
 
+        private async Task<List<string>> GetActivePanelDeviceKeysAsync()
+        {
+            var latest = await _context.KWH_Monitoring.AsNoTracking()
+                .GroupBy(x => x.DeviceKey)
+                .Select(g => g.OrderByDescending(x => x.Waktu_Server).FirstOrDefault())
+                .ToListAsync();
+            return latest
+                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.DeviceKey))
+                .Select(x => x.DeviceKey.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private string BuildReportPdfUrl(string reportType, DateTime periodStart, DateTime periodEnd, DateTime calculatedAt)
+        {
+            var baseUrl = _settings.PublicBaseUrl;
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
+                (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+                return string.Empty;
+
+            var expires = DateTimeOffset.UtcNow.AddDays(7).ToUnixTimeSeconds();
+            var payload = string.Join("|", reportType ?? string.Empty, periodStart.Ticks, periodEnd.Ticks, calculatedAt.Ticks, expires);
+            var secret = _configuration["Encryption:Key"] ?? string.Empty;
+            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)))
+            {
+                var signature = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)))
+                    .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                return baseUri.AbsoluteUri.TrimEnd('/') + "/api/Api/report-pdf?type=" + Uri.EscapeDataString(reportType) +
+                    "&start=" + periodStart.Ticks + "&end=" + periodEnd.Ticks + "&at=" + calculatedAt.Ticks + "&exp=" + expires + "&sig=" + Uri.EscapeDataString(signature);
+            }
+        }
+
         private async Task<List<EnergyReportRow>> GetAccurateEnergyRowsAsync(string reportType, DateTime periodStart, DateTime periodEnd)
         {
             if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase))
             {
                 return await _context.HourlyEnergy.AsNoTracking()
-                    .Where(x => x.Hour >= periodStart && x.Hour < periodEnd)
+                    .Where(x => x.Hour >= periodStart && x.Hour < periodEnd && x.EnergyKWh >= 0m)
                     .GroupBy(x => x.DeviceKey)
                     .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
                     .OrderByDescending(x => x.EnergyKWh).ToListAsync();
@@ -1859,13 +2040,13 @@ namespace KWHMonitoring.Services
             if (string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase))
             {
                 return await _context.DailyEnergy.AsNoTracking()
-                    .Where(x => x.Date >= periodStart && x.Date < periodEnd)
+                    .Where(x => x.Date >= periodStart && x.Date < periodEnd && x.EnergyKWh >= 0m)
                     .GroupBy(x => x.DeviceKey)
                     .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
                     .OrderByDescending(x => x.EnergyKWh).ToListAsync();
             }
-            return await _context.MonthlyEnergy.AsNoTracking()
-                .Where(x => x.Year == periodStart.Year && x.Month == periodStart.Month)
+            return await _context.DailyEnergy.AsNoTracking()
+                .Where(x => x.Date >= periodStart && x.Date < periodEnd && x.EnergyKWh >= 0m)
                 .GroupBy(x => x.DeviceKey)
                 .Select(g => new EnergyReportRow { DeviceKey = g.Key, EnergyKWh = g.Sum(x => x.EnergyKWh), DataTimestamp = g.Max(x => x.CalculatedAt) })
                 .OrderByDescending(x => x.EnergyKWh).ToListAsync();
@@ -1913,23 +2094,46 @@ namespace KWHMonitoring.Services
             await _context.SaveChangesAsync();
         }
 
-        private string BuildAccurateBillingRows(List<BillingEstimateSnapshot> snapshots)
+        private string BuildAccurateBillingRows(string reportType, List<BillingEstimateSnapshot> snapshots)
         {
             if (snapshots.Count == 0)
                 return "<tr><td colspan='11' style='padding:16px;text-align:center;color:#667085;'>Tidak ada data energi untuk periode ini.</td></tr>";
             var builder = new StringBuilder();
+            var isMonthly = string.Equals(reportType, "monthly", StringComparison.OrdinalIgnoreCase);
             foreach (var x in snapshots)
             {
-                builder.AppendFormat("<tr><td class='text strong'>{0}</td><td class='text'>{1}</td><td class='text'>{2}</td><td class='num'>{3:N4}</td><td class='text'>{4}</td><td class='num'>{5:N2}</td><td class='num'>{6:N2}</td><td class='num'>Rp {7:N2}</td><td class='num strong'>Rp {8:N2}</td><td class='text'>{9}</td><td class='text nowrap'>{10}</td></tr>", Html(x.GroupName), Html(x.KodeLokasi), Html(x.IDPelanggan), x.EnergyKWh, Html(x.TariffMode), x.WbpKWh, x.LwbpKWh, x.FlatTariffPerKWh, x.EstimatedCost, Html(x.DataStatus), x.CalculatedAt.ToString("dd/MM/yyyy HH:mm:ss"));
+                if (!isMonthly)
+                {
+                    builder.AppendFormat("<tr><td class='text strong'>{0}</td><td class='text'>{1}</td><td class='text'>{2}</td><td class='text nowrap'>{3}</td><td class='num'>{4:N4}</td><td class='num strong'>Rp {5:N2}</td><td class='text'>{6}</td></tr>",
+                        Html(x.GroupName), Html(x.KodeLokasi), Html(x.IDPelanggan), Html(x.BillingPeriodLabel), x.EnergyKWh, x.EstimatedCost, Html(x.DataStatus));
+                    continue;
+                }
+                var actual = x.ActualBilling.HasValue ? string.Format("Rp {0:N2}", x.ActualBilling.Value) : "-";
+                var previous = x.PreviousActualBilling.HasValue ? string.Format("Rp {0:N2}", x.PreviousActualBilling.Value) : "-";
+                var estimateDifference = x.EstimatedVsActualDifference.HasValue && x.ActualBilling.HasValue && x.ActualBilling.Value != 0m
+                    ? string.Format("{0:N2}%", x.EstimatedVsActualDifference.Value / x.ActualBilling.Value * 100m)
+                    : "-";
+                var previousDifference = x.ActualVsPreviousDifference.HasValue && x.PreviousActualBilling.HasValue && x.PreviousActualBilling.Value != 0m
+                    ? string.Format("{0:N2}%", x.ActualVsPreviousDifference.Value / x.PreviousActualBilling.Value * 100m)
+                    : "-";
+                builder.AppendFormat("<tr><td class='text strong'>{0}</td><td class='text'>{1}</td><td class='text'>{2}</td><td class='text nowrap'>{3}</td><td class='num'>{4:N4}</td><td class='num strong'>Rp {5:N2}</td><td class='num'>{6}</td><td class='num'>{7}</td><td class='num'>{8}</td><td class='num'>{9}</td><td class='text'>{10}</td></tr>", Html(x.GroupName), Html(x.KodeLokasi), Html(x.IDPelanggan), Html(x.BillingPeriodLabel), x.EnergyKWh, x.EstimatedCost, actual, previous, estimateDifference, previousDifference, Html(x.DataStatus));
             }
             return builder.ToString();
         }
-
-        private string BuildAccurateBillingReportHtml(string title, string periodLabel, DateTime periodStart, DateTime periodEnd, List<BillingEstimateSnapshot> snapshots, decimal totalKWh, decimal totalCost, string latestData, List<string> tariffModes, DateTime generatedAt, bool isTest, string rows)
+        private string BuildAccurateBillingReportHtml(string title, string periodLabel, DateTime periodStart, DateTime periodEnd, List<BillingEstimateSnapshot> snapshots, decimal totalKWh, decimal totalCost, string latestData, List<string> tariffModes, DateTime generatedAt, bool isTest, string rows, string pdfUrl)
         {
-            return string.Format(@"<!DOCTYPE html><html lang='id'><head><meta charset='UTF-8'><title>{0}</title><style>table{{font-family:Arial,sans-serif;}}.billing-table{{table-layout:fixed;}}.billing-table th,.billing-table td{{padding:7px 6px;border:1px solid #d9dee8;vertical-align:middle;line-height:1.35;}}.billing-table th{{font-size:10px;text-align:center;white-space:normal;}}.billing-table td{{font-size:10px;}}.billing-table .text{{text-align:left;word-break:break-word;}}.billing-table .num{{text-align:right;white-space:nowrap;}}.billing-table .strong{{font-weight:700;}}.billing-table .nowrap{{white-space:nowrap;}}.billing-table tbody tr:nth-child(even){{background:#f8fafc;}}</style></head><body style='margin:0;background:#eef1f5;font-family:Arial,sans-serif;color:#1f2937;'><table width='100%' cellpadding='0' cellspacing='0'><tr><td align='center' style='padding:24px 10px;'><table width='1100' style='max-width:1100px;background:#fff;border:1px solid #d0d5dd;border-collapse:collapse;'><tr><td colspan='11' style='padding:24px;background:#172b4d;color:#fff;border-bottom:4px solid #0b6e99;'><div style='font-size:12px;letter-spacing:1.3px;font-weight:bold;'>KWH MONITORING SYSTEM</div><h1 style='margin:8px 0 0;font-size:23px;'>{1}{2}</h1><div style='margin-top:7px;'>Periode: {3}</div></td></tr><tr><td colspan='11' style='padding:20px;'><table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;font-size:13px;'><tr><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Rentang waktu</td><td style='padding:8px;border:1px solid #d0d5dd;'>{4:dd/MM/yyyy HH:mm:ss} s.d. {5:dd/MM/yyyy HH:mm:ss}</td><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Data terakhir</td><td style='padding:8px;border:1px solid #d0d5dd;'>{6}</td></tr><tr><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Total perangkat</td><td style='padding:8px;border:1px solid #d0d5dd;'>{7}</td><td style='padding:8px;border:1px solid #d0d5dd;background:#f2f4f7;font-weight:bold;'>Mode tarif</td><td style='padding:8px;border:1px solid #d0d5dd;'>{8}</td></tr></table><p style='font-size:18px;font-weight:bold;color:#172b4d;margin:22px 0 8px;'>Rekapitulasi</p><table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;'><tr><td style='padding:14px;border:1px solid #d0d5dd;background:#f8fafc;'><small>Total energi</small><br><strong>{9:N4} kWh</strong></td><td style='padding:14px;border:1px solid #d0d5dd;background:#f8fafc;'><small>Total estimasi tagihan</small><br><strong>Rp {10:N2}</strong></td></tr></table><p style='font-size:18px;font-weight:bold;color:#172b4d;margin:22px 0 8px;'>Rincian per perangkat</p><div style='overflow-x:auto;width:100%;'><table class='billing-table' width='100%' cellpadding='0' cellspacing='0'><colgroup><col style='width:15%;'><col style='width:10%;'><col style='width:10%;'><col style='width:10%;'><col style='width:7%;'><col style='width:8%;'><col style='width:8%;'><col style='width:10%;'><col style='width:11%;'><col style='width:6%;'><col style='width:15%;'></colgroup><thead><tr style='background:#172b4d;color:#fff;'><th>Nama perangkat</th><th>Kode lokasi</th><th>ID pelanggan</th><th>Energi (kWh)</th><th>Mode</th><th>WBP (kWh)</th><th>LWBP (kWh)</th><th>Tarif flat</th><th>Estimasi</th><th>Status</th><th>Dihitung</th></tr></thead><tbody>{11}</tbody></table></div><p style='margin:18px 0 0;font-size:12px;color:#667085;'>Rekonsiliasi: total energi dan total tagihan pada laporan ini dihitung dari penjumlahan baris perangkat yang disimpan di database. Nama perangkat menggunakan GroupName, sedangkan Kode lokasi dan ID pelanggan berasal dari master ERP. Tarif flat adalah Rp {12:N2}/kWh bila tarif WBP/LWBP tidak lengkap. Jika data jam tidak tersedia atau tidak sama dengan agregasi periode, sistem menggunakan energi periode sebagai LWBP agar total biaya tetap konsisten dan status sumber tetap dapat diaudit.</p></td></tr><tr><td colspan='11' style='padding:15px 20px;background:#f2f4f7;border-top:1px solid #d0d5dd;font-size:11px;color:#667085;'>Dibuat otomatis pada {13:dd/MM/yyyy HH:mm:ss}. Snapshot disimpan pada BillingEstimateSnapshots.</td></tr></table></td></tr></table></body></html>", Html(title), Html(title), isTest ? " <span style='font-size:11px;color:#ffe08a;'>[TEST]</span>" : "", Html(periodLabel), periodStart, periodEnd, Html(latestData), snapshots.Count, Html(string.Join(", ", tariffModes)), totalKWh, totalCost, rows, snapshots.Count == 0 ? 0m : snapshots.Min(x => x.FlatTariffPerKWh), generatedAt);
+            var isMonthly = title.IndexOf("bulanan", StringComparison.OrdinalIgnoreCase) >= 0;
+            var colspan = isMonthly ? 11 : 7;
+            var headers = isMonthly
+                ? "<th>Perangkat</th><th>Kode lokasi</th><th>ID Pelanggan</th><th>Cutoff</th><th>Energi kWh</th><th>Estimasi Biaya</th><th>Tagihan Aktual</th><th>Tagihan Sebelumnya</th><th>Selisih Estimasi-Aktual</th><th>Selisih Periode Tagihan</th><th>Status</th>"
+                : "<th>Perangkat</th><th>Kode lokasi</th><th>ID pelanggan</th><th>Periode</th><th>Energi kWh</th><th>Estimasi biaya</th><th>Status</th>";
+            var mappingInfo = isMonthly
+                ? string.Format("Aktual periode ini: ERP {0:MM/yyyy} - Aktual sebelumnya: ERP {1:MM/yyyy}", periodStart.AddMonths(1), periodStart)
+                : "Mapping ERP tidak diterapkan untuk laporan ini.";
+            var downloadButton = string.IsNullOrWhiteSpace(pdfUrl) ? string.Empty : string.Format("<p style='margin:22px 0 6px;text-align:center;'><a href='{0}' style='display:inline-block;padding:13px 22px;background:#0b6e99;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;'>Unduh laporan PDF</a></p>", Html(pdfUrl));
+            var detailRows = rows;
+            return string.Format("<!DOCTYPE html><html lang='id'><head><meta charset='UTF-8'><title>{0}</title><style>body{{margin:0;background:#eef1f5;font-family:Arial,sans-serif;color:#1f2937;}}.wrap{{max-width:1500px;margin:24px auto;background:#fff;border:1px solid #d0d5dd;box-shadow:0 4px 16px rgba(16,24,40,.08);}}.billing-table{{table-layout:fixed;min-width:{1}px;border-collapse:collapse;}}.billing-table th,.billing-table td{{padding:9px 7px;border:1px solid #d9dee8;vertical-align:middle;line-height:1.35;}}.billing-table th{{font-size:11px;text-align:center;white-space:normal;}}.billing-table td{{font-size:11px;}}.billing-table .text{{text-align:left;word-break:break-word;}}.billing-table .num{{text-align:right;white-space:nowrap;}}.billing-table .strong{{font-weight:700;}}.billing-table tbody tr:nth-child(even){{background:#f8fafc;}}.meta td{{padding:9px 11px;border:1px solid #d0d5dd;font-size:12px;}}.meta .label{{background:#f2f4f7;font-weight:bold;width:150px;color:#344054;}}.card{{padding:15px;background:#f8fafc;border:1px solid #d0d5dd;}}.card-label{{font-size:11px;color:#667085;letter-spacing:.5px;}}.card-value{{font-size:20px;font-weight:bold;color:#172b4d;margin-top:5px;}}</style></head><body><table width='100%' cellpadding='0' cellspacing='0'><tr><td align='center'><table class='wrap' width='96%' cellpadding='0' cellspacing='0'><tr><td colspan='{1}' style='padding:25px 28px;background:#172b4d;color:#fff;border-bottom:4px solid #0b6e99;'><div style='font-size:12px;letter-spacing:1.5px;font-weight:bold;'>KWH MONITORING SYSTEM</div><h1 style='margin:9px 0 0;font-size:24px;'>{2}{3}</h1><div style='margin-top:8px;color:#dbeafe;font-size:13px;'>Laporan resmi konsumsi dan estimasi tagihan energi</div><div style='margin-top:13px;font-size:13px;color:#dbeafe;'>Periode laporan: {4}</div></td></tr><tr><td colspan='{1}' style='padding:22px 28px;'>{5}<table class='meta' width='100%' cellpadding='0' cellspacing='0'><tr><td class='label'>Rentang waktu</td><td>{6:dd/MM/yyyy HH:mm:ss} s.d. {7:dd/MM/yyyy HH:mm:ss}</td><td class='label'>Data terakhir</td><td>{8}</td></tr><tr><td class='label'>Total perangkat</td><td>{9}</td><td class='label'>Mode tarif</td><td>{10}</td></tr><tr><td class='label'>Mapping ERP</td><td colspan='3'><strong>{11}</strong></td></tr></table><h2 style='font-size:17px;color:#172b4d;margin:24px 0 10px;'>Ringkasan laporan</h2><table width='100%' cellpadding='0' cellspacing='8'><tr><td class='card'><div class='card-label'>TOTAL ENERGI</div><div class='card-value'>{12:N4} kWh</div></td><td class='card'><div class='card-label'>TOTAL ESTIMASI TAGIHAN</div><div class='card-value'>Rp {13:N2}</div></td><td class='card'><div class='card-label'>TOTAL PERANGKAT</div><div class='card-value'>{9}</div></td></tr></table><h2 style='font-size:17px;color:#172b4d;margin:24px 0 8px;'>Rincian per perangkat</h2><table class='billing-table' width='100%' cellpadding='0' cellspacing='0'><thead><tr style='background:#172b4d;color:#fff;'>{14}</tr></thead><tbody>{15}</tbody></table>{16}<p style='font-size:11px;color:#667085;line-height:1.6;margin-top:18px;'>Catatan: data yang belum tersedia pada sumber agregasi tidak diperkirakan dari snapshot monitoring. Laporan ini dibuat otomatis oleh KWH Monitoring System.</p></td></tr><tr><td colspan='{1}' style='padding:15px 28px;background:#f2f4f7;border-top:1px solid #d0d5dd;color:#667085;font-size:11px;'>Dibuat otomatis pada {17:dd/MM/yyyy HH:mm:ss}. Harap tidak membalas email ini.</td></tr></table></td></tr></table></body></html>", Html(title), isMonthly ? 11 : 7, Html(title), isTest ? " (TEST)" : string.Empty, Html(periodLabel), downloadButton, periodStart, periodEnd, Html(latestData), snapshots.Count, Html(string.Join(", ", tariffModes)), Html(mappingInfo), totalKWh, totalCost, headers, detailRows, downloadButton, generatedAt);
         }
-
         private bool IsReportEnabled(string reportType)
         {
             if (string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase)) return _settings.SendHourlyReport;
@@ -2057,7 +2261,7 @@ namespace KWHMonitoring.Services
                 ? string.Format("{0:N2}%", differencePercent.Value)
                 : "Tidak tersedia";
             var subject = string.Format(
-                "⚠️ BILLING VARIANCE - {0} - {1:MMMM yyyy}",
+                " BILLING VARIANCE - {0} - {1:MMMM yyyy}",
                 deviceKey,
                 billingPeriod);
             var message = string.Format(
@@ -2097,14 +2301,14 @@ namespace KWHMonitoring.Services
             if (_settings.EnableWhatsAppNotification)
             {
                 var whatsappMessage = string.Format(
-                    "⚠️ *BILLING VARIANCE*\n\n" +
-                    "🖥️ Device: *{0}*\n" +
-                    "📅 Periode: *{1:MMMM yyyy}*\n" +
-                    "💰 Estimasi: *Rp {2:N0}*\n" +
-                    "🧾 Aktual ERP: *Rp {3:N0}*\n" +
-                    "📊 Selisih: *Rp {4:N0} ({5})*\n" +
-                    "📏 Ambang: *Rp {6:N0}*\n" +
-                    "🆔 TagihanListrikID: *{7}*\n\n" +
+                    " *BILLING VARIANCE*\n\n" +
+                    " Device: *{0}*\n" +
+                    " Periode: *{1:MMMM yyyy}*\n" +
+                    " Estimasi: *Rp {2:N0}*\n" +
+                    " Aktual ERP: *Rp {3:N0}*\n" +
+                    " Selisih: *Rp {4:N0} ({5})*\n" +
+                    " Ambang: *Rp {6:N0}*\n" +
+                    " TagihanListrikID: *{7}*\n\n" +
                     "Tagihan yang di-input ke ERP dianggap sudah payment dan valid.\n" +
                     "_KWH Monitoring System_",
                     deviceKey, billingPeriod, estimatedBilling, actualBilling,
@@ -2131,7 +2335,7 @@ namespace KWHMonitoring.Services
         }
 
         // ============================================
-        // EMAIL SENDER (for reports — sends to all Operator/Admin users)
+        // EMAIL SENDER (for reports  sends to all Operator/Admin users)
         // ============================================
         public async Task SendEmailAsync(string subject, string body)
         {
@@ -2147,7 +2351,7 @@ namespace KWHMonitoring.Services
             var recipients = await GetReportRecipientEmailsAsync();
             if (recipients.Count == 0)
             {
-                _logger.LogWarning("No Operator/Admin recipients found — report email skipped");
+                _logger.LogWarning("No Operator/Admin recipients found  report email skipped");
                 return;
             }
 

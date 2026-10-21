@@ -59,9 +59,27 @@ namespace KWHMonitoring.Models
         public string TariffMode { get; set; } = "FLAT";
 
         [Required, MaxLength(30)]
-        public string DataStatus { get; set; } = "AVAILABLE";
+        public string DataStatus { get; set; } = "ANOMALI";
 
         public DateTime CalculatedAt { get; set; } = DateTime.Now;
         public DateTime? SentAt { get; set; }
+
+        [NotMapped]
+        public decimal? ActualBilling { get; set; }
+
+        [NotMapped]
+        public decimal? PreviousActualBilling { get; set; }
+
+        [NotMapped]
+        public decimal? EstimatedVsActualDifference { get; set; }
+
+        [NotMapped]
+        public decimal? ActualVsPreviousDifference { get; set; }
+
+        [NotMapped]
+        public string BillingPeriodLabel { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string PreviousBillingPeriodLabel { get; set; } = string.Empty;
     }
 }
