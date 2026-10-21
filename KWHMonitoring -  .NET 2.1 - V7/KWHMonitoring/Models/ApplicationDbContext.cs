@@ -38,9 +38,16 @@ namespace KWHMonitoring.Models
         private bool HasAppSettingsChanges()
         {
             return ChangeTracker.Entries<AppSettingsRecord>().Any(e =>
-                e.State == EntityState.Added ||
-                e.State == EntityState.Modified ||
-                e.State == EntityState.Deleted);
+                !IsAnomalyStateKey(e.Entity.SettingKey) &&
+                (e.State == EntityState.Added ||
+                 e.State == EntityState.Modified ||
+                 e.State == EntityState.Deleted));
+        }
+
+        private static bool IsAnomalyStateKey(string key)
+        {
+            return !string.IsNullOrEmpty(key) &&
+                key.StartsWith("AnomalyState.", StringComparison.Ordinal);
         }
 
         public DbSet<KWHData> KWH_Monitoring { get; set; }

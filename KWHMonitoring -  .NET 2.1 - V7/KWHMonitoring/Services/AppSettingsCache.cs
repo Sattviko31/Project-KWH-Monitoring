@@ -57,8 +57,21 @@ namespace KWHMonitoring.Services
                 using (var scope = _scopeFactory.CreateScope())
                 {
                     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    records = await context.AppSettingsRecords
-                        .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+                    // AnomalyState.* is runtime/browser state, not application
+                    // configuration. Excluding it keeps this cache small and
+                    // prevents anomaly polling from invalidating configuration.
+                    var rows = await context.AppSettingsRecords
+                        .AsNoTracking()
+                        .Where(x => !x.SettingKey.StartsWith("AnomalyState."))
+                        .OrderByDescending(x => x.UpdatedAt ?? DateTime.MinValue)
+                        .ThenByDescending(x => x.Id)
+                        .ToListAsync();
+
+                    // Keep the newest row when reading legacy databases that may
+                    // contain duplicate keys from before the unique index existed.
+                    records = rows
+                        .GroupBy(x => x.SettingKey, StringComparer.Ordinal)
+                        .ToDictionary(g => g.Key, g => g.First().SettingValue, StringComparer.Ordinal);
                 }
 
                 lock (_lock)

@@ -21,7 +21,6 @@ namespace KWHMonitoring.Controllers
         private readonly IDeviceSettingsService _deviceSettingsService;
         private readonly ITitikLokasiService _titikLokasiService;
         private readonly ILogger<MonitoringController> _logger;
-        private static AppSettings _appSettings = new AppSettings();
 
         public MonitoringController(
             ApplicationDbContext context,
@@ -48,9 +47,10 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
+                var currentSettings = await LoadSystemSettingsAsync();
                 var viewModel = new DashboardViewModel
                 {
-                    Settings = _appSettings
+                    Settings = currentSettings
                 };
 
                 var latestData = await _context.KWH_Monitoring
@@ -156,7 +156,7 @@ namespace KWHMonitoring.Controllers
                     };
                 }
 
-                ViewBag.TariffPerKWh = _appSettings.TariffPerKWh ?? 1500m;
+                ViewBag.TariffPerKWh = currentSettings.TariffPerKWh ?? 1500m;
 
                 return View(viewModel);
             }
@@ -175,9 +175,10 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
+                var currentSettings = await LoadSystemSettingsAsync();
                 var viewModel = new DashboardViewModel
                 {
-                    Settings = _appSettings
+                    Settings = currentSettings
                 };
 
                 var latestData = await _context.KWH_Monitoring
@@ -468,8 +469,15 @@ namespace KWHMonitoring.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Settings()
         {
-            var settings = await _context.AppSettingsRecords
-                .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+            var settingsRows = await _context.AppSettingsRecords
+                .AsNoTracking()
+                .Where(x => !x.SettingKey.StartsWith("AnomalyState."))
+                .OrderByDescending(x => x.UpdatedAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Id)
+                .ToListAsync();
+            var settings = settingsRows
+                .GroupBy(x => x.SettingKey, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().SettingValue, StringComparer.Ordinal);
 
             var masterAdminUser = await _context.ApplicationUsers
                 .FirstOrDefaultAsync(x => x.IsMasterAdmin && x.IsActive);
@@ -710,7 +718,6 @@ namespace KWHMonitoring.Controllers
                 }
 
                 await _context.SaveChangesAsync();
-                _appSettings = settings;
 
                 await LogSecurityActionAsync(SecurityAction.SettingsUpdated,
                     "System settings diperbarui", true);
@@ -764,6 +771,36 @@ namespace KWHMonitoring.Controllers
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        private async Task<AppSettings> LoadSystemSettingsAsync()
+        {
+            var rows = await _context.AppSettingsRecords
+                .AsNoTracking()
+                .Where(x => !x.SettingKey.StartsWith("AnomalyState."))
+                .OrderByDescending(x => x.UpdatedAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Id)
+                .ToListAsync();
+
+            var settings = rows
+                .GroupBy(x => x.SettingKey, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().SettingValue, StringComparer.Ordinal);
+
+            return new AppSettings
+            {
+                EmaPeriod = GetIntSetting(settings, "emaPeriod", 20),
+                EmaMode = GetStrSetting(settings, "emaMode", "manual"),
+                EmaUpperThreshold = GetIntSetting(settings, "emaUpperThreshold", 0),
+                EmaLowerThreshold = GetIntSetting(settings, "emaLowerThreshold", 0),
+                EmaFibUpper = GetDblSetting(settings, "emaFibUpper", 0),
+                EmaFibLower = GetDblSetting(settings, "emaFibLower", 0),
+                EmaShowLine = GetBoolSetting(settings, "emaShowLine", true),
+                EmaShowThresholds = GetBoolSetting(settings, "emaShowThresholds", true),
+                useInitial100ForEma = GetBoolSetting(settings, "useInitial100ForEma", false),
+                RefreshInterval = GetIntSetting(settings, "refreshInterval", 10),
+                ChartDataPoints = GetIntSetting(settings, "chartDataPoints", 20),
+                TariffPerKWh = GetDecSetting(settings, "Tariff.PerKWh", 1500m)
+            };
         }
 
         // ============================================

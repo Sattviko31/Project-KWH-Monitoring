@@ -7399,7 +7399,7 @@ namespace KWHMonitoring.Controllers
                 var statePrefix = "AnomalyState." + parsedScopeId.ToString("N") + ".";
                 var expiredState = await _context.AppSettingsRecords
                     .Where(x => x.SettingKey.StartsWith("AnomalyState.") && x.UpdatedAt.HasValue
-                        && x.UpdatedAt.Value < DateTime.Now.AddDays(-30))
+                        && x.UpdatedAt.Value < DateTime.Now.AddDays(-7))
                     .ToListAsync();
                 if (expiredState.Count > 0)
                 {
@@ -7469,6 +7469,25 @@ namespace KWHMonitoring.Controllers
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
 
+                // Include records already stored for this scope. This allows an
+                // empty payload or a device removed from the current page to
+                // delete its stale Counts/Cooldown rows instead of leaving them
+                // permanently in AppSettings.
+                var existingStateKeys = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith(statePrefix + "Counts.") ||
+                                x.SettingKey.StartsWith(statePrefix + "Cooldown."))
+                    .Select(x => x.SettingKey)
+                    .ToListAsync();
+
+                deviceKeys = deviceKeys
+                    .Concat(existingStateKeys.Select(key =>
+                        key.StartsWith(statePrefix + "Counts.", StringComparison.Ordinal)
+                            ? key.Substring((statePrefix + "Counts.").Length)
+                            : key.Substring((statePrefix + "Cooldown.").Length)))
+                    .Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 20)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
                 foreach (var deviceKey in deviceKeys)
                 {
                     var deviceCounts = new JObject();
@@ -7491,8 +7510,18 @@ namespace KWHMonitoring.Controllers
 
         private async Task UpsertAnomalyStateRecordAsync(string key, string value)
         {
-            if (value.Length > 500) throw new InvalidOperationException("Per-device anomaly state exceeds the AppSettings value limit");
             var record = await _context.AppSettingsRecords.FirstOrDefaultAsync(x => x.SettingKey == key);
+
+            // Empty cooldown/count objects represent no active runtime state.
+            // Do not retain them as rows in the configuration table.
+            if (string.Equals(value?.Trim(), "{}", StringComparison.Ordinal))
+            {
+                if (record != null)
+                    _context.AppSettingsRecords.Remove(record);
+                return;
+            }
+
+            if (value.Length > 500) throw new InvalidOperationException("Per-device anomaly state exceeds the AppSettings value limit");
             if (record == null)
             {
                 _context.AppSettingsRecords.Add(new AppSettingsRecord
