@@ -67,7 +67,11 @@ namespace KWHMonitoring.Services
             result.DifferencePercent = estimatedBilling == 0m
                 ? (erpBilling.JumlahTagihan == 0m ? 0m : (decimal?)null)
                 : Math.Round(result.Difference.Value / estimatedBilling * 100m, 4, MidpointRounding.AwayFromZero);
-            result.EstimateVsErpIsAnomaly = Math.Abs(result.Difference.Value) > result.Threshold;
+            result.EstimateVsErpIsAnomaly = result.Difference.Value > result.Threshold
+                || result.Difference.Value < -result.Threshold;
+            result.EstimateVsErpDirection = result.Difference.Value > result.Threshold
+                ? "UPPER"
+                : (result.Difference.Value < -result.Threshold ? "LOWER" : null);
 
             if (previousErpBilling != null && previousErpBilling.TagihanListrikID > 0 && previousErpBilling.JumlahTagihan >= 0m)
             {
@@ -78,7 +82,11 @@ namespace KWHMonitoring.Services
                 result.PeriodDifferencePercent = previousErpBilling.JumlahTagihan == 0m
                     ? (erpBilling.JumlahTagihan == 0m ? 0m : (decimal?)null)
                     : Math.Round(result.PeriodDifference.Value / previousErpBilling.JumlahTagihan * 100m, 4, MidpointRounding.AwayFromZero);
-                result.PeriodOverPeriodIsAnomaly = result.PeriodDifference.Value > result.Threshold;
+                result.PeriodOverPeriodIsAnomaly = result.PeriodDifference.Value > result.Threshold
+                    || result.PeriodDifference.Value < -result.Threshold;
+                result.PeriodOverPeriodDirection = result.PeriodDifference.Value > result.Threshold
+                    ? "UPPER"
+                    : (result.PeriodDifference.Value < -result.Threshold ? "LOWER" : null);
             }
 
             result.IsAnomaly = result.EstimateVsErpIsAnomaly || result.PeriodOverPeriodIsAnomaly;

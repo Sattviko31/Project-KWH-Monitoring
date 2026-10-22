@@ -26,8 +26,10 @@ namespace KWHMonitoring.Services
         public long? LogId { get; set; }
         public bool IsDuplicate { get; set; }
         public bool EstimateVsErpIsAnomaly { get; set; }
+        public string EstimateVsErpDirection { get; set; }
         public long? EstimateVsErpLogId { get; set; }
         public bool PeriodOverPeriodIsAnomaly { get; set; }
+        public string PeriodOverPeriodDirection { get; set; }
         public long? PeriodOverPeriodLogId { get; set; }
         public decimal? PeriodDifference { get; set; }
         public decimal? PeriodDifferencePercent { get; set; }

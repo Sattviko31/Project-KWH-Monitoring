@@ -381,7 +381,7 @@ namespace KWHMonitoring.Services
             if (string.IsNullOrWhiteSpace(deviceKey) || erpBillingId <= 0
                 || (!isPeriodOverPeriod && !isEstimateVsErp)
                 || (isPeriodOverPeriod
-                    ? !periodDifference.HasValue || periodDifference.Value <= threshold
+                    ? !periodDifference.HasValue || Math.Abs(periodDifference.Value) <= threshold
                     : Math.Abs(difference) <= threshold))
                 return null;
             var existing = await _context.AnomalyLogs.FirstOrDefaultAsync(x => x.AnomalyType == "BILLING_VARIANCE" && x.DeviceKey == deviceKey && x.BillingPeriod == billingPeriod.Date && x.ErpBillingId == erpBillingId);
@@ -393,7 +393,7 @@ namespace KWHMonitoring.Services
                 if (isPeriodOverPeriod && !IsPeriodOverPeriodAnomaly(existing.BillingAnomalyType))
                 {
                     existing.BillingAnomalyType = MergeBillingAnomalyTypes(
-                        existing.BillingAnomalyType, "PERIOD_OVER_PERIOD");
+                        existing.BillingAnomalyType, billingAnomalyType);
                     existing.PreviousBilling = previousBilling;
                     existing.PreviousBillingPeriod = previousBillingPeriod;
                     existing.PreviousErpBillingId = previousErpBillingId;
