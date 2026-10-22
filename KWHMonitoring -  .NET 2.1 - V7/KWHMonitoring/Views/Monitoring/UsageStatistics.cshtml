@@ -750,6 +750,9 @@
         var captions = { today: 'Konsumsi hari ini', month: 'Akumulasi bulan ini', year: 'Akumulasi tahun ini' };
         var usagePanelView = 'ranking';
         var usageCachePrefix = 'kwhmonitoring.usage-statistics.';
+        var rankingPeriod = 'month';
+        var rankingRequestInProgress = false;
+        var rankingXhr = null;
 
         function escapeHtml(value) { return $('<div>').text(value == null ? '' : value).html(); }
         function readUsageCache(key) {
@@ -763,9 +766,6 @@
         }
 
         (function () {
-            var rankingPeriod = 'month';
-            var rankingRequestInProgress = false;
-            var rankingXhr = null;
             var rankingHasLoaded = false;
             var combinedRankingRows = [];
             var combinedComparisonResponse = null;
@@ -1065,6 +1065,7 @@
                     }, 10000);
                 }
             });
+            window.loadUsageRanking = loadUsageRanking;
         })();
 
         let charts = {};
@@ -1780,7 +1781,9 @@
 
             setUsageComparisonRefreshState(true);
             $('#usageCombinedRows').html('<tr><td colspan="14" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat data perbandingan terbaru...</td></tr>');
-            loadUsageRanking(rankingPeriod);
+            if (typeof window.loadUsageRanking === 'function') {
+                window.loadUsageRanking(rankingPeriod);
+            }
             loadUsageErpComparison();
         }
 

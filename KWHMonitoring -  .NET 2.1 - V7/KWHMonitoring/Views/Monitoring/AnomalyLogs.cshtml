@@ -190,6 +190,9 @@
                         <i class="fas fa-sync-alt"></i> Buat Laporan
                     </button>
                 }
+                <button class="btn btn-outline-danger btn-sm ms-1" id="btnExportMonthlyReportPdf" title="Generate PDF laporan anomali bulanan">
+                    <i class="fas fa-file-pdf"></i> Generate PDF
+                </button>
             </div>
         </div>
 
@@ -289,6 +292,22 @@
                         <div class="text-muted small">Top Root Cause:</div>
                         <div class="small" id="repTopRootCausesList">-</div>
                     </div>
+                </div>
+            </div>
+            <div class="card mb-3" data-card-help="Anomaly Tagihan Bulanan|Ringkasan anomaly tagihan yang dibandingkan dengan estimasi sistem, ERP, atau periode tagihan sebelumnya.|Data dihitung dari log anomaly tagihan pada periode laporan yang dipilih.|Nilai selisih menggunakan absolute difference agar total dampak mudah dibaca.">
+                <div class="card-header bg-white py-2"><strong><i class="fas fa-file-invoice-dollar text-muted me-1"></i>Anomaly Tagihan</strong></div>
+                <div class="card-body py-2">
+                    <div class="row small">
+                        <div class="col-md-3 mb-2"><div class="text-muted">Total Anomaly Tagihan</div><div class="h6 text-danger fw-bold" id="repBillingTotal">0</div></div>
+                        <div class="col-md-3 mb-2"><div class="text-muted">Estimasi vs ERP</div><div class="h6 text-warning fw-bold" id="repBillingEstimateVsErp">0</div></div>
+                        <div class="col-md-3 mb-2"><div class="text-muted">Period over Period</div><div class="h6 text-warning fw-bold" id="repBillingPeriodOverPeriod">0</div></div>
+                        <div class="col-md-3 mb-2"><div class="text-muted">Perangkat Terdampak</div><div class="h6 text-info fw-bold" id="repBillingDevices">0</div></div>
+                    </div>
+                    <div class="row small">
+                        <div class="col-md-6"><span class="text-muted">Total Selisih Tagihan:</span> <strong id="repBillingDifference">Rp 0</strong></div>
+                        <div class="col-md-6"><span class="text-muted">Selisih Persentase Terbesar:</span> <strong id="repBillingMaxPercent">0%</strong></div>
+                    </div>
+                    <div class="small mt-2"><span class="text-muted">Jenis anomaly:</span> <span id="repBillingTypes">-</span></div>
                 </div>
             </div>
             <div class="text-muted small text-end">
@@ -1250,6 +1269,7 @@
 
             $('#btnLoadReport').click(function() { loadMonthlyReport(); });
             $('#btnGenerateReport').click(function() { generateMonthlyReport(); });
+            $('#btnExportMonthlyReportPdf').click(function() { exportMonthlyReportPdf(); });
             $('#reportMonth, #reportYear').on('change', function() {
                 if ($('#btnGenerateReport').length) generateMonthlyReport();
                 else loadMonthlyReport();
@@ -2591,6 +2611,20 @@
             });
         }
 
+        function exportMonthlyReportPdf() {
+            var year = parseInt($('#reportYear').val(), 10);
+            var month = parseInt($('#reportMonth').val(), 10);
+            if (!year || !month) return;
+
+            var url = '/api/Api/anomaly-monthly-report/export/pdf?year=' + encodeURIComponent(year) + '&month=' + encodeURIComponent(month);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'laporan-anomali-' + year + '-' + String(month).padStart(2, '0') + '.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         function getMonthlyReportText(data) {
             var isEnglish = false;
             try { isEnglish = localStorage.getItem('kwh_language') === 'en'; } catch (_) { }
@@ -2655,6 +2689,16 @@
             $('#repDetailAnomalyCost').text(currency + formatNumber(data.totalAnomalyCostImpact || 0));
             $('#repDetailRevenueLoss').text(currency + formatNumber(data.totalRevenueLoss || 0));
             $('#repDetailOngoingRevenueLoss').text(currency + formatNumber(data.ongoingRevenueLoss || 0));
+            $('#repBillingTotal').text(data.billingAnomalyCount || 0);
+            $('#repBillingEstimateVsErp').text(data.billingEstimateVsErpCount || 0);
+            $('#repBillingPeriodOverPeriod').text(data.billingPeriodOverPeriodCount || 0);
+            $('#repBillingDevices').text(data.billingAffectedDevices || 0);
+            $('#repBillingDifference').text(currency + formatNumber(data.billingTotalDifference || 0));
+            $('#repBillingMaxPercent').text(formatNumber(data.billingMaxDifferencePercent || 0) + '%');
+            var billingTypes = data.billingTypes || [];
+            $('#repBillingTypes').text(billingTypes.length
+                ? billingTypes.map(function(item) { return (item.type || '-') + ' (' + (item.count || 0) + ')'; }).join(', ')
+                : (reportText.isEnglish ? 'None' : 'Tidak ada'));
             $('#repSummary').text(reportText.summary);
             var $recommendations = $('#repRecommendations').empty();
             reportText.recommendations.forEach(function(line, index) {

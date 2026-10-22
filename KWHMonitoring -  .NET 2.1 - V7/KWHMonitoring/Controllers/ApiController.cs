@@ -2082,6 +2082,338 @@ namespace KWHMonitoring.Controllers
             return value.HasValue ? string.Format("Rp {0:N0}", value.Value) : "-";
         }
 
+        private static byte[] BuildAnomalyMonthlyReportPdfV2(DateTime monthStart, List<AnomalyLog> logs, IDictionary<string, string> deviceGroups)
+        {
+            const float pageWidth = 595.28f;
+            const float pageHeight = 841.89f;
+            const float margin = 24f;
+            const float contentWidth = pageWidth - (margin * 2);
+            const float headerBottom = 756f;
+            const float tableTop = 690f;
+            const float rowHeight = 17f;
+            const int rowsPerPage = 34;
+            var deviceLogs = logs.Where(x => string.IsNullOrWhiteSpace(x.BillingAnomalyType)).ToList();
+            var billingLogs = logs.Where(x => !string.IsNullOrWhiteSpace(x.BillingAnomalyType)).ToList();
+            var pageContents = new List<string>();
+
+            var total = logs.Count;
+            var overload = deviceLogs.Count(x => string.Equals(x.AnomalyType, "OVERLOAD", StringComparison.OrdinalIgnoreCase));
+            var drop = deviceLogs.Count(x => string.Equals(x.AnomalyType, "DROP", StringComparison.OrdinalIgnoreCase));
+            var unresolved = logs.Count(x => !x.IsResolved);
+            var critical = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
+            var billingEstimateVsErp = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0);
+            var billingPeriodOverPeriod = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0);
+            var billingDifference = billingLogs.Sum(x => Math.Abs(x.BillingDifference ?? x.PeriodDifference ?? 0m));
+
+            // Page 1: a clean summary page. The detailed tables start on their own pages.
+            var summary = new StringBuilder();
+            PdfRect(summary, 0, 0, pageWidth, pageHeight, "0.95 0.96 0.98", false);
+            PdfRect(summary, margin, margin, contentWidth, pageHeight - (margin * 2), "1 1 1", true);
+            PdfRect(summary, margin, headerBottom, contentWidth, 58, "0.09 0.17 0.30", true);
+            PdfTextBold(summary, margin + 16, 792, "KWH MONITORING SYSTEM", 9, "1 1 1");
+            PdfTextBold(summary, margin + 16, 773, "LAPORAN ANOMALI BULANAN", 16, "1 1 1");
+            PdfText(summary, margin + 16, 761, string.Format("Periode laporan: {0:MMMM yyyy}  |  Ringkasan perangkat dan tagihan", monthStart), 8, "0.86 0.91 1");
+            PdfTextBold(summary, margin, 738, "RINGKASAN LAPORAN", 11, "0.09 0.17 0.30");
+            PdfText(summary, margin, 721, "Laporan ini merangkum gangguan listrik dan perbedaan tagihan dalam satu tampilan yang mudah dipindai.", 8, "0.32 0.42 0.54");
+
+            PdfCard(summary, margin, 655, 126, 48, "TOTAL LOG", total.ToString(CultureInfo.InvariantCulture), "0.08 0.43 0.60");
+            PdfCard(summary, margin + 135, 655, 126, 48, "ANOMALI PERANGKAT", deviceLogs.Count.ToString(CultureInfo.InvariantCulture), "0.12 0.55 0.42");
+            PdfCard(summary, margin + 270, 655, 126, 48, "ANOMALI TAGIHAN", billingLogs.Count.ToString(CultureInfo.InvariantCulture), "0.80 0.25 0.25");
+            PdfCard(summary, margin + 405, 655, 142, 48, "BELUM SELESAI", unresolved.ToString(CultureInfo.InvariantCulture), "0.92 0.55 0.12");
+
+            PdfRect(summary, margin, 500, 264, 132, "0.97 0.98 1", true);
+            PdfTextBold(summary, margin + 14, 613, "ANOMALI PERANGKAT", 10, "0.08 0.43 0.60");
+            PdfText(summary, margin + 14, 590, string.Format("Beban berlebih: {0}", overload), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 14, 572, string.Format("Daya turun: {0}", drop), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 14, 554, string.Format("Kritis: {0}", critical), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 14, 536, string.Format("Perangkat terdampak: {0}", deviceLogs.Select(x => x.DeviceKey).Distinct().Count()), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 14, 516, "Detail gangguan tersedia pada tabel berikutnya.", 7, "0.32 0.42 0.54");
+            PdfRect(summary, margin + 275, 500, contentWidth - 275, 132, "1.00 0.97 0.97", true);
+            PdfTextBold(summary, margin + 289, 613, "ANOMALI TAGIHAN", 10, "0.80 0.25 0.25");
+            PdfText(summary, margin + 289, 590, string.Format("Estimasi dibanding ERP: {0}", billingEstimateVsErp), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 289, 572, string.Format("Perbandingan bulan sebelumnya: {0}", billingPeriodOverPeriod), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 289, 554, string.Format("Total selisih: Rp {0:N0}", billingDifference), 8, "0.12 0.16 0.22");
+            PdfText(summary, margin + 289, 528, "Nilai tagihan ditampilkan sebagai selisih absolut.", 7, "0.32 0.42 0.54");
+
+            PdfText(summary, margin, 70, "Keterangan: Selesai berarti sudah ditangani operator. Tanda '-' berarti data tidak tersedia.", 7, "0.32 0.42 0.54");
+            PdfText(summary, margin, 45, string.Format("KWH Monitoring System | Halaman 1 | Dibuat {0:dd/MM/yyyy HH:mm}", DateTime.Now), 7, "0.32 0.42 0.54");
+            pageContents.Add(summary.ToString());
+
+            var devicePageCount = Math.Max(1, (int)Math.Ceiling(deviceLogs.Count / (double)rowsPerPage));
+            for (var page = 0; page < devicePageCount; page++)
+            {
+                var content = new StringBuilder();
+                AddAnomalyPdfPageFrame(content, pageWidth, pageHeight, margin, "ANOMALY DEVICE", monthStart, pageContents.Count + 1);
+                var widths = new[] { 70f, 116f, 108f, 66f, 84f, 95f };
+                var headers = new[] { "Waktu", "Perangkat / Group", "Jenis", "Severity", "Status", "Keterangan" };
+                DrawAnomalyPdfTableHeader(content, margin, tableTop, widths, headers);
+                var rows = deviceLogs.Skip(page * rowsPerPage).Take(rowsPerPage).ToList();
+                for (var row = 0; row < rows.Count; row++)
+                {
+                    var log = rows[row];
+                    var values = new[]
+                    {
+                        log.DetectedTime.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture),
+                        GetPdfDeviceGroup(log.DeviceKey, deviceGroups),
+                        FriendlyDeviceAnomalyType(log.AnomalyType),
+                        FriendlySeverity(log.Severity),
+                        FriendlyResolutionStatus(log.IsResolved),
+                        string.IsNullOrWhiteSpace(log.RootCause) ? (log.RecommendedAction ?? "Tidak ada keterangan") : log.RootCause
+                    };
+                    DrawAnomalyPdfRow(content, margin, tableTop - 24 - ((row + 1) * rowHeight), widths, values, row);
+                }
+                pageContents.Add(content.ToString());
+            }
+
+            var billingPageCount = Math.Max(1, (int)Math.Ceiling(billingLogs.Count / (double)rowsPerPage));
+            for (var page = 0; page < billingPageCount; page++)
+            {
+                var content = new StringBuilder();
+                AddAnomalyPdfPageFrame(content, pageWidth, pageHeight, margin, "ANOMALY TAGIHAN", monthStart, pageContents.Count + 1);
+                var widths = new[] { 55f, 82f, 95f, 68f, 68f, 78f, 45f, 56f };
+                var headers = new[] { "Waktu", "Perangkat / Group", "Tipe", "Estimasi", "Aktual", "Selisih", "%", "Status" };
+                DrawAnomalyPdfTableHeader(content, margin, tableTop, widths, headers);
+                var rows = billingLogs.Skip(page * rowsPerPage).Take(rowsPerPage).ToList();
+                for (var row = 0; row < rows.Count; row++)
+                {
+                    var log = rows[row];
+                    var difference = log.BillingDifference ?? log.PeriodDifference ?? 0m;
+                    var percent = log.BillingDifferencePercent ?? log.PeriodDifferencePercent ?? 0m;
+                    var values = new[]
+                    {
+                        log.DetectedTime.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture),
+                        GetPdfDeviceGroup(log.DeviceKey, deviceGroups),
+                        FriendlyBillingAnomalyType(log.BillingAnomalyType),
+                        FormatPdfMoneyValue(log.EstimatedBilling),
+                        FormatPdfMoneyValue(log.ActualBilling),
+                        FormatPdfMoneyValue(log.BillingDifference ?? log.PeriodDifference),
+                        (log.BillingDifferencePercent.HasValue || log.PeriodDifferencePercent.HasValue) ? string.Format("{0:N2}%", percent) : "-",
+                        FriendlyResolutionStatus(log.IsResolved)
+                    };
+                    DrawAnomalyPdfRow(content, margin, tableTop - 24 - ((row + 1) * rowHeight), widths, values, row);
+                }
+                pageContents.Add(content.ToString());
+            }
+
+            return BuildAnomalyPdfDocument(pageContents, pageWidth, pageHeight);
+        }
+
+        private static void AddAnomalyPdfPageFrame(StringBuilder content, float pageWidth, float pageHeight, float margin, string sectionTitle, DateTime monthStart, int pageNumber)
+        {
+            PdfRect(content, 0, 0, pageWidth, pageHeight, "0.95 0.96 0.98", false);
+            PdfRect(content, margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2), "1 1 1", true);
+            PdfRect(content, margin, 756, pageWidth - (margin * 2), 58, "0.09 0.17 0.30", true);
+            PdfTextBold(content, margin + 16, 792, "KWH MONITORING SYSTEM", 9, "1 1 1");
+            PdfTextBold(content, margin + 16, 773, sectionTitle, 15, "1 1 1");
+            PdfText(content, margin + 16, 761, string.Format("Periode laporan: {0:MMMM yyyy}", monthStart), 8, "0.86 0.91 1");
+            PdfText(content, margin, 45, string.Format("KWH Monitoring System | {0} | Halaman {1}", sectionTitle, pageNumber), 7, "0.32 0.42 0.54");
+        }
+
+        private static void DrawAnomalyPdfTableHeader(StringBuilder content, float x, float y, float[] widths, string[] headers)
+        {
+            for (var i = 0; i < headers.Length; i++)
+            {
+                PdfRect(content, x, y, widths[i], 24, "0.09 0.17 0.30", true);
+                PdfTextBold(content, x + 4, y + 8, headers[i], 7, "1 1 1");
+                x += widths[i];
+            }
+        }
+
+        private static void DrawAnomalyPdfRow(StringBuilder content, float x, float y, float[] widths, string[] values, int rowIndex)
+        {
+            for (var i = 0; i < values.Length; i++)
+            {
+                PdfRect(content, x, y, widths[i], 17, rowIndex % 2 == 0 ? "0.98 0.99 1" : "0.94 0.96 0.98", true);
+                PdfText(content, x + 4, y + 5, FitPdfText(values[i], widths[i] - 8), 6, "0.12 0.16 0.22");
+                x += widths[i];
+            }
+        }
+
+        private static string GetPdfDeviceGroup(string deviceKey, IDictionary<string, string> deviceGroups)
+        {
+            if (deviceGroups != null && !string.IsNullOrWhiteSpace(deviceKey) && deviceGroups.ContainsKey(deviceKey))
+            {
+                var groupName = deviceGroups[deviceKey];
+                if (!string.IsNullOrWhiteSpace(groupName)) return groupName;
+            }
+
+            return string.IsNullOrWhiteSpace(deviceKey) ? "-" : deviceKey;
+        }
+
+        private static byte[] BuildAnomalyPdfDocument(List<string> pageContents, float pageWidth, float pageHeight)
+        {
+            var objects = new List<string>
+            {
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                string.Empty,
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
+            };
+            var kids = new List<string>();
+            for (var i = 0; i < pageContents.Count; i++)
+            {
+                var pageObject = 5 + (i * 2);
+                var contentObject = pageObject + 1;
+                kids.Add(string.Format("{0} 0 R", pageObject));
+                objects.Add(string.Format(CultureInfo.InvariantCulture, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {0} {1}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {2} 0 R >>", pageWidth, pageHeight, contentObject));
+                objects.Add(string.Format("<< /Length {0} >>\nstream\n{1}\nendstream", Encoding.ASCII.GetByteCount(pageContents[i]), pageContents[i]));
+            }
+            objects[1] = string.Format("<< /Type /Pages /Kids [{0}] /Count {1} >>", string.Join(" ", kids), pageContents.Count);
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream, Encoding.ASCII, 1024, true))
+            {
+                writer.WriteLine("%PDF-1.4");
+                writer.Flush();
+                var offsets = new List<long> { 0 };
+                for (var i = 0; i < objects.Count; i++)
+                {
+                    offsets.Add(stream.Position);
+                    writer.WriteLine(string.Format("{0} 0 obj", i + 1));
+                    writer.WriteLine(objects[i]);
+                    writer.WriteLine("endobj");
+                    writer.Flush();
+                }
+                var xref = stream.Position;
+                writer.WriteLine("xref");
+                writer.WriteLine(string.Format("0 {0}", objects.Count + 1));
+                writer.WriteLine("0000000000 65535 f ");
+                for (var i = 1; i < offsets.Count; i++) writer.WriteLine(string.Format("{0:0000000000} 00000 n ", offsets[i]));
+                writer.WriteLine("trailer");
+                writer.WriteLine(string.Format("<< /Size {0} /Root 1 0 R >>", objects.Count + 1));
+                writer.WriteLine("startxref");
+                writer.WriteLine(xref);
+                writer.WriteLine("%%EOF");
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private static byte[] BuildAnomalyMonthlyReportPdf(DateTime monthStart, List<AnomalyLog> logs)
+        {
+            const float pageWidth = 595.28f;
+            const float pageHeight = 841.89f;
+            const float margin = 28f;
+            const float rowHeight = 18f;
+            const float tableTop = 660f;
+            const int rowsPerPage = 30;
+            var pageContents = new List<string>();
+            var pageCount = Math.Max(1, (int)Math.Ceiling(logs.Count / (double)rowsPerPage));
+            var total = logs.Count;
+            var overload = logs.Count(x => string.Equals(x.AnomalyType, "OVERLOAD", StringComparison.OrdinalIgnoreCase));
+            var drop = logs.Count(x => string.Equals(x.AnomalyType, "DROP", StringComparison.OrdinalIgnoreCase));
+            var unresolved = logs.Count(x => !x.IsResolved);
+            var critical = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
+            var billingLogs = logs.Where(x => !string.IsNullOrWhiteSpace(x.BillingAnomalyType)).ToList();
+            var billingEstimateVsErp = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0);
+            var billingPeriodOverPeriod = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0);
+            var billingDifference = billingLogs.Sum(x => Math.Abs(x.BillingDifference ?? x.PeriodDifference ?? 0m));
+            var billingMaxPercent = billingLogs.Select(x => Math.Abs(x.BillingDifferencePercent ?? x.PeriodDifferencePercent ?? 0m)).DefaultIfEmpty(0m).Max();
+
+            for (var page = 0; page < pageCount; page++)
+            {
+                var content = new StringBuilder();
+                PdfRect(content, 0, 0, pageWidth, pageHeight, "0.95 0.96 0.98", false);
+                PdfRect(content, margin, margin, pageWidth - (margin * 2), pageHeight - (margin * 2), "1 1 1", true);
+                PdfRect(content, margin, pageHeight - 112, pageWidth - (margin * 2), 84, "0.09 0.17 0.30", true);
+                PdfTextBold(content, margin + 18, pageHeight - 52, "LAPORAN ANOMALI BULANAN", 16, "1 1 1");
+                PdfText(content, margin + 18, pageHeight - 72, string.Format("Periode: {0:MMMM yyyy}", monthStart), 10, "0.86 0.91 1");
+                PdfText(content, margin + 18, pageHeight - 91, string.Format("Total: {0} | Overload: {1} | Drop: {2} | Kritis: {3} | Belum selesai: {4}", total, overload, drop, critical, unresolved), 8, "0.86 0.91 1");
+                PdfText(content, margin + 18, pageHeight - 103, string.Format("Anomaly tagihan: {0} | Estimasi vs ERP: {1} | Period over Period: {2} | Total selisih: Rp {3:N0} | Maks. selisih: {4:N2}%", billingLogs.Count, billingEstimateVsErp, billingPeriodOverPeriod, billingDifference, billingMaxPercent), 7, "0.86 0.91 1");
+
+                var cardY = pageHeight - 166;
+                PdfCard(content, margin, cardY, 116, 38, "TOTAL", total.ToString(CultureInfo.InvariantCulture), "0.08 0.43 0.60");
+                PdfCard(content, margin + 124, cardY, 116, 38, "OVERLOAD", overload.ToString(CultureInfo.InvariantCulture), "0.80 0.25 0.25");
+                PdfCard(content, margin + 248, cardY, 116, 38, "DROP", drop.ToString(CultureInfo.InvariantCulture), "0.92 0.55 0.12");
+                PdfCard(content, margin + 372, cardY, 116, 38, "TERDAMPAK", logs.Select(logItem => logItem.DeviceKey).Distinct().Count().ToString(CultureInfo.InvariantCulture), "0.12 0.55 0.42");
+
+                var tableX = margin;
+                var tableY = tableTop;
+                var widths = new[] { 70f, 88f, 76f, 70f, 58f, 105f, 80f };
+                var headers = new[] { "Waktu", "Perangkat", "Jenis", "Severity", "Deviasi", "Status", "Root Cause" };
+                var x = tableX;
+                for (var i = 0; i < headers.Length; i++)
+                {
+                    PdfRect(content, x, tableY, widths[i], 24, "0.09 0.17 0.30", true);
+                    PdfTextBold(content, x + 4, tableY + 8, headers[i], 7, "1 1 1");
+                    x += widths[i];
+                }
+
+                var pageLogs = logs.Skip(page * rowsPerPage).Take(rowsPerPage).ToList();
+                for (var row = 0; row < pageLogs.Count; row++)
+                {
+                    var log = pageLogs[row];
+                    var y = tableY - ((row + 1) * rowHeight);
+                    x = tableX;
+                    var values = new[]
+                    {
+                        log.DetectedTime.ToString("dd/MM HH:mm", CultureInfo.InvariantCulture),
+                        log.DeviceKey,
+                        string.IsNullOrWhiteSpace(log.BillingAnomalyType) ? log.AnomalyType : log.BillingAnomalyType,
+                        log.Severity,
+                        log.Deviation.ToString("N2", CultureInfo.InvariantCulture) + "%",
+                        log.IsResolved ? "Selesai" : "Belum selesai",
+                        string.IsNullOrWhiteSpace(log.BillingAnomalyType)
+                            ? log.RootCause
+                            : string.Format(CultureInfo.InvariantCulture, "Selisih Rp {0:N0} ({1:N2}%)", log.BillingDifference ?? log.PeriodDifference ?? 0m, log.BillingDifferencePercent ?? log.PeriodDifferencePercent ?? 0m)
+                    };
+                    for (var i = 0; i < values.Length; i++)
+                    {
+                        PdfRect(content, x, y, widths[i], rowHeight, row % 2 == 0 ? "0.98 0.99 1" : "0.94 0.96 0.98", true);
+                        PdfText(content, x + 4, y + 5, FitPdfText(values[i], widths[i] - 8), 6, "0.12 0.16 0.22");
+                        x += widths[i];
+                    }
+                }
+
+                PdfText(content, margin, 38, string.Format("KWH Monitoring System | Halaman {0}/{1} | Dibuat {2:dd/MM/yyyy HH:mm}", page + 1, pageCount, DateTime.Now), 7, "0.32 0.42 0.54");
+                pageContents.Add(content.ToString());
+            }
+
+            var objects = new List<string>
+            {
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                string.Empty,
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"
+            };
+            var kids = new List<string>();
+            for (var i = 0; i < pageContents.Count; i++)
+            {
+                var pageObject = 5 + (i * 2);
+                var contentObject = pageObject + 1;
+                kids.Add(string.Format("{0} 0 R", pageObject));
+                objects.Add(string.Format(CultureInfo.InvariantCulture, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {0} {1}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {2} 0 R >>", pageWidth, pageHeight, contentObject));
+                objects.Add(string.Format("<< /Length {0} >>\nstream\n{1}\nendstream", Encoding.ASCII.GetByteCount(pageContents[i]), pageContents[i]));
+            }
+            objects[1] = string.Format("<< /Type /Pages /Kids [{0}] /Count {1} >>", string.Join(" ", kids), pageContents.Count);
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream, Encoding.ASCII, 1024, true))
+            {
+                writer.WriteLine("%PDF-1.4");
+                writer.Flush();
+                var offsets = new List<long> { 0 };
+                for (var i = 0; i < objects.Count; i++)
+                {
+                    offsets.Add(stream.Position);
+                    writer.WriteLine(string.Format("{0} 0 obj", i + 1));
+                    writer.WriteLine(objects[i]);
+                    writer.WriteLine("endobj");
+                    writer.Flush();
+                }
+                var xref = stream.Position;
+                writer.WriteLine("xref");
+                writer.WriteLine(string.Format("0 {0}", objects.Count + 1));
+                writer.WriteLine("0000000000 65535 f ");
+                for (var i = 1; i < offsets.Count; i++) writer.WriteLine(string.Format("{0:0000000000} 00000 n ", offsets[i]));
+                writer.WriteLine("trailer");
+                writer.WriteLine(string.Format("<< /Size {0} /Root 1 0 R >>", objects.Count + 1));
+                writer.WriteLine("startxref");
+                writer.WriteLine(xref);
+                writer.WriteLine("%%EOF");
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
         private static string FormatPdfPercent(decimal? difference, decimal? basis)
         {
             return difference.HasValue && basis.HasValue && basis.Value != 0m
@@ -2092,8 +2424,74 @@ namespace KWHMonitoring.Controllers
         private static string FitPdfText(string value, float width)
         {
             var max = Math.Max(8, (int)(width / 4.2f));
-            value = value ?? string.Empty;
-            return value.Length <= max ? value : value.Substring(0, Math.Max(1, max - 1)) + "…";
+            value = NormalizePdfText(value);
+            return value.Length <= max ? value : value.Substring(0, Math.Max(1, max - 3)) + "...";
+        }
+
+        private static string NormalizePdfText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "-";
+            var normalized = value
+                .Replace("â€¦", "...")
+                .Replace("…", "...")
+                .Replace("â€“", "-")
+                .Replace("–", "-")
+                .Replace("â€”", "-")
+                .Replace("—", "-")
+                .Replace("â€œ", "\"")
+                .Replace("“", "\"")
+                .Replace("â€", "\"")
+                .Replace("”", "\"")
+                .Replace("â€™", "'")
+                .Replace("’", "'")
+                .Replace("Ã—", "x")
+                .Replace("×", "x")
+                .Replace("Ã·", "/")
+                .Replace("÷", "/");
+            return new string(normalized.Select(ch => ch >= 32 && ch <= 126 ? ch : '?').ToArray());
+        }
+
+        private static string FormatPdfMoneyValue(decimal? value)
+        {
+            return value.HasValue
+                ? string.Format(CultureInfo.InvariantCulture, "Rp {0:N0}", value.Value)
+                : "-";
+        }
+
+        private static string FriendlyDeviceAnomalyType(string anomalyType)
+        {
+            if (string.Equals(anomalyType, "OVERLOAD", StringComparison.OrdinalIgnoreCase)) return "Beban berlebih";
+            if (string.Equals(anomalyType, "DROP", StringComparison.OrdinalIgnoreCase)) return "Daya turun";
+            if (string.Equals(anomalyType, "DEVICE_OFFLINE", StringComparison.OrdinalIgnoreCase)) return "Perangkat offline";
+            if (string.IsNullOrWhiteSpace(anomalyType)) return "Tidak diketahui";
+            return anomalyType.Replace('_', ' ');
+        }
+
+        private static string FriendlyBillingAnomalyType(string anomalyType)
+        {
+            if (string.IsNullOrWhiteSpace(anomalyType)) return "Tidak diketahui";
+            var normalized = anomalyType.ToUpperInvariant();
+            if (normalized.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0 && normalized.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Estimasi vs ERP + bulan sebelumnya";
+            if (normalized.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Estimasi dibanding ERP";
+            if (normalized.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Perbandingan bulan sebelumnya";
+            return anomalyType.Replace('_', ' ');
+        }
+
+        private static string FriendlySeverity(string severity)
+        {
+            if (string.Equals(severity, "critical", StringComparison.OrdinalIgnoreCase)) return "Kritis";
+            if (string.Equals(severity, "high", StringComparison.OrdinalIgnoreCase)) return "Tinggi";
+            if (string.Equals(severity, "medium", StringComparison.OrdinalIgnoreCase)) return "Sedang";
+            if (string.Equals(severity, "low", StringComparison.OrdinalIgnoreCase)) return "Rendah";
+            return string.IsNullOrWhiteSpace(severity) ? "-" : severity;
+        }
+
+        private static string FriendlyResolutionStatus(bool isResolved)
+        {
+            return isResolved ? "Selesai" : "Belum selesai";
         }
 
         private static void PdfCard(StringBuilder content, float x, float y, float width, float height, string label, string value, string accentColor)
@@ -2126,8 +2524,7 @@ namespace KWHMonitoring.Controllers
 
         private static void PdfText(StringBuilder content, float x, float y, string text, int size, string color)
         {
-            var safe = (text ?? string.Empty).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
-            safe = new string(safe.Select(ch => ch <= 127 ? ch : '?').ToArray());
+            var safe = NormalizePdfText(text).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
             content.Append(color).Append(" rg BT /F1 ").Append(size).Append(" Tf ")
                 .Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
                 .Append(y.ToString(CultureInfo.InvariantCulture)).Append(" Td (").Append(safe).Append(") Tj ET ");
@@ -2135,8 +2532,7 @@ namespace KWHMonitoring.Controllers
 
         private static void PdfTextBold(StringBuilder content, float x, float y, string text, int size, string color)
         {
-            var safe = (text ?? string.Empty).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
-            safe = new string(safe.Select(ch => ch <= 127 ? ch : '?').ToArray());
+            var safe = NormalizePdfText(text).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
             content.Append(color).Append(" rg BT /F2 ").Append(size).Append(" Tf ")
                 .Append(x.ToString(CultureInfo.InvariantCulture)).Append(' ')
                 .Append(y.ToString(CultureInfo.InvariantCulture)).Append(" Td (").Append(safe).Append(") Tj ET ");
@@ -6077,6 +6473,20 @@ namespace KWHMonitoring.Controllers
                 var avgDeviation = total > 0 ? logs.Average(x => (double)x.Deviation) : 0;
                 var criticalCount = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
                 var unresolvedCount = logs.Count(x => !x.IsResolved);
+                var billingLogs = logs.Where(x => !string.IsNullOrWhiteSpace(x.BillingAnomalyType)).ToList();
+                var billingEstimateVsErpCount = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0);
+                var billingPeriodOverPeriodCount = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0);
+                var billingAffectedDevices = billingLogs.Select(x => x.DeviceKey).Distinct().Count();
+                var billingTotalDifference = billingLogs.Sum(x => Math.Abs(x.BillingDifference ?? x.PeriodDifference ?? 0m));
+                var billingMaxDifferencePercent = billingLogs
+                    .Select(x => Math.Abs(x.BillingDifferencePercent ?? x.PeriodDifferencePercent ?? 0m))
+                    .DefaultIfEmpty(0m)
+                    .Max();
+                var billingTypes = billingLogs
+                    .GroupBy(x => x.BillingAnomalyType)
+                    .Select(g => new { type = g.Key, count = g.Count() })
+                    .OrderByDescending(x => x.count)
+                    .ToList();
 
                 var topDevice = logs
                     .GroupBy(x => x.DeviceKey)
@@ -6219,18 +6629,35 @@ namespace KWHMonitoring.Controllers
                     .OrderByDescending(x => x.GeneratedAt)
                     .FirstOrDefaultAsync(x => x.Year == year && x.Month == month);
 
-                if (report == null)
-                    return Ok(new { success = true, data = (object)null, message = "No report found" });
-
-                // Recompute financials on-the-fly from raw logs
+                // Always read the current anomaly logs so a report never becomes stale
+                // after an anomaly is acknowledged, resolved, enriched, or deleted.
                 var startDate = new DateTime(year, month, 1);
                 var endDate = startDate.AddMonths(1);
                 var logs = await _context.AnomalyLogs
                     .AsNoTracking()
                     .Where(x => x.DetectedTime >= startDate && x.DetectedTime < endDate)
                     .ToListAsync();
+                var total = logs.Count;
+                var overload = logs.Count(x => string.Equals(x.AnomalyType, "OVERLOAD", StringComparison.OrdinalIgnoreCase));
+                var drop = logs.Count(x => string.Equals(x.AnomalyType, "DROP", StringComparison.OrdinalIgnoreCase));
+                var affectedDevices = logs.Select(x => x.DeviceKey).Distinct().Count();
+                var averageDeviation = total > 0 ? logs.Average(x => x.Deviation) : 0m;
                 var criticalCount = logs.Count(x => string.Equals(x.Severity, "critical", StringComparison.OrdinalIgnoreCase));
                 var unresolvedCount = logs.Count(x => !x.IsResolved);
+                var billingLogs = logs.Where(x => !string.IsNullOrWhiteSpace(x.BillingAnomalyType)).ToList();
+                var billingEstimateVsErpCount = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("ESTIMATE_VS_ERP", StringComparison.OrdinalIgnoreCase) >= 0);
+                var billingPeriodOverPeriodCount = billingLogs.Count(x => x.BillingAnomalyType.IndexOf("PERIOD_OVER_PERIOD", StringComparison.OrdinalIgnoreCase) >= 0);
+                var billingAffectedDevices = billingLogs.Select(x => x.DeviceKey).Distinct().Count();
+                var billingTotalDifference = billingLogs.Sum(x => Math.Abs(x.BillingDifference ?? x.PeriodDifference ?? 0m));
+                var billingMaxDifferencePercent = billingLogs
+                    .Select(x => Math.Abs(x.BillingDifferencePercent ?? x.PeriodDifferencePercent ?? 0m))
+                    .DefaultIfEmpty(0m)
+                    .Max();
+                var billingTypes = billingLogs
+                    .GroupBy(x => x.BillingAnomalyType)
+                    .Select(g => new { type = g.Key, count = g.Count() })
+                    .OrderByDescending(x => x.count)
+                    .ToList();
                 var topDevice = logs.GroupBy(x => x.DeviceKey)
                     .Select(g => new { DeviceKey = g.Key, Count = g.Count() })
                     .OrderByDescending(x => x.Count)
@@ -6277,6 +6704,18 @@ namespace KWHMonitoring.Controllers
                     .Take(3)
                     .ToList();
 
+                var summaryText = string.Format(
+                    CultureInfo.CurrentCulture,
+                    "Laporan anomali untuk {0:MMMM yyyy} mencatat {1} kejadian. Sebanyak {2} kejadian berkategori kritis dan {3} kejadian belum diselesaikan.",
+                    startDate, total, criticalCount, unresolvedCount);
+                var recommendations = new List<string>();
+                if (overload > drop) recommendations.Add("Anomali beban berlebih paling banyak terjadi. Tinjau kapasitas panel dan kurangi beban pada jam puncak.");
+                if (drop > overload) recommendations.Add("Gangguan perangkat paling banyak terjadi. Periksa kualitas koneksi dan catu daya.");
+                if (criticalCount > 0) recommendations.Add("Terdapat anomali berkategori kritis. Segera lakukan penanganan.");
+                if (totalAnomalyCostImpact > 0) recommendations.Add(string.Format("Dampak biaya akibat beban berlebih pada bulan ini sebesar Rp {0:N0}.", totalAnomalyCostImpact));
+                if (totalRevenueLoss > 0) recommendations.Add(string.Format("Estimasi kehilangan pendapatan pada bulan ini sebesar Rp {0:N0}.", totalRevenueLoss));
+                if (recommendations.Count == 0) recommendations.Add("Tidak ada rekomendasi tambahan untuk periode ini.");
+
                 return Ok(new
                 {
                     success = true,
@@ -6285,25 +6724,68 @@ namespace KWHMonitoring.Controllers
                         report.Id,
                         report.Year,
                         report.Month,
-                        report.TotalAnomalies,
-                        report.OverloadCount,
-                        report.DropCount,
-                        report.AffectedDevices,
-                        report.AverageDeviation,
-                        report.TopAffectedDevice,
+                        totalAnomalies = total,
+                        overloadCount = overload,
+                        dropCount = drop,
+                        affectedDevices,
+                        averageDeviation,
+                        topAffectedDevice = topDevice?.DeviceKey,
                         topAffectedDeviceCount = topDevice?.Count ?? 0,
                         criticalCount,
                         unresolvedCount,
-                        report.SummaryText,
-                        report.Recommendations,
+                        billingAnomalyCount = billingLogs.Count,
+                        billingEstimateVsErpCount,
+                        billingPeriodOverPeriodCount,
+                        billingAffectedDevices,
+                        billingTotalDifference,
+                        billingMaxDifferencePercent,
+                        billingTypes,
+                        summaryText,
+                        recommendations = string.Join("\n", recommendations),
                         totalAnomalyCostImpact,
                         totalRevenueLoss,
                         ongoingRevenueLoss,
                         topRootCauses = rootCauseGroups,
-                        report.GeneratedBy,
-                        report.GeneratedAt
+                        generatedBy = report?.GeneratedBy ?? "live",
+                        generatedAt = report?.GeneratedAt ?? DateTime.Now
                     }
                 });
+            }
+            catch (Exception ex)
+            {
+                return SafeError(ex);
+            }
+        }
+
+        // ============================================
+        // EXPORT MONTHLY ANOMALY REPORT PDF
+        // ============================================
+        [AllowAnonymous]
+        [HttpGet("anomaly-monthly-report/export/pdf")]
+        public async Task<IActionResult> ExportMonthlyAnomalyReportPdf([FromQuery] int year, [FromQuery] int month)
+        {
+            try
+            {
+                var startDate = new DateTime(year, month, 1);
+                var endDate = startDate.AddMonths(1);
+                var logs = await _context.AnomalyLogs
+                    .AsNoTracking()
+                    .Where(x => x.DetectedTime >= startDate && x.DetectedTime < endDate)
+                    .OrderBy(x => x.DetectedTime)
+                    .ToListAsync();
+
+                var deviceKeys = logs
+                    .Select(x => x.DeviceKey)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToList();
+                var deviceGroups = await _context.DeviceRegistry
+                    .AsNoTracking()
+                    .Where(x => deviceKeys.Contains(x.DeviceKey))
+                    .ToDictionaryAsync(x => x.DeviceKey, x => x.GroupName);
+
+                var pdf = BuildAnomalyMonthlyReportPdfV2(startDate, logs, deviceGroups);
+                return File(pdf, "application/pdf", string.Format("laporan-anomali-{0:yyyy-MM}.pdf", startDate));
             }
             catch (Exception ex)
             {
