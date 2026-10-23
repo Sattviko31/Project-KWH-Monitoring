@@ -506,7 +506,8 @@ namespace KWHMonitoring.Controllers
                         ampT = data.Amp_T ?? 0m,
                         cosPhi = data.Cos_Phi ?? 0m,
                         dayaWatt = data.Daya_Watt ?? 0m,
-                        totalW1M = data.TotalW1M_Wh ?? 0m,
+                        // Direct mapping dari KWHData.TotalW per device.
+                        totalW1M = data.Total_Energy_Wh ?? 0m,
                         energiAktif = data.Energi_Aktif_Wh ?? 0m,
                         totalEnergy = data.Total_Energy_Wh ?? 0m,
                         frekuensi = data.Frekuensi_Hz ?? 0m,
@@ -604,7 +605,9 @@ namespace KWHMonitoring.Controllers
                 {
                     totalDaya = validData.Sum(x => x.Daya_Watt) ?? 0m,
                     totalEnergy = validData.Sum(x => x.Total_Energy_Wh) ?? 0m,
-                    totalW1M = validData.Sum(x => x.TotalW1M_Wh) ?? 0m,
+                    // Agregat dashboard: jumlah TotalW dari satu record terbaru
+                    // untuk setiap device. Nilai kartu per-device tetap langsung.
+                    totalW1M = validData.Sum(x => x.Total_Energy_Wh) ?? 0m,
                     totalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh) ?? 0m,
                     activePanels = validData.Count,
                     avgPowerFactor = validData.Count > 0 ? validData.Average(x => x.Cos_Phi) ?? 0m : 0m,

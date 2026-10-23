@@ -103,7 +103,9 @@ namespace KWHMonitoring.Controllers
                         Amp_T = data.Amp_T ?? 0m,
                         Cos_Phi = data.Cos_Phi ?? 0m,
                         Daya_Watt = data.Daya_Watt ?? 0m,
-                        TotalW1M_Wh = data.TotalW1M_Wh ?? 0m,
+                        // Direct mapping dari KWHData.TotalW melalui Total_Energy_Wh.
+                        // Nilai ditampilkan apa adanya untuk device ini.
+                        TotalW1M_Wh = data.Total_Energy_Wh ?? 0m,
                         Energi_Aktif_Wh = data.Energi_Aktif_Wh ?? 0m,
                         Total_Energy_Wh = data.Total_Energy_Wh ?? 0m,
                         Frekuensi_Hz = data.Frekuensi_Hz ?? 0m
@@ -147,7 +149,7 @@ namespace KWHMonitoring.Controllers
                     {
                         TotalDaya = validData.Sum(x => x.Daya_Watt) ?? 0m,
                         TotalEnergy = validData.Sum(x => x.Total_Energy_Wh) ?? 0m,
-                        TotalW1M = validData.Sum(x => x.TotalW1M_Wh) ?? 0m,
+                        TotalW1M = viewModel.Panels.Sum(x => x.TotalW1M_Wh),
                         TotalEnergiAktif = validData.Sum(x => x.Energi_Aktif_Wh) ?? 0m,
                         ActivePanels = validData.Count,
                         AvgPowerFactor = validData.Average(x => x.Cos_Phi) ?? 0m,

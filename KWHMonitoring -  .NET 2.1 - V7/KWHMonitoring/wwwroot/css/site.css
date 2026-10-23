@@ -3648,6 +3648,33 @@ canvas {
     box-shadow: 0 4px 10px rgba(22, 163, 74, 0.18);
 }
 
+/* Samakan tipografi Energi 1 Bulan dengan kartu Energi Aktif. */
+.monthly-energy-card .aktif-icon {
+    font-size: 0.7rem;
+    font-weight: 700;
+    opacity: 0.8;
+    margin-bottom: 2px;
+    letter-spacing: 0.3px;
+}
+
+.monthly-energy-card .aktif-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.monthly-energy-card .aktif-unit {
+    font-size: 0.75rem;
+    font-weight: 400;
+    opacity: 0.65;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
 .frequency-highlight {
     display: flex;
     flex-direction: column;
