@@ -33,6 +33,7 @@
         
         let anomalyTimer = null;
         let anomalyTimerInterval = 0;    // Track current interval value (ms) - setInterval returns primitive, can't hold properties
+        let anomalyRealtimeWatcher = null;
         let settingsReloadTimer = null;  // Timer untuk reload settings secara berkala
         let anomalyChecksInFlight = {};  // Hindari pemrosesan bersamaan untuk device yang sama
         let silenceChecksInFlight = {};  // Satu pemeriksaan keterlambatan telemetry per device
@@ -55,7 +56,7 @@
         // Menangkap 50 titik sebelum & 50 titik sesudah anomali
         // ============================================
         const CHART_SNAPSHOT_SIZE = 50;
-        let anomalyChartBuffers = {};  // deviceKey -> { logId, beforeData, afterBuffer, afterCount, thresholds }
+        let anomalyChartBuffers = {};  // deviceKey -> { logId, beforeData, afterBuffer, afterTimestamps, thresholds }
 
         function buildChartDataPoints(powerData, ema, thresholds, timestamps) {
             // Build array of ChartDataPoint-compatible objects from current chart data
@@ -113,7 +114,9 @@
             if (buf.uploadInFlight) return;
 
             var afterData = buf.afterBuffer.slice(0, CHART_SNAPSHOT_SIZE);
-            isFinal = isFinal || afterData.length >= CHART_SNAPSHOT_SIZE;
+            // Only mark the snapshot final after all required post-anomaly
+            // samples have actually been collected and merged.
+            isFinal = afterData.length >= CHART_SNAPSHOT_SIZE;
             buf.uploadInFlight = true;
             @* console.log('ðŸ“Š Sending chart snapshot AFTER data for anomaly #' + logId + ' (' + afterData.length + ' points' + (isFinal ? ', FINAL' : ', incremental') + ')'); *@
 
@@ -455,13 +458,9 @@
                             anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
                             anomalyConfirmation.cooldownTime = Number(settingValue(data.anomalyCooldownTime, 60)) * 1000; // Convert ke ms
 
-                            // Sampling mengikuti interval anomaly dari preset.
-                            if (anomalyTimer && newInterval !== anomalyTimerInterval) {
-                                clearInterval(anomalyTimer);
-                                anomalyTimerInterval = newInterval;
-                                anomalyTimer = setInterval(runAnomalyCheck, newInterval);
-                                @* console.log(`â±ï¸ Anomaly check interval updated to ${newInterval / 1000}s`); *@
-                            }
+                            // Jika realtime-refresh tersedia, sampling dipicu oleh
+                            // perubahan token KWH, bukan oleh interval ini.
+                            // Nilai checkInterval hanya dipakai oleh fallback lama.
                         }
 
                         // Notification settings
@@ -796,15 +795,22 @@
             // ============================================
             var chartBuf = anomalyChartBuffers[deviceKey];
             if (chartBuf && chartBuf.afterBuffer.length < CHART_SNAPSHOT_SIZE) {
-                // Add latest data point to the after-buffer
+                // Add each telemetry timestamp only once. A chart refresh or
+                // forced safety tick must not duplicate the same post sample.
                 var ts = timestamps ? timestamps[lastIndex] : null;
-                chartBuf.afterBuffer.push({
-                    Timestamp: ts,
-                    Power: currentPower,
-                    Upper: upper,
-                    Lower: lower,
-                    EMA: emaValue
+                var timestampKey = ts ? new Date(ts).getTime() : null;
+                var alreadyCaptured = timestampKey !== null && chartBuf.afterBuffer.some(function(point) {
+                    return point.Timestamp && new Date(point.Timestamp).getTime() === timestampKey;
                 });
+                if (!alreadyCaptured) {
+                    chartBuf.afterBuffer.push({
+                        Timestamp: ts,
+                        Power: currentPower,
+                        Upper: upper,
+                        Lower: lower,
+                        EMA: emaValue
+                    });
+                }
                 @* console.log('ðŸ“Š Chart snapshot after-buffer: ' + chartBuf.afterBuffer.length + '/' + CHART_SNAPSHOT_SIZE + ' for ' + deviceKey); *@
 
                 // Send incrementally: every N points OR after timeout, OR when buffer is full
@@ -953,6 +959,13 @@
                     // Don't return â€” lanjut proses tipe anomali baru dengan counter fresh
                  } else {
                     @* console.log(`ðŸ›‘ ${anomalyType.toUpperCase()} for ${deviceKey} - IN COOLDOWN , waiting for power to return to normal`); *@
+
+                    // The same anomaly is still one episode. Continue increasing the
+                    // persisted count, but never create another AnomalyLog row.
+                    const continuedKey = `${deviceKey}_${anomalyType}`;
+                    anomalyConfirmation.counts[continuedKey] =
+                        Math.max(anomalyConfirmation.counts[continuedKey] || 0, anomalyConfirmation.maxConfirmations) + 1;
+                    saveAnomalyState();
 
                     // Check apakah sudah kembali normal
                     if (!isDowntime && currentPower >= lower && currentPower <= upper) {
@@ -1104,7 +1117,7 @@
                 });
  
             } else {
-                @* console.log(`â³ Still monitoring... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutiv e samples outside threshold)`); *@
+                    @* console.log(`â³ Still monitoring... (${confirmedCount}/${anomalyConfirmation.maxConfirmations} consecutive samples outside threshold)`); *@
                 @* console.log(`â³ If power returns to normal before ${anomalyConfirmation.maxConfirmations}, counter will reset automatically`); *@
             }
         }
@@ -1139,10 +1152,19 @@
                 @* console.log('Starting anomaly checks...'); *@
                 setTimeout(runAnomalyCheck, 2000);
                 
-                // Gunakan sampling interval dari preset anomaly.
-                anomalyTimerInterval = (anomalyServiceConfig.checkInterval || 30) * 1000;
-                anomalyTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
-                @* console.log(`ðŸ”„ Anomaly check started with interval: ${anomalyTimerInterval / 1000}s`); *@
+                // Sampling anomaly harus mengikuti perubahan data KWH yang sama
+                // dengan refresh chart, bukan berjalan berdasarkan detik.
+                if (window.RealtimeRefresh && typeof window.RealtimeRefresh.watch === 'function') {
+                    anomalyRealtimeWatcher = window.RealtimeRefresh.watch(['kwh'], function(changedKeys, forced) {
+                        if (forced) return;
+                        runAnomalyCheck();
+                    }, { throttleMs: 0, ignoreForced: true });
+                } else {
+                    // Fallback hanya untuk halaman/deployment yang belum memuat
+                    // realtime-refresh.js. Dedup tetap berdasarkan timestamp sample.
+                    anomalyTimerInterval = (anomalyServiceConfig.checkInterval || 30) * 1000;
+                    anomalyTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
+                }
                 
                 // ============================================
                 // RELOAD SETTINGS SETIAP 60 DETIK (2x chart interval)
@@ -1198,7 +1220,11 @@
                 @* console.error('âŒ Error sending chart snapshot via se ndBeacon:', e); *@
             }
 
-             if (anomalyTimer) clearInterval(anomalyTimer);
+            if (anomalyRealtimeWatcher && window.RealtimeRefresh && typeof window.RealtimeRefresh.unwatch === 'function') {
+                window.RealtimeRefresh.unwatch(anomalyRealtimeWatcher);
+                anomalyRealtimeWatcher = null;
+            }
+            if (anomalyTimer) clearInterval(anomalyTimer);
             if (settingsReloadTimer) clearInterval(settingsReloadTimer);
             @* console.log('ðŸ›‘ Anomaly service stopped'); *@
         });

@@ -54,6 +54,7 @@ namespace KWHMonitoring.Models
         public DbSet<KWHDataHistory> KWHData_History { get; set; }
         public DbSet<DeviceRegistry> DeviceRegistry { get; set; }
         public DbSet<AnomalyLog> AnomalyLogs { get; set; }
+        public DbSet<ActiveAnomalyState> ActiveAnomalyStates { get; set; }
         public DbSet<AnomalyChartSnapshot> AnomalyChartSnapshots { get; set; }
         public DbSet<AnomalyMonthlyReport> AnomalyMonthlyReports { get; set; }
         public DbSet<DeviceSettings> DeviceSettings { get; set; }
@@ -216,6 +217,24 @@ namespace KWHMonitoring.Models
                     .HasFilter("[AnomalyType] = 'BILLING_VARIANCE' AND [BillingPeriod] IS NOT NULL AND [ErpBillingId] IS NOT NULL");
                 entity.HasIndex(x => x.Severity).HasName("IX_AnomalyLogs_Severity");
                 entity.HasIndex(x => x.IsResolved).HasName("IX_AnomalyLogs_IsResolved");
+            });
+
+            modelBuilder.Entity<ActiveAnomalyState>(entity =>
+            {
+                entity.ToTable("ActiveAnomalyStates");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.DeviceKey).HasColumnType("nvarchar(50)").HasMaxLength(50).IsRequired();
+                entity.Property(x => x.AnomalyType).HasColumnType("nvarchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.ConfirmationCount).IsRequired();
+                entity.Property(x => x.MaxConfirmations).IsRequired();
+                entity.Property(x => x.IsConfirmed).IsRequired();
+                entity.Property(x => x.AnomalyLogId);
+                entity.Property(x => x.FirstDetectedAt).HasColumnType("datetime2").IsRequired();
+                entity.Property(x => x.LastDetectedAt).HasColumnType("datetime2").IsRequired();
+                entity.Property(x => x.UpdatedAt).HasColumnType("datetime2").IsRequired();
+                entity.HasIndex(x => x.DeviceKey).IsUnique().HasName("IX_ActiveAnomalyStates_DeviceKey");
+                entity.HasIndex(x => x.UpdatedAt).HasName("IX_ActiveAnomalyStates_UpdatedAt");
             });
 
             modelBuilder.Entity<AnomalyChartSnapshot>(entity =>

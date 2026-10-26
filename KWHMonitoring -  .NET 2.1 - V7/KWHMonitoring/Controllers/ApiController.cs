@@ -5354,6 +5354,19 @@ namespace KWHMonitoring.Controllers
                             await _context.SaveChangesAsync();
                         }
                     }
+
+                    // A recovered device closes its DEVICE_OFFLINE episode as resolved.
+                    // Keep AnomalyLogs and chart snapshots; only transient active state is removed.
+                    var offlineState = await _context.ActiveAnomalyStates
+                        .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey
+                            && (x.AnomalyType == "DEVICE_OFFLINE" || x.AnomalyType == "DEVICE_DROP"));
+                    if (offlineState != null)
+                    {
+                        await CompleteAnomalyEpisodeAsync(offlineState);
+                        _context.ActiveAnomalyStates.Remove(offlineState);
+                        await _context.SaveChangesAsync();
+                        _logger.LogInformation("Device {DeviceKey} is online again; offline anomaly episode resolved", deviceKey);
+                    }
                 }
 
                 return Ok(new
@@ -5556,6 +5569,39 @@ namespace KWHMonitoring.Controllers
                 data.EMAValue = verified.EmaValue;
                 data.ThresholdMode = verified.ThresholdMode;
 
+                // Retain anomaly history for three months, while never deleting
+                // a log that is still referenced by an active episode.
+                await CleanupExpiredAnomalyLogsAsync();
+
+                // ActiveAnomalyStates is the authoritative episode registry. Do not
+                // create a second log while the same confirmed episode is active.
+                var authoritativeState = await _context.ActiveAnomalyStates
+                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+                if (authoritativeState != null &&
+                    authoritativeState.IsConfirmed &&
+                    authoritativeState.AnomalyLogId.HasValue &&
+                    string.Equals(authoritativeState.AnomalyType, data.AnomalyType, StringComparison.Ordinal))
+                {
+                    authoritativeState.ConfirmationCount++;
+                    authoritativeState.LastDetectedAt = verified.DetectedTime;
+                    authoritativeState.UpdatedAt = DateTime.Now;
+                    await _context.SaveChangesAsync();
+                    return Ok(new
+                    {
+                        success = true,
+                        suppressed = true,
+                        reason = "Active anomaly episode already exists",
+                        logId = authoritativeState.AnomalyLogId
+                    });
+                }
+
+                if (authoritativeState != null &&
+                    !string.Equals(authoritativeState.AnomalyType, data.AnomalyType, StringComparison.Ordinal))
+                {
+                    await DeleteActiveAnomalyEpisodeAsync(authoritativeState);
+                    await _context.SaveChangesAsync();
+                }
+
                 // ============================================
                 // SERVER-SIDE DEDUPLICATION:
                 // Cek apakah device ini sudah punya anomali aktif (belum di-reset)
@@ -5654,6 +5700,35 @@ namespace KWHMonitoring.Controllers
 
                 _context.AnomalyLogs.Add(log);
                 await _context.SaveChangesAsync();
+
+                // Link the confirmed episode to this single log. This makes repeated
+                // samples update the same episode instead of creating another log.
+                var activeStateAfterInsert = await _context.ActiveAnomalyStates
+                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+                var configuredMaxConfirmations = await GetMaxConfirmationsAsync();
+                if (activeStateAfterInsert == null)
+                {
+                    activeStateAfterInsert = new ActiveAnomalyState
+                    {
+                        DeviceKey = data.DeviceKey,
+                        AnomalyType = data.AnomalyType,
+                        ConfirmationCount = configuredMaxConfirmations,
+                        MaxConfirmations = configuredMaxConfirmations,
+                        FirstDetectedAt = verified.DetectedTime,
+                        LastDetectedAt = verified.DetectedTime,
+                        UpdatedAt = DateTime.Now
+                    };
+                    _context.ActiveAnomalyStates.Add(activeStateAfterInsert);
+                }
+
+                if (string.Equals(activeStateAfterInsert.AnomalyType, data.AnomalyType, StringComparison.Ordinal))
+                {
+                    activeStateAfterInsert.IsConfirmed = true;
+                    activeStateAfterInsert.AnomalyLogId = log.Id;
+                    activeStateAfterInsert.LastDetectedAt = verified.DetectedTime;
+                    activeStateAfterInsert.UpdatedAt = DateTime.Now;
+                    await _context.SaveChangesAsync();
+                }
 
                 // ============================================================
                 // ANALISIS OTOMATIS & SNAPSHOT CHART
@@ -5972,9 +6047,18 @@ namespace KWHMonitoring.Controllers
                         return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
 
                     _context.AppSettingsRecords.Remove(activeAlert);
-                    await _context.SaveChangesAsync();
-                    _logger.LogInformation("Anomaly alert reset for {DeviceKey}", data.DeviceKey);
                 }
+
+                var activeState = await _context.ActiveAnomalyStates
+                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+                if (activeState != null)
+                {
+                    await CompleteAnomalyEpisodeAsync(activeState);
+                    _context.ActiveAnomalyStates.Remove(activeState);
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Anomaly episode reset for {DeviceKey}", data.DeviceKey);
 
                 return Ok(new { success = true, deviceKey = data.DeviceKey });
             }
@@ -7902,42 +7986,23 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                if (!Guid.TryParse(scopeId, out var parsedScopeId))
-                    return BadRequest(new { success = false, error = "A valid state scope is required" });
-                var statePrefix = "AnomalyState." + parsedScopeId.ToString("N") + ".";
-                var expiredState = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith("AnomalyState.") && x.UpdatedAt.HasValue
-                        && x.UpdatedAt.Value < DateTime.Now.AddDays(-7))
-                    .ToListAsync();
-                if (expiredState.Count > 0)
-                {
-                    _context.AppSettingsRecords.RemoveRange(expiredState);
-                    await _context.SaveChangesAsync();
-                }
-                var perDeviceState = await _context.AppSettingsRecords.AsNoTracking()
-                    .Where(x => x.SettingKey.StartsWith(statePrefix + "Counts.") || x.SettingKey.StartsWith(statePrefix + "Cooldown."))
-                    .ToListAsync();
+                // scopeId is retained only for backwards compatibility with old clients.
+                // Runtime state is now one row per device and is no longer partitioned by tab.
+                var activeStates = await _context.ActiveAnomalyStates.AsNoTracking().ToListAsync();
                 var counts = new JObject();
                 var cooldown = new JObject();
-                foreach (var state in perDeviceState)
+                foreach (var state in activeStates)
                 {
-                    var countPrefix = statePrefix + "Counts.";
-                    var isCount = state.SettingKey.StartsWith(countPrefix, StringComparison.Ordinal);
-                    var prefix = isCount ? countPrefix : statePrefix + "Cooldown.";
-                    var deviceKey = state.SettingKey.Substring(prefix.Length);
-                    try
+                    counts[state.DeviceKey + "_" + state.AnomalyType] = state.ConfirmationCount;
+                    if (state.IsConfirmed)
                     {
-                        var parsed = JObject.Parse(state.SettingValue ?? "{}");
-                        if (isCount)
+                        cooldown[state.DeviceKey] = new JObject
                         {
-                            foreach (var property in parsed.Properties()) counts[property.Name] = property.Value.DeepClone();
-                        }
-                        else if (parsed.HasValues)
-                        {
-                            cooldown[deviceKey] = parsed.DeepClone();
-                        }
+                            ["type"] = state.AnomalyType,
+                            ["loggedAt"] = new DateTimeOffset(state.LastDetectedAt).ToUnixTimeMilliseconds(),
+                            ["waitingForNormal"] = true
+                        };
                     }
-                    catch (JsonException) { /* Ignore malformed per-device state and continue loading other devices. */ }
                 }
 
                 return Ok(new
@@ -7964,11 +8029,9 @@ namespace KWHMonitoring.Controllers
             try
             {
                 if (data == null) return BadRequest(new { success = false, error = "State payload is required" });
-                if (!Guid.TryParse(data.scopeId, out var parsedScopeId))
-                    return BadRequest(new { success = false, error = "A valid state scope is required" });
-                var statePrefix = "AnomalyState." + parsedScopeId.ToString("N") + ".";
                 var counts = JObject.Parse(string.IsNullOrWhiteSpace(data.confirmationCounts) ? "{}" : data.confirmationCounts);
                 var cooldown = JObject.Parse(string.IsNullOrWhiteSpace(data.cooldownState) ? "{}" : data.cooldownState);
+                var maxConfirmations = await GetMaxConfirmationsAsync();
                 var deviceKeys = counts.Properties().Select(x =>
                     x.Name.EndsWith("_OVERLOAD", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 9) :
                     x.Name.EndsWith("_DROP", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 5) : string.Empty)
@@ -7977,33 +8040,54 @@ namespace KWHMonitoring.Controllers
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
 
-                // Include records already stored for this scope. This allows an
-                // empty payload or a device removed from the current page to
-                // delete its stale Counts/Cooldown rows instead of leaving them
-                // permanently in AppSettings.
-                var existingStateKeys = await _context.AppSettingsRecords
-                    .Where(x => x.SettingKey.StartsWith(statePrefix + "Counts.") ||
-                                x.SettingKey.StartsWith(statePrefix + "Cooldown."))
-                    .Select(x => x.SettingKey)
-                    .ToListAsync();
-
-                deviceKeys = deviceKeys
-                    .Concat(existingStateKeys.Select(key =>
-                        key.StartsWith(statePrefix + "Counts.", StringComparison.Ordinal)
-                            ? key.Substring((statePrefix + "Counts.").Length)
-                            : key.Substring((statePrefix + "Cooldown.").Length)))
-                    .Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 20)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList();
-
                 foreach (var deviceKey in deviceKeys)
                 {
-                    var deviceCounts = new JObject();
-                    foreach (var property in counts.Properties().Where(x => x.Name.StartsWith(deviceKey + "_", StringComparison.Ordinal)))
-                        deviceCounts[property.Name] = property.Value.DeepClone();
-                    var deviceCooldown = cooldown[deviceKey] as JObject ?? new JObject();
-                    await UpsertAnomalyStateRecordAsync(statePrefix + "Counts." + deviceKey, deviceCounts.ToString(Formatting.None));
-                    await UpsertAnomalyStateRecordAsync(statePrefix + "Cooldown." + deviceKey, deviceCooldown.ToString(Formatting.None));
+                    var countProperty = counts.Properties()
+                        .Where(x => x.Name.StartsWith(deviceKey + "_", StringComparison.Ordinal))
+                        .FirstOrDefault(x => x.Value.Type == JTokenType.Integer && x.Value.Value<int>() > 0)
+                        ?? counts.Properties().FirstOrDefault(x => x.Name.StartsWith(deviceKey + "_", StringComparison.Ordinal));
+                    var anomalyType = countProperty?.Name.EndsWith("_DROP", StringComparison.Ordinal) == true ? "DROP" : "OVERLOAD";
+                    var count = countProperty == null ? 0 : Math.Max(0, countProperty.Value.Value<int>());
+                    var cooldownState = cooldown[deviceKey] as JObject;
+                    if (cooldownState != null && cooldownState["type"] != null)
+                        anomalyType = cooldownState.Value<string>("type") ?? anomalyType;
+
+                    var state = await _context.ActiveAnomalyStates
+                        .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
+                    if (count <= 0 && cooldownState == null)
+                    {
+                        if (state != null)
+                        {
+                            await DeleteActiveAnomalyEpisodeAsync(state);
+                        }
+                        continue;
+                    }
+
+                    if (state == null || !string.Equals(state.AnomalyType, anomalyType, StringComparison.Ordinal))
+                    {
+                        if (state != null)
+                            await DeleteActiveAnomalyEpisodeAsync(state);
+                        state = new ActiveAnomalyState
+                        {
+                            DeviceKey = deviceKey,
+                            AnomalyType = anomalyType,
+                            ConfirmationCount = count,
+                            MaxConfirmations = maxConfirmations,
+                            IsConfirmed = cooldownState != null,
+                            FirstDetectedAt = DateTime.Now,
+                            LastDetectedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+                        _context.ActiveAnomalyStates.Add(state);
+                    }
+                    else
+                    {
+                        state.ConfirmationCount = Math.Max(state.ConfirmationCount, count);
+                        state.MaxConfirmations = maxConfirmations;
+                        state.IsConfirmed = state.IsConfirmed || cooldownState != null;
+                        state.LastDetectedAt = DateTime.Now;
+                        state.UpdatedAt = DateTime.Now;
+                    }
                 }
 
                 await _context.SaveChangesAsync();
@@ -8016,34 +8100,72 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        private async Task UpsertAnomalyStateRecordAsync(string key, string value)
+        private async Task<int> GetMaxConfirmationsAsync()
         {
-            var record = await _context.AppSettingsRecords.FirstOrDefaultAsync(x => x.SettingKey == key);
+            var setting = await _context.AppSettingsRecords.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SettingKey == "Anomaly.MaxConfirmations");
 
-            // Empty cooldown/count objects represent no active runtime state.
-            // Do not retain them as rows in the configuration table.
-            if (string.Equals(value?.Trim(), "{}", StringComparison.Ordinal))
-            {
-                if (record != null)
-                    _context.AppSettingsRecords.Remove(record);
+            if (setting != null && int.TryParse(setting.SettingValue, out var configuredValue))
+                return Math.Max(1, Math.Min(configuredValue, 100));
+
+            return 3;
+        }
+
+        private async Task DeleteActiveAnomalyEpisodeAsync(ActiveAnomalyState state)
+        {
+            if (state == null) return;
+            await CompleteAnomalyEpisodeAsync(state);
+            _context.ActiveAnomalyStates.Remove(state);
+        }
+
+        /// <summary>
+        /// Closes the active episode without deleting its historical log or chart snapshot.
+        /// ActiveAnomalyStates is transient state; AnomalyLogs is the audit/history table.
+        /// </summary>
+        private async Task CompleteAnomalyEpisodeAsync(ActiveAnomalyState state)
+        {
+            if (state == null || !state.AnomalyLogId.HasValue)
                 return;
-            }
 
-            if (value.Length > 500) throw new InvalidOperationException("Per-device anomaly state exceeds the AppSettings value limit");
-            if (record == null)
-            {
-                _context.AppSettingsRecords.Add(new AppSettingsRecord
-                {
-                    SettingKey = key,
-                    SettingValue = value,
-                    UpdatedAt = DateTime.Now
-                });
-            }
-            else
-            {
-                record.SettingValue = value;
-                record.UpdatedAt = DateTime.Now;
-            }
+            var log = await _context.AnomalyLogs
+                .FirstOrDefaultAsync(x => x.Id == state.AnomalyLogId.Value);
+            if (log == null || log.IsResolved)
+                return;
+
+            log.IsResolved = true;
+            log.ResolvedTime = DateTime.Now;
+            log.ResolvedBy = "system";
+            log.OperatorAction = string.IsNullOrWhiteSpace(log.OperatorAction)
+                ? "auto_resolved"
+                : log.OperatorAction;
+        }
+
+        /// <summary>
+        /// Retains anomaly history for three months. Snapshot rows are removed first
+        /// so the cleanup remains safe when the database uses a restrictive FK.
+        /// </summary>
+        private async Task CleanupExpiredAnomalyLogsAsync()
+        {
+            var cutoff = DateTime.Now.AddMonths(-3);
+            var expiredIds = await _context.AnomalyLogs
+                .Where(x => x.DetectedTime < cutoff
+                    && !_context.ActiveAnomalyStates.Any(state => state.AnomalyLogId == x.Id))
+                .Select(x => x.Id)
+                .ToListAsync();
+
+            if (expiredIds.Count == 0)
+                return;
+
+            var snapshots = await _context.AnomalyChartSnapshots
+                .Where(x => expiredIds.Contains(x.AnomalyLogId))
+                .ToListAsync();
+            if (snapshots.Count > 0)
+                _context.AnomalyChartSnapshots.RemoveRange(snapshots);
+
+            var expiredLogs = await _context.AnomalyLogs
+                .Where(x => expiredIds.Contains(x.Id))
+                .ToListAsync();
+            _context.AnomalyLogs.RemoveRange(expiredLogs);
         }
 
         // ============================================

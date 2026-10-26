@@ -193,71 +193,22 @@
                         </div>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
                     </div>
-                    <div class="modal-body help-modal-body">
-                        <section class="help-section">
-                            <h6><i class="fas fa-project-diagram mr-2"></i>1. Alur kerja aplikasi</h6>
-                            <ol>
-                                <li>Meter atau perangkat mengirim data listrik ke layanan penerima perangkat.</li>
-                                <li>Data masuk disimpan sebagai pembacaan bertanda waktu. Sistem menggunakan pembacaan terbaru dari setiap panel untuk menampilkan kondisi terkini.</li>
-                                <li>Data energi dihimpun per jam, hari, bulan, dan tahun untuk menyajikan statistik konsumsi.</li>
-                                <li>Dasbor, grafik, statistik, dan Voltra mengambil data melalui layanan aplikasi. Setiap pertanyaan kepada Voltra memicu pengambilan cuplikan data terbaru.</li>
-                                <li>Pemeriksaan anomali membandingkan hasil pembacaan dengan ambang batas sistem. Aktivitas penting dicatat dan ditampilkan pada ikon lonceng notifikasi.</li>
-                            </ol>
-                            <p class="help-note">Waktu pembaruan mengikuti waktu penerimaan data oleh server. Jika data terakhir sudah lama, periksa koneksi perangkat dan status panel sebelum menyimpulkan bahwa konsumsi bernilai nol.</p>
-                        </section>
-
-                        <section class="help-section">
-                            <h6><i class="fas fa-tachometer-alt mr-2"></i>2. Dasbor dan kondisi panel</h6>
-                            <p>Dasbor merangkum panel, daya aktif, tegangan, arus, faktor daya, frekuensi, dan energi. Pilih panel untuk membuka rinciannya. Nilai setiap fasa R/S/T tersedia pada perangkat tiga fasa; beberapa perangkat hanya mengirim satu fasa.</p>
-                            <ul>
-                                <li><strong>Watt (W):</strong> daya pada saat pembacaan diterima.</li>
-                                <li><strong>kWh:</strong> akumulasi energi selama periode; gunakan statistik energi untuk membandingkan periode.</li>
-                                <li><strong>Faktor daya:</strong> nilai faktor daya yang dilaporkan perangkat; nilainya umumnya berada pada rentang 0 hingga 1.</li>
-                                <li><strong>Waktu terakhir:</strong> periksa cap waktu untuk memastikan data panel masih baru.</li>
-                            </ul>
-                        </section>
-
-                        <section class="help-section">
-                            <h6><i class="fas fa-chart-line mr-2"></i>3. Grafik, riwayat, dan statistik biaya</h6>
-                            <ul>
-                                <li><strong>Grafik:</strong> menampilkan perubahan daya, tegangan, dan arus berdasarkan data historis.</li>
-                                <li><strong>Riwayat:</strong> menelusuri hasil pembacaan berdasarkan panel dan rentang tanggal.</li>
-                                <li><strong>Statistik Penggunaan:</strong> membandingkan konsumsi setiap panel per hari, bulan, dan tahun serta melihat peringkat konsumsi.</li>
-                                <li><strong>Perkiraan biaya:</strong> konsumsi energi dalam kWh dikalikan dengan tarif per kWh yang dikonfigurasi. Nilai ini merupakan perkiraan aplikasi, bukan tagihan resmi penyedia listrik.</li>
-                            </ul>
-                        </section>
-
-                        <section class="help-section">
-                            <h6><i class="fas fa-exclamation-triangle mr-2"></i>4. Anomali dan lonceng aktivitas</h6>
-                            <p>Halaman <strong>Log Anomali</strong> memuat kejadian yang direkam sistem, status penanganan, dan rincian panel. Ikon lonceng menampilkan riwayat anomali, aktivitas akun dan pendaftaran, respons AI, serta temuan kondisi panel yang masih aktif. Pilih <strong>Perbarui</strong> pada dialog notifikasi untuk memuat ulang data.</p>
-                            <p>Temuan langsung mencakup data panel yang tidak diperbarui selama lebih dari 15 menit, nilai daya atau energi negatif, faktor daya di luar rentang 0–1, dan tegangan fasa R di luar acuan 180–260 V. Rentang tegangan tersebut hanya digunakan untuk pemeriksaan awal; bandingkan dengan standar instalasi dan konfigurasi lokasi.</p>
-                        </section>
-
-                        <section class="help-section">
-                            <h6><i class="fas fa-robot mr-2"></i>5. Menggunakan Voltra AI</h6>
-                            <p>Pilih tombol Voltra untuk bertanya tentang kondisi panel, konsumsi, perkiraan biaya, peringkat konsumsi, tren, dan anomali. Jawaban menggunakan cuplikan terbaru dari basis data saat pesan dikirim. Voltra tidak menggantikan pemeriksaan teknisi; mintalah petugas berwenang memvalidasi tindakan kelistrikan.</p>
-                            <p>Jika pengambilan cuplikan data gagal, chatbot meminta Anda mencoba kembali agar data lama tidak dianggap sebagai kondisi terkini. Riwayat percakapan disimpan di peramban, sedangkan respons yang berhasil juga dicatat dalam catatan aktivitas sistem.</p>
-                        </section>
-
-                        <section class="help-section">
-                            <h6><i class="fas fa-sliders-h mr-2"></i>6. Pengaturan, akun, dan akses</h6>
-                            <ul>
-                                <li><strong>Pengaturan:</strong> atur tarif, ambang batas dan mode deteksi, preferensi notifikasi, serta konfigurasi chatbot sesuai dengan hak akses akun.</li>
-                                <li><strong>Pendaftaran:</strong> pengguna baru mendaftar dengan alamat email, menyelesaikan verifikasi, lalu menunggu persetujuan akses atau penetapan peran jika diwajibkan administrator.</li>
-                                <li><strong>Manajemen Pengguna:</strong> administrator dapat mengubah peran atau status akun. Aktivitas akun utama dicatat dalam catatan audit.</li>
-                                <li>Jika halaman atau API menolak akses, masuklah menggunakan akun dengan peran yang sesuai dengan kebijakan sistem.</li>
-                            </ul>
-                        </section>
-
-                        <section class="help-section help-changelog">
-                            <h6><i class="fas fa-clipboard-list mr-2"></i>Catatan pembaruan sistem</h6>
-                            <p class="text-muted">Daftar ini ditulis langsung pada tata letak aplikasi. Tambahkan catatan baru di bagian teratas setiap kali pembaruan dirilis.</p>
-                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Pusat bantuan dan log aktivitas</strong><span>Menambahkan panduan penggunaan terintegrasi, modal aktivitas notifikasi, pencatatan respons Voltra, dan tampilan temuan sistem aktif.</span></div>
-                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Pembaruan chatbot dan pemeriksaan kondisi panel</strong><span>Cuplikan data chatbot kini memuat seluruh panel dan peringkat tanpa pemotongan, serta memeriksa kebaruan data, nilai negatif, faktor daya, dan tegangan.</span></div>
-                            <div class="help-release"><time datetime="2026-09-29">29 September 2026</time><strong>Perbaikan konsistensi snapshot Voltra</strong><span>Chatbot mengambil snapshot database terbaru setiap pertanyaan dan tidak memakai fallback teks halaman jika pengambilan snapshot gagal.</span></div>
-                        </section>
+                    <div class="modal-body" style="padding:0; background:#525659;">
+                        <div style="height:calc(100vh - 190px); min-height:500px; width:100%;">
+                            <iframe src="@Url.Content("~/docs/Panduan_Pengguna_KWH_Monitoring.pdf")#view=FitH"
+                                    title="Panduan Pengguna KWH Monitoring"
+                                    style="display:block; width:100%; height:100%; border:0; background:#525659;"
+                                    loading="lazy">
+                            </iframe>
+                        </div>
                     </div>
                     <div class="modal-footer">
+                        <a class="btn btn-outline-primary" href="@Url.Content("~/docs/Panduan_Pengguna_KWH_Monitoring.pdf")" target="_blank" rel="noopener noreferrer">
+                            <i class="fas fa-external-link-alt mr-1"></i>Buka di tab baru
+                        </a>
+                        <a class="btn btn-primary" href="@Url.Content("~/docs/Panduan_Pengguna_KWH_Monitoring.pdf")" download="Panduan_Pengguna_KWH_Monitoring.pdf">
+                            <i class="fas fa-download mr-1"></i>Unduh PDF
+                        </a>
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup panduan</button>
                     </div>
                 </div>
@@ -2137,10 +2088,10 @@
     </script>
 
     <!-- ANOMALY BACKGROUND SERVICE -->
-    @await Html.PartialAsync("_AnomalyService")
-
     <!-- REALTIME REFRESH: update halaman ketika ada perubahan data (bukan interval tetap) -->
     <script src="~/js/realtime-refresh.js" asp-append-version="true"></script>
+
+    @await Html.PartialAsync("_AnomalyService")
 
     @await RenderSectionAsync("Scripts", required: false)
     <script src="~/js/language.js" asp-append-version="true"></script>

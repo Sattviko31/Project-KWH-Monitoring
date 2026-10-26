@@ -76,10 +76,10 @@
         return false;
     }
 
-    function runWatch(watch, changedKeys) {
+    function runWatch(watch, changedKeys, forced) {
         if (!watch.enabled) return;
         try {
-            watch.handler(changedKeys);
+            watch.handler(changedKeys, !!forced);
         } catch (e) {
             logError(e);
         }
@@ -102,7 +102,7 @@
             watch.pendingKeys = null;
             if (!watch.enabled) return;
             watch.lastRunAt = nowMs();
-            runWatch(watch, changedKeys);
+            runWatch(watch, changedKeys, false);
         }, delay);
     }
 
@@ -115,9 +115,10 @@
             if (!matches(watch, changedKeys)) continue;
 
             if (force) {
+                if (watch.ignoreForced) continue;
                 clearPending(watch);
                 watch.lastRunAt = stamp;
-                runWatch(watch, changedKeys);
+                runWatch(watch, changedKeys, true);
                 continue;
             }
 
@@ -125,7 +126,7 @@
             if (elapsed >= watch.throttleMs) {
                 clearPending(watch);
                 watch.lastRunAt = stamp;
-                runWatch(watch, changedKeys);
+                runWatch(watch, changedKeys, false);
             } else {
                 schedulePending(watch, changedKeys, watch.throttleMs - elapsed);
             }
@@ -222,6 +223,7 @@
                     : config.throttleMs,
                 lastRunAt: 0,
                 enabled: true,
+                ignoreForced: opts.ignoreForced === true,
                 pendingTimer: null,
                 pendingKeys: null
             };

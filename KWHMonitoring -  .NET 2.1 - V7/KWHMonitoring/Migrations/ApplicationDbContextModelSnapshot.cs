@@ -622,6 +622,18 @@ namespace KWHMonitoring.Migrations
                     b.Property<decimal>("FlatTariffPerKWh")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("GroupName")
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<string>("IDPelanggan")
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
+                    b.Property<string>("KodeLokasi")
+                        .HasColumnType("varchar(100)")
+                        .HasMaxLength(100);
+
                     b.Property<decimal>("LwbpCost")
                         .HasColumnType("decimal(18,2)");
 

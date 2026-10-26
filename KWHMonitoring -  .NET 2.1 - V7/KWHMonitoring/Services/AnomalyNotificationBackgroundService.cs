@@ -19,6 +19,7 @@ namespace KWHMonitoring.Services
         private DateTime _lastHourlyReportTime;
         private DateTime _lastDailyReportSentDate;   // date when daily report was last sent
         private DateTime _lastMonthlyReportSentDate;  // date when monthly report was last sent
+        private DateTime _lastAnomalyRetentionCleanupDate;
 
         private const string LastDailyReportSentKey = "Notification.LastDailyReportSentDate";
         private const string LastMonthlyReportSentKey = "Notification.LastMonthlyReportSentDate";
@@ -32,6 +33,7 @@ namespace KWHMonitoring.Services
             _lastHourlyReportTime = DateTime.MinValue;
             _lastDailyReportSentDate = DateTime.MinValue;
             _lastMonthlyReportSentDate = DateTime.MinValue;
+            _lastAnomalyRetentionCleanupDate = DateTime.MinValue;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,6 +68,12 @@ namespace KWHMonitoring.Services
             try
             {
                 var now = DateTime.Now;
+
+                if (_lastAnomalyRetentionCleanupDate.Date != now.Date)
+                {
+                    await CleanupExpiredAnomalyLogsAsync();
+                    _lastAnomalyRetentionCleanupDate = now.Date;
+                }
 
                 using (var scope = _serviceProvider.CreateScope())
                 {
@@ -125,6 +133,44 @@ namespace KWHMonitoring.Services
             finally
             {
                 _lock.Release();
+            }
+        }
+
+        private async Task CleanupExpiredAnomalyLogsAsync()
+        {
+            try
+            {
+                using (var scope = _serviceProvider.CreateScope())
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    var cutoff = DateTime.Now.AddMonths(-3);
+                    var expiredIds = await db.AnomalyLogs
+                        .Where(x => x.DetectedTime < cutoff
+                            && !db.ActiveAnomalyStates.Any(state => state.AnomalyLogId == x.Id))
+                        .Select(x => x.Id)
+                        .ToListAsync();
+
+                    if (expiredIds.Count == 0)
+                        return;
+
+                    var snapshots = await db.AnomalyChartSnapshots
+                        .Where(x => expiredIds.Contains(x.AnomalyLogId))
+                        .ToListAsync();
+                    if (snapshots.Count > 0)
+                        db.AnomalyChartSnapshots.RemoveRange(snapshots);
+
+                    var logs = await db.AnomalyLogs
+                        .Where(x => expiredIds.Contains(x.Id))
+                        .ToListAsync();
+                    db.AnomalyLogs.RemoveRange(logs);
+                    await db.SaveChangesAsync();
+
+                    _logger.LogInformation("Removed {Count} anomaly logs older than three months", logs.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clean up anomaly logs older than three months");
             }
         }
 
