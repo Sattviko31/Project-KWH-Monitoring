@@ -1407,6 +1407,43 @@ h6 { font-size: clamp(0.85rem, 2vw, 1rem); }
     min-width: 0;
 }
 
+/* Kartu kota dibuat dinamis oleh halaman monitoring; setiap kartu tetap
+   menjadi item grid tersendiri tanpa mengubah layout kartu ringkasan utama. */
+.panel-city-summary-cards {
+    display: contents;
+}
+
+/* Ringkasan monitoring dibuat lebih ringkas dan konsisten. Class yang sama
+   dipakai oleh kartu kota yang dibuat dinamis agar tidak terlihat berbeda. */
+.panel-summary-stats {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.55rem;
+}
+
+.panel-summary-stats .panel-summary-card {
+    min-height: 64px;
+    padding: 9px 12px;
+    border-radius: 8px;
+}
+
+.panel-summary-stats .panel-summary-card .stat-label {
+    font-size: 0.68rem;
+    line-height: 1.1;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+}
+
+.panel-summary-stats .panel-summary-card .stat-value {
+    font-size: 1.2rem;
+    line-height: 1.15;
+    letter-spacing: -0.2px;
+}
+
+.panel-summary-stats .panel-summary-card .stat-icon {
+    right: 10px;
+    font-size: 1.65rem;
+}
+
 .stats-row .stat-card {
     display: flex;
     flex-direction: column;

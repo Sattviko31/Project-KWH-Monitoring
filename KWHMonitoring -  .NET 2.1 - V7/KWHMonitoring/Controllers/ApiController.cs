@@ -494,6 +494,9 @@ namespace KWHMonitoring.Controllers
                         deviceKey = data.DeviceKey,
                         deviceId = data.DeviceId,
                         groupName = data.GroupName,
+                        kotaProvinsi = erpCapacityMap.TryGetValue(data.DeviceKey, out var lokasi)
+                            ? lokasi.KotaProvinsi
+                            : string.Empty,
                         deviceCategory = categorySettings.ContainsKey("DeviceCategory." + data.DeviceKey)
                             ? categorySettings["DeviceCategory." + data.DeviceKey]
                             : "Billboard",

@@ -46,6 +46,34 @@
     </div> *@
 </div>
 
+    <!-- Ringkasan lokasi dan kapasitas panel -->
+    <!-- Kartu statistik lama di atas tetap dipertahankan; blok ini adalah tambahan baru. -->
+    <div class="stats-row panel-summary-stats mb-3 mb-md-4" id="panelSummaryStats" aria-live="polite">
+        <div>
+            <div class="stat-card panel-summary-card bg-primary h-100">
+                <div class="stat-label">TOTAL PANEL</div>
+                <div class="stat-value" data-summary-value="total">0</div>
+                <i class="fas fa-th stat-icon"></i>
+            </div>
+        </div>
+        <div>
+            <div class="stat-card panel-summary-card bg-success h-100">
+                <div class="stat-label">PANEL ONLINE</div>
+                <div class="stat-value" data-summary-value="online">0</div>
+                <i class="fas fa-wifi stat-icon"></i>
+            </div>
+        </div>
+    
+        <div id="panelCitySummaryCards" class="panel-city-summary-cards" aria-label="Jumlah panel berdasarkan kota"></div>
+        <div>
+            <div class="stat-card panel-summary-card bg-info h-100">
+                <div class="stat-label">DAYA TERPASANG</div>
+                <div class="stat-value" data-summary-value="capacity">0 VA</div>
+                <i class="fas fa-bolt stat-icon"></i>
+            </div>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-between align-items-center mb-2 mb-md-3 flex-wrap gap-2">
         <h5 class="mb-0"></h5>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -598,6 +626,42 @@
         let panelList = @Html.Raw(Json.Serialize(Model.Panels.Select(p => new { deviceKey = p.DeviceKey, safeKey = p.DeviceKey.Replace("-", "_") }).ToList()));
         let allPanelData = []; // Cached panel data for client-side filtering
 
+        function getCityName(cityText) {
+            if (!cityText || typeof cityText !== 'string') return '';
+            return cityText.trim().split(/\s+/)[0].toUpperCase();
+        }
+
+        function updatePanelSummaryCards() {
+            const cities = {};
+            let totalCapacity = 0;
+            let onlineCount = 0;
+
+            (allPanelData || []).forEach(function(panel) {
+                const city = getCityName(panel.kotaProvinsi);
+                if (city) cities[city] = (cities[city] || 0) + 1;
+
+                totalCapacity += parseFloat(panel.installedCapacityVA) || 0;
+                // Event konektivitas akan mengubah nilai ini menjadi false bila offline.
+                if (deviceConnectivityMap[panel.deviceKey] !== false) onlineCount++;
+            });
+
+            $('[data-summary-value="total"]').text(formatNumber(allPanelData.length));
+            $('[data-summary-value="online"]').text(formatNumber(onlineCount));
+            $('[data-summary-value="capacity"]').text(formatNumber(totalCapacity) + ' VA');
+
+            const $cityCards = $('#panelCitySummaryCards').empty();
+            Object.keys(cities).sort().forEach(function(city) {
+                const $wrapper = $('<div>');
+                $('<div>')
+                    .addClass('stat-card panel-summary-card bg-secondary h-100')
+                    .append($('<div>').addClass('stat-label').text(city))
+                    .append($('<div>').addClass('stat-value').text(formatNumber(cities[city])))
+                    .append($('<i>').addClass('fas fa-map-marker-alt stat-icon'))
+                    .appendTo($wrapper);
+                $cityCards.append($wrapper);
+            });
+        }
+
         // ============================================
         // PANEL FILTER LOGIC
         // ============================================
@@ -952,9 +1016,20 @@
                 deviceId = p.DeviceId,
                 groupName = p.GroupName,
                 dayaWatt = p.Daya_Watt,
-                isThreePhase = p.IsThreePhase
+                isThreePhase = p.IsThreePhase,
+                kotaProvinsi = p.KotaProvinsi,
+                installedCapacityVA = p.InstalledCapacityVA
             }).ToList()));
+            panelList = allPanelData.map(function(panel) {
+                return { deviceKey: panel.deviceKey, safeKey: panel.deviceKey.replace(/-/g, '_') };
+            });
+            allPanelData.forEach(function(panel) {
+                if (deviceConnectivityMap[panel.deviceKey] === undefined) {
+                    deviceConnectivityMap[panel.deviceKey] = true;
+                }
+            });
             renderPanelChips();
+            updatePanelSummaryCards();
 
             updateLastUpdate();
 
@@ -969,6 +1044,7 @@
             window.addEventListener('deviceConnectivityChanged', function(e) {
                 if (!e.detail || !e.detail.deviceKey) return;
                 deviceConnectivityMap[e.detail.deviceKey] = e.detail.online === true;
+                updatePanelSummaryCards();
                 updatePanelHeadersByAnomaly();
                 applyPanelFilter();
             });
@@ -1427,11 +1503,11 @@
                 method: 'GET',
                 dataType: 'json',
                 success: function(stats) {
-                    $('.stat-card.bg-primary .stat-value').first().text(formatNumber(stats.totalDaya) + ' W');
-                    $('.stat-card.bg-success .stat-value').first().text(formatNumber(stats.totalEnergy) + ' Wh');
-                    $('.stat-card.bg-warning .stat-value').first().text(formatNumber(stats.totalEnergiAktif) + ' Wh');
-                    $('.stat-card.bg-secondary .stat-value').first().text(stats.activePanels);
-                    $('.stat-card.bg-dark .stat-value').first().text(stats.avgPowerFactor.toFixed(3).replace('.', ','));
+                    $('.stats-row:not(.panel-summary-stats) .stat-card.bg-primary .stat-value').first().text(formatNumber(stats.totalDaya) + ' W');
+                    $('.stats-row:not(.panel-summary-stats) .stat-card.bg-success .stat-value').first().text(formatNumber(stats.totalEnergy) + ' Wh');
+                    $('.stats-row:not(.panel-summary-stats) .stat-card.bg-warning .stat-value').first().text(formatNumber(stats.totalEnergiAktif) + ' Wh');
+                    $('.stats-row:not(.panel-summary-stats) .stat-card.bg-secondary .stat-value').first().text(stats.activePanels);
+                    $('.stats-row:not(.panel-summary-stats) .stat-card.bg-dark .stat-value').first().text(stats.avgPowerFactor.toFixed(3).replace('.', ','));
                     $('#lastUpdate').text(stats.timestamp);
                     $('#statusText').text('Online');
                 },
@@ -1450,6 +1526,13 @@
                 success: function(panels) {
                     // Update cached panel data for filtering
                     allPanelData = panels;
+
+                    panels.forEach(function(panel) {
+                        if (deviceConnectivityMap[panel.deviceKey] === undefined) {
+                            deviceConnectivityMap[panel.deviceKey] = true;
+                        }
+                    });
+                    updatePanelSummaryCards();
 
                     // Re-render chip list with updated data
                     renderPanelChips();

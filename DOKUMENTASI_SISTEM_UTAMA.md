@@ -2,7 +2,7 @@
 
 > **Cakupan:** Panel Monitoring, Details, Charts, Usage Statistics, Anomaly Center, dan Settings.  
 > **Versi source:** KWH Monitoring .NET 2.1 — V7.  
-> **Tanggal dokumentasi:** 23 Oktober 2026.
+> **Tanggal dokumentasi:** 26 Oktober 2026.
 
 Dokumen ini hanya membahas enam modul utama aplikasi. Login, registrasi, approval user, user management, dan modul lain di luar area utama tidak menjadi fokus.
 
@@ -107,6 +107,12 @@ flowchart TD
 4. Panel/Charts mengambil panel dan chart.
 5. Usage mengambil agregat energi/biaya.
 6. Anomaly mengambil summary/log.
+7. Pada Panel Monitoring, data terbaru juga memperbarui kartu ringkasan di antara tab dan filter:
+   - jumlah total panel;
+   - jumlah panel online;
+   - total daya terpasang dalam VA;
+   - jumlah panel per kota.
+8. Perubahan status dari event `deviceConnectivityChanged` langsung memperbarui nilai **PANEL ONLINE** tanpa menghapus atau merender ulang kartu panel.
 
 ---
 
@@ -139,6 +145,28 @@ Kartu menggunakan `PanelViewModel` dan partial `_PanelCard.cshtml`.
 | Frekuensi | `Frekuensi_Hz` | Frekuensi listrik. |
 | Lokasi ERP | `KodeLokasi`, `Alamat`, `KotaProvinsi` | Informasi lokasi panel. |
 | Pelanggan/catatan | `IDPelanggan`, `Catatan` | Identitas pelanggan dan catatan lokasi. |
+
+### 3.2.1 Kartu ringkasan Panel Monitoring
+
+Di antara tab navigasi dan bagian Filter terdapat baris kartu ringkasan tambahan. Kartu statistik lama yang masih berada di bagian atas `Index.cshtml` tidak dihapus; kartu ringkasan baru ditambahkan pada lokasi yang sama sesuai kebutuhan halaman.
+
+| Kartu | Sumber/perhitungan | Keterangan |
+|---|---|---|
+| **TOTAL** | `allPanelData.length` | Jumlah seluruh panel yang tersedia pada data halaman/API. |
+| **PANEL ONLINE** | `deviceConnectivityMap` | Menghitung device yang tidak memiliki status `false`; status diperbarui oleh event konektivitas realtime. |
+| **DAYA TERPASANG** | `Σ installedCapacityVA` | Total kapasitas terpasang dari field `InstalledCapacityVA`/`DayaVA` ERP, bukan daya realtime Watt. Satuan: VA. |
+| **Kota** | `KotaProvinsi` | Mengambil kata pertama dari `KotaProvinsi`, menormalkannya menjadi huruf kapital, lalu menghitung jumlah panel pada kota tersebut. |
+
+#### Aturan kartu kota dinamis
+
+1. Nilai `KotaProvinsi` berasal dari data master ERP melalui `TitikLokasiService`.
+2. Kata pertama diambil setelah trimming dan pemisahan whitespace. Contoh: `Surabaya, Jawa Timur` menjadi `SURABAYA`.
+3. Setiap kota unik dibuat sebagai kartu tersendiri secara otomatis; tidak ada daftar kota yang di-hardcode.
+4. Jika kota baru muncul pada data API, kartu kota baru ditambahkan saat refresh.
+5. Kartu kota menggunakan class `panel-summary-card` yang sama dengan kartu TOTAL, PANEL ONLINE, dan DAYA TERPASANG agar ukuran label, nilai, ikon, padding, tinggi, dan radius konsisten.
+6. Layout memakai grid responsif dengan ukuran minimum kartu yang lebih ringkas dan proporsional, termasuk pada layar kecil.
+
+Endpoint `GET /api/Api/panels` mengirim field `kotaProvinsi` bersama `installedCapacityVA` agar kartu ringkasan tetap akurat ketika data diperbarui melalui auto-refresh.
 
 ### 3.3 Status beban
 
@@ -641,7 +669,9 @@ flowchart TD
     CONFIG --> ERP[Load lokasi dan kapasitas ERP]
     ERP --> VM[Build PanelViewModel]
     VM --> CARDS[Render kartu panel]
+    VM --> SUMMARY[Render kartu TOTAL/kota/online/daya terpasang]
     CARDS --> FILTER{Filter?}
+    SUMMARY --> FILTER
     FILTER -->|Ya| SEARCH[Search Group/Key/ID]
     SEARCH --> STATUS[Status filter]
     STATUS --> PHASE[Phase filter]
@@ -845,7 +875,7 @@ Filter OFFLINE → Details → catat LastSeen → periksa MQTT/topic/jaringan/da
 ## 12. Catatan Implementasi
 
 1. Label/field dapat berubah jika source atau konfigurasi database berubah.
-2. Statistik global di bagian atas `Index.cshtml` sebagian masih dikomentari; data utama tetap ditampilkan lewat kartu panel.
+2. Statistik global lama di bagian atas `Index.cshtml` sebagian masih dikomentari; kartu ringkasan baru berada di antara tab dan filter dan tidak menghapus markup lama tersebut.
 3. OFFLINE bergantung pada freshness/LastSeen dan interval aktif.
 4. NORMAL saat kapasitas tidak tersedia berarti persentase beban tidak dapat dihitung penuh, bukan jaminan perangkat aman.
 5. Data biaya bergantung pada tarif, WBP/LWBP, budget, dan periode yang benar.
@@ -854,6 +884,9 @@ Filter OFFLINE → Details → catat LastSeen → periksa MQTT/topic/jaringan/da
 8. Relay dapat berdampak fisik; verifikasi DeviceKey dan SOP keselamatan sebelum melanjutkan.
 9. Settings dapat memengaruhi runtime melalui database/cache; lakukan Refresh setelah menyimpan.
 10. Flowchart menggunakan Mermaid dan dapat dirender pada editor Markdown yang mendukung Mermaid.
+11. Ringkasan **PANEL ONLINE** menganggap device online selama `deviceConnectivityMap[deviceKey]` belum bernilai `false`; event konektivitas menjadi sumber perubahan offline/online di browser.
+12. Ringkasan **DAYA TERPASANG** menjumlahkan kapasitas VA dari ERP. Nilai nol tetap dihitung sebagai nol dan tidak digantikan oleh `Daya_Watt` realtime.
+13. Kartu kota bergantung pada ketersediaan `KotaProvinsi`; device tanpa kota tidak membuat kartu kota dan tetap masuk ke TOTAL serta DAYA TERPASANG.
 
 ## Referensi Source
 
@@ -868,6 +901,7 @@ Filter OFFLINE → Details → catat LastSeen → periksa MQTT/topic/jaringan/da
 - `Views/Monitoring/_DeviceSettingsTab.cshtml`
 - `Controllers/MonitoringController.cs`
 - `Controllers/ApiController.cs`
+- `wwwroot/css/site.css`
 - `Models/PanelViewModel.cs`
 - `Models/DeviceSettings.cs`
 - `Models/AnomalyLog.cs`
