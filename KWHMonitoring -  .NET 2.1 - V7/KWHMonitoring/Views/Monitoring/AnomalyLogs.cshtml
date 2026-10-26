@@ -366,7 +366,7 @@
 
 <!-- Detail Modal -->
 <div class="modal fade" id="detailModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl detail-modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-light">
                 <h5 class="modal-title"><i class="fas fa-info-circle"></i> Detail Anomali #<span id="detailId"></span></h5>
@@ -374,6 +374,7 @@
             </div>
             <div class="modal-body">
                 <div class="detail-modal-grid">
+                    <div class="detail-modal-left-column">
                     <section class="detail-modal-card" id="detailDeviceInfoCard">
                         <h6><i class="fas fa-info-circle text-muted"></i> Informasi Dasar</h6>
                         <table class="table table-sm table-borderless mb-0">
@@ -431,16 +432,6 @@
                         <p class="mb-1 font-weight-bold small">Catatan Operator</p>
                         <p class="small text-muted" id="detailOperatorNotes">-</p>
                     </section>
-                    <section class="detail-modal-card" id="detailFinancialCard">
-                        <h6><i class="fas fa-coins text-muted"></i> Dampak Finansial</h6>
-                        <div id="detailFinancialImpactContainer">
-                            <p class="mb-1 font-weight-bold small">Dampak Biaya (Beban Berlebih)</p>
-                            <p class="h5 text-danger" id="detailAnomalyCostImpact">Rp 0</p>
-                            <p class="mb-1 font-weight-bold small mt-2">Estimasi Kehilangan Pendapatan (Gangguan)</p>
-                            <p class="h5 text-danger" id="detailRevenueLoss">Rp 0</p>
-                            <p class="small text-muted mt-2 mb-0" id="detailFinancialNote">-</p>
-                        </div>
-                    </section>
                     <section class="detail-modal-card d-none" id="detailBillingSummaryCard">
                         <h6><i class="fas fa-scale-balanced text-warning"></i> Ringkasan Variansi Tagihan</h6>
                         <div class="billing-variance-summary">
@@ -450,6 +441,7 @@
                         </div>
                         <div class="alert alert-warning small mb-0 mt-3" id="detailBillingSummaryNote">-</div>
                     </section>
+                    </div>
                     <section class="detail-modal-card detail-snapshot-card" id="detailSnapshotCard">
                         <div class="detail-snapshot-heading">
                             <h6><i class="fas fa-chart-area text-primary"></i> Cuplikan Grafik</h6>
@@ -933,29 +925,55 @@
 
      Detail modal cards and live snapshot chart
     #detailModal .modal-dialog {
-        width: calc(100% - 2rem);
-        max-width: 1180px;
-        margin: 1rem auto;
+        width: 96vw !important;
+        flex: 0 0 96vw !important;
+        flex-basis: 96vw !important;
+        max-width: 1600px !important;
+        height: auto !important;
+        margin: 1rem auto !important;
+        display: flex !important;
+        align-items: flex-start !important;
+        box-sizing: border-box !important;
+    }
+    #detailModal .modal-dialog.modal-xl {
+        width: 96vw !important;
+        flex-basis: 96vw !important;
+        max-width: 1600px !important;
+    }
+    #detailModal.detail-modal-billing .modal-dialog,
+    #detailModal.detail-modal-billing .modal-dialog.modal-xl {
+        width: min(820px, calc(100vw - 2rem)) !important;
+        flex-basis: min(820px, calc(100vw - 2rem)) !important;
+        max-width: 820px !important;
     }
     #detailModal .modal-content {
+        display: flex;
+        flex-direction: column;
+        width: 100% !important;
+        max-width: none !important;
+        max-height: calc(100vh - 2rem);
         overflow: hidden;
-        border: 0;
         border-radius: 0.9rem;
-        background: #f1f5f9;
-        box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, 0.28);
+        border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+        background: color-mix(in srgb, var(--bg-surface) 91%, transparent);
+        color: var(--text-primary);
+        box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, 0.24);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
     }
     #detailModal .modal-header {
         min-height: 58px;
         padding: 0.85rem 1.25rem;
-        border-bottom: 1px solid #dbe3ee;
-        background: #ffffff !important;
-        color: #172033 !important;
+        flex: 0 0 auto;
+        border-bottom: 1px solid var(--border-color);
+        background: color-mix(in srgb, var(--bg-surface-hover) 88%, transparent) !important;
+        color: var(--text-primary) !important;
     }
     #detailModal .modal-title {
         display: flex;
         align-items: center;
         gap: 0.45rem;
-        color: #172033 !important;
+        color: var(--text-primary) !important;
         font-size: 1rem;
         font-weight: 700;
     }
@@ -963,68 +981,103 @@
     #detailModal .modal-header .close {
         margin: -0.25rem -0.35rem -0.25rem auto;
         padding: 0.25rem 0.5rem;
-        color: #475569 !important;
+        color: var(--text-secondary) !important;
         text-shadow: none;
     }
-    #detailModal .modal-body { padding: 1.15rem; }
+    #detailModal .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        padding: 0.85rem;
+    }
     .detail-modal-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.9rem;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        gap: 0.65rem;
+        min-height: 0;
+        height: auto;
+    }
+    .detail-modal-left-column {
+        min-width: 0;
+        height: max-content;
+        align-self: start;
+        display: flex;
+        flex-direction: column;
         align-items: stretch;
+        gap: 0.65rem;
+    }
+    #detailModal.detail-modal-billing .detail-modal-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #detailModal.detail-modal-billing .detail-modal-left-column {
+        width: 100%;
+    }
+    #detailModal.detail-modal-billing .detail-snapshot-card {
+        display: none !important;
     }
     .detail-modal-card {
         min-width: 0;
-        padding: 1.05rem 1.1rem;
-        border: 1px solid #dbe3ee;
+        padding: 0.75rem 0.85rem;
+        border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
         border-radius: 0.75rem;
-        background: #ffffff;
-        color: #1e293b;
-        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+        background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+        color: var(--text-primary);
+        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
     }
     .detail-modal-card h6 {
         display: flex;
         align-items: center;
         gap: 0.45rem;
         min-height: 1.4rem;
-        margin: 0 0 0.8rem;
-        color: #1e293b !important;
+        margin: 0 0 0.55rem;
+        color: var(--text-primary) !important;
         font-size: 0.9rem;
         font-weight: 700;
     }
     .detail-modal-card h6 i { color: #64748b; }
     .detail-modal-card .table {
         margin-bottom: 0;
-        color: #1e293b;
+        color: var(--text-primary);
         table-layout: fixed;
     }
     .detail-modal-card .table td {
-        padding: 0.48rem 0.25rem;
+        padding: 0.31rem 0.25rem;
         vertical-align: top;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--border-subtle);
         overflow-wrap: anywhere;
     }
     .detail-modal-card .table tr:first-child td { border-top: 0; }
     .detail-modal-card .table td:first-child {
         width: 43%;
-        color: #64748b !important;
+        color: var(--text-secondary) !important;
         font-size: 0.78rem;
         line-height: 1.25;
     }
     .detail-modal-card .table td:last-child {
-        color: #1e293b !important;
+        color: var(--text-primary) !important;
         font-size: 0.82rem;
         font-weight: 600;
         line-height: 1.35;
     }
     .detail-modal-card p {
-        color: #475569 !important;
+        color: var(--text-secondary) !important;
         overflow-wrap: anywhere;
         line-height: 1.45;
     }
-    .detail-modal-card .text-muted { color: #64748b !important; }
-    #detailBillingSummaryCard,
-    #detailFinancialCard { grid-column: 1 / -1; }
+    .detail-modal-card .text-muted { color: var(--text-secondary) !important; }
+    #detailDeviceInfoCard,
+    #detailBillingInfoCard {
+        grid-column: auto;
+        grid-row: auto;
+    }
+    #detailDeviceAnalysis {
+        grid-column: auto;
+        grid-row: auto;
+    }
+    #detailBillingSummaryCard {
+        grid-column: auto;
+        grid-row: auto;
+    }
     #detailBillingAnalysis p.small,
     #detailDeviceAnalysis p.small { font-size: 0.8rem; }
     .billing-variance-summary {
@@ -1035,21 +1088,28 @@
     }
     .billing-variance-value {
         min-width: 0;
-        padding: 0.85rem;
-        border: 1px solid #dbe3ee;
+        padding: 0.65rem;
+        border: 1px solid var(--border-color);
         border-radius: 0.5rem;
-        background: #f8fafc;
+        background: color-mix(in srgb, var(--bg-surface-hover) 86%, transparent);
     }
-    .billing-variance-value span { display: block; color: #64748b !important; font-size: 0.76rem; font-weight: 600; }
-    .billing-variance-value strong { display: block; margin-top: 0.25rem; color: #1e293b !important; font-size: 1rem; overflow-wrap: anywhere; }
+    .billing-variance-value span { display: block; color: var(--text-secondary) !important; font-size: 0.76rem; font-weight: 600; }
+    .billing-variance-value strong { display: block; margin-top: 0.25rem; color: var(--text-primary) !important; font-size: 1rem; overflow-wrap: anywhere; }
     .billing-variance-arrow { color: #2563eb; font-size: 1.15rem; }
     #detailBillingSummaryNote {
         border: 1px solid #f6d88b;
-        color: #854d0e !important;
+        color: var(--text-primary) !important;
         line-height: 1.45;
     }
-    #detailFinancialCard .h5 { font-size: 1.15rem; }
-    .detail-snapshot-card { grid-column: 1 / -1; padding: 1rem 1.1rem 0.85rem; }
+    .detail-snapshot-card {
+        grid-column: 2;
+        grid-row: auto;
+        display: flex;
+        flex-direction: column;
+        align-self: stretch;
+        min-height: 0;
+        padding: 0.7rem 0.85rem 0.55rem;
+    }
     .detail-snapshot-heading, .detail-snapshot-footer {
         display: flex;
         align-items: center;
@@ -1060,28 +1120,30 @@
     .detail-chart-snapshot-container {
         position: relative;
         width: 100%;
-        height: clamp(300px, 42vh, 480px);
-        min-height: 300px;
+        flex: 0 0 clamp(390px, 68vh, 720px);
+        min-height: 390px;
+        height: clamp(390px, 68vh, 720px);
     }
     .detail-chart-snapshot-container canvas { display: block; width: 100% !important; height: 100% !important; }
     .detail-snapshot-footer {
         min-height: 2.25rem;
         padding-top: 0.55rem;
-        color: #64748b !important;
+        color: var(--text-secondary) !important;
         font-size: 0.82rem;
     }
     #detailSnapshotStatus,
-    #detailSnapshotProgress { color: #64748b !important; }
+    #detailSnapshotProgress { color: var(--text-secondary) !important; }
     #detailModal .modal-footer {
         padding: 0.75rem 1.15rem;
-        border-top: 1px solid #dbe3ee;
-        background: #ffffff;
+        flex: 0 0 auto;
+        border-top: 1px solid var(--border-color);
+        background: color-mix(in srgb, var(--bg-surface-hover) 88%, transparent);
     }
     .detail-snapshot-progress-track {
         height: 4px;
         overflow: hidden;
         border-radius: 99px;
-        background: #e2e8f0;
+        background: var(--border-subtle);
     }
     #detailSnapshotProgressBar {
         width: 0;
@@ -1091,19 +1153,29 @@
         transition: width 0.35s ease;
     }
     @@media (max-width: 767.98px) {
-        #detailModal .modal-dialog { width: calc(100% - 0.5rem); max-width: none; margin: 0.25rem auto; }
-        #detailModal .modal-body { padding: 0.75rem; }
+        #detailModal .modal-dialog,
+        #detailModal .modal-dialog.modal-xl { width: calc(100% - 0.5rem) !important; max-width: none !important; height: auto !important; margin: 0.25rem auto !important; }
+        #detailModal .modal-content { max-height: calc(100vh - 0.5rem); }
+        #detailModal.detail-modal-billing .modal-dialog,
+        #detailModal.detail-modal-billing .modal-dialog.modal-xl {
+            width: calc(100% - 0.5rem) !important;
+            flex-basis: calc(100% - 0.5rem) !important;
+        }
+        #detailModal .modal-body { padding: 0.75rem; overflow-y: auto; }
         .detail-modal-grid { grid-template-columns: minmax(0, 1fr); gap: 0.65rem; }
         #detailBillingSummaryCard,
-        #detailFinancialCard,
+        #detailDeviceInfoCard,
+        #detailBillingInfoCard,
+        #detailDeviceAnalysis,
         .detail-snapshot-card { grid-column: auto; }
+        .detail-modal-left-column { gap: 0.65rem; }
         .detail-modal-card { padding: 0.8rem; }
         .billing-variance-summary { grid-template-columns: minmax(0, 1fr); }
         .billing-variance-arrow { text-align: center; transform: rotate(90deg); }
-        .detail-chart-snapshot-container { height: 300px; min-height: 260px; }
+        .detail-chart-snapshot-container { height: 220px; min-height: 200px; flex: 0 0 220px; }
     }
     @@media (min-width: 768px) and (max-width: 991.98px) {
-        #detailModal .modal-dialog { width: calc(100% - 1rem); }
+        #detailModal .modal-dialog { width: calc(100% - 0.75rem); }
         #detailModal .modal-body { padding: 0.9rem; }
         .detail-modal-grid { gap: 0.75rem; }
     }
@@ -2187,6 +2259,7 @@
 
             var isBilling = data.anomalyType === 'BILLING_VARIANCE';
             currentDetailIsBilling = isBilling;
+            $('#detailModal').toggleClass('detail-modal-billing', isBilling);
             $('#detailDeviceInfoCard').toggleClass('d-none', isBilling);
             $('#detailBillingInfoCard').toggleClass('d-none', !isBilling);
             $('#detailFinancialCard').toggleClass('d-none', isBilling);
