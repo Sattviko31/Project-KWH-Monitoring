@@ -62,7 +62,11 @@ namespace KWHMonitoring.Services
                     return null;
 
                 // Try new format: IV (16 bytes) + ciphertext
-                if (fullBytes.Length > 32)
+                // AES-CBC with PKCS7 padding stores a 16-byte IV followed by at
+                // least one 16-byte ciphertext block. A short password commonly
+                // produces exactly 32 bytes total; using > 32 incorrectly routes
+                // that valid new-format ciphertext to the legacy decrypt path.
+                if (fullBytes.Length >= 32 && (fullBytes.Length - 16) % 16 == 0)
                 {
                     var iv = new byte[16];
                     Buffer.BlockCopy(fullBytes, 0, iv, 0, 16);

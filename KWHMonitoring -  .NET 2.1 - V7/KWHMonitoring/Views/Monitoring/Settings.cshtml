@@ -6,6 +6,13 @@
     {
         return settings.TryGetValue(key, out var value) ? value : defaultValue;
     }
+
+    string GetSecretSetting(string key)
+    {
+        return settings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? "********"
+            : string.Empty;
+    }
 }
 
 <!-- Breadcrumb -->
@@ -120,14 +127,16 @@
                         <div class="settings-field">
                             <label class="form-label">Nama Pengguna</label>
                             <input type="text" class="form-control" id="mqttUsername"
-                                   value="@GetSetting("MQTT.Username", "")"
-                                   placeholder="(opsional)">
+                                   value="@GetSecretSetting("MQTT.Username")"
+                                   placeholder="Kosongkan untuk memakai username tersimpan">
+                            <small class="text-muted">Kosongkan atau biarkan tanda bintang untuk memakai username tersimpan.</small>
                         </div>
                         <div class="settings-field">
                             <label class="form-label">Kata Sandi</label>
                             <input type="password" class="form-control" id="mqttPassword"
-                                   value="@GetSetting("MQTT.Password", "")"
-                                   placeholder="(opsional)">
+                                   value="@GetSecretSetting("MQTT.Password")"
+                                   placeholder="Kosongkan untuk memakai password tersimpan">
+                            <small class="text-muted">Kosongkan atau biarkan tanda bintang untuk memakai password tersimpan.</small>
                         </div>
                     </div>
 
@@ -157,7 +166,7 @@
                             <div class="settings-field">
                                 <label class="form-label">Kata Sandi Sertifikat Klien</label>
                                 <input type="password" class="form-control" id="mqttClientCertPassword"
-                                       value="@GetSetting("MQTT.TlsClientCertPassword", "")"
+                                       value="@GetSecretSetting("MQTT.TlsClientCertPassword")"
                                        placeholder="(opsional)">
                                 <small class="text-muted">Kata sandi berkas .pfx — isi sebelum mengunggah berkas jika diperlukan.</small>
                             </div>

@@ -21,15 +21,17 @@ namespace KWHMonitoring.Services
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AppSettingsCache> _logger;
+        private readonly AesEncryptionService _encryption;
         private readonly object _lock = new object();
         private Dictionary<string, string> _settings = new Dictionary<string, string>();
         private DateTime _loadedAtUtc = DateTime.MinValue;
         private int _refreshInProgress;
 
-        public AppSettingsCache(IServiceScopeFactory scopeFactory, ILogger<AppSettingsCache> logger)
+        public AppSettingsCache(IServiceScopeFactory scopeFactory, ILogger<AppSettingsCache> logger, AesEncryptionService encryption)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
+            _encryption = encryption;
             ApplicationDbContext.AppSettingsChanged = ScheduleRefresh;
         }
 
@@ -61,11 +63,34 @@ namespace KWHMonitoring.Services
                     // configuration. Excluding it keeps this cache small and
                     // prevents anomaly polling from invalidating configuration.
                     var rows = await context.AppSettingsRecords
-                        .AsNoTracking()
                         .Where(x => !x.SettingKey.StartsWith("AnomalyState."))
                         .OrderByDescending(x => x.UpdatedAt ?? DateTime.MinValue)
                         .ThenByDescending(x => x.Id)
                         .ToListAsync();
+
+                    // Migrate legacy plaintext MQTT credentials on first load.
+                    // The plaintext value is only held in memory for this request
+                    // and is replaced in the database before the cache is published.
+                    var migrated = false;
+                    foreach (var row in rows)
+                    {
+                        if (!IsProtectedSetting(row.SettingKey)
+                            || string.IsNullOrWhiteSpace(row.SettingValue)
+                            || row.SettingValue.StartsWith("ENC:", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        row.SettingValue = "ENC:" + _encryption.Encrypt(row.SettingValue);
+                        row.UpdatedAt = DateTime.Now;
+                        migrated = true;
+                    }
+
+                    if (migrated)
+                    {
+                        await context.SaveChangesAsync();
+                        _logger.LogInformation("Migrated legacy MQTT credentials to encrypted storage.");
+                    }
 
                     // Keep the newest row when reading legacy databases that may
                     // contain duplicate keys from before the unique index existed.
@@ -86,6 +111,13 @@ namespace KWHMonitoring.Services
             {
                 _logger.LogError(ex, "Failed to load AppSettings into cache. Keeping previous snapshot.");
             }
+        }
+
+        private static bool IsProtectedSetting(string key)
+        {
+            return string.Equals(key, "MQTT.Username", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.Password", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.TlsClientCertPassword", StringComparison.Ordinal);
         }
 
         /// <summary>

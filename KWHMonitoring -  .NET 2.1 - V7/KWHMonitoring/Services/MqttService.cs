@@ -43,21 +43,42 @@ namespace KWHMonitoring.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly IHostingEnvironment _environment;
         private readonly ILogger<MqttService> _logger;
+        private readonly AesEncryptionService _encryption;
         private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         private IMqttClient _mqttClient;
         private string _lastSettingsJson;
 
-        public MqttService(IServiceProvider serviceProvider, IHostingEnvironment environment, ILogger<MqttService> logger)
+        public MqttService(IServiceProvider serviceProvider, IHostingEnvironment environment, ILogger<MqttService> logger, AesEncryptionService encryption)
         {
             _serviceProvider = serviceProvider;
             _environment = environment;
             _logger = logger;
+            _encryption = encryption;
         }
 
         private async Task<string> GetSettingOrDefaultAsync(DbSet<AppSettingsRecord> settings, string key, string defaultValue)
         {
             var record = await settings.FirstOrDefaultAsync(x => x.SettingKey == key);
-            return record != null ? record.SettingValue : defaultValue;
+            if (record == null || record.SettingValue == null)
+            {
+                return defaultValue;
+            }
+
+            // Secrets are stored as ENC:<ciphertext>. Keep plaintext fallback only
+            // for legacy rows so an existing installation can be migrated safely.
+            if (IsProtectedSetting(key) && record.SettingValue.StartsWith("ENC:", StringComparison.Ordinal))
+            {
+                return _encryption.Decrypt(record.SettingValue.Substring(4)) ?? string.Empty;
+            }
+
+            return record.SettingValue;
+        }
+
+        private static bool IsProtectedSetting(string key)
+        {
+            return string.Equals(key, "MQTT.Username", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.Password", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.TlsClientCertPassword", StringComparison.Ordinal);
         }
 
         public async Task<MqttSettings> LoadSettingsAsync()

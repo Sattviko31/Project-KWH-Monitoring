@@ -146,7 +146,7 @@
         'Panduan dan catatan pembaruan': ['Panduan dan catatan pembaruan', 'Guide and release notes'],
         'Online 💭 KWH Monitoring Support': ['Daring 💭 Bantuan KWH Monitoring', 'Online 💭 KWH Monitoring Support'],
         'Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.': ['Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.', 'I am Voltra, the KWH Monitoring AI assistant. Ask me about electricity data, panels, bills, or anomalies.'],
-        'Panel Boros': ['Panel dengan Konsumsi Tertinggi', 'Highest-Consumption Panel'],
+        'Panel Boros': ['Konsumsi Tertinggi', 'Highest-Consumption Panel'],
         'Tagihan': ['Estimasi Tagihan', 'Estimated Bill'], 'Daya Total': ['Total Daya', 'Total Power'],
         'Mana panel paling boros?': ['Panel mana yang konsumsinya paling tinggi?', 'Which panel has the highest energy consumption?'],
         'Berapa tagihan bulan ini?': ['Berapa estimasi tagihan bulan ini?', "What is this month's estimated bill?"],

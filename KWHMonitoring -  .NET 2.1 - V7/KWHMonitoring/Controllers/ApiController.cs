@@ -4248,12 +4248,29 @@ namespace KWHMonitoring.Controllers
             {
                 foreach (var kvp in settings)
                 {
+                    var value = kvp.Value ?? string.Empty;
                     var existing = await _context.AppSettingsRecords
                         .FirstOrDefaultAsync(x => x.SettingKey == kvp.Key);
 
+                    // Never overwrite a stored secret with a UI mask or an empty
+                    // value. This allows the settings page to edit non-secret
+                    // fields without forcing the user to reveal the credential.
+                    if (IsProtectedMqttSetting(kvp.Key)
+                        && existing != null
+                        && (string.IsNullOrWhiteSpace(value) || IsSecretMask(value)))
+                    {
+                        continue;
+                    }
+
+                    if (IsProtectedMqttSetting(kvp.Key) && !string.IsNullOrWhiteSpace(value)
+                        && !value.StartsWith("ENC:", StringComparison.Ordinal))
+                    {
+                        value = "ENC:" + _encryption.Encrypt(value);
+                    }
+
                     if (existing != null)
                     {
-                        existing.SettingValue = kvp.Value;
+                        existing.SettingValue = value;
                         existing.UpdatedAt = DateTime.Now;
                     }
                     else
@@ -4261,7 +4278,7 @@ namespace KWHMonitoring.Controllers
                         _context.AppSettingsRecords.Add(new AppSettingsRecord
                         {
                             SettingKey = kvp.Key,
-                            SettingValue = kvp.Value,
+                            SettingValue = value,
                             UpdatedAt = DateTime.Now
                         });
                     }
@@ -4311,17 +4328,23 @@ namespace KWHMonitoring.Controllers
             try
             {
                 // Sertifikat yang dipakai adalah file yang sudah ter-upload (tersimpan di DB)
+                var username = await ResolveMqttSecretAsync(data.username, "MQTT.Username");
+                var password = await ResolveMqttSecretAsync(data.password, "MQTT.Password");
+                var clientCertPassword = await ResolveMqttSecretAsync(
+                    data.clientCertPassword,
+                    "MQTT.TlsClientCertPassword");
+
                 var settings = new MqttSettings
                 {
                     Broker = data.broker,
                     Port = data.port,
-                    Username = data.username ?? string.Empty,
-                    Password = data.password ?? string.Empty,
+                    Username = username,
+                    Password = password,
                     UseTls = data.useTls,
                     ClientId = string.IsNullOrWhiteSpace(data.clientId) ? "KWHMonitoringWeb" : data.clientId,
                     CaCertificateFile = await GetSettingValueAsync("MQTT.TlsCaCertFile"),
                     ClientCertificateFile = await GetSettingValueAsync("MQTT.TlsClientCertFile"),
-                    ClientCertificatePassword = data.clientCertPassword ?? string.Empty,
+                    ClientCertificatePassword = clientCertPassword,
                     SkipCertificateValidation = data.skipCertValidation
                 };
 
@@ -4339,6 +4362,30 @@ namespace KWHMonitoring.Controllers
             {
                 return SafeError(ex);
             }
+        }
+
+        private async Task<string> ResolveMqttSecretAsync(string submittedValue, string settingKey)
+        {
+            if (!string.IsNullOrWhiteSpace(submittedValue)
+                && !IsSecretMask(submittedValue)
+                && !submittedValue.StartsWith("ENC:", StringComparison.Ordinal))
+            {
+                return submittedValue;
+            }
+
+            var storedValue = await _context.AppSettingsRecords
+                .Where(x => x.SettingKey == settingKey)
+                .Select(x => x.SettingValue)
+                .FirstOrDefaultAsync();
+
+            if (string.IsNullOrWhiteSpace(storedValue))
+            {
+                return string.Empty;
+            }
+
+            return storedValue.StartsWith("ENC:", StringComparison.Ordinal)
+                ? (_encryption.Decrypt(storedValue.Substring(4)) ?? string.Empty)
+                : storedValue;
         }
 
         // ============================================
@@ -4891,12 +4938,15 @@ namespace KWHMonitoring.Controllers
         // GET SYSTEM SETTINGS
         // ============================================
         [HttpGet("get-system-settings")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetSystemSettings()
         {
             try
             {
                 var settings = await _context.AppSettingsRecords
-                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+                    .ToDictionaryAsync(x => x.SettingKey, x => IsProtectedMqttSetting(x.SettingKey)
+                        ? MaskSecret(x.SettingValue)
+                        : x.SettingValue);
 
                 return Ok(new
                 {
@@ -4908,6 +4958,25 @@ namespace KWHMonitoring.Controllers
             {
                 return SafeError(ex);
             }
+        }
+
+        private static bool IsProtectedMqttSetting(string key)
+        {
+            return string.Equals(key, "MQTT.Username", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.Password", StringComparison.Ordinal)
+                || string.Equals(key, "MQTT.TlsClientCertPassword", StringComparison.Ordinal);
+        }
+
+        private static bool IsSecretMask(string value)
+        {
+            return string.Equals(value, "********", StringComparison.Ordinal)
+                || string.Equals(value, "**********", StringComparison.Ordinal)
+                || string.Equals(value, "[PROTECTED]", StringComparison.Ordinal);
+        }
+
+        private static string MaskSecret(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : "********";
         }
 
         // ============================================

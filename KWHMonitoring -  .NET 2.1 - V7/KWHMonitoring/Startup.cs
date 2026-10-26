@@ -56,7 +56,9 @@ namespace KWHMonitoring
             });
 
             services.AddScoped<NotificationService>();
-            services.AddScoped<AesEncryptionService>();
+            // Immutable and configuration-backed; singleton is required because
+            // MqttService is a singleton and must not capture a scoped service.
+            services.AddSingleton<AesEncryptionService>();
             services.AddSingleton<MqttService>();
             services.AddScoped<IAnomalyAnalysisService, AnomalyAnalysisService>();
             services.AddScoped<IBillingAnomalyEvaluationService, BillingAnomalyEvaluationService>();
