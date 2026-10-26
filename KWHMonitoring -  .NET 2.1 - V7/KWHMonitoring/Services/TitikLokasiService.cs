@@ -418,7 +418,8 @@ namespace KWHMonitoring.Services
                             "WITH LatestErp AS (" +
                             "SELECT " +
                             "r.[RekListrikID], r.[NoPelanggan], r.[IDPelanggan], r.[NamaRekening], " +
-                            "l.[KodeLokasi], l.[Address], l.[City], l.[Province], ld.[ArahLokasi], r.[Daya], " +
+                            "l.[KodeLokasi], l.[Address], l.[City], l.[Province], r.[Daya], " +
+                            "detail.[Panjang], detail.[Lebar], detail.[Tinggi], detail.[Luas], detail.[Status], " +
                             "t.[TagihanListrikID], t.[ClientID], c.[CompanyName] AS [Client], " +
                             "t.[MeterAwal], t.[MeterAkhir], t.[Periode], t.[JumlahTagihan], " +
                             "t.[LoginUser], t.[Catatan], l.[TitikLokasiID], " +
@@ -433,8 +434,10 @@ namespace KWHMonitoring.Services
                             "ON t.[RekListrikID] = r.[RekListrikID] " +
                             "INNER JOIN " + target.TableReference + " l " +
                             "ON r.[TitikLokasiID] = l.[TitikLokasiID] " +
-                            "INNER JOIN " + target.LocationDetailTableReference + " ld " +
-                            "ON l.[TitikLokasiID] = ld.[TitikLokasiID] " +
+                            "OUTER APPLY (SELECT TOP (1) d.[Panjang], d.[Lebar], d.[Tinggi], d.[Luas], d.[Status] " +
+                            "FROM " + target.LocationDetailTableReference + " d " +
+                            "WHERE d.[TitikLokasiID] = l.[TitikLokasiID] " +
+                            "ORDER BY d.[TitikLokasiDetailID] DESC) detail " +
                             "LEFT JOIN " + target.ClientTableReference + " c " +
                             "ON t.[ClientID] = c.[ClientID] " +
                             "WHERE CONVERT(nvarchar(50), l.[TitikLokasiID]) IN (" +
@@ -458,7 +461,12 @@ namespace KWHMonitoring.Services
                                     Province = Normalize(Convert.ToString(reader["Province"])),
                                     IDPelanggan = Normalize(Convert.ToString(reader["IDPelanggan"])),
                                     Catatan = Normalize(Convert.ToString(reader["Catatan"])),
-                                    DayaVA = ReadDecimal(reader["Daya"])
+                                    DayaVA = ReadDecimal(reader["Daya"]),
+                                    Luas = ReadDecimalAllowZero(reader["Luas"]),
+                                    Panjang = ReadDecimalAllowZero(reader["Panjang"]),
+                                    Lebar = ReadDecimalAllowZero(reader["Lebar"]),
+                                    Tinggi = ReadDecimalAllowZero(reader["Tinggi"]),
+                                    Status = Normalize(Convert.ToString(reader["Status"]))
                                 };
 
                                 if (!found.ContainsKey(lokasi.TitikLokasiID)) found[lokasi.TitikLokasiID] = lokasi;

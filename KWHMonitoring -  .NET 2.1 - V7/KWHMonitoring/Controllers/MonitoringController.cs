@@ -133,6 +133,11 @@ namespace KWHMonitoring.Controllers
                             panel.KotaProvinsi = lokasi.KotaProvinsi;
                             panel.IDPelanggan = lokasi.IDPelanggan;
                             panel.Catatan = lokasi.Catatan;
+                            panel.Luas = lokasi.Luas;
+                            panel.Panjang = lokasi.Panjang;
+                            panel.Lebar = lokasi.Lebar;
+                            panel.Tinggi = lokasi.Tinggi;
+                            panel.LokasiStatus = lokasi.Status;
                             panel.InstalledCapacityVA = lokasi.DayaVA;
                             panel.MaxCapacity = PanelViewModel.CalculateMaxCapacityWatt(lokasi.DayaVA, panel.Cos_Phi);
                         }
@@ -553,6 +558,14 @@ namespace KWHMonitoring.Controllers
                     InstalledCapacityVA = installedCapacityVA,
                     IDPelanggan = erpCapacity?.IDPelanggan ?? string.Empty,
                     Catatan = erpCapacity?.Catatan ?? string.Empty,
+                    Luas = erpCapacity?.Luas ?? 0m,
+                    Panjang = erpCapacity?.Panjang ?? 0m,
+                    Lebar = erpCapacity?.Lebar ?? 0m,
+                    Tinggi = erpCapacity?.Tinggi ?? 0m,
+                    LokasiStatus = erpCapacity?.Status ?? string.Empty,
+                    KodeLokasi = erpCapacity?.KodeLokasi ?? string.Empty,
+                    Alamat = erpCapacity?.Address ?? string.Empty,
+                    KotaProvinsi = erpCapacity?.KotaProvinsi ?? string.Empty,
                     LoadNormalThreshold = settings?.LoadNormalThreshold ?? 30,
                     LoadMediumThreshold = settings?.LoadMediumThreshold ?? 70,
                     Waktu_Server = latestData.Waktu_Server,

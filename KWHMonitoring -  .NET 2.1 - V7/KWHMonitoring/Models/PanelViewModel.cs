@@ -38,6 +38,11 @@ namespace KWHMonitoring.Models
         public string KotaProvinsi { get; set; } = string.Empty;
         public string IDPelanggan { get; set; } = string.Empty;
         public string Catatan { get; set; } = string.Empty;
+        public decimal Panjang { get; set; }
+        public decimal Lebar { get; set; }
+        public decimal Tinggi { get; set; }
+        public decimal Luas { get; set; }
+        public string LokasiStatus { get; set; } = string.Empty;
 
         public bool HasTitikLokasi => !string.IsNullOrWhiteSpace(KodeLokasi)
                                       || !string.IsNullOrWhiteSpace(Alamat)

@@ -430,32 +430,7 @@
                 </div>
             </div>
 
-            <!-- ERP Billing Comparison -->
-            <div class="card shadow-sm mb-3" data-card-help="Perbandingan Estimasi dan ERP (Perangkat)|Membandingkan estimasi biaya perangkat dari sistem KWH dengan tagihan aktual WWERP2019.|Tagihan dicocokkan ke bulan pemakaian. Periode pembayaran ERP biasanya jatuh pada bulan berikutnya, misalnya pembayaran September untuk pemakaian Agustus.">
-                <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Perbandingan Estimasi KWH vs WWERP2019</h6>
-                    <small id="deviceErpComparisonCaption">Memuat...</small>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="thead-light">
-                            <tr>
-                                <th>Periode</th>
-                                <th class="text-right">kWh</th>
-                                <th class="text-right">Estimasi</th>
-                                <th class="text-right">Aktual ERP</th>
-                                <th>Status</th>
-                                <th>Periode Pembayaran</th>
-                                <th class="text-right">Selisih Aktual vs Estimasi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="deviceErpComparisonRows">
-                            <tr><td colspan="7" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat perbandingan...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="px-3 py-2 border-top text-muted small" id="deviceErpComparisonAverage"></div>
-            </div>
+            
 
             <!-- Charts -->
             <div class="chart-row mb-3 mb-md-4">
@@ -520,6 +495,33 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- ERP Billing Comparison -->
+            <div class="card shadow-sm mb-3" data-card-help="Perbandingan Estimasi dan ERP (Perangkat)|Membandingkan estimasi biaya perangkat dari sistem KWH dengan tagihan aktual WWERP2019.|Tagihan dicocokkan ke bulan pemakaian. Periode pembayaran ERP biasanya jatuh pada bulan berikutnya, misalnya pembayaran September untuk pemakaian Agustus.">
+                <div class="card-header bg-secondary text-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Perbandingan Estimasi vs Tagihan Aktual</h6>
+                    <small id="deviceErpComparisonCaption">Memuat...</small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Periode</th>
+                                <th class="text-right">kWh</th>
+                                <th class="text-right">Estimasi</th>
+                                <th class="text-right">Aktual ERP</th>
+                                <th>Status</th>
+                                <th>Periode Pembayaran</th>
+                                <th class="text-right">Selisih Aktual vs Estimasi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceErpComparisonRows">
+                            <tr><td colspan="7" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Memuat perbandingan...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-3 py-2 border-top text-muted small" id="deviceErpComparisonAverage"></div>
             </div>
 
             <!-- Financial Analysis -->

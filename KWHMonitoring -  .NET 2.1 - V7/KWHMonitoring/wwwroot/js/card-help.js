@@ -24,6 +24,11 @@
    data-card-help-lokasi-kota   -> Kota         (ERP: TitikLokasi.City + Province)
    data-card-help-lokasi-id-pelanggan -> ID Pelanggan (ERP: RekListrik.IDPelanggan)
    data-card-help-lokasi-catatan -> Catatan      (ERP: TagihanListrik.Catatan)
+    data-card-help-lokasi-panjang -> Panjang       (ERP: TitikLokasiDetail.Panjang)
+    data-card-help-lokasi-lebar -> Lebar           (ERP: TitikLokasiDetail.Lebar)
+    data-card-help-lokasi-luas -> Luas             (ERP: TitikLokasiDetail.Luas)
+    data-card-help-lokasi-tinggi -> Tinggi         (ERP: TitikLokasiDetail.Tinggi)
+    data-card-help-lokasi-status -> Status         (ERP: TitikLokasiDetail.Status)
    Atribut tersebut diisi server dari database ERP lewat pencocokan
    DeviceKey = TitikLokasiID. Kartu yang tidak memiliki atribut ini
    (semua kartu non-panel) tampil persis seperti sebelumnya.
@@ -65,8 +70,13 @@
         var idPelanggan = card.getAttribute('data-card-help-lokasi-id-pelanggan');
         var catatan = card.getAttribute('data-card-help-lokasi-catatan');
         var dayaTerpasang = card.getAttribute('data-card-help-lokasi-daya-terpasang');
+        var panjang = card.getAttribute('data-card-help-lokasi-panjang');
+        var lebar = card.getAttribute('data-card-help-lokasi-lebar');
+        var luas = card.getAttribute('data-card-help-lokasi-luas');
+        var tinggi = card.getAttribute('data-card-help-lokasi-tinggi');
+        var status = card.getAttribute('data-card-help-lokasi-status');
 
-        if (!kode && !alamat && !kota && !idPelanggan && !catatan && !dayaTerpasang) return '';
+        if (!kode && !alamat && !kota && !idPelanggan && !catatan && !dayaTerpasang && !panjang && !lebar && !luas && !tinggi && !status) return '';
 
         var html = '<div class="ch-lokasi">';
         if (kode) {
@@ -92,6 +102,28 @@
         if (dayaTerpasang) {
             html += '<div class="ch-lokasi-row is-daya"><span class="ch-lokasi-label">Daya Terpasang</span>' +
                     '<span class="ch-lokasi-value">' + escapeHtml(dayaTerpasang) + '</span></div>';
+        }
+        if (panjang || lebar || luas || tinggi || status) {
+            html += '<div class="ch-lokasi-dimensions">';
+            if (panjang || lebar || luas) {
+                html += '<div class="ch-lokasi-dimension ch-lokasi-dimension-main">' +
+                        '<div class="ch-lokasi-dimension-label">Panjang x Lebar x Luas</div>' +
+                        '<div class="ch-lokasi-dimension-value">' +
+                        escapeHtml(panjang || '-') + ' m x ' +
+                        escapeHtml(lebar || '-') + ' m x ' +
+                        escapeHtml(luas || '-') + ' m²</div></div>';
+            }
+            if (tinggi) {
+                html += '<div class="ch-lokasi-dimension ch-lokasi-dimension-tall">' +
+                        '<div class="ch-lokasi-dimension-label">Tinggi</div>' +
+                        '<div class="ch-lokasi-dimension-value">' + escapeHtml(tinggi) + ' m</div></div>';
+            }
+            if (status) {
+                html += '<div class="ch-lokasi-dimension ch-lokasi-dimension-status">' +
+                        '<div class="ch-lokasi-dimension-label">Status</div>' +
+                        '<div class="ch-lokasi-dimension-value">' + escapeHtml(status) + '</div></div>';
+            }
+            html += '</div>';
         }
 
         return html + '</div>';

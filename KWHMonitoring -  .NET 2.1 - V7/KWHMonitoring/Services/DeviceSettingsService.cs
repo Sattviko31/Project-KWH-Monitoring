@@ -18,10 +18,12 @@ namespace KWHMonitoring.Services
     public class DeviceSettingsService : IDeviceSettingsService
     {
         private readonly ApplicationDbContext _context;
+        private readonly ITitikLokasiService _titikLokasiService;
 
-        public DeviceSettingsService(ApplicationDbContext context)
+        public DeviceSettingsService(ApplicationDbContext context, ITitikLokasiService titikLokasiService)
         {
             _context = context;
+            _titikLokasiService = titikLokasiService;
         }
 
         public async Task<DeviceSettings> GetEffectiveAsync(string deviceKey)
@@ -44,6 +46,8 @@ namespace KWHMonitoring.Services
 
             NormalizeBillingConfigurationDefaults(deviceSettings);
 
+            await PopulateAutomaticSurfaceAreaAsync(deviceSettings);
+
             await PopulateAutomaticBudgetAsync(deviceSettings);
 
             NormalizeBillingCutoff(deviceSettings);
@@ -61,6 +65,22 @@ namespace KWHMonitoring.Services
 
             var result = new Dictionary<string, DeviceSettings>();
 
+            var activeTrendDevices = await _context.BillingTrendProfiles
+                .AsNoTracking()
+                .Where(x => x.Status == "ACTIVE"
+                    && x.ActiveBaselineAmount.HasValue
+                    && x.ActiveBaselineAmount.Value > 0m)
+                .Select(x => x.DeviceKey)
+                .Distinct()
+                .ToListAsync();
+
+            var locationKeys = allDeviceSettings.Select(x => x.DeviceKey)
+                .Concat(activeTrendDevices)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(locationKeys);
+
             foreach (var setting in allDeviceSettings)
             {
                 // MaxCapacity, EMA thresholds, BudgetKWh, SurfaceArea: 0 means not configured — do NOT override
@@ -71,6 +91,8 @@ namespace KWHMonitoring.Services
                     setting.ControlMode = "OnOff";
 
                 NormalizeBillingConfigurationDefaults(setting);
+
+                PopulateAutomaticSurfaceArea(setting, lokasiMap);
 
                 await PopulateAutomaticBudgetAsync(setting);
 
@@ -88,15 +110,6 @@ namespace KWHMonitoring.Services
             // A device can already have an active billing trend before its
             // DeviceSettings row exists. Include that device in the effective
             // settings so the trend budget is visible in Settings per Device.
-            var activeTrendDevices = await _context.BillingTrendProfiles
-                .AsNoTracking()
-                .Where(x => x.Status == "ACTIVE"
-                    && x.ActiveBaselineAmount.HasValue
-                    && x.ActiveBaselineAmount.Value > 0m)
-                .Select(x => x.DeviceKey)
-                .Distinct()
-                .ToListAsync();
-
             foreach (var deviceKey in activeTrendDevices)
             {
                 if (string.IsNullOrWhiteSpace(deviceKey) || result.ContainsKey(deviceKey))
@@ -110,12 +123,50 @@ namespace KWHMonitoring.Services
                 };
 
                 NormalizeBillingConfigurationDefaults(setting);
+                PopulateAutomaticSurfaceArea(setting, lokasiMap);
                 await PopulateAutomaticBudgetAsync(setting);
                 NormalizeBillingCutoff(setting);
                 result[deviceKey] = setting;
             }
 
             return result;
+        }
+
+        private async Task PopulateAutomaticSurfaceAreaAsync(DeviceSettings settings)
+        {
+            if (settings == null || string.IsNullOrWhiteSpace(settings.DeviceKey) || settings.SurfaceArea > 0m)
+                return;
+
+            try
+            {
+                var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(new[] { settings.DeviceKey });
+                if (lokasiMap.TryGetValue(settings.DeviceKey.Trim(), out var lokasi)
+                    && lokasi != null
+                    && lokasi.Luas > 0m)
+                {
+                    settings.SurfaceArea = lokasi.Luas;
+                }
+            }
+            catch
+            {
+                // ERP bersifat pelengkap. Settings tetap dapat digunakan jika ERP tidak tersedia.
+            }
+        }
+
+        private static void PopulateAutomaticSurfaceArea(
+            DeviceSettings settings,
+            Dictionary<string, TitikLokasi> lokasiMap)
+        {
+            if (settings == null || settings.SurfaceArea > 0m || lokasiMap == null
+                || string.IsNullOrWhiteSpace(settings.DeviceKey))
+                return;
+
+            if (lokasiMap.TryGetValue(settings.DeviceKey.Trim(), out var lokasi)
+                && lokasi != null
+                && lokasi.Luas > 0m)
+            {
+                settings.SurfaceArea = lokasi.Luas;
+            }
         }
 
         public async Task<DeviceSettings> GetOrCreateAsync(string deviceKey)

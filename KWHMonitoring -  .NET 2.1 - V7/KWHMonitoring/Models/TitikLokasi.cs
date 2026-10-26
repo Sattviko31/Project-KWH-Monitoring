@@ -19,6 +19,11 @@ namespace KWHMonitoring.Models
         public string IDPelanggan { get; set; } = string.Empty;
         public string Catatan { get; set; } = string.Empty;
         public decimal DayaVA { get; set; }
+        public decimal Luas { get; set; }
+        public decimal Panjang { get; set; }
+        public decimal Lebar { get; set; }
+        public decimal Tinggi { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         /// <summary>Kota = City + Province (tanpa pengulangan bila salah satu kosong atau sama).</summary>
         public string KotaProvinsi => Compose(City, Province);
