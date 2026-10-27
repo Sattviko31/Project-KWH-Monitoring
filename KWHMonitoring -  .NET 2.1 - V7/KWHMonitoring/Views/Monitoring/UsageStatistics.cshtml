@@ -16,7 +16,7 @@
 
     .usage-ranking-comparison-header-main,
     .usage-ranking-comparison-header-controls {
-        display: flex;
+        display: flex; 
         align-items: center;
         justify-content: space-between;
         gap: .75rem;
@@ -2128,7 +2128,13 @@
                     ? Math.round((wbpKwh * wbpTariff + lwbpKwh * lwbpTariff) / totalKwh)
                     : Math.round((wbpTariff + lwbpTariff) / 2);
             }
-            var devEstimatedCost = (data.budget && data.budget.actualCost) || 0;
+            // Keep the card semantics consistent with the aggregate path:
+            // show the projected billing cost, never budget.actualCost.
+            var singleProjection = data.billProjection || {};
+            var devEstimatedCost = singleProjection.projectedPeriodCost != null
+                ? Number(singleProjection.projectedPeriodCost)
+                : (singleProjection.projectedCost != null ? Number(singleProjection.projectedCost) : 0);
+            if (!isFinite(devEstimatedCost) || devEstimatedCost < 0) devEstimatedCost = 0;
             if (devEstimatedCost === 0 && data.month) {
                 devEstimatedCost = Math.round((data.month.total || 0) * devTariff);
             }
@@ -2145,7 +2151,7 @@
                     wbpDeviceCount: (data.wbpLwbp && data.wbpLwbp.configured) ? 1 : 0,
                     flatDeviceCount: (data.wbpLwbp && !data.wbpLwbp.configured) ? 1 : 0,
                     flatKWh: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.month && data.month.total) || 0) : 0,
-                    flatCost: (data.wbpLwbp && !data.wbpLwbp.configured) ? ((data.budget && data.budget.actualCost) || 0) : 0,
+                    flatCost: (data.wbpLwbp && !data.wbpLwbp.configured) ? devEstimatedCost : 0,
                     totalDeviceCount: 1
                 },
                 avgTariffPerKWh: devTariff,
@@ -2585,8 +2591,13 @@
                 tariffSum += devTariff;
                 tariffCount++;
 
-                // Sum per-device estimated cost (uses each device's own tariff/WBP)
-                var devEstimatedCost = (d.budget && d.budget.actualCost) || 0;
+                // Use the projected billing cost for the selected period.
+                // budget.actualCost is actual consumption cost, not an estimate.
+                var projection = d.billProjection || {};
+                var devEstimatedCost = projection.projectedPeriodCost != null
+                    ? Number(projection.projectedPeriodCost)
+                    : (projection.projectedCost != null ? Number(projection.projectedCost) : 0);
+                if (!isFinite(devEstimatedCost) || devEstimatedCost < 0) devEstimatedCost = 0;
                 if (devEstimatedCost === 0 && deviceMonthKWh > 0) {
                     devEstimatedCost = Math.round(deviceMonthKWh * devTariff);
                 }
@@ -2610,7 +2621,7 @@
                     // tarif tetap device
                     flatDeviceCount++;
                     flatKWh += deviceMonthKWh;
-                    flatCost += (d.budget && d.budget.actualCost) || Math.round(deviceMonthKWh * (d.tariffPerKWh || 1500));
+                    flatCost += devEstimatedCost;
                 }
 
                 // Pemborosan energi
@@ -2810,7 +2821,11 @@
             // Always refresh the card, including zero, so it cannot retain an old period's value.
             var estimatedCost = data.totalEstimatedCost != null
                 ? data.totalEstimatedCost
-                : (data.budget && data.budget.actualCost) || 0;
+                : ((data.billProjection && data.billProjection.projectedPeriodCost != null)
+                    ? data.billProjection.projectedPeriodCost
+                    : ((data.billProjection && data.billProjection.projectedCost != null)
+                        ? data.billProjection.projectedCost
+                        : 0));
             $('#usageCost').text('Rp ' + formatInteger(estimatedCost));
 
             // Update Tarif display from average of all device tariffs
