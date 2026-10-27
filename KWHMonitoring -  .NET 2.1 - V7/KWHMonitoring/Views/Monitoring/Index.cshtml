@@ -224,6 +224,61 @@
         // tidak memicu global ajaxError handler (401 -> redirect ke Login).
         var IS_USER_AUTHENTICATED = @(User.Identity.IsAuthenticated ? "true" : "false");
 
+        function executeVoltraDeviceAction() {
+            var params = new URLSearchParams(window.location.search);
+            var requestedDeviceKey = params.get('deviceKey');
+            var requestedAction = params.get('action');
+            if (!requestedDeviceKey || !requestedAction) return;
+
+            // Action dari Voltra adalah perintah sekali jalan. Hapus dari URL
+            // sebelum tombol dipicu agar reload, refresh otomatis, atau tombol
+            // Back tidak mengeksekusi ulang perintah AI yang sama.
+            if (requestedAction === 'relay-on' || requestedAction === 'relay-off' || requestedAction === 'details') {
+                params.delete('action');
+                params.delete('deviceKey');
+                var cleanUrl = window.location.pathname;
+                var remainingQuery = params.toString();
+                if (remainingQuery) cleanUrl += '?' + remainingQuery;
+                if (window.location.hash) cleanUrl += window.location.hash;
+                window.history.replaceState(null, document.title, cleanUrl);
+            }
+
+            var $card = $('.panel-card-clickable').filter(function() {
+                return String($(this).attr('data-device-key') || '').toLowerCase() === requestedDeviceKey.toLowerCase();
+            }).first();
+            if (!$card.length) return;
+
+            $card.addClass('voltra-action-target').css({ outline: '3px solid #0d6efd', boxShadow: '0 0 0 6px rgba(13,110,253,.18)' });
+            $card[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            var $collapseToggle = $card.find('.panel-collapse-toggle').first();
+            if ($collapseToggle.length && $collapseToggle.attr('aria-expanded') !== 'true') {
+                $collapseToggle.trigger('click');
+            }
+
+            if (requestedAction !== 'relay-on' && requestedAction !== 'relay-off') return;
+            setTimeout(function() {
+                var selector = requestedAction === 'relay-on' ? '.btn-device-on' : '.btn-device-off';
+                var $button = $card.find(selector).first();
+                if (!$button.length) {
+                    $button = $card.find('.btn-device-toggle').filter(function() {
+                        var state = String($(this).closest('.device-control-wrapper').data('relay-state') || 'unknown').toLowerCase();
+                        return requestedAction === 'relay-on' ? state !== 'on' : state === 'on';
+                    }).first();
+                }
+
+                if ($button.length) {
+                    $button.trigger('click');
+                } else {
+                    showNotification('Tombol aksi untuk device tersebut tidak tersedia pada mode kontrol saat ini.', 'warning');
+                }
+            }, 450);
+        }
+
+        $(function() {
+            setTimeout(executeVoltraDeviceAction, 250);
+        });
+
         function openRelayOtpModal(deviceId, rcValue, pulse, groupName, $btn, $wrapper, actionText, onComplete) {
             pendingOtpRelay = {
                 deviceId: deviceId,
@@ -1828,10 +1883,10 @@
                 '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
                 'Apakah Anda yakin ingin ' + actionText + ' perangkat ' + groupName + '?',
                 function() {
-                    updateRelayIndicator($wrapper, 'on');
-                    publishRelayCommand(deviceId, rcValue, $btn, true, function(success) {
+                    openRelayOtpModal(deviceId, rcValue, false, groupName, $btn, $wrapper, actionText, function(success) {
+                        if (success) updateRelayIndicator($wrapper, 'on');
                         setTimeout(updateRelayStates, success ? 1500 : 0);
-                    }, groupName);
+                    });
                 }
             );
         });
@@ -1878,12 +1933,10 @@
                 '<i class="fas fa-exclamation-triangle text-warning"></i> Konfirmasi Kontrol Perangkat',
                 'Apakah Anda yakin ingin ' + actionText + ' ' + targetText + ' pada perangkat ' + groupName + '?',
                 function() {
-                    publishRelayCommand(deviceId, rcValue, $btn, false, function(success) {
+                    openRelayOtpModal(deviceId, rcValue, false, groupName, $btn, $wrapper, actionText + ' ' + targetText, function(success) {
+                        if (success) updateRelayIndicator($wrapper, isOff ? 'on' : 'off');
                         setTimeout(updateRelayStates, success ? 1500 : 0);
-                    }, groupName);
-
-                    var newState = isOff ? 'on' : 'off';
-                    updateRelayIndicator($wrapper, newState);
+                    });
                 }
             );
         });

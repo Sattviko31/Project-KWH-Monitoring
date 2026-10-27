@@ -1,4 +1,5 @@
 @using KWHMonitoring.Models
+@using System.Text
 @using Microsoft.Extensions.Caching.Memory
 @inject IMemoryCache MemoryCache
 @inject KWHMonitoring.Services.AppSettingsCache SettingsCache
@@ -1078,12 +1079,23 @@
                         <!-- JAVASCRIPT LOGIC WIDGET                    -->
                         <!-- ========================================== -->
                         <script>
+                            // Persistensi Voltra dibuat stabil saat reload dan dipisahkan
+                            // berdasarkan akun browser yang sedang login.
+                            const voltraStorageKey = 'voltra_ai_chat_history_v2_@(Convert.ToBase64String(Encoding.UTF8.GetBytes(User.Identity.Name ?? "anonymous")).Replace("=", "").Replace("+", "-").Replace("/", "_"))';
+                            const voltraStateKey = voltraStorageKey + '_state';
+                            const voltraMaxHistory = 50;
+
                             // Load chat history from localStorage on page load
                             let chatHistory = [];
                             try {
-                                const savedHistory = localStorage.getItem('qwen_chat_history');
+                                const savedHistory = localStorage.getItem(voltraStorageKey);
                                 if (savedHistory) {
-                                    chatHistory = JSON.parse(savedHistory);
+                                    const parsedHistory = JSON.parse(savedHistory);
+                                    if (Array.isArray(parsedHistory)) {
+                                        chatHistory = parsedHistory.filter(function (item) {
+                                            return item && (item.Role === 'user' || item.Role === 'assistant') && typeof item.Content === 'string';
+                                        }).slice(-voltraMaxHistory);
+                                    }
                                     @* console.log('[QwenChat] ? History loaded from localStorage:', chatHistory.length, 'messages'); *@
                                 }
                             } catch (e) {
@@ -1093,6 +1105,12 @@
                             let cachedRealTimeData = null;
                             let isFetchingData = false;
                             let isSending = false;
+
+                            function saveVoltraState(isOpen) {
+                                try {
+                                    localStorage.setItem(voltraStateKey, JSON.stringify({ isOpen: !!isOpen, updatedAt: new Date().toISOString() }));
+                                } catch (e) { }
+                            }
 
                             function toggleQwenChat() {
                                 const chatBox = document.getElementById('qwen-chat-box');
@@ -1107,20 +1125,168 @@
 
                                     // Fetch data realtime saat chat dibuka
                                     refreshRealTimeData();
+                                    saveVoltraState(true);
                                 } else {
                                     chatBox.classList.add('qwen-hidden');
                                     toggleBtn.classList.remove('qwen-hidden');
+                                    saveVoltraState(false);
                                 }
                             }
 
                             // Save chat history to localStorage
                             function saveChatHistory() {
                                 try {
-                                    localStorage.setItem('qwen_chat_history', JSON.stringify(chatHistory));
+                                    chatHistory = (chatHistory || []).slice(-voltraMaxHistory);
+                                    localStorage.setItem(voltraStorageKey, JSON.stringify(chatHistory));
                                     @* console.log('[QwenChat] ?? History saved to localStorage:', chatHistory.length, 'messages'); *@
                                 } catch (e) {
-                                    @* console.warn('[QwenChat] ?? Failed to save history to localStorage:', e); *@
+                                    @* console.warn('[QwenChat] Gagal menyimpan riwayat chat:', e); *@
                                 }
+                            }
+
+                            function correctVoltraMessage(messageText) {
+                                let corrected = String(messageText || '').trim();
+                                const replacements = [
+                                    [/\bdimana\b/gi, 'di mana'], [/\bdmana\b/gi, 'di mana'],
+                                    [/\bgmana\b/gi, 'bagaimana'], [/\bliat\b/gi, 'lihat'],
+                                    [/\blihatt\b/gi, 'lihat'], [/\bbukak\b/gi, 'buka'],
+                                    [/\bbukain\b/gi, 'bukakan'], [/\btampilin\b/gi, 'tampilkan'],
+                                    [/\bperangakat\b/gi, 'perangkat'], [/\bperangkt\b/gi, 'perangkat'],
+                                    [/\bdevcie\b/gi, 'device'], [/\bdeivce\b/gi, 'device'],
+                                    [/\bdivice\b/gi, 'device'], [/\bgrafikk\b/gi, 'grafik'],
+                                    [/\bgarfik\b/gi, 'grafik'], [/\bgrfik\b/gi, 'grafik'],
+                                    [/\bchrat\b/gi, 'chart'], [/\bvisualisai\b/gi, 'visualisasi'],
+                                    [/\brincin\b/gi, 'rincian'], [/\binfromasi\b/gi, 'informasi'],
+                                    [/\binformsi\b/gi, 'informasi'], [/\bdetil\b/gi, 'detail'],
+                                    [/\bdeatil\b/gi, 'detail'], [/\bstatistk\b/gi, 'statistik'],
+                                    [/\bkonsmsi\b/gi, 'konsumsi'], [/\bkonsumi\b/gi, 'konsumsi'],
+                                    [/\btagiahan\b/gi, 'tagihan'], [/\bnyalain\b/gi, 'nyalakan'],
+                                    [/\bperbandngan\b/gi, 'perbandingan'], [/\bpemakaiaan\b/gi, 'pemakaian']
+                                ];
+                                replacements.forEach(function (item) { corrected = corrected.replace(item[0], item[1]); });
+                                return corrected.replace(/\s+/g, ' ').trim();
+                            }
+
+                            async function tryVoltraNavigation(messageText) {
+                                const original = correctVoltraMessage(messageText).toLowerCase().trim();
+                                const normalized = original
+                                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                                    .replace(/[^a-z0-9]+/g, ' ')
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+                                const compact = normalized.replace(/\s/g, '');
+                                const asksForChart = /\b(grafik|chart|charts|tren|trend|visualisasi)\b/.test(normalized);
+                                const asksForDetail = /\b(details?|detailkan|rincian|rincikan|informasi|info|lihat(?:kan)?\s+lebih\s+detail|buka\s+(?:detail|details|rincian|info))\b/.test(normalized);
+                                const deviceCommand = /\b(nyalakan|hidupkan|matikan|padamkan)\b/.test(normalized) || asksForDetail;
+
+                                if (asksForChart) {
+                                    let groupName = normalized
+                                        .replace(/\b(buka|bukakan|open|go|goto|arah|arahkan|menuju|pergi|tampilkan|lihat|akses|grafik|chart|charts|tren|trend|visualisasi|device|perangkat|panel)\b/g, ' ')
+                                        .replace(/\b\d+\b/g, ' ')
+                                        .replace(/\s+/g, ' ')
+                                        .trim();
+                                    if (/^[a-z0-9._-]+$/.test(groupName) && /\d/.test(groupName)) groupName = '';
+                                    appendMessage(groupName
+                                        ? 'Siap, saya tampilkan grafik untuk grup/lokasi **' + groupName + '** ya.'
+                                        : 'Siap, saya tampilkan semua grafiknya ya.', 'bot', true);
+                                    return await navigateVoltraPage('charts', null, null, null, groupName || null);
+                                }
+
+                                if (deviceCommand) {
+                                    const deviceMatch = original.match(/(?:device|perangkat|panel)\s*#?\s*([a-z0-9][a-z0-9._-]*)/i) || original.match(/#\s*([a-z0-9][a-z0-9._-]*)/i);
+
+                                    if (asksForDetail && !deviceMatch) {
+                                        const groupName = normalized
+                                            .replace(/\b(buka|bukakan|open|go|goto|arah|arahkan|menuju|pergi|tampilkan|lihat|akses|detail|details|detailkan|rincian|rincikan|informasi|info|grup|group|lokasi|location)\b/g, ' ')
+                                            .replace(/\s+/g, ' ')
+                                            .trim();
+
+                                        if (groupName) {
+                                            appendMessage('Siap, saya buka detail grup/lokasi **' + groupName + '** ya.', 'bot', true);
+                                            return await navigateVoltraPage('dashboard', null, null, 'details', groupName);
+                                        }
+                                    }
+
+                                    if (!deviceMatch && (asksForChart || asksForDetail || /\b(nyalakan|hidupkan|matikan|padamkan)\b/.test(normalized))) {
+                                        appendMessage('Device atau grup/lokasi mana yang ingin dibuka? Contohnya, **buka detail device DEV-01** atau **buka detail Jakarta Selatan**.', 'bot', true);
+                                        return true;
+                                    }
+                                    if (deviceMatch) {
+                                        const requestedDeviceKey = deviceMatch[1];
+                                        const isOnCommand = /\b(nyalakan|hidupkan)\b/.test(normalized);
+                                        const isOffCommand = /\b(matikan|padamkan)\b/.test(normalized);
+                                        const isDetailCommand = !isOnCommand && !isOffCommand && !asksForChart;
+                                        const requestedAction = isDetailCommand ? 'details' : (isOnCommand ? 'relay-on' : (isOffCommand ? 'relay-off' : null));
+                                        const description = asksForChart
+                                            ? 'membuka grafik'
+                                            : (isDetailCommand ? 'membuka detail' : (isOnCommand ? 'menyiapkan tombol ON' : 'menyiapkan tombol OFF dan verifikasi OTP'));
+                                        appendMessage('Siap, saya ' + description + ' untuk device **' + requestedDeviceKey + '** ya.', 'bot', true);
+                                        return await navigateVoltraPage(asksForChart ? 'charts' : 'dashboard', null, requestedDeviceKey, requestedAction);
+                                    }
+                                }
+
+                                const hasNavigationIntent = /(^|\s)(buka|bukakan|open|go|goto|arah|arahkan|menuju|pergi|tampilkan|lihat|akses)(\s|$)/.test(normalized) ||
+                                    /\b(halaman|page|menu|dimana|di mana|where|grafik|chart|charts|visualisasi|tren|trend)\b/.test(normalized) ||
+                                    /\b(bisa melihat|dapat melihat|melihat|find|locate)\b/.test(normalized);
+                                const asksForBillingComparison = /(perbandingan|bandingkan|comparison|compare|selisih).*(tagihan|biaya|cost|billing)|((tagihan|biaya|cost|billing).*(perbandingan|bandingkan|comparison|compare|selisih))/.test(normalized) ||
+                                    compact.indexOf('perbandingantagihan') >= 0 || compact.indexOf('tagihanaktual') >= 0 || compact.indexOf('estimasitagihan') >= 0 || compact.indexOf('selisihtagihan') >= 0;
+                                const asksForBillingAnomaly = /(anomali|abnormal|variance|selisih).*(tagihan|biaya|cost|billing)|((tagihan|biaya|cost|billing).*(anomali|abnormal|variance))/.test(normalized) ||
+                                    compact.indexOf('anomalitagihan') >= 0 || compact.indexOf('anomalibilling') >= 0 || compact.indexOf('billingvariance') >= 0 || compact.indexOf('tagihanabnormal') >= 0;
+                                if (!hasNavigationIntent && !asksForBillingComparison && !asksForBillingAnomaly) return false;
+
+                                if (asksForBillingAnomaly) {
+                                    appendMessage('Anomali tagihan tersedia di halaman Anomaly Logs, pada tabel **Anomali Tagihan**. Saya membuka dan menyorot tabel tersebut sekarang.', 'bot', true);
+                                    return await navigateVoltraPage('anomaly-logs', 'billing-anomaly');
+                                }
+                                if (asksForBillingComparison) {
+                                    appendMessage('Perbandingan tagihan tersedia di halaman Usage Statistics, pada tabel **Peringkat dan Perbandingan Usage Statistics**. Saya membuka dan menyorot tabel tersebut sekarang.', 'bot', true);
+                                    return await navigateVoltraPage('usage-statistics', 'billing-comparison');
+                                }
+
+                                const pageMap = [
+                                    { id: 'charts', aliases: ['charts', 'chart', 'grafik', 'grafik perangkat', 'visualisasi', 'tren', 'trend'], compact: ['charts', 'chart', 'grafik', 'grafikperangkat', 'visualisasi', 'tren', 'trend'] },
+                                    { id: 'usage-statistics', aliases: ['usage statistics', 'usage statistic', 'statistik penggunaan', 'statistik pemakaian', 'pemakaian', 'konsumsi'], compact: ['usagestatistics', 'usagestatistic', 'usageatistic', 'statistikpenggunaan', 'statistikpemakaian', 'statistik'] },
+                                    { id: 'anomaly-logs', aliases: ['anomaly logs', 'anomaly log', 'log anomali', 'anomali'], compact: ['anomalylogs', 'anomalylog', 'loganomali', 'anomali'] },
+                                    { id: 'user-management', aliases: ['user management', 'manajemen pengguna', 'kelola pengguna', 'pengguna'], compact: ['usermanagement', 'manajemenpengguna', 'kelolapengguna'] },
+                                    { id: 'settings', aliases: ['settings', 'setting', 'pengaturan', 'konfigurasi'], compact: ['settings', 'setting', 'pengaturan', 'konfigurasi'] },
+                                    { id: 'history', aliases: ['history', 'riwayat', 'histori'], compact: ['history', 'riwayat', 'histori'] },
+                                    { id: 'dashboard', aliases: ['dashboard', 'beranda', 'panel monitoring', 'monitoring panel'], compact: ['dashboard', 'beranda', 'panelmonitoring', 'monitoringpanel'] }
+                                ];
+                                const requested = pageMap.find(function (page) {
+                                    return page.aliases.some(function (alias) {
+                                        return normalized.indexOf(alias.replace(/[^a-z0-9]+/g, ' ').trim()) >= 0;
+                                    }) || page.compact.some(function (alias) { return compact.indexOf(alias) >= 0; });
+                                });
+                                if (!requested) return false;
+                                return await navigateVoltraPage(requested.id, null, null, null, null);
+                            }
+                            async function navigateVoltraPage(pageId, section, deviceKey, action, groupName) {
+                                try {
+                                    const response = await fetch('/api/qwenchat/navigate', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                                        },
+                                        body: JSON.stringify({ PageId: pageId, DeviceKey: deviceKey || null, GroupName: groupName || null, Action: action || null })
+                                    });
+                                    const result = await response.json();
+                                    if (response.ok && result.success && result.url) {
+                                    const sectionHashMap = {
+                                        'billing-comparison': '#usage-billing-comparison',
+                                        'billing-anomaly': '#billing-anomaly-logs'
+                                    };
+                                    const targetUrl = sectionHashMap[section]
+                                        ? result.url + sectionHashMap[section]
+                                        : result.url;
+                                        window.location.assign(targetUrl);
+                                        return true;
+                                    }
+ appendMessage(result.message || 'Maaf, halaman itu belum tersedia untuk akun Anda.', 'bot', false);
+                                } catch (e) {
+ appendMessage('Maaf, halaman itu belum bisa dibuka sekarang. Coba lagi sebentar ya.', 'bot', false);
+                                }
+                                return true;
                             }
 
                             // Clear chat history
@@ -1270,12 +1436,21 @@
 
                                 const inputElement = document.getElementById('qwen-chat-input');
                                 const sendBtn = document.getElementById('qwen-send-btn');
-                                const messageText = inputElement.value.trim();
+                                const originalMessageText = inputElement.value.trim();
+                                const messageText = correctVoltraMessage(originalMessageText);
 
-                                if (!messageText) return;
+                                if (!originalMessageText) return;
 
                                 isSending = true;
-                                appendMessage(messageText, 'user', false);
+
+                                // Navigasi hanya dipicu untuk permintaan eksplisit yang
+                                // cocok dengan halaman whitelist dari server.
+                                if (await tryVoltraNavigation(messageText)) {
+                                    inputElement.value = '';
+                                    isSending = false;
+                                    return;
+                                }
+                                appendMessage(originalMessageText, 'user', false);
                                 inputElement.value = '';
                                 inputElement.disabled = true;
                                 sendBtn.disabled = true;
@@ -1488,6 +1663,19 @@
                             document.addEventListener('DOMContentLoaded', function() {
                                 // Initialize chat history when page loads
                                 renderChatHistory();
+
+                                try {
+                                    const savedState = JSON.parse(localStorage.getItem(voltraStateKey) || 'null');
+                                    if (savedState && savedState.isOpen) {
+                                        const chatBox = document.getElementById('qwen-chat-box');
+                                        const toggleBtn = document.getElementById('qwen-toggle-btn');
+                                        if (chatBox && toggleBtn) {
+                                            chatBox.classList.remove('qwen-hidden');
+                                            toggleBtn.classList.add('qwen-hidden');
+                                            refreshRealTimeData();
+                                        }
+                                    }
+                                } catch (e) { }
                                 
                                 // Initialize all event handlers after DOM is loaded
                                 initializeQwenChatEvents();

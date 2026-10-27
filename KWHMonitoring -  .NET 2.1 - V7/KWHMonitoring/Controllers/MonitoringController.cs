@@ -178,7 +178,7 @@ namespace KWHMonitoring.Controllers
         // ============================================
         // ALL CHARTS
         // ============================================
-        public async Task<IActionResult> Charts()
+        public async Task<IActionResult> Charts(string groupName)
         {
             try
             {
@@ -245,6 +245,7 @@ namespace KWHMonitoring.Controllers
                     });
                 }
 
+                ViewBag.ChartGroupName = groupName?.Trim();
                 return View(viewModel);
             }
             catch (Exception ex)

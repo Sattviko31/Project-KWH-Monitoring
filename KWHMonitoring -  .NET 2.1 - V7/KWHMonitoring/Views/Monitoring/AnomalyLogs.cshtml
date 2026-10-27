@@ -132,7 +132,7 @@
 </div>
 
 <!-- Anomaly Tagihan -->
-<div class="card shadow-sm mb-3 billing-anomaly-section" data-card-help="Daftar Anomali Tagihan|Tabel khusus untuk membandingkan estimasi sistem dengan tagihan aktual ERP.|Hanya anomaly BILLING_VARIANCE yang ditampilkan di sini.|Selisih positif berarti tagihan ERP lebih tinggi dari estimasi sistem.">
+<div class="card shadow-sm mb-3 billing-anomaly-section" id="billing-anomaly-logs" data-voltra-target="billing-anomaly" data-card-help="Daftar Anomali Tagihan|Tabel khusus untuk membandingkan estimasi sistem dengan tagihan aktual ERP.|Hanya anomaly BILLING_VARIANCE yang ditampilkan di sini.|Selisih positif berarti tagihan ERP lebih tinggi dari estimasi sistem.">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
         <h6 class="mb-0"><i class="fas fa-file-invoice-dollar text-warning"></i> Anomali Tagihan</h6>
         <div class="d-flex align-items-center flex-wrap gap-1">
@@ -1268,6 +1268,21 @@
             }, 0);
         }
 
+        function focusVoltraTarget() {
+            if (window.location.hash !== '#billing-anomaly-logs') return;
+            var target = document.getElementById('billing-anomaly-logs');
+            if (!target) return;
+
+            window.setTimeout(function () {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                target.style.transition = 'box-shadow .25s ease-in-out';
+                target.style.boxShadow = '0 0 0 0.3rem rgba(245, 158, 11, .35)';
+                window.setTimeout(function () {
+                    target.style.boxShadow = '';
+                }, 2200);
+            }, 250);
+        }
+
         $(window).on('resize', function() {
             fitAnomalyGridColumns(dataGrid);
             fitAnomalyGridColumns(billingDataGrid);
@@ -1289,6 +1304,7 @@
             initBillingDataGrid();
             loadDashboard();
             loadTrends(7);
+            focusVoltraTarget();
 
             $('#btnRefresh').click(function() {
                 if (dataGrid) dataGrid.refresh();

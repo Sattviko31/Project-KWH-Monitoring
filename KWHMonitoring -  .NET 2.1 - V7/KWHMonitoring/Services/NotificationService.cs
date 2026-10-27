@@ -1588,6 +1588,54 @@ namespace KWHMonitoring.Services
 #endif
         }
 
+        /// <summary>
+        /// Mengirim laporan yang diminta dari chatbot hanya ke kontak user yang sedang login.
+        /// Tidak memakai daftar penerima global Wablas agar user tidak dapat mengirim ke kontak lain.
+        /// </summary>
+        public async Task<bool> SendPersonalPeriodicReportAsync(string reportType, string email, string whatsappNumber)
+        {
+            if (!string.Equals(reportType, "hourly", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(reportType, "daily", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(reportType, "monthly", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(whatsappNumber))
+                return false;
+
+            await SendAccuratePeriodicReportAsync(reportType, true, email, whatsappNumber);
+            return true;
+        }
+
+        /// <summary>
+        /// Mengirim alert monitoring ke kontak user yang sedang login.
+        /// </summary>
+        public async Task<bool> SendPersonalAlertAsync(string email, string whatsappNumber)
+        {
+            EnsureSettingsLoaded();
+            if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(whatsappNumber))
+                return false;
+
+            var since = DateTime.Now.AddHours(-24);
+            var anomalies = await _context.AnomalyLogs.AsNoTracking()
+                .Where(x => x.DetectedTime >= since)
+                .OrderByDescending(x => x.DetectedTime)
+                .Take(20)
+                .ToListAsync();
+
+            var subject = "[KWH Monitoring] Alert 24 Jam Terakhir";
+            var body = string.Format("<h2>Alert Monitoring KWH</h2><p>Ringkasan anomali sejak {0:dd/MM/yyyy HH:mm}.</p><p><strong>Total anomali:</strong> {1}</p>", since, anomalies.Count);
+            var sent = false;
+            if (!string.IsNullOrWhiteSpace(email) && _settings.EnableEmailNotification)
+                sent = (await SendEmailWithResultAsync(email, subject, body)).Success || sent;
+
+            if (!string.IsNullOrWhiteSpace(whatsappNumber) && _settings.EnableWhatsAppNotification)
+            {
+                var text = string.Format("KWH MONITORING - ALERT\nPeriode: 24 jam terakhir\nTotal anomali: {0}\nTerakhir: {1}", anomalies.Count, anomalies.Count == 0 ? "Tidak ada" : anomalies[0].DetectedTime.ToString("dd/MM/yyyy HH:mm"));
+                sent = (await SendWablasAsync(text, whatsappNumber)).Success || sent;
+            }
+            return sent;
+        }
+
         // ============================================
         // REPORT RECIPIENTS  all active Operator/Admin users
         // ============================================
@@ -1731,7 +1779,7 @@ namespace KWHMonitoring.Services
             _logger.LogInformation("Formal {ReportType} report sent for period {PeriodStart} - {PeriodEnd}", reportType, periodStart, periodEnd);
         }
 
-        private async Task SendAccuratePeriodicReportAsync(string reportType, bool isTest)
+        private async Task SendAccuratePeriodicReportAsync(string reportType, bool isTest, string personalEmail = null, string personalWhatsapp = null)
         {
             EnsureSettingsLoaded();
             if ((!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
@@ -1982,15 +2030,20 @@ namespace KWHMonitoring.Services
             var body = BuildAccurateBillingReportHtml(reportTitle, periodLabel, periodStart, periodEnd, snapshots, totalKWh, reportTotalCost, latestData, tariffModes, now, isTest, rowsHtml, pdfUrl);
 
             if (_settings.EnableEmailNotification)
-                await SendEmailAsync(subject, body);
+            {
+                if (!string.IsNullOrWhiteSpace(personalEmail))
+                    await SendEmailWithResultAsync(personalEmail, subject, body);
+                else if (string.IsNullOrWhiteSpace(personalWhatsapp))
+                    await SendEmailAsync(subject, body);
+            }
 
             foreach (var snapshot in snapshots)
                 snapshot.SentAt = now;
             await _context.SaveChangesAsync();
 
-            if (_settings.EnableWhatsAppNotification)
+            if (_settings.EnableWhatsAppNotification && (!string.IsNullOrWhiteSpace(personalWhatsapp) || string.IsNullOrWhiteSpace(personalEmail) && string.IsNullOrWhiteSpace(personalWhatsapp)))
             {
-                await SendWablasAsync(string.Format("KWH MONITORING - {0}\nPeriode: {1}\nTotal energi: {2:N4} kWh\nTotal estimasi: Rp {3:N2}\nPerangkat: {4}\nTarif: {5}", reportTitle, periodLabel, totalKWh, reportTotalCost, snapshots.Count, string.Join(", ", tariffModes)));
+                await SendWablasAsync(string.Format("KWH MONITORING - {0}\nPeriode: {1}\nTotal energi: {2:N4} kWh\nTotal estimasi: Rp {3:N2}\nPerangkat: {4}\nTarif: {5}", reportTitle, periodLabel, totalKWh, reportTotalCost, snapshots.Count, string.Join(", ", tariffModes)), personalWhatsapp);
             }
         }
 

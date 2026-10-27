@@ -533,7 +533,7 @@
     <div class="mb-3 mt-3 mt-md-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
     </div>
     <!-- Ranking & ERP Comparison -->
-    <div class="card shadow-sm mb-3 mb-md-4 usage-ranking-comparison-card">
+    <div class="card shadow-sm mb-3 mb-md-4 usage-ranking-comparison-card" id="usage-billing-comparison" data-voltra-target="billing-comparison">
         <div class="card-header py-2">
             <div class="usage-ranking-comparison-header-main">
                 <div class="usage-ranking-comparison-heading">
@@ -1487,6 +1487,7 @@
         }
 
         $(document).ready(function() {
+            focusVoltraTarget();
             // Hide page-specific buttons not applicable to this page
             $('#btnRescan, #btnExport').hide();
 
@@ -1555,6 +1556,24 @@
                 }
             });
         });
+
+        // Dipakai Voltra saat pengguna meminta bagian tertentu dari halaman.
+        // Hash tidak mengubah filter/perhitungan; hanya memfokuskan tabel yang diminta.
+        function focusVoltraTarget() {
+            if (window.location.hash !== '#usage-billing-comparison') return;
+
+            var target = document.getElementById('usage-billing-comparison');
+            if (!target) return;
+
+            window.setTimeout(function () {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                target.style.transition = 'box-shadow .25s ease-in-out';
+                target.style.boxShadow = '0 0 0 3px rgba(13, 110, 253, .55), 0 8px 24px rgba(13, 110, 253, .22)';
+                window.setTimeout(function () {
+                    target.style.boxShadow = '';
+                }, 2200);
+            }, 350);
+        }
 
         function updateDateInput() {
             var y = selectedDate.getFullYear();
