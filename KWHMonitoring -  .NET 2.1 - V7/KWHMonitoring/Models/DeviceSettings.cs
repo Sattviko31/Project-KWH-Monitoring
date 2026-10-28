@@ -41,7 +41,9 @@ namespace KWHMonitoring.Models
         public TimeSpan DowntimeEnd { get; set; } = TimeSpan.FromHours(6);
 
         [Column("TariffPerKWh", TypeName = "decimal(18,2)")]
-        public decimal TariffPerKWh { get; set; } = 1500m;
+        // Tarif flat per-device. Digunakan hanya bila tarif device tidak
+        // tersedia/valid atau pembacaan settings gagal.
+        public decimal TariffPerKWh { get; set; } = 1444.70m;
 
         [Column("LoadNormalThreshold")]
         public int LoadNormalThreshold { get; set; } = 30;

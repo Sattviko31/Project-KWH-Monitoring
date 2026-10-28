@@ -32,6 +32,7 @@ namespace KWHMonitoring.Controllers
         private readonly AesEncryptionService _encryption;
         private readonly IMemoryCache _cache;
         private readonly NotificationService _notificationService;
+        private readonly IBillingTrendWorkflowService _billingTrendWorkflowService;
 
         public QwenChatController(
             IConfiguration configuration,
@@ -40,7 +41,8 @@ namespace KWHMonitoring.Controllers
             ApplicationDbContext context,
             AesEncryptionService encryption,
             IMemoryCache cache,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            IBillingTrendWorkflowService billingTrendWorkflowService)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
@@ -49,6 +51,7 @@ namespace KWHMonitoring.Controllers
             _encryption = encryption;
             _cache = cache;
             _notificationService = notificationService;
+            _billingTrendWorkflowService = billingTrendWorkflowService;
         }
 
         private class ChatbotConfig
@@ -155,6 +158,9 @@ namespace KWHMonitoring.Controllers
             public string Message { get; set; }
             public string Severity { get; set; }
             public DateTime Timestamp { get; set; }
+            public bool RequiresConfirmation { get; set; }
+            public long? AnomalyLogId { get; set; }
+            public string ConfirmationUrl { get; set; }
         }
 
         private static string CorrectUserMessage(string message)
@@ -535,6 +541,9 @@ namespace KWHMonitoring.Controllers
 
                 var anomalyLogs = await _context.AnomalyLogs
                     .AsNoTracking()
+                    .Where(x => !x.IsResolved &&
+                        (x.AnomalyType != BillingAnomalyDetectionService.AnomalyType ||
+                         (x.BillingAnomalyType != null && x.BillingAnomalyType.Contains("PERIOD_OVER_PERIOD_"))))
                     .OrderByDescending(x => x.DetectedTime)
                     .Take(100)
                     .ToListAsync();
@@ -552,15 +561,37 @@ namespace KWHMonitoring.Controllers
                 }).Concat(anomalyLogs.Select(x => new ActivityLogItem
                 {
                     Id = "anomaly-" + x.Id,
-                    Category = "Anomali",
-                    Title = "Anomali " + (x.AnomalyType ?? "sistem"),
-                    Message = string.Format("Panel {0}: {1:N1} W (deviasi {2:N1}%). {3}", x.DeviceKey, x.PowerValue, x.Deviation, string.IsNullOrWhiteSpace(x.Notes) ? "" : x.Notes),
-                    Severity = string.IsNullOrWhiteSpace(x.Severity) ? "warning" : x.Severity,
-                    Timestamp = x.DetectedTime
+                    Category = x.AnomalyType == "BILLING_VARIANCE" ? "Billing Anomaly" : "Anomali",
+                    Title = x.AnomalyType == "BILLING_VARIANCE" ? "Konfirmasi anomaly tagihan periode berjalan" : "Anomali " + (x.AnomalyType ?? "sistem"),
+                    Message = x.AnomalyType == "BILLING_VARIANCE"
+                        ? BuildBillingAnomalyMessage(x)
+                        : string.Format("Panel {0}: {1:N1} W (deviasi {2:N1}%). {3}", x.DeviceKey, x.PowerValue, x.Deviation, string.IsNullOrWhiteSpace(x.Notes) ? "" : x.Notes),
+                    Timestamp = x.DetectedTime,
+                    RequiresConfirmation = x.AnomalyType == "BILLING_VARIANCE"
+                        && x.BillingAnomalyType != null
+                        && x.BillingAnomalyType.Contains("PERIOD_OVER_PERIOD_"),
+                    AnomalyLogId = x.AnomalyType == "BILLING_VARIANCE"
+                        && x.BillingAnomalyType != null
+                        && x.BillingAnomalyType.Contains("PERIOD_OVER_PERIOD_")
+                        ? (long?)x.Id : null
                 }))
                 .OrderByDescending(x => x.Timestamp)
                 .Take(100)
                 .ToList();
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(userIdClaim, out var userId) && await _billingTrendWorkflowService.IsSelectedRecipientAsync(userId))
+                {
+                    foreach (var item in items.Where(x => x.RequiresConfirmation))
+                    {
+                        var notification = await _billingTrendWorkflowService.EnsureModalConfirmationNotificationAsync(item.AnomalyLogId.Value, userId);
+                        if (notification == null)
+                        {
+                            _logger.LogWarning("Billing modal notification is unavailable for anomaly {AnomalyLogId} and user {UserId}.", item.AnomalyLogId.Value, userId);
+                        }
+                        item.ConfirmationUrl = notification?.ConfirmationUrl;
+                    }
+                }
 
                 return Ok(new { success = true, items, count = items.Count, updatedAt = DateTime.UtcNow });
             }
@@ -569,6 +600,32 @@ namespace KWHMonitoring.Controllers
                 _logger.LogError(ex, "Gagal mengambil log aktivitas notifikasi");
                 return StatusCode(500, new { success = false, message = "Log aktivitas tidak dapat dimuat." });
             }
+        }
+
+        private static string BuildBillingAnomalyMessage(AnomalyLog anomaly)
+        {
+            var current = anomaly.ActualBilling.HasValue
+                ? string.Format("Rp {0:N0}", anomaly.ActualBilling.Value)
+                : "belum tersedia";
+            var previous = anomaly.PreviousBilling.HasValue
+                ? string.Format("Rp {0:N0}", anomaly.PreviousBilling.Value)
+                : "belum tersedia";
+            var difference = anomaly.PeriodDifference.HasValue
+                ? string.Format("Rp {0:N0}", anomaly.PeriodDifference.Value)
+                : "belum tersedia";
+            var percent = anomaly.PeriodDifferencePercent.HasValue
+                ? string.Format("{0:N2}%", anomaly.PeriodDifferencePercent.Value)
+                : "belum tersedia";
+            var period = anomaly.BillingPeriod.HasValue
+                ? anomaly.BillingPeriod.Value.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("id-ID"))
+                : "periode tidak tersedia";
+            var previousPeriod = anomaly.PreviousBillingPeriod.HasValue
+                ? anomaly.PreviousBillingPeriod.Value.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("id-ID"))
+                : "periode sebelumnya";
+            var note = string.IsNullOrWhiteSpace(anomaly.Notes) ? string.Empty : " " + anomaly.Notes.Trim();
+            return string.Format(
+                "Panel {0}, periode {1}: tagihan aktual {2}; periode sebelumnya ({3}) {4}; selisih {5} ({6}).{7}",
+                anomaly.DeviceKey, period, current, previousPeriod, previous, difference, percent, note);
         }
 
         [HttpGet("capabilities")]
@@ -612,7 +669,7 @@ namespace KWHMonitoring.Controllers
             string deviceKey = string.IsNullOrWhiteSpace(request.DeviceKey) ? null : request.DeviceKey.Trim();
             string groupName = string.IsNullOrWhiteSpace(request.GroupName) ? null : request.GroupName.Trim();
 
-            if (action == "details" && string.IsNullOrEmpty(deviceKey) && !string.IsNullOrEmpty(groupName))
+            if (!string.IsNullOrEmpty(action) && (string.IsNullOrEmpty(deviceKey) || !string.IsNullOrEmpty(groupName)))
             {
                 var latestPanels = await _context.KWH_Monitoring
                     .Where(x => x.DeviceKey != null)
@@ -620,7 +677,7 @@ namespace KWHMonitoring.Controllers
                     .Select(g => g.OrderByDescending(x => x.Waktu_Server).FirstOrDefault())
                     .ToListAsync();
 
-                var requestedName = groupName.Trim();
+                var requestedName = !string.IsNullOrEmpty(groupName) ? groupName.Trim() : deviceKey?.Trim();
                 var normalizedRequestedName = NormalizePanelName(requestedName);
                 var exactPanel = latestPanels
                     .Where(x => x != null)
@@ -637,10 +694,11 @@ namespace KWHMonitoring.Controllers
                     .OrderByDescending(x => x.Waktu_Server)
                     .FirstOrDefault();
 
-                deviceKey = matchingPanel?.DeviceKey;
+                if (matchingPanel != null)
+                    deviceKey = matchingPanel.DeviceKey;
 
                 if (string.IsNullOrEmpty(deviceKey))
-                    return NotFound(new { success = false, message = "Saya belum menemukan device atau grup/lokasi yang cocok di panel monitoring." });
+                    return NotFound(new { success = false, message = "Saya belum menemukan device atau grup/lokasi yang cocok di panel monitoring. Coba sebutkan nama panel atau grupnya dengan lebih spesifik." });
             }
             if (!string.IsNullOrWhiteSpace(request.Action) && string.IsNullOrEmpty(action))
                 return BadRequest(new { success = false, message = "Aksi UI tersebut tidak diizinkan." });

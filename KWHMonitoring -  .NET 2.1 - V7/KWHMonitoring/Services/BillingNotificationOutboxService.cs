@@ -69,6 +69,12 @@ namespace KWHMonitoring.Services
                     {
                         var payload = JObject.Parse(row.PayloadJson ?? "{}");
                         var anomalyId = (long?)payload["anomalyLogId"];
+                        if (string.Equals(row.Channel, "WEB_MODAL", StringComparison.OrdinalIgnoreCase))
+                        {
+                            row.Status = "SENT";
+                            row.UpdatedAt = DateTime.UtcNow;
+                            continue;
+                        }
                         if (anomalyId.HasValue && await db.AnomalyLogs.AnyAsync(x => x.Id == anomalyId.Value && x.IsResolved, cancellationToken))
                         {
                             db.BillingNotificationOutbox.Remove(row);

@@ -2810,7 +2810,7 @@
         function loadSystemSettings() {
             return new Promise(function(resolve) {
                 $.ajax({
-                    url: '/api/Api/get-system-settings',
+                    url: '/api/Api/get-public-chart-settings',
                     method: 'GET',
                     dataType: 'json',
                     timeout: 10000,

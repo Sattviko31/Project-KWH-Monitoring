@@ -2117,7 +2117,7 @@
         }
 
         function buildSingleDeviceFinancialData(data) {
-            var devTariff = data.tariffPerKWh || 1500;
+            var devTariff = Number(data.tariffPerKWh) > 0 ? Number(data.tariffPerKWh) : 1444.70;
             if (data.wbpLwbp && data.wbpLwbp.configured && data.wbpLwbp.tariffWBP > 0 && data.wbpLwbp.tariffLWBP > 0) {
                 var wbpKwh = data.wbpLwbp.wbpKWh || 0;
                 var lwbpKwh = data.wbpLwbp.lwbpKWh || 0;
@@ -2575,7 +2575,7 @@
                 var deviceMonthKWh = (d.month && d.month.total) || 0;
 
                 // Calculate effective tariff per device (weighted by consumption for WBP/LWBP)
-                var devTariff = d.tariffPerKWh || 1500;
+                var devTariff = Number(d.tariffPerKWh) > 0 ? Number(d.tariffPerKWh) : 1444.70;
                 if (d.wbpLwbp && d.wbpLwbp.configured && d.wbpLwbp.tariffWBP > 0 && d.wbpLwbp.tariffLWBP > 0) {
                     var wbpKwh = d.wbpLwbp.wbpKWh || 0;
                     var lwbpKwh = d.wbpLwbp.lwbpKWh || 0;
@@ -2643,7 +2643,7 @@
                 // actualCost is always available regardless of anggaran configured
                 actualKWh += (b.actualKWh || deviceMonthKWh);
                 budgetCost += (b.budgetCost || 0);
-                actualCost += (b.actualCost || Math.round(deviceMonthKWh * (d.tariffPerKWh || 1500)));
+                actualCost += (b.actualCost || Math.round(deviceMonthKWh * (Number(d.tariffPerKWh) > 0 ? Number(d.tariffPerKWh) : 1444.70)));
 
                 // Period Comparison — sum absolute values
                 var pc = d.periodComparison || {};
@@ -2773,7 +2773,7 @@
                     flatCost: Math.round(flatCost),
                     totalDeviceCount: wbpDeviceCount + flatDeviceCount
                 },
-                avgTariffPerKWh: tariffCount > 0 ? Math.round(tariffSum / tariffCount) : 1500,
+                avgTariffPerKWh: tariffCount > 0 ? Math.round(tariffSum / tariffCount) : 1444.70,
                 totalEstimatedCost: Math.round(totalEstimatedCost)
             };
         }
@@ -2829,7 +2829,7 @@
             $('#usageCost').text('Rp ' + formatInteger(estimatedCost));
 
             // Update Tarif display from average of all device tariffs
-            $('#tariffDisplay').text('Rp ' + formatInteger(data.avgTariffPerKWh || 1500));
+            $('#tariffDisplay').text('Rp ' + formatInteger(Number(data.avgTariffPerKWh) > 0 ? data.avgTariffPerKWh : 1444.70));
 
             updateWbpLwbpChart(data);
             updateBudgetChart(data.budget || {});
@@ -3288,7 +3288,7 @@
 
             var monthlyData = (ed && ed.monthlyData) || [];
             var budget = (fd && fd.budget) || {};
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+        var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
 
             var monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
 
@@ -3477,7 +3477,7 @@
 
             var dailyData = (ed && ed.dailyData) || [];
             var budget = (fd && fd.budget) || {};
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
 
             var monthKwh = (ed && ed.totalThisMonth) || 0;
             var monthActualCost = budget.actualCost || 0;
@@ -3543,7 +3543,7 @@
             var currentMonth = new Date().getMonth() + 1;
             var monthlyData = (ed && ed.monthlyData) || [];
             var budget = (fd && fd.budget) || {};
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
 
             var monthKwh = (ed && ed.totalThisMonth) || 0;
             var monthActualCost = budget.actualCost || 0;
@@ -3811,7 +3811,7 @@
             var hourlyData = (ed && ed.hourlyData) || [];
             var totalToday = (ed && ed.totalToday) || 0;
             var dailyData = (ed && ed.dailyData) || [];
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
 
             var wbpLwbp = (fd && fd.wbpLwbp) || {};
             var waste = (fd && fd.waste) || {};
@@ -3955,7 +3955,7 @@
             var monthAvgPerDay = (ed && ed.avgPerDay) || 0;
             var monthPeakDay = (ed && ed.peakDay) || 0;
             var monthPeakDayDate = (ed && ed.peakDayDate) || '-';
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
             var dailyData = (ed && ed.dailyData) || [];
 
             var wbpLwbp = (fd && fd.wbpLwbp) || {};
@@ -4116,7 +4116,7 @@
             var yearPeakMonth = (ed && ed.peakMonth) || 0;
             var yearPeakMonthName = (ed && ed.peakMonthName) || '-';
             var monthlyData = (ed && ed.monthlyData) || [];
-            var tariff = (fd && fd.avgTariffPerKWh) || (ed && ed.tariffPerKWh) || 1500;
+            var tariff = (fd && Number(fd.avgTariffPerKWh) > 0 ? fd.avgTariffPerKWh : (ed && Number(ed.tariffPerKWh) > 0 ? ed.tariffPerKWh : 1444.70));
             var monthKwh = (ed && ed.totalThisMonth) || 0;
 
             var wbpLwbp = (fd && fd.wbpLwbp) || {};

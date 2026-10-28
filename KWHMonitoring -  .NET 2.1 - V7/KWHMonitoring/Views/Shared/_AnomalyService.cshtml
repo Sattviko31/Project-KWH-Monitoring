@@ -186,6 +186,7 @@
 
         // Debounce timer untuk save anomaly state ke database
         let anomalyStateSaveTimer = null;
+        let anomalyStateSaveInFlight = false;
         let anomalyStateScopeId;
         try {
             anomalyStateScopeId = sessionStorage.getItem('kwhAnomalyStateScopeId');
@@ -269,6 +270,8 @@
             // Debounce: wait 2 seconds before saving to avoid excessive DB writes
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
             anomalyStateSaveTimer = setTimeout(function() {
+                if (anomalyStateSaveInFlight) return;
+                anomalyStateSaveInFlight = true;
                 $.ajax({
                     url: '/api/Api/save-anomaly-state',
                     method: 'POST',
@@ -279,9 +282,11 @@
                         scopeId: anomalyStateScopeId
                     }),
                     success: function() {
+                        anomalyStateSaveInFlight = false;
                         @* console.log('Anomaly state saved to DB'); *@
                     },
                     error: function(xhr) {
+                        anomalyStateSaveInFlight = false;
                         if (xhr.status === 401) {
                             @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
                             if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
@@ -299,6 +304,8 @@
             if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
             // Immediate save for critical state changes (cooldown enter/exit)
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
+            if (anomalyStateSaveInFlight) return;
+            anomalyStateSaveInFlight = true;
             $.ajax({
                 url: '/api/Api/save-anomaly-state',
                 method: 'POST',
@@ -309,9 +316,11 @@
                     scopeId: anomalyStateScopeId
                 }),
                 success: function() {
+                    anomalyStateSaveInFlight = false;
                     @* console.log('ðŸ’¾ Anomaly state saved to DB (immediate)'); *@
                 },
                 error: function(xhr) {
+                    anomalyStateSaveInFlight = false;
                     if (xhr.status === 401) {
                         @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
                         if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
@@ -419,7 +428,7 @@
                 
                 // Load system settings (Chart & Refresh Interval)
                 $.ajax({
-                    url: '/api/Api/get-system-settings',
+                    url: '/api/Api/get-public-chart-settings',
                     method: 'GET',
                     dataType: 'json',
                     timeout: 5000,
@@ -1192,7 +1201,11 @@
         $(window).on('pagehide', function() {
             // Save state sebelum halaman ditutup menggunakan sendBeacon
             if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
-            try {
+            // Jangan kirim beacon kedua saat AJAX save masih berjalan. Pada navigasi
+            // ke BillingConfirmation, pagehide dapat terjadi hampir bersamaan dengan
+            // saveAnomalyStateImmediate() dan menyebabkan duplicate insert pada
+            // unique index ActiveAnomalyStates.DeviceKey.
+            if (!anomalyStateSaveInFlight) try {
                 var payload = JSON.stringify({
                     confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
                     cooldownState: JSON.stringify(anomalyCooldownState),

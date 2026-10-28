@@ -23,13 +23,16 @@ namespace KWHMonitoring.Controllers
             if (string.IsNullOrWhiteSpace(token))
                 return View("Index", new BillingConfirmationPageModel { Error = "Link konfirmasi tidak lengkap." });
 
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userId, out var authenticatedUserId))
+                return RedirectToAction("Login", "Account", new { returnUrl = Request.Path + Request.QueryString });
+
+            if (!await _workflow.IsSelectedRecipientAsync(authenticatedUserId))
+                return View("Index", new BillingConfirmationPageModel { Error = "Akun ini tidak dipilih sebagai penerima konfirmasi anomaly." });
+
             var details = await _workflow.GetTokenViewAsync(token);
             if (!details.Valid)
                 return View("Index", new BillingConfirmationPageModel { Error = details.Error });
-
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!int.TryParse(userId, out _))
-                return RedirectToAction("Login", "Account", new { returnUrl = Request.Path + Request.QueryString });
 
             return View("Index", new BillingConfirmationPageModel { Token = token, Details = details });
         }

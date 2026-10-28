@@ -54,6 +54,7 @@
         .activity-log-message { margin: 5px 0 0; color: var(--text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
         .activity-log-meta { color: var(--text-muted); font-size: 12px; }
         .activity-log-empty { padding: 36px 12px; color: var(--text-muted); text-align: center; }
+        .billing-confirmation-action { margin-top: 10px; }
         #notificationActivityList { max-height: min(65vh, 620px); overflow-y: auto; }
         .help-modal-body { max-height: min(70vh, 720px); overflow-y: auto; }
         .help-section { padding: 14px 2px 16px; border-bottom: 1px solid var(--border-subtle); }
@@ -1194,6 +1195,22 @@
 
                                 if (deviceCommand) {
                                     const deviceMatch = original.match(/(?:device|perangkat|panel)\s*#?\s*([a-z0-9][a-z0-9._-]*)/i) || original.match(/#\s*([a-z0-9][a-z0-9._-]*)/i);
+                                    const isOnCommand = /\b(nyalakan|hidupkan)\b/.test(normalized);
+                                    const isOffCommand = /\b(matikan|padamkan)\b/.test(normalized);
+
+                                    if ((isOnCommand || isOffCommand) && !deviceMatch) {
+                                        const groupName = normalized
+                                            .replace(/\b(nyalakan|hidupkan|matikan|padamkan|tolong|mohon|bisa|dong|ya|device|perangkat|panel|untuk|pada|di)\b/g, ' ')
+                                            .replace(/\s+/g, ' ')
+                                            .trim();
+
+                                        if (groupName) {
+                                            const action = isOnCommand ? 'relay-on' : 'relay-off';
+                                            const description = isOnCommand ? 'menyiapkan tombol ON' : 'menyiapkan tombol OFF dan verifikasi OTP';
+                                            appendMessage('Siap, saya ' + description + ' untuk **' + groupName + '** ya.', 'bot', true);
+                                            return await navigateVoltraPage('dashboard', null, null, action, groupName);
+                                        }
+                                    }
 
                                     if (asksForDetail && !deviceMatch) {
                                         const groupName = normalized
@@ -1213,8 +1230,6 @@
                                     }
                                     if (deviceMatch) {
                                         const requestedDeviceKey = deviceMatch[1];
-                                        const isOnCommand = /\b(nyalakan|hidupkan)\b/.test(normalized);
-                                        const isOffCommand = /\b(matikan|padamkan)\b/.test(normalized);
                                         const isDetailCommand = !isOnCommand && !isOffCommand && !asksForChart;
                                         const requestedAction = isDetailCommand ? 'details' : (isOnCommand ? 'relay-on' : (isOffCommand ? 'relay-off' : null));
                                         const description = asksForChart
@@ -2031,6 +2046,7 @@
 
             var latestActivityItems = [];
             var activityRefreshInProgress = false;
+            var activityRefreshQueued = false;
             var activityModalIsOpen = false;
             var notificationFeedStorageKey = 'kwh_notification_feed';
             var observedSourceStorageKey = 'kwh_notification_observed_sources';
@@ -2061,8 +2077,16 @@
                 if (legacyBadge) legacyBadge.textContent = String(count);
             }
 
+            function updateNotificationBadgeFromFeed() {
+                var feed = readActivityStorage(notificationFeedStorageKey, []);
+                updateActivityBadge(feed.filter(function(item) { return item && !item.requiresConfirmation; }).length);
+            }
+
             function clearNotificationFeed() {
-                saveNotificationFeed([]);
+                var feed = readActivityStorage(notificationFeedStorageKey, []);
+                // Billing confirmation notifications are persistent until the
+                // server marks the anomaly resolved. Reset only transient items.
+                saveNotificationFeed(feed.filter(function(item) { return item && item.requiresConfirmation; }));
                 updateActivityBadge(0);
             }
 
@@ -2077,10 +2101,11 @@
                     latestActivityItems = latestActivityItems.concat(item).filter(function(entry, index, all) {
                         return all.findIndex(function(candidate) { return candidate.id === entry.id; }) === index;
                     });
-                    clearNotificationFeed();
+                    saveNotificationFeed(latestActivityItems);
+                    updateNotificationBadgeFromFeed();
                 } else {
                     latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
-                    updateActivityBadge(latestActivityItems.length);
+                    updateNotificationBadgeFromFeed();
                 }
                 renderActivityLog(latestActivityItems);
             };
@@ -2131,6 +2156,24 @@
                     message.textContent = item.message || '';
                     copy.appendChild(heading);
                     copy.appendChild(message);
+                    if (item.requiresConfirmation && item.confirmationUrl) {
+                        var action = document.createElement('div');
+                        action.className = 'billing-confirmation-action';
+                        var button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'btn btn-sm btn-primary';
+                        button.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Konfirmasi anomaly';
+                        button.addEventListener('click', function() {
+                            openBillingConfirmationPage(item);
+                        });
+                        action.appendChild(button);
+                        copy.appendChild(action);
+                    } else if (item.requiresConfirmation) {
+                        var pending = document.createElement('small');
+                        pending.className = 'text-muted d-block mt-2';
+                        pending.textContent = 'Menunggu konfirmasi dari Operator';
+                        copy.appendChild(pending);
+                    }
                     row.appendChild(icon);
                     row.appendChild(copy);
                     container.appendChild(row);
@@ -2138,12 +2181,31 @@
                 list.appendChild(container);
             }
 
-            async function refreshActivityLog() {
-                if (activityRefreshInProgress) return;
+            function openBillingConfirmationPage(item) {
+                if (!item || !item.confirmationUrl) {
+                    window.alert('Link konfirmasi belum tersedia. Silakan perbarui notifikasi.');
+                    return;
+                }
+                try {
+                    var confirmationUri = new URL(item.confirmationUrl, window.location.origin);
+                    if (confirmationUri.origin !== window.location.origin || confirmationUri.pathname !== '/BillingConfirmation') {
+                        throw new Error('Link konfirmasi tidak valid.');
+                    }
+                    window.location.assign(confirmationUri.href);
+                } catch (error) {
+                    window.alert(error.message || 'Link konfirmasi tidak valid.');
+                }
+            }
+
+            async function refreshActivityLog(force) {
+                if (activityRefreshInProgress) {
+                    if (force) activityRefreshQueued = true;
+                    return;
+                }
                 if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
                     latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
                     renderActivityLog(latestActivityItems);
-                    updateActivityBadge(latestActivityItems.length);
+                    updateNotificationBadgeFromFeed();
                     return;
                 }
                 activityRefreshInProgress = true;
@@ -2153,7 +2215,7 @@
                     if (!contentType.toLowerCase().includes('application/json')) {
                         latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
                         renderActivityLog(latestActivityItems);
-                        updateActivityBadge(latestActivityItems.length);
+                        updateNotificationBadgeFromFeed();
                         return;
                     }
                     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -2209,9 +2271,35 @@
                     }
 
                     var feed = readActivityStorage(notificationFeedStorageKey, []);
+                    var activeBillingItems = sourceItems.filter(function(item) { return item.requiresConfirmation; });
+                    var activeBillingIds = new Set(activeBillingItems.map(function(item) { return item.id; }));
+                    var currentBillingById = {};
+                    activeBillingItems.forEach(function(item) { currentBillingById[item.id] = item; });
+                    feed = feed
+                        .filter(function(item) { return item && item.requiresConfirmation && activeBillingIds.has(item.id); })
+                        .map(function(item) {
+                            if (!item.requiresConfirmation || !currentBillingById[item.id]) return item;
+                            // Never reuse a confirmation URL cached under a different
+                            // recipient selection. The server response is authoritative.
+                            return Object.assign({}, item, {
+                                confirmationUrl: currentBillingById[item.id].confirmationUrl || null,
+                                anomalyLogId: currentBillingById[item.id].anomalyLogId
+                            });
+                        });
+                    // Persist active billing notifications in the local feed as
+                    // well. They are server-owned and must survive closing and
+                    // reopening the modal without another refresh.
+                    activeBillingItems.forEach(function(item) {
+                        var existing = feed.find(function(candidate) { return candidate.id === item.id; });
+                        if (existing) {
+                            Object.assign(existing, item);
+                        } else {
+                            feed.push(item);
+                        }
+                    });
                     var feedIds = new Set(feed.map(function(item) { return item.id; }));
                     newlyObserved.forEach(function(item) {
-                        if (item.id && !feedIds.has(item.id)) {
+                        if (item.id && !item.requiresConfirmation && !feedIds.has(item.id)) {
                             feed.unshift(item);
                             feedIds.add(item.id);
                         }
@@ -2219,27 +2307,34 @@
                     feed.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
                     feed = feed.slice(0, 100);
                     saveNotificationFeed(feed);
-                    if (activityModalIsOpen) {
-                        var visibleById = {};
-                        latestActivityItems.concat(feed).forEach(function(item) { if (item.id) visibleById[item.id] = item; });
-                        latestActivityItems = Object.keys(visibleById).map(function(id) { return visibleById[id]; })
-                            .sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); }).slice(0, 100);
-                    } else {
-                        latestActivityItems = feed;
-                    }
+                    // Non-billing activity is transient: show it during this
+                    // refresh/modal session, but never persist it in the feed.
+                    // Billing confirmation rows are persistent and come from
+                    // both the server and the billing-only local feed.
+                    var transientItems = newlyObserved.filter(function(item) { return !item.requiresConfirmation; });
+                    var displayItems = feed.concat(transientItems).concat(activeBillingItems).filter(function(item, index, all) {
+                        return item.id && all.findIndex(function(candidate) { return candidate.id === item.id; }) === index;
+                    }).sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+                    // The server response is authoritative. Do not retain stale
+                    // billing rows after confirmation and do not let cached rows
+                    // hide a newly issued confirmation URL.
+                    latestActivityItems = displayItems;
                     var updatedAt = document.getElementById('activityLogUpdatedAt');
                     if (updatedAt) updatedAt.textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID');
                     renderActivityLog(latestActivityItems);
-                    if (activityModalIsOpen) {
-                        if (feed.length) clearNotificationFeed();
-                        else updateActivityBadge(0);
-            } else updateActivityBadge(feed.length);
+                    // Billing rows are persistent content, not unread-count
+                    // items. The badge counts only transient notifications.
+                    updateNotificationBadgeFromFeed();
                 } catch (e) {
                      /* console.warn('Gagal memuat log aktivitas:', e) */;
                     var list = document.getElementById('notificationActivityList');
                     if (list) list.innerHTML = '<div class="activity-log-empty">Log aktivitas gagal dimuat. Coba perbarui kembali.</div>';
                 } finally {
                     activityRefreshInProgress = false;
+                    if (activityRefreshQueued) {
+                        activityRefreshQueued = false;
+                        refreshActivityLog(false);
+                    }
                 }
             }
 
@@ -2248,14 +2343,17 @@
                 activityModalIsOpen = true;
                 latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
                 renderActivityLog(latestActivityItems);
-                clearNotificationFeed();
                 if (window.jQuery && typeof jQuery.fn.modal === 'function') jQuery('#notificationActivityModal').modal('show');
-                refreshActivityLog();
+                // Always reconcile with the server when the bell is opened so
+                // newly rescanned billing anomalies do not require manual refresh.
+                refreshActivityLog(true);
             });
             if (window.jQuery) jQuery('#notificationActivityModal').on('hidden.bs.modal', function() {
                 activityModalIsOpen = false;
-                latestActivityItems = [];
-                renderActivityLog([]);
+                // Do not mutate the persistent feed when the modal closes.
+                // Billing anomaly rows must remain available until the server
+                // confirms that the anomaly has been resolved.
+                latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
             });
             var helpButton = document.getElementById('topbarHelp');
             if (helpButton) helpButton.addEventListener('click', function() {
@@ -2267,8 +2365,11 @@
             if (resetActivityButton) resetActivityButton.addEventListener('click', async function() {
                 await refreshActivityLog();
                 clearNotificationFeed();
-                latestActivityItems = [];
-                renderActivityLog([]);
+                // Reset only clears transient notifications. Keep active billing
+                // confirmation rows visible because they are cleared only after
+                // successful server-side confirmation.
+                latestActivityItems = readActivityStorage(notificationFeedStorageKey, []);
+                renderActivityLog(latestActivityItems);
             });
             refreshActivityLog();
             setInterval(refreshActivityLog, 60000);

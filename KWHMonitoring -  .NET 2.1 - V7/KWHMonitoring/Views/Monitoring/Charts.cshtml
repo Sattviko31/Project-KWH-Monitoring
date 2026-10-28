@@ -665,7 +665,7 @@
                 var cached = readChartSettingsCache('system');
                 if (cached && cached.success && cached.settings) applySystemSettings(cached.settings);
                 $.ajax({
-                    url: '/api/Api/get-system-settings',
+                    url: '/api/Api/get-public-chart-settings',
                     method: 'GET',
                     dataType: 'json',
                     timeout: 10000,

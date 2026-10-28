@@ -63,7 +63,9 @@ namespace KWHMonitoring.Services
                 .AsNoTracking()
                 .ToListAsync();
 
-            var result = new Dictionary<string, DeviceSettings>();
+            // DeviceKey berasal dari beberapa sumber dan dapat berbeda kapitalisasi.
+            // Lookup tarif harus tetap menemukan settings device yang benar.
+            var result = new Dictionary<string, DeviceSettings>(StringComparer.OrdinalIgnoreCase);
 
             var activeTrendDevices = await _context.BillingTrendProfiles
                 .AsNoTracking()

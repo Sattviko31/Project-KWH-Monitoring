@@ -32,6 +32,7 @@ namespace KWHMonitoring.Controllers
     [ApiController]
     public class ApiController : ControllerBase
     {
+        private const decimal DefaultTariffPerKWh = 1444.70m;
         private readonly ApplicationDbContext _context;
         private readonly IMemoryCache _cache;
         private readonly IServiceProvider _serviceProvider;
@@ -192,6 +193,7 @@ namespace KWHMonitoring.Controllers
                 var evaluatedIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var evaluated = 0;
                 var estimatedByBillingId = new Dictionary<long, decimal>();
+                var notificationAnomalies = new List<AnomalyLog>();
 
                 foreach (var billing in targetBillingRows)
                 {
@@ -201,7 +203,7 @@ namespace KWHMonitoring.Controllers
 
                     var tariff = settings.TryGetValue(billing.DeviceKey, out var deviceSettings) && deviceSettings.TariffPerKWh > 0m
                         ? deviceSettings.TariffPerKWh
-                        : 1500m;
+                        : DefaultTariffPerKWh;
                     estimatedByBillingId[billing.TagihanListrikID] = Math.Round(energy * tariff, 0, MidpointRounding.AwayFromZero);
                 }
 
@@ -295,6 +297,16 @@ namespace KWHMonitoring.Controllers
                     log.ThresholdValue = evaluation.Threshold;
                     log.DetectedTime = DateTime.Now;
                     updated++;
+
+                    // Scan ulang juga harus menjalankan workflow notifikasi untuk
+                    // anomaly period-over-period yang masih aktif. Ini penting
+                    // terutama setelah seluruh log anomaly dihapus, karena log baru
+                    // belum memiliki token maupun outbox notifikasi.
+                    if (!log.IsResolved && !string.IsNullOrWhiteSpace(log.BillingAnomalyType)
+                        && log.BillingAnomalyType.IndexOf("PERIOD_OVER_PERIOD_", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        notificationAnomalies.Add(log);
+                    }
                 }
 
                 removed.AddRange(existingLogs.Where(x => x.BillingPeriod.HasValue && x.ErpBillingId.HasValue
@@ -312,6 +324,9 @@ namespace KWHMonitoring.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+                foreach (var anomalyId in notificationAnomalies.Select(x => x.Id).Where(x => x > 0).Distinct())
+                    await _billingTrendWorkflowService.QueueAnomalyNotificationsAsync(anomalyId);
+
                 return Ok(new
                 {
                     success = true,
@@ -1325,7 +1340,7 @@ namespace KWHMonitoring.Controllers
                         yearKWh = Math.Round(todayKWh + previousDaysTotal + previousMonthsTotal, 2);
                     }
 
-                    var tariff = deviceSettings.TariffPerKWh > 0m ? deviceSettings.TariffPerKWh : 1500m;
+                    var tariff = deviceSettings.TariffPerKWh > 0m ? deviceSettings.TariffPerKWh : DefaultTariffPerKWh;
                     var estimatedCost = Math.Round(monthKWh * tariff, 2);
 
                     var hourlyKwhByHour = hourlyData.Select(x => x.energy).ToArray();
@@ -1642,7 +1657,7 @@ namespace KWHMonitoring.Controllers
                 {
                     var tariff = settings.TryGetValue(deviceKey, out var deviceSettings) && deviceSettings.TariffPerKWh > 0m
                         ? deviceSettings.TariffPerKWh
-                        : 1500m;
+                        : DefaultTariffPerKWh;
                     var deviceErpRows = erpHistory.TryGetValue(deviceKey, out var erpRows)
                         ? erpRows
                         : new List<ErpBillingRecord>();
@@ -3099,7 +3114,7 @@ namespace KWHMonitoring.Controllers
         {
             var tariffWBP = ds.TariffWBP > 0 ? ds.TariffWBP : 0m;
             var tariffLWBP = ds.TariffLWBP > 0 ? ds.TariffLWBP : 0m;
-            var flatTariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : 1500m;
+            var flatTariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : DefaultTariffPerKWh;
             var useWbpSplit = tariffWBP > 0 && tariffLWBP > 0;
             var wbpStart = ds.WbpStartHour;
             var wbpEnd = ds.WbpEndHour;
@@ -3129,7 +3144,7 @@ namespace KWHMonitoring.Controllers
             if (!ds.DowntimeEnabled) return (0, 0, 0, false, "", "");
             var startH = ds.DowntimeStart.Hours;
             var endH = ds.DowntimeEnd.Hours;
-            var tariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : 1500m;
+            var tariff = ds.TariffPerKWh > 0 ? ds.TariffPerKWh : DefaultTariffPerKWh;
 
             decimal wasteKWh = 0, totalKWh = 0;
             for (int h = 0; h < hourlyKwhByHour.Length && h < 24; h++)
@@ -3164,11 +3179,11 @@ namespace KWHMonitoring.Controllers
                         return deviceSettings.TariffPerKWh;
                 }
 
-                return 1500m;
+                return DefaultTariffPerKWh;
             }
             catch
             {
-                return 1500m;
+                return DefaultTariffPerKWh;
             }
         }
 
@@ -3192,11 +3207,11 @@ namespace KWHMonitoring.Controllers
                     }
                 }
 
-                return Ok(new { tariffPerKWh = 1500m });
+                return Ok(new { tariffPerKWh = DefaultTariffPerKWh });
             }
             catch (Exception)
             {
-                return Ok(new { tariffPerKWh = 1500m });
+                return Ok(new { tariffPerKWh = DefaultTariffPerKWh });
             }
         }
 
@@ -4963,6 +4978,30 @@ namespace KWHMonitoring.Controllers
             }
         }
 
+        // Public read-only settings required by the anomaly/chart background
+        // service. Keep the full settings endpoint admin-only because it contains
+        // application configuration that must not be exposed to operators/viewers.
+        [HttpGet("get-public-chart-settings")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPublicChartSettings()
+        {
+            try
+            {
+                var settings = await _context.AppSettingsRecords
+                    .Where(x => x.SettingKey.StartsWith("Chart.") ||
+                                x.SettingKey.StartsWith("Interval.") ||
+                                x.SettingKey == "RefreshInterval")
+                    .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+                return Ok(new { success = true, settings });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading public chart settings");
+                return StatusCode(StatusCodes.Status500InternalServerError, new { success = false });
+            }
+        }
+
         private static bool IsProtectedMqttSetting(string key)
         {
             return string.Equals(key, "MQTT.Username", StringComparison.Ordinal)
@@ -5221,7 +5260,9 @@ namespace KWHMonitoring.Controllers
                 {
                     var settings = deviceSettings.ContainsKey(x.deviceKey) ? deviceSettings[x.deviceKey] : null;
                     var category = settings?.DeviceCategory ?? "Unknown";
-                    var tariffPerKWh = settings?.TariffPerKWh ?? 1500m;
+                    var tariffPerKWh = settings != null && settings.TariffPerKWh > 0m
+                        ? settings.TariffPerKWh
+                        : DefaultTariffPerKWh;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
                     var isOverload = x.anomalyType == "OVERLOAD";
 
@@ -6172,7 +6213,9 @@ namespace KWHMonitoring.Controllers
                 var groupName = deviceGroupNames.ContainsKey(log.DeviceKey) ? deviceGroupNames[log.DeviceKey] : log.DeviceKey;
                 var location = deviceLocations.ContainsKey(log.DeviceKey) ? deviceLocations[log.DeviceKey] : "-";
                 var category = deviceSettings?.DeviceCategory ?? "Unknown";
-                var tariffPerKWh = deviceSettings?.TariffPerKWh ?? 1500m;
+                var tariffPerKWh = deviceSettings != null && deviceSettings.TariffPerKWh > 0m
+                    ? deviceSettings.TariffPerKWh
+                    : DefaultTariffPerKWh;
                 var revenuePerHour = deviceSettings?.RevenuePerHour ?? 0m;
                 var isOverload = log.AnomalyType == "OVERLOAD";
 
@@ -6499,7 +6542,9 @@ namespace KWHMonitoring.Controllers
                 foreach (var log in allLogs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
-                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var tariff = settings != null && settings.TariffPerKWh > 0m
+                        ? settings.TariffPerKWh
+                        : DefaultTariffPerKWh;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
                     var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
@@ -6700,7 +6745,9 @@ namespace KWHMonitoring.Controllers
                 foreach (var log in logs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
-                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var tariff = settings != null && settings.TariffPerKWh > 0m
+                        ? settings.TariffPerKWh
+                        : DefaultTariffPerKWh;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
                     var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
@@ -6859,7 +6906,9 @@ namespace KWHMonitoring.Controllers
                 foreach (var log in logs)
                 {
                     var settings = deviceSettingsDict.ContainsKey(log.DeviceKey) ? deviceSettingsDict[log.DeviceKey] : null;
-                    var tariff = settings?.TariffPerKWh ?? 1500m;
+                    var tariff = settings != null && settings.TariffPerKWh > 0m
+                        ? settings.TariffPerKWh
+                        : DefaultTariffPerKWh;
                     var revenuePerHour = settings?.RevenuePerHour ?? 0m;
                     var isDrop = log.AnomalyType == "DROP";
                     var isOverload = log.AnomalyType == "OVERLOAD";
@@ -8135,10 +8184,8 @@ namespace KWHMonitoring.Controllers
                         continue;
                     }
 
-                    if (state == null || !string.Equals(state.AnomalyType, anomalyType, StringComparison.Ordinal))
+                    if (state == null)
                     {
-                        if (state != null)
-                            await DeleteActiveAnomalyEpisodeAsync(state);
                         state = new ActiveAnomalyState
                         {
                             DeviceKey = deviceKey,
@@ -8151,6 +8198,21 @@ namespace KWHMonitoring.Controllers
                             UpdatedAt = DateTime.Now
                         };
                         _context.ActiveAnomalyStates.Add(state);
+                    }
+                    else if (!string.Equals(state.AnomalyType, anomalyType, StringComparison.Ordinal))
+                    {
+                        // Reuse the existing row when the anomaly type changes.
+                        // Removing and inserting the same DeviceKey in one SaveChanges
+                        // can cause SQL Server to execute INSERT before DELETE and
+                        // violate IX_ActiveAnomalyStates_DeviceKey.
+                        await CompleteAnomalyEpisodeAsync(state);
+                        state.AnomalyType = anomalyType;
+                        state.ConfirmationCount = count;
+                        state.MaxConfirmations = maxConfirmations;
+                        state.IsConfirmed = cooldownState != null;
+                        state.FirstDetectedAt = DateTime.Now;
+                        state.LastDetectedAt = DateTime.Now;
+                        state.UpdatedAt = DateTime.Now;
                     }
                     else
                     {
@@ -8167,7 +8229,7 @@ namespace KWHMonitoring.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError("[SAVE-ANOMALY-STATE] Error: {0}", ex.Message);
+                _logger.LogError(ex, "[SAVE-ANOMALY-STATE] Error while saving anomaly state");
                 return SafeError(ex);
             }
         }
@@ -9349,7 +9411,7 @@ namespace KWHMonitoring.Controllers
                     return BadRequest(new { success = false, message = "Token wajib diisi." });
                 if (data.BillingPeriod == default(DateTime) || data.BillingPeriod.Date > DateTime.UtcNow.Date)
                     return BadRequest(new { success = false, message = "Billing period tidak valid." });
-                if (data.ObservedAmount <= 0m || data.ObservedAmount > 1000000000000m)
+                if (data.ObservedAmount < 0m || data.ObservedAmount > 1000000000000m)
                     return BadRequest(new { success = false, message = "Observed amount tidak valid." });
                 if (string.IsNullOrWhiteSpace(data.Reason) || data.Reason.Trim().Length < 3 || data.Reason.Length > 1000)
                     return BadRequest(new { success = false, message = "Reason wajib 3-1000 karakter." });
@@ -9372,6 +9434,49 @@ namespace KWHMonitoring.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Billing trend confirmation failed.");
+                return SafeError(ex);
+            }
+        }
+
+        [HttpPost("billing-anomalies/{id}/confirm-from-notification")]
+        [Authorize]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfirmBillingAnomalyFromNotification(long id, [FromBody] BillingNotificationConfirmationRequest data)
+        {
+            try
+            {
+                if (data == null || string.IsNullOrWhiteSpace(data.Token))
+                    return BadRequest(new { success = false, message = "Token wajib diisi." });
+                if (string.IsNullOrWhiteSpace(data.Reason) || data.Reason.Trim().Length < 3 || data.Reason.Length > 1000)
+                    return BadRequest(new { success = false, message = "Alasan wajib 3-1000 karakter." });
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out var authenticatedUserId))
+                    return StatusCode(StatusCodes.Status401Unauthorized, new { success = false, message = "Identitas akun tidak valid." });
+
+                var details = await _billingTrendWorkflowService.GetTokenViewAsync(data.Token);
+                if (!details.Valid || details.AnomalyLogId != id || !details.BillingPeriod.HasValue || !details.ActualBilling.HasValue)
+                    return BadRequest(new { success = false, message = details.Error ?? "Link konfirmasi tidak sesuai dengan anomaly." });
+
+                var result = await _billingTrendWorkflowService.ConfirmWithTokenAsync(
+                    data.Token,
+                    details.BillingPeriod.Value,
+                    details.ActualBilling.Value,
+                    id,
+                    "VALID",
+                    data.Reason,
+                    User.Identity.Name,
+                    "WEB_NOTIFICATION",
+                    authenticatedUserId);
+                return Ok(new { success = true, result });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Billing anomaly notification confirmation failed.");
                 return SafeError(ex);
             }
         }
@@ -10057,6 +10162,12 @@ namespace KWHMonitoring.Controllers
         public string Reason { get; set; }
         public string ConfirmedBy { get; set; }
         public string Channel { get; set; } = "WEB";
+    }
+
+    public class BillingNotificationConfirmationRequest
+    {
+        public string Token { get; set; }
+        public string Reason { get; set; }
     }
 
     public class BillingConfirmationRecipientsRequest

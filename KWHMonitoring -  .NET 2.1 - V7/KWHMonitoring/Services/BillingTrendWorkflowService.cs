@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace KWHMonitoring.Services
 {
@@ -20,6 +21,9 @@ namespace KWHMonitoring.Services
         Task QueueAnomalyNotificationsAsync(long anomalyLogId, bool forceResend = false);
         Task<BillingConfirmationTokenView> GetTokenViewAsync(string rawToken);
         Task<BillingTrendConfirmationResult> ConfirmFromLinkAsync(string rawToken, string reason, string confirmedBy, int authenticatedUserId);
+        Task<BillingConfirmationNotificationView> GetActiveConfirmationNotificationAsync(long anomalyLogId, int recipientUserId);
+        Task<BillingConfirmationNotificationView> EnsureModalConfirmationNotificationAsync(long anomalyLogId, int recipientUserId);
+        Task<bool> IsSelectedRecipientAsync(int userId);
         Task<long?> EnsureDetectedAnomalyAsync(string deviceKey, DateTime billingPeriod, long erpBillingId,
             decimal estimatedBilling, decimal actualBilling, decimal difference, decimal? differencePercent,
             decimal threshold, string billingAnomalyType, decimal? previousBilling,
@@ -60,6 +64,13 @@ namespace KWHMonitoring.Services
         public DateTime ExpiresAt { get; set; }
     }
 
+    public sealed class BillingConfirmationNotificationView
+    {
+        public long AnomalyLogId { get; set; }
+        public string ConfirmationUrl { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+    }
+
     public sealed class BillingTrendWorkflowService : IBillingTrendWorkflowService
     {
         private const int RequiredConfirmations = 3;
@@ -92,7 +103,10 @@ namespace KWHMonitoring.Services
             string decision, string reason, string confirmedBy, string channel)
         {
             if (string.IsNullOrWhiteSpace(deviceKey)) throw new ArgumentException("Device key wajib diisi.", nameof(deviceKey));
-            if (observedAmount <= 0m) throw new ArgumentOutOfRangeException(nameof(observedAmount));
+            // ERP billing rows are valid when the amount is zero. The anomaly
+            // detector accepts non-negative billing values, so modal/link
+            // confirmation must use the same rule.
+            if (observedAmount < 0m) throw new ArgumentOutOfRangeException(nameof(observedAmount));
             if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 3) throw new ArgumentException("Alasan wajib diisi.", nameof(reason));
 
             var normalizedPeriod = billingPeriod.Date;
@@ -226,11 +240,11 @@ namespace KWHMonitoring.Services
             if (profile == null)
                 throw new InvalidOperationException("Trend profile tidak aktif.");
 
-            var currentUser = await _context.ApplicationUsers.FirstOrDefaultAsync(x => x.Id == token.UserId && x.IsActive);
+            var currentUser = await _context.ApplicationUsers.FirstOrDefaultAsync(x => x.Id == authenticatedUserId && x.IsActive);
             if (currentUser == null || !await _context.BillingConfirmationRecipients.AnyAsync(x => x.UserId == currentUser.Id && x.IsSelected))
                 throw new InvalidOperationException("Akun tidak terdaftar sebagai penerima konfirmasi.");
-            if (currentUser.Id != authenticatedUserId)
-                throw new InvalidOperationException("Token konfirmasi bukan milik akun yang sedang login.");
+            if (token.UserId != authenticatedUserId)
+                throw new InvalidOperationException("Token konfirmasi bukan milik akun penerima yang sedang login.");
             if (token.AnomalyLogId.HasValue && anomalyLogId.HasValue && token.AnomalyLogId.Value != anomalyLogId.Value)
                 throw new InvalidOperationException("Token tidak terkait dengan anomaly yang dikirim.");
 
@@ -271,8 +285,134 @@ namespace KWHMonitoring.Services
             }
             freshToken.UsedAt = DateTime.UtcNow;
             freshToken.UsedBy = currentUser.Email;
+            var relatedTokens = await _context.BillingConfirmationTokens
+                .Where(x => x.AnomalyLogId == anomalyLogId && x.Id != freshToken.Id && !x.UsedAt.HasValue && !x.RevokedAt.HasValue)
+                .ToListAsync();
+            foreach (var relatedToken in relatedTokens)
+            {
+                relatedToken.RevokedAt = DateTime.UtcNow;
+            }
             await _context.SaveChangesAsync();
             return result;
+        }
+
+        public async Task<BillingConfirmationNotificationView> GetActiveConfirmationNotificationAsync(long anomalyLogId, int recipientUserId)
+        {
+            var anomaly = await _context.AnomalyLogs.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == anomalyLogId && x.AnomalyType == BillingAnomalyDetectionService.AnomalyType && !x.IsResolved);
+            if (anomaly == null) return null;
+
+            var rows = await _context.BillingNotificationOutbox.AsNoTracking()
+                .Where(x => x.NotificationType == "BILLING_CONFIRMATION"
+                    && x.Status != "CANCELLED"
+                    && x.Status != "FAILED")
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var payload = JsonConvert.DeserializeObject<JObject>(row.PayloadJson ?? "{}");
+                    var payloadAnomalyId = (long?)payload?["anomalyLogId"];
+                    var payloadRecipientUserId = (int?)payload?["recipientUserId"];
+                    if (payloadAnomalyId != anomalyLogId) continue;
+                    if (row.Channel != "WEB_MODAL" || payloadRecipientUserId != recipientUserId) continue;
+                    var url = (string)payload?["confirmationLink"];
+                    if (!string.IsNullOrWhiteSpace(url))
+                    {
+                        DateTime? expires = null;
+                        DateTime parsed;
+                        if (DateTime.TryParse((string)payload?["expiresAt"], out parsed)) expires = parsed;
+                        if (expires.HasValue && expires.Value <= DateTime.UtcNow) continue;
+                        if (!await IsConfirmationUrlForRecipientAsync(url, recipientUserId, anomalyLogId)) continue;
+                        return new BillingConfirmationNotificationView { AnomalyLogId = anomalyLogId, ConfirmationUrl = url, ExpiresAt = expires };
+                    }
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        public async Task<bool> IsSelectedRecipientAsync(int userId)
+        {
+            return await _context.BillingConfirmationRecipients
+                .AnyAsync(x => x.UserId == userId && x.IsSelected);
+        }
+
+        public async Task<BillingConfirmationNotificationView> EnsureModalConfirmationNotificationAsync(long anomalyLogId, int recipientUserId)
+        {
+            var recipient = await _context.ApplicationUsers.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == recipientUserId && x.IsActive);
+            if (recipient == null || !await IsSelectedRecipientAsync(recipientUserId)) return null;
+
+            var anomaly = await _context.AnomalyLogs.FirstOrDefaultAsync(x => x.Id == anomalyLogId
+                && !x.IsResolved
+                && x.AnomalyType == BillingAnomalyDetectionService.AnomalyType);
+            if (anomaly == null || !IsPeriodOverPeriodAnomaly(anomaly.BillingAnomalyType)) return null;
+
+            var profile = await _context.BillingTrendProfiles.FirstOrDefaultAsync(x => x.DeviceKey == anomaly.DeviceKey && x.Status == "ACTIVE");
+            if (profile == null)
+            {
+                profile = new BillingTrendProfile
+                {
+                    DeviceKey = anomaly.DeviceKey,
+                    AnchorBillingPeriod = anomaly.BillingPeriod ?? anomaly.DetectedTime.Date,
+                    AnchorAmount = anomaly.ActualBilling ?? anomaly.EstimatedBilling ?? 0m,
+                    BaselineVersion = 0,
+                    ValidConfirmationCount = 0,
+                    Status = "ACTIVE"
+                };
+                _context.BillingTrendProfiles.Add(profile);
+                await _context.SaveChangesAsync();
+            }
+
+            var confirmationUrl = await GetExistingConfirmationUrlAsync(anomalyLogId, recipientUserId);
+            if (string.IsNullOrWhiteSpace(confirmationUrl))
+            {
+                var rawToken = await CreateTokenAsync(profile.Id, anomalyLogId, recipientUserId, TimeSpan.FromDays(7));
+                confirmationUrl = BuildConfirmationUrl(rawToken);
+            }
+
+            var eventKey = anomalyLogId + ":" + recipientUserId + ":WEB_MODAL";
+            var payload = JsonConvert.SerializeObject(new
+            {
+                recipientUserId,
+                anomalyLogId,
+                confirmationLink = confirmationUrl,
+                expiresAt = DateTime.UtcNow.AddDays(7)
+            });
+            var row = await _context.BillingNotificationOutbox.FirstOrDefaultAsync(x => x.EventKey == eventKey);
+            if (row == null)
+            {
+                _context.BillingNotificationOutbox.Add(new BillingNotificationOutbox
+                {
+                    EventKey = eventKey,
+                    Channel = "WEB_MODAL",
+                    NotificationType = "BILLING_CONFIRMATION",
+                    PayloadJson = payload,
+                    Status = "SENT",
+                    SentAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                row.Channel = "WEB_MODAL";
+                row.NotificationType = "BILLING_CONFIRMATION";
+                row.PayloadJson = payload;
+                row.Status = "SENT";
+                row.SentAt = DateTime.UtcNow;
+                row.LastError = null;
+                row.UpdatedAt = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync();
+            return new BillingConfirmationNotificationView
+            {
+                AnomalyLogId = anomalyLogId,
+                ConfirmationUrl = confirmationUrl,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            };
         }
 
         public async Task<BillingConfirmationTokenResult> IssueTokenAsync(string deviceKey, long? anomalyLogId, TimeSpan lifetime)
@@ -306,15 +446,11 @@ namespace KWHMonitoring.Services
                 return;
             if (anomaly.IsResolved)
                 throw new InvalidOperationException("Anomaly sudah terkonfirmasi. Notifikasi ulang tidak diperbolehkan.");
-            if (!forceResend && await _context.BillingNotificationOutbox.AnyAsync(x =>
-                x.NotificationType == "BILLING_CONFIRMATION" && x.Channel == "EMAIL" &&
-                x.EventKey.StartsWith(anomaly.Id + ":")))
-                return;
             var recipients = await (from selection in _context.BillingConfirmationRecipients
                                     join user in _context.ApplicationUsers on selection.UserId equals user.Id
-                                    where selection.IsSelected && user.IsActive && user.EmailConfirmed
+                                    where selection.IsSelected && user.IsActive
                                     select user).ToListAsync();
-            if (recipients.Count == 0) throw new InvalidOperationException("Belum ada akun penerima email yang dipilih dan aktif.");
+            if (recipients.Count == 0) throw new InvalidOperationException("Belum ada akun penerima konfirmasi yang dipilih dan aktif.");
 
             var profile = await _context.BillingTrendProfiles.FirstOrDefaultAsync(x => x.DeviceKey == anomaly.DeviceKey && x.Status == "ACTIVE");
             if (profile == null)
@@ -346,21 +482,117 @@ namespace KWHMonitoring.Services
                 DayaVA = lokasi?.DayaVA ?? 0m,
                 Catatan = lokasi?.Catatan
             };
+            var expiresAt = DateTime.UtcNow.AddDays(7);
             foreach (var user in recipients)
             {
-                var rawToken = await CreateTokenAsync(profile.Id, anomaly.Id, user.Id, TimeSpan.FromDays(7));
-                var confirmationUrl = BuildConfirmationUrl(rawToken);
-                var message = _emailService.BuildBillingConfirmationEmail(confirmationUrl, anomaly.DeviceKey, anomaly.BillingPeriod, anomaly.EstimatedBilling, anomaly.ActualBilling, anomaly.PeriodDifference ?? anomaly.BillingDifference, anomaly.PeriodDifferencePercent ?? anomaly.BillingDifferencePercent, anomaly.PreviousBilling, anomaly.PreviousBillingPeriod, DateTime.UtcNow.AddDays(7), deviceInfo);
+                var confirmationUrl = forceResend
+                    ? null
+                    : await GetExistingConfirmationUrlAsync(anomaly.Id, user.Id);
+                if (string.IsNullOrWhiteSpace(confirmationUrl))
+                {
+                    var rawToken = await CreateTokenAsync(profile.Id, anomaly.Id, user.Id, TimeSpan.FromDays(7));
+                    confirmationUrl = BuildConfirmationUrl(rawToken);
+                }
+                var message = _emailService.BuildBillingConfirmationEmail(confirmationUrl, anomaly.DeviceKey, anomaly.BillingPeriod, anomaly.EstimatedBilling, anomaly.ActualBilling, anomaly.PeriodDifference ?? anomaly.BillingDifference, anomaly.PeriodDifferencePercent ?? anomaly.BillingDifferencePercent, anomaly.PreviousBilling, anomaly.PreviousBillingPeriod, expiresAt, deviceInfo);
                 var eventKey = forceResend
                     ? anomaly.Id + ":" + user.Id + ":RESEND:" + Guid.NewGuid().ToString("N")
                     : anomaly.Id + ":" + user.Id;
-                if (!await _context.BillingNotificationOutbox.AnyAsync(x => x.EventKey == eventKey && x.Channel == "EMAIL" && x.NotificationType == "BILLING_CONFIRMATION"))
-                    AddOutbox(eventKey, anomaly.Id, "EMAIL", user.Email, "Konfirmasi anomaly tagihan", message);
+                var modalEventKey = eventKey + ":WEB_MODAL";
+                var modalRow = await _context.BillingNotificationOutbox
+                    .FirstOrDefaultAsync(x => x.EventKey == modalEventKey
+                        && x.Channel == "WEB_MODAL"
+                        && x.NotificationType == "BILLING_CONFIRMATION");
+                var modalPayload = JsonConvert.SerializeObject(new
+                {
+                    recipientUserId = user.Id,
+                    anomalyLogId = anomaly.Id,
+                    confirmationLink = confirmationUrl,
+                    expiresAt
+                });
+                if (modalRow == null)
+                {
+                    _context.BillingNotificationOutbox.Add(new BillingNotificationOutbox
+                    {
+                        EventKey = modalEventKey,
+                        Channel = "WEB_MODAL",
+                        NotificationType = "BILLING_CONFIRMATION",
+                        PayloadJson = modalPayload,
+                        Status = "SENT",
+                        SentAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                else
+                {
+                    // Existing rows may have been created before recipient-scoped
+                    // tokens were introduced. Always synchronize the modal row
+                    // with the token/link for this exact selected recipient.
+                    modalRow.PayloadJson = modalPayload;
+                    modalRow.Status = "SENT";
+                    modalRow.SentAt = DateTime.UtcNow;
+                    modalRow.LastError = null;
+                    modalRow.UpdatedAt = DateTime.UtcNow;
+                }
+                if (user.EmailConfirmed && !string.IsNullOrWhiteSpace(user.Email)
+                    && !await _context.BillingNotificationOutbox.AnyAsync(x => x.EventKey == eventKey && x.Channel == "EMAIL" && x.NotificationType == "BILLING_CONFIRMATION"))
+                    AddOutbox(eventKey, anomaly.Id, "EMAIL", user.Email, "Konfirmasi anomaly tagihan", message, confirmationUrl, expiresAt);
                 if (!string.IsNullOrWhiteSpace(user.WhatsAppNumber))
                     if (!await _context.BillingNotificationOutbox.AnyAsync(x => x.EventKey == eventKey && x.Channel == "WHATSAPP" && x.NotificationType == "BILLING_CONFIRMATION"))
-                        AddOutbox(eventKey, anomaly.Id, "WHATSAPP", user.WhatsAppNumber, null, message);
+                        AddOutbox(eventKey, anomaly.Id, "WHATSAPP", user.WhatsAppNumber, null, message, confirmationUrl, expiresAt);
             }
             await _context.SaveChangesAsync();
+        }
+
+        private async Task<string> GetExistingConfirmationUrlAsync(long anomalyLogId, int recipientUserId)
+        {
+            var rows = await _context.BillingNotificationOutbox.AsNoTracking()
+                .Where(x => x.NotificationType == "BILLING_CONFIRMATION"
+                    && x.Status != "CANCELLED"
+                    && x.Status != "FAILED")
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var payload = JsonConvert.DeserializeObject<JObject>(row.PayloadJson ?? "{}");
+                    if ((long?)payload?["anomalyLogId"] != anomalyLogId) continue;
+                    if ((int?)payload?["recipientUserId"] != recipientUserId) continue;
+                    var url = (string)payload?["confirmationLink"];
+                    var expiresAt = (DateTime?)payload?["expiresAt"];
+                    if (!string.IsNullOrWhiteSpace(url)
+                        && (!expiresAt.HasValue || expiresAt.Value > DateTime.UtcNow)
+                        && await IsConfirmationUrlForRecipientAsync(url, recipientUserId, anomalyLogId))
+                        return url;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        private async Task<bool> IsConfirmationUrlForRecipientAsync(string url, int recipientUserId, long anomalyLogId)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+            var query = uri.Query ?? string.Empty;
+            var tokenMarker = "token=";
+            var tokenIndex = query.IndexOf(tokenMarker, StringComparison.OrdinalIgnoreCase);
+            if (tokenIndex < 0) return false;
+            var rawToken = query.Substring(tokenIndex + tokenMarker.Length);
+            var separatorIndex = rawToken.IndexOf('&');
+            if (separatorIndex >= 0) rawToken = rawToken.Substring(0, separatorIndex);
+            rawToken = Uri.UnescapeDataString(rawToken);
+            if (string.IsNullOrWhiteSpace(rawToken)) return false;
+
+            var token = await _context.BillingConfirmationTokens.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.TokenHash == Hash(rawToken)
+                    && x.Purpose == "BILLING_CONFIRMATION"
+                    && x.AnomalyLogId == anomalyLogId
+                    && x.UserId == recipientUserId
+                    && !x.UsedAt.HasValue
+                    && !x.RevokedAt.HasValue
+                    && x.ExpiresAt > DateTime.UtcNow);
+            return token != null;
         }
 
         public async Task<long?> EnsureDetectedAnomalyAsync(
@@ -483,11 +715,14 @@ namespace KWHMonitoring.Services
             if (anomaly == null || anomaly.IsResolved) throw new InvalidOperationException("Anomaly sudah terkonfirmasi atau tidak ditemukan.");
             if (!IsPeriodOverPeriodAnomaly(anomaly.BillingAnomalyType))
                 throw new InvalidOperationException("Anomaly estimasi dan aktual hanya merupakan catatan biasa dan tidak masuk konfirmasi trend.");
-            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(x => x.Id == token.UserId && x.IsActive && x.EmailConfirmed);
+            // The token is shared by all selected confirmation recipients.
+            // The authenticated user must still be active and selected, but
+            // does not have to be the first recipient that caused token issue.
+            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(x => x.Id == authenticatedUserId && x.IsActive);
             if (user == null || !await _context.BillingConfirmationRecipients.AnyAsync(x => x.UserId == user.Id && x.IsSelected))
                 throw new InvalidOperationException("Akun penerima tidak lagi aktif atau tidak dipilih.");
-            if (user.Id != authenticatedUserId)
-                throw new InvalidOperationException("Link konfirmasi bukan milik akun yang sedang login.");
+            if (token.UserId != authenticatedUserId)
+                throw new InvalidOperationException("Token konfirmasi bukan milik akun penerima yang sedang login.");
 
             var executionStrategy = _context.Database.CreateExecutionStrategy();
             await executionStrategy.ExecuteAsync(async () =>
@@ -579,14 +814,14 @@ namespace KWHMonitoring.Services
             return Task.FromResult(raw);
         }
 
-        private void AddOutbox(string eventKey, long anomalyLogId, string channel, string recipient, string subject, string message)
+        private void AddOutbox(string eventKey, long anomalyLogId, string channel, string recipient, string subject, string message, string confirmationLink, DateTime expiresAt)
         {
             _context.BillingNotificationOutbox.Add(new BillingNotificationOutbox
             {
                 EventKey = eventKey,
                 Channel = channel,
                 NotificationType = "BILLING_CONFIRMATION",
-                PayloadJson = JsonConvert.SerializeObject(new { recipient, subject, message, anomalyLogId }),
+                PayloadJson = JsonConvert.SerializeObject(new { recipient, subject, message, anomalyLogId, confirmationLink, expiresAt }),
                 Status = "PENDING"
             });
         }
