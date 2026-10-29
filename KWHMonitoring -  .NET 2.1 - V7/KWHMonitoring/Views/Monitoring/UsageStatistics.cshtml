@@ -456,10 +456,10 @@
             </div>
         </div>
         <div>
-            <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya|Perkiraan biaya listrik dari konsumsi yang sudah terpakai.|Rumus: Estimasi Biaya = kWh × Tarif (Rp/kWh)|Tarif bawaan sebesar Rp1.500/kWh dan dapat diatur untuk setiap perangkat pada halaman Pengaturan.">
+            <div class="stat-card bg-warning h-100" data-card-help="Estimasi Biaya|Total biaya listrik kumulatif dari tanggal 1 sampai tanggal yang dipilih.|Rumus: Estimasi Biaya = total kWh kumulatif × tarif device (Rp/kWh)|Jika tanggal yang dipilih adalah hari ini, pemakaian hari ini dibaca dari data per jam agar tidak terjadi double count.|Tarif fallback sebesar Rp1.444,70/kWh dan dapat diatur untuk setiap perangkat pada halaman Pengaturan.">
                 <div class="stat-label" id="usageCostLabel">Estimasi Biaya</div>
                 <div class="stat-value" id="usageCost">Rp 0</div>
-                <small>Tarif: <span id="tariffDisplay">Rp 1.500</span>/kWh</small>
+                <small>Tarif: <span id="tariffDisplay">Rp 1.444,70</span>/kWh</small>
                 <i class="fas fa-money-bill-wave stat-icon"></i>
             </div>
         </div>
@@ -1113,6 +1113,8 @@
         function renderUsageChart(key, canvas, config) {
             config.options = config.options || {};
             config.options.animation = false;
+            config.options.plugins = config.options.plugins || {};
+            config.options.plugins.tooltip = usageTooltipOptions(config.options.plugins.tooltip || {});
             if (window.Chart && Chart.defaults) Chart.defaults.animation = false;
             var targetCanvas = canvas && canvas.canvas ? canvas.canvas : canvas;
             if (charts[key] && charts[key].canvas !== targetCanvas) {
@@ -1141,6 +1143,64 @@
             charts[key] = new Chart(canvas, config);
             return charts[key];
         }
+
+        // Tampilan tooltip dipusatkan agar seluruh grafik Usage Statistics
+        // memiliki jarak, font, dan pemenggalan baris yang konsisten.
+        function usageTooltipOptions(custom) {
+            custom = custom || {};
+            var dark = typeof window.isDarkMode === 'function'
+                ? window.isDarkMode()
+                : document.documentElement.getAttribute('data-theme') === 'dark';
+            var defaults = {
+                enabled: true,
+                backgroundColor: dark ? 'rgba(18, 25, 38, 0.97)' : 'rgba(255, 255, 255, 0.98)',
+                titleColor: dark ? '#f8fafc' : '#172033',
+                bodyColor: dark ? '#e2e8f0' : '#334155',
+                footerColor: dark ? '#cbd5e1' : '#64748b',
+                borderColor: dark ? 'rgba(148, 163, 184, 0.38)' : 'rgba(15, 23, 42, 0.16)',
+                borderWidth: 1,
+                padding: { top: 10, right: 12, bottom: 10, left: 12 },
+                boxPadding: 5,
+                bodySpacing: 4,
+                titleSpacing: 4,
+                titleMarginBottom: 7,
+                displayColors: true,
+                caretPadding: 6,
+                cornerRadius: 7,
+                caretSize: 5,
+                maxWidth: 280,
+                bodyFont: { size: 10, lineHeight: 1.45 },
+                titleFont: { size: 10, weight: '700' },
+                footerFont: { size: 9, weight: '500' },
+                callbacks: {}
+            };
+            var result = Object.assign({}, defaults, custom);
+            // Warna tema harus selalu mengikuti tema aktif, meskipun tooltip
+            // dibuat sebelum pengguna mengganti tema halaman.
+            result.backgroundColor = defaults.backgroundColor;
+            result.titleColor = defaults.titleColor;
+            result.bodyColor = defaults.bodyColor;
+            result.footerColor = defaults.footerColor;
+            result.borderColor = defaults.borderColor;
+            result.borderWidth = defaults.borderWidth;
+            result.callbacks = Object.assign({
+                title: function(items) { return items && items.length ? items[0].label : ''; }
+            }, custom.callbacks || {});
+            return result;
+        }
+
+        function refreshUsageTooltipTheme() {
+            Object.keys(charts).forEach(function(key) {
+                var chart = charts[key];
+                if (!chart || !chart.options || !chart.options.plugins || !chart.options.plugins.tooltip) return;
+                chart.options.plugins.tooltip = usageTooltipOptions(chart.options.plugins.tooltip);
+                chart.update('none');
+            });
+        }
+
+        window.addEventListener('kwh-theme-changed', function() {
+            setTimeout(refreshUsageTooltipTheme, 100);
+        });
 
         // ============================================
         // DEVICE FILTER LOGIC
@@ -2135,9 +2195,6 @@
                 ? Number(singleProjection.projectedPeriodCost)
                 : (singleProjection.projectedCost != null ? Number(singleProjection.projectedCost) : 0);
             if (!isFinite(devEstimatedCost) || devEstimatedCost < 0) devEstimatedCost = 0;
-            if (devEstimatedCost === 0 && data.month) {
-                devEstimatedCost = Math.round((data.month.total || 0) * devTariff);
-            }
             return {
                 wbpLwbp: data.wbpLwbp || {},
                 waste: data.waste || {},
@@ -2355,6 +2412,49 @@
                 return { y: y, x: x };
             }
 
+            // Tooltip grafik energi memakai tarif efektif yang sama dengan kartu
+            // estimasi: kWh titik grafik dikalikan tarif device/agregat aktif.
+            // Dataset garis rata-rata tidak diberi estimasi biaya agar tidak
+            // terlihat sebagai konsumsi tambahan.
+            function energyTooltipOptions(series, granularity, effectiveTariff, tariffLabel, wbpInfo) {
+                var cumulativeLabel = granularity === 'hourly'
+                    ? 'Akumulasi hari sampai jam ini'
+                    : (granularity === 'daily' ? 'Akumulasi bulan sampai hari ini' : 'Akumulasi tahun sampai bulan ini');
+                return {
+                    callbacks: {
+                        title: function(items) {
+                            return items && items.length ? 'Periode  ·  ' + items[0].label : '';
+                        },
+                        label: function(ctx) {
+                            if (!ctx || ctx.datasetIndex !== 0) {
+                                // Garis rata-rata hanya referensi visual, bukan konsumsi.
+                                return null;
+                            }
+                            var kwh = Number(ctx.parsed && ctx.parsed.y != null ? ctx.parsed.y : ctx.raw) || 0;
+                            var index = ctx.dataIndex || 0;
+                            var cumulativeKwh = series.slice(0, index + 1).reduce(function(sum, item) {
+                                return sum + (Number(item.energy) || 0);
+                            }, 0);
+                            return [
+                                'Konsumsi     ' + formatDecimal(kwh) + ' kWh',
+                                'Biaya titik  Rp ' + formatInteger(Math.round(kwh * effectiveTariff)),
+                                'Akumulasi    ' + formatDecimal(cumulativeKwh) + ' kWh',
+                                'Biaya total  Rp ' + formatInteger(Math.round(cumulativeKwh * effectiveTariff))
+                            ];
+                        },
+                        afterBody: function() {
+                            var lines = ['Tarif        Rp ' + formatDecimal(effectiveTariff) + '/kWh'];
+                            lines.push('Mode         ' + tariffLabel);
+                            if (wbpInfo && wbpInfo.configured) {
+                                lines.push('WBP          Rp ' + formatDecimal(Number(wbpInfo.tariffWBP) || 0) + '/kWh');
+                                lines.push('LWBP         Rp ' + formatDecimal(Number(wbpInfo.tariffLWBP) || 0) + '/kWh');
+                            }
+                            return lines;
+                        }
+                    }
+                };
+            }
+
             // Hourly chart
             var hourlyCtx = document.getElementById('hourlyChart');
             if (hourlyCtx) {
@@ -2372,6 +2472,12 @@
                 });
 
                 var avgHourly = calcAvg(hourlyData);
+                var hourlyTariff = Number(data.tariffPerKWh) > 0
+                    ? Number(data.tariffPerKWh)
+                    : (lastFinancialData && Number(lastFinancialData.avgTariffPerKWh) > 0 ? Number(lastFinancialData.avgTariffPerKWh) : 1444.70);
+                var hourlyTariffLabel = Number(data.tariffPerKWh) > 0
+                    ? 'tarif device'
+                    : (lastFinancialData ? '' : '');
 
                 charts.hourly = renderUsageChart('hourly', hourlyCtx, {
                     type: 'bar',
@@ -2399,6 +2505,9 @@
                     },
                     options: {
                         ...commonOptions,
+                        plugins: {
+                            tooltip: energyTooltipOptions(hourlyData, 'hourly', hourlyTariff, hourlyTariffLabel, data.wbpLwbp || (lastFinancialData && lastFinancialData.wbpLwbp))
+                        },
                         scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
@@ -2424,6 +2533,12 @@
                 });
 
                 var avgDaily = calcAvg(dailyData);
+                var dailyTariff = Number(data.tariffPerKWh) > 0
+                    ? Number(data.tariffPerKWh)
+                    : (lastFinancialData && Number(lastFinancialData.avgTariffPerKWh) > 0 ? Number(lastFinancialData.avgTariffPerKWh) : 1444.70);
+                var dailyTariffLabel = Number(data.tariffPerKWh) > 0
+                    ? 'tarif device'
+                    : (lastFinancialData ? '' : '');
 
                 charts.daily = renderUsageChart('daily', dailyCtx, {
                     type: 'bar',
@@ -2451,6 +2566,9 @@
                     },
                     options: {
                         ...commonOptions,
+                        plugins: {
+                            tooltip: energyTooltipOptions(dailyData, 'daily', dailyTariff, dailyTariffLabel, data.wbpLwbp || (lastFinancialData && lastFinancialData.wbpLwbp))
+                        },
                         scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
@@ -2476,6 +2594,12 @@
                 });
 
                 var avgMonthly = calcAvg(monthlyData);
+                var monthlyTariff = Number(data.tariffPerKWh) > 0
+                    ? Number(data.tariffPerKWh)
+                    : (lastFinancialData && Number(lastFinancialData.avgTariffPerKWh) > 0 ? Number(lastFinancialData.avgTariffPerKWh) : 1444.70);
+                var monthlyTariffLabel = Number(data.tariffPerKWh) > 0
+                    ? 'tarif device'
+                    : (lastFinancialData ? '' : '');
 
                 charts.monthly = renderUsageChart('monthly', monthlyCtx, {
                     type: 'bar',
@@ -2503,6 +2627,9 @@
                     },
                     options: {
                         ...commonOptions,
+                        plugins: {
+                            tooltip: energyTooltipOptions(monthlyData, 'monthly', monthlyTariff, monthlyTariffLabel, data.wbpLwbp || (lastFinancialData && lastFinancialData.wbpLwbp))
+                        },
                         scales: themeScales({
                             y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
                             x: { ticks: { font: { size: 9 } } }
@@ -2591,16 +2718,13 @@
                 tariffSum += devTariff;
                 tariffCount++;
 
-                // Use the projected billing cost for the selected period.
-                // budget.actualCost is actual consumption cost, not an estimate.
+            // Use the cumulative billing cost returned by the server for the
+            // selected calendar dates. This is not an end-of-month projection.
                 var projection = d.billProjection || {};
                 var devEstimatedCost = projection.projectedPeriodCost != null
                     ? Number(projection.projectedPeriodCost)
                     : (projection.projectedCost != null ? Number(projection.projectedCost) : 0);
                 if (!isFinite(devEstimatedCost) || devEstimatedCost < 0) devEstimatedCost = 0;
-                if (devEstimatedCost === 0 && deviceMonthKWh > 0) {
-                    devEstimatedCost = Math.round(deviceMonthKWh * devTariff);
-                }
                 totalEstimatedCost += devEstimatedCost;
 
                 // WBP/LWBP
@@ -2938,7 +3062,10 @@
                             callbacks: {
                                 label: function(ctx) {
                                     var cost = ctx.dataIndex === 0 ? wbpCost : (ctx.dataIndex === 1 ? lwbpCost : (ti.flatCost || 0));
-                                    return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh (Rp ' + formatInteger(cost) + ')';
+                                    return [
+                                        ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh',
+                                        'Biaya: Rp ' + formatInteger(cost)
+                                    ];
                                 }
                             }
                         }
@@ -3032,7 +3159,10 @@
                         tooltip: {
                             callbacks: {
                                 label: function(ctx) {
-                                    return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh';
+                                    return [
+                                        ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh',
+                                        'Porsi: ' + (budgetKwh > 0 ? formatDecimal((ctx.parsed / budgetKwh) * 100) : '0') + '%'
+                                    ];
                                 }
                             }
                         }
@@ -3258,7 +3388,7 @@
                                 label: function(ctx) {
                                     var val = ctx.parsed.y;
                                     if (val === null || val === undefined) return null;
-                                    return ctx.dataset.label + ': ' + formatDecimal(val) + ' kWh';
+                                    return [ctx.dataset.label, formatDecimal(val) + ' kWh'];
                                 }
                             }
                         }
@@ -3431,7 +3561,7 @@
                                 label: function(ctx) {
                                     var val = ctx.parsed.y;
                                     if (val === null || val === undefined) return null;
-                                    return ctx.dataset.label + ': ' + formatDecimal(val) + ' kWh';
+                                    return [ctx.dataset.label, formatDecimal(val) + ' kWh'];
                                 }
                             }
                         }
@@ -3524,7 +3654,7 @@
                 type: 'line', data: { labels: dayLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return [ctx.dataset.label, 'Rp ' + formatInteger(Math.round(v))]; } } } },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });
@@ -3592,7 +3722,7 @@
                 type: 'bar', data: { labels: monthLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return [ctx.dataset.label, 'Rp ' + formatInteger(Math.round(v))]; } } } },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });

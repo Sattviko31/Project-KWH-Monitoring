@@ -1416,6 +1416,64 @@
                 plugins: { legend: { display: false } }
             };
 
+            function detailUsageTooltipOptions(series, granularity, dataSet) {
+                var info = detailTariffInfo(dataSet || {});
+                var cumulativeLabel = granularity === 'hourly'
+                    ? 'Hari berjalan'
+                    : (granularity === 'daily' ? 'Bulan berjalan' : 'Tahun berjalan');
+                var dark = typeof window.isDarkMode === 'function'
+                    ? window.isDarkMode()
+                    : document.documentElement.getAttribute('data-theme') === 'dark';
+                var cumulative = 0;
+
+                return {
+                    backgroundColor: dark ? 'rgba(18, 25, 38, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+                    titleColor: dark ? '#f8fafc' : '#172033',
+                    bodyColor: dark ? '#e2e8f0' : '#334155',
+                    footerColor: dark ? '#cbd5e1' : '#64748b',
+                    borderColor: dark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(15, 23, 42, 0.16)',
+                    borderWidth: 1,
+                    cornerRadius: 7,
+                    padding: { top: 10, right: 12, bottom: 10, left: 12 },
+                    boxPadding: 5,
+                    bodySpacing: 4,
+                    titleMarginBottom: 7,
+                    displayColors: true,
+                    maxWidth: 285,
+                    bodyFont: { size: 10, lineHeight: 1.45 },
+                    titleFont: { size: 10, weight: '700' },
+                    callbacks: {
+                        title: function(items) {
+                            return items && items.length ? 'Periode  ·  ' + items[0].label : '';
+                        },
+                        label: function(ctx) {
+                            var value = Number(ctx.parsed && ctx.parsed.y);
+                            if (!isFinite(value)) return null;
+                            cumulative = series.slice(0, ctx.dataIndex + 1).reduce(function(sum, item) {
+                                return sum + (Number(item.energy) || 0);
+                            }, 0);
+                            return [
+                                'Konsumsi     ' + formatDecimal(value) + ' kWh',
+                                'Biaya titik  Rp ' + formatInteger(Math.round(value * info.tariff)),
+                                'Akumulasi    ' + formatDecimal(cumulative) + ' kWh',
+                                'Biaya total  Rp ' + formatInteger(Math.round(cumulative * info.tariff))
+                            ];
+                        },
+                        afterBody: function() {
+                            var lines = [
+                                cumulativeLabel + ' · tarif ' + info.label,
+                                'Tarif        Rp ' + formatInteger(Math.round(info.tariff)) + '/kWh'
+                            ];
+                            if (info.wbp && info.wbp.configured) {
+                                lines.push('WBP          Rp ' + formatInteger(Math.round(Number(info.wbp.tariffWBP) || 0)) + '/kWh');
+                                lines.push('LWBP         Rp ' + formatInteger(Math.round(Number(info.wbp.tariffLWBP) || 0)) + '/kWh');
+                            }
+                            return lines;
+                        }
+                    }
+                };
+            }
+
             var today = new Date();
             var isToday = deviceUsageDate.toDateString() === today.toDateString();
 
@@ -1447,6 +1505,7 @@
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
+                        plugins: Object.assign({}, commonOptions.plugins, { tooltip: detailUsageTooltipOptions(sortedHourly, 'hourly', data) }),
                         scales: {
                             y: {
                                 beginAtZero: true,
@@ -1487,6 +1546,7 @@
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
+                        plugins: Object.assign({}, commonOptions.plugins, { tooltip: detailUsageTooltipOptions(sortedDaily, 'daily', data) }),
                         scales: {
                             y: {
                                 beginAtZero: true,
@@ -1527,6 +1587,7 @@
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
+                        plugins: Object.assign({}, commonOptions.plugins, { tooltip: detailUsageTooltipOptions(sortedMonthly, 'monthly', data) }),
                         scales: {
                             y: {
                                 beginAtZero: true,
@@ -1599,6 +1660,107 @@
             renderAllDeviceReports();
         }
 
+        // Tooltip finansial detail dibuat singkat dan konsisten dengan Usage Statistics.
+        // Dataset proyeksi/budget hanya menampilkan nilainya sendiri, bukan konsumsi aktual.
+        function detailTariffInfo(d) {
+            var wbp = (d && d.wbpLwbp) || {};
+            var tariff = Number(d && d.tariffPerKWh) || 1500;
+            var label = wbp.configured ? 'WBP/LWBP' : 'tarif tetap';
+            return { tariff: tariff, label: label, wbp: wbp };
+        }
+
+        function detailTooltipLines(info) {
+            var lines = ['Tarif        Rp ' + formatInteger(Math.round(info.tariff)) + '/kWh', 'Mode         ' + info.label];
+            if (info.wbp && info.wbp.configured) {
+                lines.push('WBP          Rp ' + formatInteger(Math.round(Number(info.wbp.tariffWBP) || 0)) + '/kWh');
+                lines.push('LWBP         Rp ' + formatInteger(Math.round(Number(info.wbp.tariffLWBP) || 0)) + '/kWh');
+            }
+            return lines;
+        }
+
+        function detailVisualTooltipOptions(callbacks) {
+            var dark = typeof window.isDarkMode === 'function'
+                ? window.isDarkMode()
+                : document.documentElement.getAttribute('data-theme') === 'dark';
+            return {
+                backgroundColor: dark ? 'rgba(18, 25, 38, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+                titleColor: dark ? '#f8fafc' : '#172033',
+                bodyColor: dark ? '#e2e8f0' : '#334155',
+                footerColor: dark ? '#cbd5e1' : '#64748b',
+                borderColor: dark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(15, 23, 42, 0.16)',
+                borderWidth: 1,
+                cornerRadius: 7,
+                padding: { top: 10, right: 12, bottom: 10, left: 12 },
+                boxPadding: 5,
+                bodySpacing: 4,
+                titleMarginBottom: 7,
+                displayColors: true,
+                maxWidth: 285,
+                bodyFont: { size: 10, lineHeight: 1.45 },
+                titleFont: { size: 10, weight: '700' },
+                callbacks: callbacks || {}
+            };
+        }
+
+        window.addEventListener('kwh-theme-changed', function() {
+            setTimeout(function() {
+                Object.keys(deviceUsageCharts).forEach(function(key) {
+                    var chart = deviceUsageCharts[key];
+                    if (!chart || !chart.options || !chart.options.plugins) return;
+                    var tooltip = chart.options.plugins.tooltip;
+                    if (!tooltip) return;
+                    var callbacks = tooltip.callbacks || {};
+                    chart.options.plugins.tooltip = detailVisualTooltipOptions(callbacks);
+                    chart.update('none');
+                });
+            }, 100);
+        });
+
+        function detailEnergyTooltipOptions(values, cumulativeValues, d, cumulativeLabel) {
+            var info = detailTariffInfo(d);
+            return {
+                callbacks: {
+                    title: function(items) { return items && items.length ? items[0].label : ''; },
+                    label: function(ctx) {
+                        var value = Number(ctx.parsed && ctx.parsed.y);
+                        if (!isFinite(value)) return null;
+                        var lines = [ctx.dataset.label + ': ' + formatDecimal(value) + ' kWh'];
+                        if (ctx.datasetIndex === 0) {
+                            lines.push('Biaya: Rp ' + formatInteger(Math.round(value * info.tariff)));
+                            if (cumulativeValues && cumulativeValues[ctx.dataIndex] != null) {
+                                var cumulative = Number(cumulativeValues[ctx.dataIndex]) || 0;
+                                lines.push(cumulativeLabel + ': ' + formatDecimal(cumulative) + ' kWh');
+                                lines.push('Biaya kumulatif: Rp ' + formatInteger(Math.round(cumulative * info.tariff)));
+                            }
+                        }
+                        return lines;
+                    },
+                    afterBody: function() { return detailTooltipLines(info); }
+                }
+            };
+        }
+
+        function detailCostTooltipOptions(kwhValues, d, cumulativeLabel) {
+            var info = detailTariffInfo(d);
+            return {
+                callbacks: {
+                    title: function(items) { return items && items.length ? items[0].label : ''; },
+                    label: function(ctx) {
+                        var value = Number(ctx.parsed && ctx.parsed.y);
+                        if (!isFinite(value)) return null;
+                        var lines = [ctx.dataset.label + ': Rp ' + formatInteger(Math.round(value))];
+                        var kwh = kwhValues && kwhValues[ctx.dataIndex];
+                        if (ctx.datasetIndex === 0 && kwh != null) {
+                            lines.push('kWh: ' + formatDecimal(Number(kwh) || 0));
+                            lines.push('Biaya titik: Rp ' + formatInteger(Math.round((Number(kwh) || 0) * info.tariff)));
+                        }
+                        return lines;
+                    },
+                    afterBody: function() { return detailTooltipLines(info); }
+                }
+            };
+        }
+
         // --- WBP/LWBP Doughnut Chart ---
         function updateDeviceWbpLwbpChart(wbpLwbp) {
             var $canvas = $('#deviceWbpLwbpChart');
@@ -1668,7 +1830,22 @@
                             line1: formatDecimal(total) + ' kWh', line2: 'WBP ' + wbpPct + '% / LWBP ' + lwbpPct + '%', line3: 'Rp ' + formatNumber(totalCost),
                             color1: '#333', color2: '#888', color3: '#aaa'
                         },
-                        tooltip: { callbacks: { label: function(ctx) { var cost = ctx.dataIndex === 0 ? wbpCost : lwbpCost; return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh (Rp ' + formatNumber(cost) + ')'; } } }
+                        tooltip: detailVisualTooltipOptions({
+                            title: function(items) { return items && items.length ? 'Komponen  ·  ' + items[0].label : ''; },
+                            label: function(ctx) {
+                                var cost = ctx.dataIndex === 0 ? wbpCost : lwbpCost;
+                                return [
+                                    ctx.label + '         ' + formatDecimal(ctx.parsed) + ' kWh',
+                                    'Biaya        Rp ' + formatNumber(cost)
+                                ];
+                            },
+                            afterBody: function() {
+                                return [
+                                    'Tarif WBP     Rp ' + formatNumber(wbpTariff) + '/kWh',
+                                    'Tarif LWBP    Rp ' + formatNumber(lwbpTariff) + '/kWh'
+                                ];
+                            }
+                        })
                     }
                 }
             });
@@ -1748,7 +1925,18 @@
                             line1: pct + '%', line2: isOver ? 'Melebihi Anggaran' : 'terpakai', line3: isOver ? 'Lebih ' + (pct - 100) + '%' : 'Sisa ' + (100 - pct) + '%',
                             color1: isOver ? '#dc3545' : (pct > 80 ? '#856404' : '#198754'), color2: '#888', color3: isOver ? '#dc3545' : '#aaa'
                         },
-                        tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + formatDecimal(ctx.parsed) + ' kWh'; } } }
+                        tooltip: detailVisualTooltipOptions({
+                            title: function(items) { return items && items.length ? 'Anggaran  ·  ' + items[0].label : ''; },
+                            label: function(ctx) {
+                                return [
+                                    ctx.label + '         ' + formatDecimal(ctx.parsed) + ' kWh',
+                                    'Porsi        ' + (budgetKwh > 0 ? formatDecimal((ctx.parsed / budgetKwh) * 100) : '0') + '%'
+                                ];
+                            },
+                            afterBody: function() {
+                                return ['Anggaran     ' + formatDecimal(budgetKwh) + ' kWh'];
+                            }
+                        })
                     }
                 }
             });
@@ -1862,7 +2050,7 @@
                 type: 'bar', data: { labels: labels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': ' + formatDecimal(v) + ' kWh'; } } } },
+                        tooltip: detailEnergyTooltipOptions(actualDaily, actualCum, d, 'Akumulasi bulan'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return formatDecimal(v); } } } }
                 }
             });
@@ -1917,7 +2105,7 @@
                 type: 'bar', data: { labels: monthLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': ' + formatDecimal(v) + ' kWh'; } } } },
+                        tooltip: detailEnergyTooltipOptions(actualMonthly, actualCum, d, 'Akumulasi tahun'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return formatDecimal(v); } } } }
                 }
             });
@@ -1984,7 +2172,7 @@
                 type: 'line', data: { labels: dayLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                        tooltip: detailCostTooltipOptions(actualDaily, d, 'Akumulasi bulan'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });
@@ -2036,7 +2224,7 @@
                 type: 'bar', data: { labels: monthLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null || v === undefined) return null; return ctx.dataset.label + ': Rp ' + formatInteger(Math.round(v)); } } } },
+                        tooltip: detailCostTooltipOptions(actualMonthly, d, 'Akumulasi tahun'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });

@@ -815,6 +815,7 @@ namespace KWHMonitoring.Controllers
 
                 // Real-time kWh if viewing today
                 var isToday = startDate.Date == serverToday;
+                var isFuture = startDate.Date > serverToday;
                 decimal realtimeKWh = 0;
                 int secondsToNextHour = 0;
                 string currentHourLabel = "";
@@ -1115,6 +1116,11 @@ namespace KWHMonitoring.Controllers
                 var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
                 var monthEnd = monthStart.AddMonths(1);
                 var isToday = startDate.Date == serverToday;
+                var isFuture = startDate.Date > serverToday;
+                var isFutureSameMonth = isFuture
+                    && startDate.Year == serverToday.Year
+                    && startDate.Month == serverToday.Month;
+                var calculationDate = isFutureSameMonth ? serverToday : startDate;
                 var settingsQueryTimer = Stopwatch.StartNew();
                 var settings = singleDeviceKey == null
                     ? await _deviceSettingsService.GetAllEffectiveAsync()
@@ -1145,6 +1151,7 @@ namespace KWHMonitoring.Controllers
                 {
                     var cacheIdentity = string.Join("|", new[]
                     {
+                        "hourly-future-rule-v2",
                         startDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
                         string.Join(",", deviceKeys),
                         energyVersionToken,
@@ -1166,8 +1173,11 @@ namespace KWHMonitoring.Controllers
 
                 // Each query returns grouped, narrow projections. Query count stays bounded as
                 // device count grows; the browser no longer starts one HTTP request per device.
+                // A future date in the current month must be calculated from daily
+                // aggregates only. Do not substitute today's hourly data here:
+                // otherwise a future-day filter incorrectly shows today's hourly chart.
                 var hourlyQuery = _context.HourlyEnergy.AsNoTracking()
-                    .Where(x => x.Hour >= startDate && x.Hour < startDate.AddDays(1));
+                    .Where(x => !isFutureSameMonth && x.Hour >= calculationDate && x.Hour < calculationDate.AddDays(1));
                 if (singleDeviceKey != null) hourlyQuery = hourlyQuery.Where(x => x.DeviceKey == singleDeviceKey);
                 var hourlyQueryTimer = Stopwatch.StartNew();
                 var hourlyRecords = await hourlyQuery
@@ -1346,25 +1356,24 @@ namespace KWHMonitoring.Controllers
                     var hourlyKwhByHour = hourlyData.Select(x => x.energy).ToArray();
                     var wbp = CalculateWbpLwbp(hourlyKwhByHour, deviceSettings);
                     var waste = CalculateWaste(hourlyKwhByHour, deviceSettings);
-                    var billingKWh = deviceBillingRows
-                        .Where(x => x.Date >= billingPeriod.Start.Date && x.Date < billingPeriod.End.Date)
-                        .Sum(x => x.EnergyKWh);
-                    if (isToday && serverToday >= billingPeriod.Start.Date && serverToday < billingPeriod.End.Date)
+                    // Kartu estimasi memakai konsumsi kumulatif bulan kalender:
+                    // tanggal 1 sampai tanggal filter, inklusif. Untuk hari ini,
+                    // DailyEnergy hari ini digantikan oleh HourlyEnergy agar tidak double count.
+                    var billingKWh = isFuture && !isFutureSameMonth
+                        ? 0m
+                        : dailyMap
+                            .Where(x => x.Key <= calculationDate.Day)
+                            .Sum(x => x.Value);
+                    if (isToday)
                     {
                         var currentDayDaily = deviceBillingRows.FirstOrDefault(x => x.Date.Date == serverToday);
                         billingKWh -= currentDayDaily == null ? 0m : currentDayDaily.EnergyKWh;
                         billingKWh += hourlyMap.Values.Sum();
                     }
                     billingKWh = Math.Round(Math.Max(0m, billingKWh), 2);
-                    var elapsedDays = billingPeriod.IsDeviceCutoff
-                        ? (isToday ? billingPeriod.ElapsedDays : billingPeriod.PeriodDays)
-                        : (isToday ? serverNow.Day : billingPeriod.PeriodDays);
+                    var elapsedDays = isFuture && !isFutureSameMonth ? 0 : calculationDate.Day;
                     var averageKWhPerDay = elapsedDays > 0 ? Math.Round(billingKWh / elapsedDays, 2) : 0m;
-                    var projectedPeriodKWh = !isToday
-                        ? billingKWh
-                        : (elapsedDays > 0
-                            ? Math.Round(billingKWh / elapsedDays * billingPeriod.PeriodDays, 2)
-                            : billingKWh);
+                    var projectedPeriodKWh = billingKWh;
                     var projectedPeriodCost = Math.Round(projectedPeriodKWh * tariff, 0);
                     var budgetKWh = deviceSettings.BudgetKWh;
                     var budgetVariance = budgetKWh > 0 ? Math.Round(billingKWh - budgetKWh, 2) : 0m;
@@ -1377,7 +1386,7 @@ namespace KWHMonitoring.Controllers
                     var momChangePercent = lastMonthKWh > 0 ? Math.Round((monthKWh - lastMonthKWh) / lastMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
                     var yoyChange = Math.Round(monthKWh - lastYearSameMonthKWh, 2);
                     var yoyChangePercent = lastYearSameMonthKWh > 0 ? Math.Round((monthKWh - lastYearSameMonthKWh) / lastYearSameMonthKWh * 100, 1) : (monthKWh > 0 ? 100m : 0m);
-                    var dayOfMonth = isToday ? serverNow.Day : billingPeriod.PeriodDays;
+                    var dayOfMonth = isFuture && !isFutureSameMonth ? 0 : calculationDate.Day;
                     var projectedMonthKWh = projectedPeriodKWh;
                     var projectedCost = projectedPeriodCost;
                     var deviceAnomalies = anomaliesByDevice.ContainsKey(deviceKey) ? anomaliesByDevice[deviceKey] : new List<UsageStatisticsBatchAnomaly>();
@@ -2604,11 +2613,21 @@ namespace KWHMonitoring.Controllers
                 var dayEnd = startDate.AddDays(1);
                 var monthStart = new DateTime(startDate.Year, startDate.Month, 1);
                 var monthEnd = monthStart.AddMonths(1);
+                var isFutureDevice = startDate.Date > serverToday.Date;
+                var isFutureSameMonthDevice = isFutureDevice
+                    && startDate.Year == serverToday.Year
+                    && startDate.Month == serverToday.Month;
+                var calculationDateDevice = isFutureSameMonthDevice ? serverToday : startDate;
 
                 // Hourly
+                // A future date in the current month has no hourly calculation yet.
+                // Keep its hourly chart empty instead of substituting serverToday.
                 var hourlyRows = await _context.HourlyEnergy
                     .AsNoTracking()
-                    .Where(x => x.DeviceKey == deviceKey && x.Hour >= dayStart && x.Hour < dayEnd)
+                    .Where(x => !isFutureSameMonthDevice
+                        && x.DeviceKey == deviceKey
+                        && x.Hour >= calculationDateDevice
+                        && x.Hour < calculationDateDevice.AddDays(1))
                     .Select(x => new { x.Hour, x.EnergyKWh, x.CalculatedAt })
                     .ToListAsync();
                 var hourlyRecords = hourlyRows.ToDictionary(x => x.Hour.Hour, x => x.EnergyKWh);
@@ -2788,19 +2807,21 @@ namespace KWHMonitoring.Controllers
 
                 // Bill projection: calendar month by default, or the explicitly configured
                 // per-device cutoff period.
-                var billingAsOf = isTodayDevice ? serverNow : startDate;
-                var dayOfMonth = isTodayDevice ? serverNow.Day : DateTime.DaysInMonth(startDate.Year, startDate.Month);
+                var billingAsOf = isTodayDevice || isFutureSameMonthDevice ? serverNow : startDate;
+                var dayOfMonth = isFutureDevice && !isFutureSameMonthDevice ? 0 : calculationDateDevice.Day;
                 var billingPeriod = BillingPeriodCalculator.Resolve(billingAsOf, devSettings.BillingCutoffEnabled, devSettings.BillingCutoffDay);
                 var billingDailyRows = await _context.DailyEnergy
                     .AsNoTracking()
                     .Where(x => x.DeviceKey == deviceKey
-                        && x.Date >= billingPeriod.Start.Date
-                        && x.Date < billingPeriod.End.Date)
+                        && x.Date >= monthStart
+                        && x.Date < calculationDateDevice.AddDays(1))
                     .Select(x => new { x.Date, x.EnergyKWh })
                     .ToListAsync();
-                var billingKWh = billingDailyRows.Sum(x => x.EnergyKWh);
+                var billingKWh = isFutureDevice && !isFutureSameMonthDevice
+                    ? 0m
+                    : billingDailyRows.Sum(x => x.EnergyKWh);
 
-                if (serverNow.Date >= billingPeriod.Start.Date && serverNow.Date < billingPeriod.End.Date)
+                if (isTodayDevice)
                 {
                     var currentDayHourlyKWh = await _context.HourlyEnergy
                         .AsNoTracking()
@@ -2812,21 +2833,14 @@ namespace KWHMonitoring.Controllers
                 }
 
                 billingKWh = Math.Round(Math.Max(billingKWh, 0m), 2);
-                var elapsedDays = billingPeriod.IsDeviceCutoff
-                    ? (isTodayDevice ? billingPeriod.ElapsedDays : billingPeriod.PeriodDays)
-                    : (isTodayDevice ? dayOfMonth : billingPeriod.PeriodDays);
+                var elapsedDays = isFutureDevice && !isFutureSameMonthDevice ? 0 : calculationDateDevice.Day;
                 var averageKWhPerDay = elapsedDays > 0 ? Math.Round(billingKWh / elapsedDays, 2) : 0m;
                 // Budget and actual cost must use the same active billing period as the
                 // projection. MoM/YoY intentionally remain calendar-month comparisons.
                 budgetVariance = budgetKWh > 0 ? Math.Round(billingKWh - budgetKWh, 2) : 0m;
                 budgetVariancePct = budgetKWh > 0 ? Math.Round((billingKWh - budgetKWh) / budgetKWh * 100, 1) : 0m;
                 actualCost = Math.Round(billingKWh * tariffPerKWh, 0);
-                var projectionBaseKWh = billingPeriod.IsDeviceCutoff ? billingKWh : monthKWh;
-                var projectedPeriodKWh = !isTodayDevice
-                    ? projectionBaseKWh
-                    : (elapsedDays > 0
-                        ? Math.Round(projectionBaseKWh / elapsedDays * billingPeriod.PeriodDays, 2)
-                        : projectionBaseKWh);
+                var projectedPeriodKWh = billingKWh;
                 var projectedPeriodCost = Math.Round(projectedPeriodKWh * tariffPerKWh, 0);
                 var projectedMonthKWh = projectedPeriodKWh;
                 var projectedCost = projectedPeriodCost;
