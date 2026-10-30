@@ -1,4 +1,4 @@
-@using KWHMonitoring.Models
+﻿@using KWHMonitoring.Models
 @using System.Text
 @using Microsoft.Extensions.Caching.Memory
 @inject IMemoryCache MemoryCache
@@ -33,7 +33,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.common.css" />
     <link rel="stylesheet" href="~/lib/devextreme/css/dx.light.css" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito+Sans:wght@400;500;600;700;800&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <style>
         .activity-modal-content { color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
@@ -278,14 +278,14 @@
                                 <!-- Header -->
                                 <div id="qwen-chat-header">
                                     <div class="qwen-header-left">
-                                        <div class="qwen-avatar">
-                                            <i class="fas fa-robot"></i>
+                                        <div class="qwen-avatar" aria-label="Voltra">
+                                            <span class="qwen-voltra-mascot qwen-voltra-mascot--header" aria-hidden="true"><span class="qwen-voltra-eye qwen-voltra-eye--left"></span><span class="qwen-voltra-eye qwen-voltra-eye--right"></span><span class="qwen-voltra-mouth"></span></span>
                                         </div>
                                         <div class="qwen-header-info">
-                                            <div class="qwen-header-title">Voltra AI Assistant</div>
+                                            <div class="qwen-header-title">Voltra - AI Assistent</div>
                                             <div class="qwen-header-status">
                                                 <span class="qwen-status-dot"></span>
-                                                Online 💭 KWH Monitoring Support
+                                                Daring - Bantuan KWH Monitoring
                                             </div>
                                         </div>
                                     </div>
@@ -318,42 +318,42 @@
                                 <!-- Chat Body -->
                                 <div id="qwen-chat-body">
                                     <div class="qwen-welcome-container">
-                                        <div class="qwen-welcome-icon">
-                                            <i class="fas fa-comments"></i>
+                                        <div class="qwen-welcome-icon" aria-label="Voltra">
+                                            <span class="qwen-voltra-mascot qwen-voltra-mascot--welcome" aria-hidden="true"><span class="qwen-voltra-eye qwen-voltra-eye--left"></span><span class="qwen-voltra-eye qwen-voltra-eye--right"></span><span class="qwen-voltra-mouth"></span></span>
                                         </div>
-                                        <div class="qwen-welcome-title">Selamat Datang!</div>
+                                            <div class="qwen-welcome-title">Halo, saya Voltra!</div>
                                         <div class="qwen-welcome-text" id="qwen-welcome-message"
-                                             data-i18n-id="Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali."
-                                             data-i18n-en="I am Voltra, the KWH Monitoring AI assistant. Ask me about electricity data, panels, bills, or anomalies.">
-                                            Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.
+                                             data-i18n-id="Saya Voltra, teman analisis Voltra. Sapa saya atau tanyakan apa saja tentang listrik, energi, panel, tagihan, dan anomali."
+                                             data-i18n-en="I am Voltra, Voltra's analysis companion. Say hello or ask me about electricity, energy, panels, bills, and anomalies.">
+                                            Saya Voltra, teman analisis KWH Monitoring. Sapa saya atau tanyakan apa saja tentang listrik, energi, panel, tagihan, dan anomali.
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Typing Indicator -->
                                 <div id="qwen-typing-indicator" class="qwen-typing-indicator" style="display: none;">
-                                    <div class="qwen-typing-avatar">
-                                        <i class="fas fa-robot"></i>
+                                    <div class="qwen-typing-avatar" aria-label="Voltra sedang mengetik">
+                                        <span class="qwen-voltra-mascot qwen-voltra-mascot--typing" aria-hidden="true"><span class="qwen-voltra-eye qwen-voltra-eye--left"></span><span class="qwen-voltra-eye qwen-voltra-eye--right"></span><span class="qwen-voltra-mouth"></span></span>
                                     </div>
                                     <div class="qwen-typing-dots">
                                         <span></span><span></span><span></span>
                                     </div>
-                                    <span class="qwen-typing-text">Voltra sedang mengetik...</span>
+                                    <span class="qwen-typing-text">Voltra sedang merapikan analisis...</span>
                                 </div>
 
                                 <!-- Footer / Input -->
                                 <div id="qwen-chat-footer">
                                     <div class="qwen-input-wrapper">
-                                        <input type="text" id="qwen-chat-input" 
-                                               placeholder="Ketik pertanyaan Anda..." 
-                                               onkeypress="handleQwenEnter(event)" 
+                                        <input type="text" id="qwen-chat-input"
+                                               placeholder="Ketik pertanyaan Anda..."
+                                               onkeypress="handleQwenEnter(event)"
                                                autocomplete="off" />
                                         <button id="qwen-send-btn" onclick="sendQwenMessage()" title="Kirim Pesan">
                                             <i class="fas fa-paper-plane"></i>
                                         </button>
                                     </div>
                                     <div class="qwen-footer-note">
-                                        <i class="fas fa-shield-alt"></i> Powered by Qwen AI
+                                        <i class="fas fa-shield-alt"></i> Voltra di AI Assistent
                                     </div>
                                 </div>
                             </div>
@@ -364,24 +364,35 @@
                         <!-- ========================================== -->
                         <style>
                             /* Main Widget Container */
-                            #qwen-chat-widget { 
-                                position: fixed; 
-                                bottom: 25px; 
-                                right: 25px; 
-                                z-index: 9999; 
-                                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                            #qwen-chat-widget {
+                                position: fixed;
+                                bottom: 25px;
+                                right: 25px;
+                                z-index: 9999;
+                                font-family: 'Nunito Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                --qwen-purple: #6956c9;
+                                --qwen-purple-dark: #4d3a9d;
+                                --qwen-ink: #26324a;
+                                --qwen-muted: #74809a;
+                                --qwen-surface: var(--bg-surface, #ffffff);
+                                --qwen-surface-hover: var(--bg-surface-hover, #f8f9ff);
+                                --qwen-soft: var(--bg-muted, #f5f7ff);
+                                --qwen-border: var(--border-color, #e2e8f0);
+                                --qwen-text: var(--text-primary, #26324a);
+                                --qwen-secondary: var(--text-secondary, #4d5874);
+                                --qwen-muted: var(--text-muted, #74809a);
                             }
 
                              /* Toggle Button Round floating button */
                             #qwen-toggle-btn {
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                background: linear-gradient(145deg, #7867e7 0%, #5a43a8 100%);
                                 color: white;
                                 border: none;
                                 width: 60px;
                                 height: 60px;
                                 border-radius: 50%;
                                 cursor: pointer;
-                                box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+                                box-shadow: 0 10px 28px rgba(86, 66, 170, 0.38), 0 0 0 5px rgba(120, 103, 231, 0.12);
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
@@ -492,16 +503,16 @@
                             }
 
                             /* Chat Box */
-                            #qwen-chat-box { 
-                                width: 420px; 
-                                height: 600px; 
-                                background: #ffffff; 
-                                border-radius: 20px; 
-                                box-shadow: 0 20px 60px rgba(0,0,0,0.15); 
-                                display: flex; 
-                                flex-direction: column; 
-                                overflow: hidden; 
-                                margin-bottom: 15px; 
+                            #qwen-chat-box {
+                                width: 420px;
+                                height: 600px;
+                                background: var(--qwen-surface);
+                                border-radius: 22px;
+                                box-shadow: 0 24px 70px rgba(38, 50, 74, 0.22), 0 4px 16px rgba(105, 86, 201, 0.12);
+                                display: flex;
+                                flex-direction: column;
+                                overflow: hidden;
+                                margin-bottom: 15px;
                                 border: 1px solid #e8e8e8;
                                 animation: qwen-slide-up 0.3s ease-out;
                             }
@@ -517,17 +528,17 @@
                                 }
                             }
 
-                            .qwen-hidden { 
-                                display: none !important; 
+                            .qwen-hidden {
+                                display: none !important;
                             }
 
                             /* Header */
-                            #qwen-chat-header { 
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                color: white; 
-                                padding: 20px; 
-                                display: flex; 
-                                justify-content: space-between; 
+                            #qwen-chat-header {
+                                background: linear-gradient(135deg, #7065d9 0%, #7447a2 100%);
+                                color: white;
+                                padding: 15px 18px;
+                                display: flex;
+                                justify-content: space-between;
                                 align-items: center;
                                 flex-shrink: 0;
                             }
@@ -539,16 +550,16 @@
                             }
 
                             .qwen-avatar {
-                                width: 45px;
-                                height: 45px;
-                                background: rgba(255,255,255,0.2);
-                                border-radius: 50%;
+                                width: 46px;
+                                height: 46px;
+                                background: rgba(255,255,255,0.16);
+                                border-radius: 16px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
-                                font-size: 22px;
                                 backdrop-filter: blur(10px);
-                                border: 2px solid rgba(255,255,255,0.3);
+                                border: 1px solid rgba(255,255,255,0.35);
+                                box-shadow: inset 0 1px 0 rgba(255,255,255,0.24);
                             }
 
                             .qwen-header-info {
@@ -557,12 +568,13 @@
 
                             .qwen-header-title {
                                 font-weight: 700;
-                                font-size: 16px;
+                                font-size: 15px;
+                                letter-spacing: -0.01em;
                                 margin-bottom: 2px;
                             }
 
                             .qwen-header-status {
-                                font-size: 12px;
+                                font-size: 11px;
                                 opacity: 0.9;
                                 display: flex;
                                 align-items: center;
@@ -588,31 +600,31 @@
                                 gap: 8px;
                             }
 
-                            .qwen-header-btn { 
-                                background: rgba(255,255,255,0.15); 
-                                border: none; 
-                                color: white; 
-                                cursor: pointer; 
-                                border-radius: 50%; 
-                                width: 32px; 
-                                height: 32px; 
-                                display: flex; 
-                                align-items: center; 
-                                justify-content: center; 
+                            .qwen-header-btn {
+                                background: rgba(255,255,255,0.15);
+                                border: none;
+                                color: white;
+                                cursor: pointer;
+                                border-radius: 50%;
+                                width: 32px;
+                                height: 32px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
                                 transition: all 0.2s;
                                 font-size: 14px;
                             }
 
-                            .qwen-header-btn:hover { 
-                                background: rgba(255,255,255,0.25); 
+                            .qwen-header-btn:hover {
+                                background: rgba(255,255,255,0.25);
                                 transform: scale(1.05);
                             }
 
                             /* Quick Actions */
                             .qwen-quick-actions {
-                                padding: 15px 20px;
-                                background: #f8fafc;
-                                border-bottom: 1px solid #e8e8e8;
+                                padding: 12px 16px;
+                                background: var(--qwen-soft);
+                                border-bottom: 1px solid var(--qwen-border);
                                 display: flex;
                                 gap: 8px;
                                 flex-wrap: wrap;
@@ -623,12 +635,12 @@
                                 flex: 1;
                                 min-width: 90px;
                                 padding: 10px 12px;
-                                background: white;
-                                border: 1px solid #e2e8f0;
-                                border-radius: 12px;
-                                font-size: 12px;
-                                font-weight: 500;
-                                color: #475569;
+                                background: var(--qwen-surface);
+                                border: 1px solid var(--qwen-border);
+                                border-radius: 13px;
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: var(--qwen-secondary);
                                 cursor: pointer;
                                 transition: all 0.2s;
                                 display: flex;
@@ -640,7 +652,7 @@
                             }
 
                             .qwen-quick-btn:hover {
-                                background: #667eea;
+                                background: var(--qwen-purple);
                                 color: white;
                                 border-color: #667eea;
                                 transform: translateY(-2px);
@@ -659,27 +671,27 @@
                             }
 
                             /* Chat Body */
-                            #qwen-chat-body { 
-                                flex: 1; 
-                                padding: 20px; 
-                                overflow-y: auto; 
-                                background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-                                display: flex; 
-                                flex-direction: column; 
-                                gap: 12px; 
+                            #qwen-chat-body {
+                                flex: 1;
+                                padding: 18px 16px;
+                                overflow-y: auto;
+                                background: radial-gradient(circle at 90% 8%, rgba(120, 103, 231, 0.10), transparent 28%), var(--qwen-surface);
+                                display: flex;
+                                flex-direction: column;
+                                gap: 12px;
                             }
 
-                            #qwen-chat-body::-webkit-scrollbar { 
-                                width: 6px; 
+                            #qwen-chat-body::-webkit-scrollbar {
+                                width: 6px;
                             }
 
                             #qwen-chat-body::-webkit-scrollbar-track {
                                 background: transparent;
                             }
 
-                            #qwen-chat-body::-webkit-scrollbar-thumb { 
-                                background-color: #cbd5e1; 
-                                border-radius: 10px; 
+                            #qwen-chat-body::-webkit-scrollbar-thumb {
+                                background-color: var(--scrollbar-thumb, #cbd5e1);
+                                border-radius: 10px;
                             }
 
                             /* Welcome Container */
@@ -695,39 +707,40 @@
                             .qwen-welcome-icon {
                                 width: 70px;
                                 height: 70px;
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                border-radius: 50%;
+                                background: linear-gradient(145deg, #7a6be4 0%, #5b43a9 100%);
+                                border-radius: 24px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
-                                font-size: 32px;
                                 color: white;
-                                box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+                                box-shadow: 0 12px 26px rgba(105, 86, 201, 0.28);
+                                animation: qwen-voltra-float 4s ease-in-out infinite;
                             }
 
                             .qwen-welcome-title {
                                 font-size: 20px;
                                 font-weight: 700;
-                                color: #1e293b;
+                                color: var(--qwen-text);
+                                letter-spacing: -0.02em;
                             }
 
                             .qwen-welcome-text {
-                                font-size: 14px;
-                                color: #64748b;
-                                line-height: 1.6;
+                                font-size: 13px;
+                                color: var(--qwen-muted);
+                                line-height: 1.65;
                                 max-width: 300px;
                             }
 
                             /* Messages */
-                            .qwen-message { 
-                                max-width: 85%; 
-                                padding: 14px 18px; 
-                                border-radius: 18px; 
-                                font-size: 14px; 
-                                line-height: 1.6; 
+                            .qwen-message {
+                                max-width: 85%;
+                                padding: 14px 18px;
+                                border-radius: 18px;
+                                font-size: 13px;
+                                line-height: 1.65;
                                 word-wrap: break-word;
                                 animation: qwen-message-slide 0.3s ease-out;
-                                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                                box-shadow: 0 4px 12px rgba(38, 50, 74, 0.06);
                             }
 
                             @@keyframes qwen-message-slide {
@@ -741,35 +754,35 @@
                                 }
                             }
 
-                            .qwen-message p { 
-                                margin: 0 0 8px 0; 
+                            .qwen-message p {
+                                margin: 0 0 8px 0;
                             }
 
-                            .qwen-message p:last-child { 
-                                margin: 0; 
+                            .qwen-message p:last-child {
+                                margin: 0;
                             }
 
-                            .qwen-message strong { 
-                                font-weight: 700; 
+                            .qwen-message strong {
+                                font-weight: 700;
                             }
 
-                            .qwen-message ul, .qwen-message ol { 
-                                margin: 8px 0; 
-                                padding-left: 20px; 
+                            .qwen-message ul, .qwen-message ol {
+                                margin: 8px 0;
+                                padding-left: 20px;
                             }
 
-                            .qwen-bot { 
-                                background-color: #ffffff; 
-                                color: #334155; 
-                                align-self: flex-start; 
+                            .qwen-bot {
+                                background-color: var(--qwen-surface);
+                                color: var(--qwen-text);
+                                align-self: flex-start;
                                 border-bottom-left-radius: 6px;
-                                border: 1px solid #e2e8f0;
+                                border: 1px solid var(--qwen-border);
                             }
 
-                            .qwen-user { 
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                color: white; 
-                                align-self: flex-end; 
+                            .qwen-user {
+                                background: linear-gradient(135deg, #7065d9 0%, #7047a0 100%);
+                                color: white;
+                                align-self: flex-end;
                                 border-bottom-right-radius: 6px;
                                 box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
                             }
@@ -789,13 +802,12 @@
                             .qwen-typing-avatar {
                                 width: 32px;
                                 height: 32px;
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                border-radius: 50%;
+                                background: linear-gradient(135deg, #7065d9 0%, #764ba2 100%);
+                                border-radius: 12px;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 color: white;
-                                font-size: 14px;
                             }
 
                             .qwen-typing-dots {
@@ -879,10 +891,10 @@
                             }
 
                             /* Footer / Input */
-                            #qwen-chat-footer { 
-                                padding: 16px 20px; 
-                                background: white; 
-                                border-top: 1px solid #e8e8e8;
+                            #qwen-chat-footer {
+                                padding: 13px 16px 14px;
+                                background: var(--qwen-surface);
+                                border-top: 1px solid var(--qwen-border);
                                 flex-shrink: 0;
                             }
 
@@ -892,46 +904,90 @@
                                 margin-bottom: 8px;
                             }
 
-                            #qwen-chat-input { 
-                                flex: 1; 
-                                padding: 14px 18px; 
-                                border: 2px solid #e2e8f0; 
-                                border-radius: 25px; 
-                                outline: none; 
-                                font-size: 14px; 
-                                background-color: #f8fafc; 
+                            #qwen-chat-input {
+                                flex: 1;
+                                padding: 14px 18px;
+                                border: 2px solid var(--input-border, var(--qwen-border));
+                                border-radius: 25px;
+                                color: var(--input-text, var(--qwen-text));
+                                caret-color: var(--primary-color, #7065d9);
+                                background-color: var(--input-bg, var(--qwen-soft));
+                                font-weight: 600;
                                 transition: all 0.3s;
                             }
 
-                            #qwen-chat-input:focus { 
-                                border-color: #667eea; 
-                                background-color: #ffffff;
+                            #qwen-chat-input:focus {
+                                border-color: #7065d9;
+                                color: var(--input-text, var(--qwen-text));
+                                background-color: var(--qwen-surface);
                                 box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
                             }
 
-                            #qwen-send-btn { 
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                color: white; 
-                                border: none; 
-                                width: 48px; 
-                                height: 48px; 
-                                border-radius: 50%; 
-                                cursor: pointer; 
-                                display: flex; 
-                                align-items: center; 
-                                justify-content: center; 
+                            #qwen-send-btn {
+                                background: linear-gradient(135deg, #7065d9 0%, #7047a0 100%);
+                                color: white;
+                                border: none;
+                                width: 48px;
+                                height: 48px;
+                                border-radius: 50%;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
                                 transition: all 0.3s;
                                 font-size: 16px;
                                 box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
                             }
 
-                            #qwen-send-btn:hover { 
+                            #qwen-send-btn:hover {
                                 transform: scale(1.05);
                                 box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
                             }
 
-                            #qwen-send-btn:disabled { 
-                                background: #cbd5e1; 
+                            [data-theme="dark"] #qwen-chat-widget {
+                                --qwen-surface: var(--bg-surface, #151a2c);
+                                --qwen-surface-hover: var(--bg-surface-hover, #1c2238);
+                                --qwen-soft: var(--bg-muted, #1e2540);
+                                --qwen-border: var(--border-color, #2a3050);
+                                --qwen-text: var(--text-primary, #e8ecf4);
+                                --qwen-secondary: var(--text-secondary, #a0aabe);
+                                --qwen-muted: var(--text-muted, #a0aabe);
+                            }
+
+                            [data-theme="dark"] #qwen-chat-input {
+                                color: #f4f7ff;
+                                background-color: #0f1424;
+                                border-color: #53658d;
+                                text-shadow: none;
+                            }
+
+                            [data-theme="dark"] #qwen-chat-input:focus {
+                                color: #ffffff;
+                                background-color: #11182a;
+                                border-color: #8baeff;
+                                box-shadow: 0 0 0 3px rgba(92, 160, 255, 0.26);
+                            }
+
+                            [data-theme="dark"] #qwen-chat-input::placeholder {
+                                color: #aebddd;
+                            }
+
+                            [data-theme="dark"] .qwen-quick-btn {
+                                background: var(--qwen-surface-hover);
+                                color: #dbe5ff;
+                            }
+
+                            [data-theme="dark"] .qwen-bot {
+                                background: #151d31;
+                                color: #e8ecf4;
+                            }
+
+                            [data-theme="dark"] .qwen-footer-note {
+                                color: #aebddd;
+                            }
+
+                            #qwen-send-btn:disabled {
+                                background: #cbd5e1;
                                 cursor: not-allowed;
                                 transform: none;
                                 box-shadow: none;
@@ -939,15 +995,51 @@
 
                             .qwen-footer-note {
                                 text-align: center;
-                                font-size: 11px;
-                                color: #94a3b8;
+                                font-size: 10px;
+                                font-weight: 600;
+                                color: var(--qwen-muted);
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
                                 gap: 4px;
                             }
 
-                             /* Responsive — fullscreen on mobile (handled by site.css) */
+                            /* Voltra mascot: a small, dependency-free character for the widget. */
+                            .qwen-voltra-mascot {
+                                position: relative;
+                                display: inline-block;
+                                width: 28px;
+                                height: 23px;
+                                border-radius: 10px 10px 8px 8px;
+                                background: linear-gradient(145deg, #ffffff 0%, #dce8ff 100%);
+                                border: 2px solid rgba(78, 61, 155, 0.34);
+                                box-shadow: inset 0 -3px 0 rgba(101, 78, 196, 0.12), 0 4px 9px rgba(37, 24, 104, 0.16);
+                            }
+
+                            .qwen-voltra-mascot::before,
+                            .qwen-voltra-mascot::after {
+                                content: '';
+                                position: absolute;
+                                top: -7px;
+                                width: 5px;
+                                height: 8px;
+                                border-radius: 4px 4px 1px 1px;
+                                background: #ffd166;
+                            }
+
+                            .qwen-voltra-mascot::before { left: 4px; transform: rotate(-20deg); }
+                            .qwen-voltra-mascot::after { right: 4px; transform: rotate(20deg); }
+                            .qwen-voltra-mascot--header { transform: scale(1.05); }
+                            .qwen-voltra-mascot--welcome { transform: scale(1.7); }
+                            .qwen-voltra-mascot--typing { transform: scale(.72); }
+                            .qwen-voltra-eye { position: absolute; top: 8px; width: 4px; height: 5px; border-radius: 50%; background: #44358d; }
+                            .qwen-voltra-eye--left { left: 7px; }
+                            .qwen-voltra-eye--right { right: 7px; }
+                            .qwen-voltra-mouth { position: absolute; left: 10px; bottom: 4px; width: 7px; height: 3px; border-bottom: 2px solid #44358d; border-radius: 0 0 8px 8px; }
+                            @@keyframes qwen-voltra-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px) rotate(1deg); } }
+                            @@media (prefers-reduced-motion: reduce) { .qwen-welcome-icon, .qwen-voltra-mascot, #qwen-toggle-btn::before { animation: none !important; } }
+
+                             /* Responsive â€” fullscreen on mobile (handled by site.css) */
                             @@media (max-width: 480px) {
                                 .qwen-quick-actions {
                                     padding: 10px 15px;
@@ -973,66 +1065,66 @@
                                     height: 32px;
                                     font-size: 16px;
                                 }
-                                
+
                                 #qwen-chat-header {
                                     padding: 16px;
                                 }
-                                
+
                                 .qwen-avatar {
                                     width: 40px;
                                     height: 40px;
                                     font-size: 18px;
                                 }
-                                
+
                                 .qwen-header-title {
                                     font-size: 15px;
                                 }
-                                
+
                                 .qwen-quick-actions {
                                     padding: 12px 16px;
                                     gap: 6px;
                                 }
-                                
+
                                 .qwen-quick-btn {
                                     min-width: 80px;
                                     padding: 8px 10px;
                                     font-size: 11px;
                                 }
-                                
+
                                 #qwen-chat-body {
                                     padding: 16px;
                                 }
-                                
+
                                 .qwen-welcome-icon {
                                     width: 60px;
                                     height: 60px;
                                     font-size: 24px;
                                 }
-                                
+
                                 .qwen-welcome-title {
                                     font-size: 18px;
                                 }
-                                
+
                                 .qwen-welcome-text {
                                     font-size: 13px;
                                     max-width: 280px;
                                 }
-                                
+
                                 .qwen-message {
                                     padding: 12px 16px;
                                     font-size: 13px;
                                     max-width: 90%;
                                 }
-                                
+
                                 #qwen-chat-footer {
                                     padding: 12px 16px;
                                 }
-                                
+
                                 #qwen-chat-input {
                                     padding: 12px 16px;
                                     font-size: 13px;
                                 }
-                                
+
                                 #qwen-send-btn {
                                     width: 42px;
                                     height: 42px;
@@ -1312,9 +1404,9 @@
                                 // Clear chat body and restore default welcome container
                                 const chatBody = document.getElementById('qwen-chat-body');
                                 chatBody.innerHTML = '<div class="qwen-welcome-container">' +
-                                    '<div class="qwen-welcome-icon"><i class="fas fa-comments"></i></div>' +
-                                    '<div class="qwen-welcome-title">Selamat Datang!</div>' +
-                                    '<div class="qwen-welcome-text" id="qwen-welcome-message">Saya Voltra, asisten AI KWH Monitoring. Tanyakan tentang data listrik, panel, tagihan, atau anomali.</div>' +
+                                    '<div class="qwen-welcome-icon"><span class="qwen-voltra-mascot qwen-voltra-mascot--welcome" aria-hidden="true"><span class="qwen-voltra-eye qwen-voltra-eye--left"></span><span class="qwen-voltra-eye qwen-voltra-eye--right"></span><span class="qwen-voltra-mouth"></span></span></div>' +
+                                    '<div class="qwen-welcome-title">Halo, saya Voltra!</div>' +
+                                    '<div class="qwen-welcome-text" id="qwen-welcome-message">Saya Voltra, teman analisis KWH Monitoring. Sapa saya atau tanyakan apa saja tentang listrik, energi, panel, tagihan, dan anomali.</div>' +
                                     '</div>';
                             }
 
@@ -1327,7 +1419,7 @@
 
                                 const chatBody = document.getElementById('qwen-chat-body');
                                 const welcomeMsg = document.getElementById('qwen-welcome-message');
-                                
+
                                 // Hide or remove welcome message
                                 if (welcomeMsg) {
                                     welcomeMsg.style.display = 'none';
@@ -1340,7 +1432,7 @@
                                 chatHistory.forEach(msg => {
                                     const msgDiv = document.createElement('div');
                                     msgDiv.className = 'qwen-message ' + (msg.Role === 'user' ? 'qwen-user' : 'qwen-bot');
-                                    
+
                                     if (msg.Role === 'user') {
                                         msgDiv.innerHTML = '<strong>Anda:</strong><br/>' + escapeHtml(msg.Content);
                                     } else {
@@ -1351,7 +1443,7 @@
                                             msgDiv.innerHTML = '<strong>Voltra:</strong><br/>' + escapeHtml(msg.Content).replace(/\n/g, '<br/>');
                                         }
                                     }
-                                    
+
                                     chatBody.appendChild(msgDiv);
                                 });
 
@@ -1376,13 +1468,13 @@
                                 document.getElementById('qwen-chat-input').value = message;
                                 sendQwenMessage();
                             }
-                            
+
                             // Fetch data realtime dan cache
                             async function refreshRealTimeData() {
                                 if (isFetchingData) return;
                                 isFetchingData = true;
                                 cachedRealTimeData = null;
-                                
+
                                  try {
                                     @* console.log('[QwenChat] Memuat data realtime...'); *@
                                     const data = await getRealTimeDashboardData();
@@ -1401,7 +1493,7 @@
                             }
 
                             // LOGIKA PENGAMBILAN DATA REAL-TIME (OPTIMIZED)
-                            // Mengambil data langsung dari API internal � bukan scrape DOM
+                            // Mengambil data langsung dari API internal ï¿½ bukan scrape DOM
                             // Agar chatbot mendapat data terstruktur, akurat, dan per-panel
                             async function getRealTimeDashboardData() {
                                  try {
@@ -1412,7 +1504,7 @@
                                      });
 
                                     @* console.log('[Qwen Chat] ?? Response status:', apiResponse.status); *@
-                                    
+
                                     if (apiResponse.ok) {
                                         const jsonData = await apiResponse.json();
                                         @* console.log('[QwenChat] JSON berhasil di-parse!'); *@
@@ -1427,16 +1519,16 @@
                                             source: jsonData.source,
                                             error:  jsonData.error
                                         }); *@
-                                        
+
                                         // Cek apakah data valid
                                         if (jsonData.error) {
                                             @* console.error('[QwenChat] API mengembalikan error:', jsonData.error); *@
                                         }
-                                        
+
                                         if (jsonData.panels?.length === 0) {
                                             @* console.warn('[QwenChat] ?? PANELS KOSONG! Database mungkin belum ada data.'); *@
                                         }
-                                        
+
                                         return jsonData; // Kirim sebagai objek JSON (bukan string)
                                     } else {
                                     throw new Error('Snapshot database gagal: HTTP ' + apiResponse.status);
@@ -1573,7 +1665,7 @@
                             function appendMessage(text, sender, parseMarkdown) {
                                 const chatBody = document.getElementById('qwen-chat-body');
                                 const welcomeMsg = document.getElementById('qwen-welcome-message');
-                                
+
                                 // Hide welcome message on first message
                                 if (welcomeMsg && chatBody.children.length === 1) {
                                     welcomeMsg.style.display = 'none';
@@ -1653,10 +1745,10 @@
 
                             function handleTouchEnd() {
                                 if (!isDragging) return;
-                                
+
                                 const diff = touchStartY - touchEndY;
                                 const swipeThreshold = 80; // Increased threshold for intentional close
-                                
+
                                 if (Math.abs(diff) > swipeThreshold && diff > 0) {
                                     // Swipe down - close/minimize
                                     toggleQwenChat();
@@ -1664,13 +1756,13 @@
                                     // Reset position if not enough swipe
                                     document.getElementById('qwen-chat-box').style.transition = 'transform 0.3s ease-out';
                                     document.getElementById('qwen-chat-box').style.transform = 'translateY(0)';
-                                    
+
                                     // Remove transition after animation completes
                                     setTimeout(() => {
                                         document.getElementById('qwen-chat-box').style.transition = '';
                                     }, 300);
                                 }
-                                
+
                                 isDragging = false;
                             }
 
@@ -1691,11 +1783,11 @@
                                         }
                                     }
                                 } catch (e) { }
-                                
+
                                 // Initialize all event handlers after DOM is loaded
                                 initializeQwenChatEvents();
                             });
-                            
+
                             // Initialize all chatbot event handlers
                             function initializeQwenChatEvents() {
                                 const toggleBtn = document.getElementById('qwen-toggle-btn');
@@ -1704,36 +1796,36 @@
                                         toggleQwenChat();
                                     };
                                 }
-                                
+
                                 const minimizeBtn = document.getElementById('qwen-minimize-btn');
                                 if (minimizeBtn) {
                                     minimizeBtn.onclick = function() {
                                         toggleQwenChat();
                                     };
                                 }
-                                
+
                                 const clearBtn = document.getElementById('qwen-clear-btn');
                                 if (clearBtn) {
                                     clearBtn.onclick = function() {
                                         clearChatHistory();
                                     };
                                 }
-                                
+
                                 const sendBtn = document.getElementById('qwen-send-btn');
                                 if (sendBtn) {
                                     sendBtn.onclick = function() {
                                         sendQwenMessage();
                                     };
                                 }
-                                
+
                                 const chatInput = document.getElementById('qwen-chat-input');
                                 if (chatInput) {
                                     chatInput.onkeypress = function(event) {
                                         handleQwenEnter(event);
                                     };
                                 }
-                                
-                                // Initialize quick action buttons — use data-message attribute (more reliable than onclick parsing)
+
+                                // Initialize quick action buttons â€” use data-message attribute (more reliable than onclick parsing)
                                 const quickActionButtons = document.querySelectorAll('.qwen-quick-btn');
                                 quickActionButtons.forEach(function(btn) {
                                     const message = btn.getAttribute('data-message');
@@ -1745,8 +1837,8 @@
                                         });
                                     }
                                 });
-                                
-                                // Initialize touch events for mobile — swipe-to-close only on chat header,
+
+                                // Initialize touch events for mobile â€” swipe-to-close only on chat header,
                                 // NOT on the entire chat box (so tapping messages/input/quick-actions won't close the widget)
                                 const chatHeader = document.getElementById('qwen-chat-header');
                                 if (chatHeader) {
@@ -1768,7 +1860,7 @@
                                             }
                                         });
                                     });
-                                    
+
                                     observer.observe(chatBox, {
                                         attributes: true,
                                         attributeFilter: ['class']
@@ -1793,15 +1885,15 @@
                 });
                 // Global 401 handler: redirect to login if session expired
                 // Untuk pengunjung TANPA login (IS_USER_AUTHENTICATED === false):
-                // JANGAN redirect paksa — cukup catat ke console, agar halaman
+                // JANGAN redirect paksa â€” cukup catat ke console, agar halaman
                 // yang memang publik tetap terbuka tanpa "ditarik" ke halaman Login.
                 $(document).ajaxError(function(e, xhr, options) {
                     if (xhr.status === 401 && !options._authRedirecting) {
                         if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) {
-                            /* console.warn('🔒 Fitur ini memerlukan login (akses ditolak).') */;
+                            /* console.warn('ðŸ”’ Fitur ini memerlukan login (akses ditolak).') */;
                             return;
                         }
-                        /* console.warn('🔒 Session expired — redirecting to login') */;
+                        /* console.warn('ðŸ”’ Session expired â€” redirecting to login') */;
                         window.location.href = '/Account/Login?ReturnUrl=' + encodeURIComponent(window.location.pathname + window.location.search);
                     }
                 });
@@ -1814,7 +1906,7 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script src="~/js/card-help.js" asp-append-version="true"></script>
 
-    <!-- Custom Tab Handler � completely replaces BS3's tab data-api -->
+    <!-- Custom Tab Handler ï¿½ completely replaces BS3's tab data-api -->
     <script>
         $(function() {
             // 1. Remove BS3's native tab click handlers (they conflict with our CSS)
@@ -1825,7 +1917,7 @@
                 $(this).find('.tab-pane.active').addClass('in');
             });
 
-            // 3. Our own tab click handler � fully controls tab switching
+            // 3. Our own tab click handler ï¿½ fully controls tab switching
             $(document).on('click.customTab', '[data-toggle="tab"], [data-toggle="pill"]', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -1839,7 +1931,7 @@
                 var $nav = $clickedTab.closest('.nav');
                 if (!$nav.length) $nav = $clickedTab.closest('ul');
 
-                // Find the tab-content � could be next sibling or in same parent
+                // Find the tab-content ï¿½ could be next sibling or in same parent
                 var $tabContent = $nav.nextAll('.tab-content').first();
                 if (!$tabContent.length) {
                     $tabContent = $nav.parent().find('.tab-content').first();

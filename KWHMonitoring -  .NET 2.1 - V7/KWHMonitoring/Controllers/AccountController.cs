@@ -471,6 +471,7 @@ namespace KWHMonitoring.Controllers
             {
                 new Claim(ClaimTypes.Name, user.Email),
                 new Claim(ClaimTypes.Email, user.Email),
+                new Claim("DisplayName", user.DisplayName ?? string.Empty),
                 new Claim(ClaimTypes.Role, user.Role),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
             };
