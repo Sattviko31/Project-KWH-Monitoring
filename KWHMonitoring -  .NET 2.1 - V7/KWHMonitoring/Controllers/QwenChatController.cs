@@ -227,59 +227,6 @@ namespace KWHMonitoring.Controllers
             return corrected;
         }
 
-        private static string BuildOffTopicReply(string normalizedMessage)
-        {
-            string topic;
-            string topicHint;
-
-            if (normalizedMessage.Contains("resep") || normalizedMessage.Contains("masak"))
-            {
-                topic = "urusan dapur";
-                topicHint = "Resep dan masakan memang menarik, tetapi saya tidak mau sok jadi chef lalu membuat listrik di dapur ikut matang.";
-            }
-            else if (normalizedMessage.Contains("politik") || normalizedMessage.Contains("jokowi") || normalizedMessage.Contains("prabowo"))
-            {
-                topic = "politik atau tokoh publik";
-                topicHint = "Untuk politik dan tokoh publik, saya lebih baik tidak ikut debat - arus listrik saja kadang sudah cukup bikin tegang.";
-            }
-            else if (normalizedMessage.Contains("film") || normalizedMessage.Contains("lagu") || normalizedMessage.Contains("berita"))
-            {
-                topic = "hiburan atau berita";
-                topicHint = "Hiburan dan berita boleh jadi bahan ngobrol, tetapi radar saya lebih peka pada watt daripada plot twist.";
-            }
-            else if (normalizedMessage.Contains("cuaca"))
-            {
-                topic = "cuaca";
-                topicHint = "Untuk cuaca, saya tidak mau menyaingi prakiraan resmi - saya cukup memantau apakah panel tetap aman dan konsumsi tetap terkendali.";
-            }
-            else if (normalizedMessage.Contains("sepak bola") || normalizedMessage.Contains("futsal"))
-            {
-                topic = "olahraga";
-                topicHint = "Soal olahraga, saya belum punya kartu kuning; keahlian saya lebih ke membaca beban listrik tanpa ngos-ngosan.";
-            }
-            else if (normalizedMessage.Contains("kripto") || normalizedMessage.Contains("saham"))
-            {
-                topic = "investasi";
-                topicHint = "Untuk investasi, saya tidak mau ikut berspekulasi - angka kWh saja harus saya cek dua kali agar tidak bikin dompet tersengat.";
-            }
-            else
-            {
-                topic = "topik umum tersebut";
-                topicHint = "Saya bisa ikut ngobrol ringan, tetapi wilayah kerja saya memang lebih dekat ke panel daripada ke segala topik di dunia.";
-            }
-
-            var variants = new[]
-            {
-                "Menarik juga membahas " + topic + ". " + topicHint + " Saya bisa bantu kalau pembahasannya diarahkan ke listrik, energi, KWH, panel, daya, tagihan, atau anomali.",
-                "Saya menangkap Anda sedang membahas " + topic + ". Untuk bagian itu saya lebih baik tidak mengarang jawaban; nanti watt-nya benar, isinya meleset. Kalau mau, kita belokkan sedikit ke konsumsi listrik, panel, tagihan, atau kondisi perangkat.",
-                "" + topicHint + " Jadi untuk topik tersebut saya mundur dengan sopan. Ajak saya kembali ke listrik, misalnya analisis daya, KWH, tagihan, panel, atau anomali - di sana saya lebih percaya diri."
-            };
-
-            var messageSeed = normalizedMessage.Aggregate(0, (seed, character) => seed + character);
-            var variantIndex = Math.Abs(messageSeed) % variants.Length;
-            return variants[variantIndex];
-        }
-
         [HttpPost("send")]
         public async Task<IActionResult> SendMessage([FromBody] ChatRequestDto request)
         {
@@ -357,34 +304,6 @@ namespace KWHMonitoring.Controllers
                 {
                     success = true,
                     reply = "Anda sedang login sebagai **" + displayName + "**. Saya Rama, teman analisis Voltra. Tenang, identitas sudah terbaca - meteran tidak ikut-ikutan minta KTP."
-                });
-            }
-
-            var outsideContextTerms = new[]
-            {
-                "siapa jokowi", "siapa prabowo", "resep", "masak", "politik", "berita", "film", "lagu", "cuaca",
-                "sepak bola", "futsal", "kripto", "saham", "jodoh", "pacar", "gosip", "lelucon umum"
-            };
-            var monitoringTerms = new[]
-            {
-                "kwh", "energi", "listrik", "daya", "tegangan", "arus", "panel", "device", "perangkat",
-                "relay", "anomali", "alert", "laporan", "tagihan", "konsumsi", "monitoring", "whatsapp", "email"
-                , "grafik", "chart", "charts", "visualisasi", "tren", "trend", "navigasi", "halaman", "menu"
-            };
-            var conversationalTerms = new[]
-            {
-                "halo", "hai", "hi", "hei", "pagi", "siang", "sore", "malam", "terima kasih", "makasih",
-                "selamat datang", "apa kabar", "kabarmu", "bisa bantu", "tolong bantu", "siapa kamu", "namamu"
-            };
-            var isMonitoringContext = monitoringTerms.Any(normalizedMessage.Contains);
-            var isConversational = conversationalTerms.Any(normalizedMessage.Contains);
-            var isExplicitlyOutsideContext = outsideContextTerms.Any(normalizedMessage.Contains);
-            if (isExplicitlyOutsideContext || (!isMonitoringContext && !isConversational))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    reply = BuildOffTopicReply(normalizedMessage)
                 });
             }
 
@@ -516,7 +435,9 @@ namespace KWHMonitoring.Controllers
                 // ==========================================
                 string systemPrompt = "Anda adalah Voltra, persona percakapan dari AI Agent dan teman kerja digital untuk tim KWH Monitoring. Voltra ramah, hangat, humoris secukupnya, cerdas, analitis, dan profesional. Buat jawaban terasa seperti percakapan manusia dengan rekan kerja yang membantu, bukan seperti membaca manual atau pesan otomatis. " +
                                       "Kamu memahami fitur, halaman, istilah, data monitoring, dan alur kerja aplikasi ini berdasarkan konteks yang diberikan. " +
-                                      "Jawab dengan leluasa sapaan, basa-basi, dan percakapan yang masih berhubungan dengan listrik, energi, kelistrikan, panel/device, relay, konsumsi, tagihan, anomali, alert, laporan, navigasi, atau keselamatan yang langsung terkait pengoperasian sistem. Untuk topik yang sama sekali tidak berhubungan dengan listrik atau sistem ini, tolak dengan halus dalam satu atau dua kalimat, sertakan candaan ringan yang sopan, lalu arahkan kembali ke topik kelistrikan. Jangan menolak sapaan atau obrolan ringan yang masih relevan. " +
+                                       "Jawab hanya isi yang berhubungan dengan listrik, energi, KWH Monitoring, panel/device, relay, konsumsi, daya, tegangan, tagihan, anomali, laporan, navigasi aplikasi, atau percakapan ringan yang langsung mendukung konteks tersebut. Untuk topik yang tidak berhubungan dengan kelistrikan, jangan memberikan penjelasan, resep, langkah-langkah, definisi, rekomendasi, opini, atau fakta substantif tentang topik itu. Tetap tanggapi secara natural: sebut topiknya secara singkat agar pengguna merasa didengar, sampaikan bahwa fokusmu bukan bidang tersebut, lalu arahkan percakapan kembali ke listrik dengan candaan ringan yang relevan. Jangan gunakan kalimat penolakan yang sama berulang-ulang, jangan membuat daftar kategori penolakan, dan jangan menyelipkan jawaban parsial tentang topik di luar kelistrikan. " +
+                                       "Contoh kebijakan, bukan template jawaban: untuk pertanyaan resep, jangan memberi bahan atau cara memasak; cukup akui bahwa pengguna sedang membahas masakan lalu arahkan kembali ke energi atau peralatan listrik secara ringan. Untuk Bitcoin, olahraga, politik, film, atau topik umum lain, lakukan hal yang sama tanpa menjelaskan topiknya. Sapaan dan basa-basi boleh dijawab secara natural selama tidak berubah menjadi pembahasan substantif di luar kelistrikan. " +
+                                       "Jika pertanyaan membutuhkan informasi terkini yang masih terkait kelistrikan tetapi tidak ada di konteks, katakan bahwa pengetahuanmu mungkin tidak real-time dan jangan mengarang fakta. Untuk permintaan berisiko, ilegal, atau instruksi berbahaya, tolak bagian berbahayanya dengan sopan dan tawarkan alternatif aman. " +
                                       "Untuk perhitungan, tampilkan rumus, nilai input, satuan, hasil, dan asumsi. Untuk keselamatan listrik, selalu prioritaskan mematikan sumber dan mengikuti prosedur teknisi berwenang; jangan memberi instruksi berbahaya atau mengklaim diagnosis lapangan tanpa pengukuran. " +
                                       "Gunakan data realtime sebagai sumber utama; jangan mengarang angka, status, waktu, nama panel, atau kemampuan sistem. Bedakan fakta, perhitungan, dan saran. " +
                                       "Jika data tidak tersedia, basi, konflik, atau sebagian gagal dimuat, katakan dengan jelas dan jangan mengganti data yang hilang dengan nol. " +
