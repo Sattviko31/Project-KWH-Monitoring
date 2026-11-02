@@ -168,6 +168,11 @@
         var charts = {};
         var refreshTimer = null;
         var refreshWatcherId = null; // watcher realtime (refresh chart saat data berubah)
+        // This page owns the KWH refresh cycle. The anomaly service listens to
+        // chartDataUpdated so it evaluates the same telemetry refresh cycle,
+        // after the chart requests have completed.
+        window.__chartRealtimeSyncActive = true;
+        window.dispatchEvent(new CustomEvent('chartRealtimeSyncReady'));
         var chartViewStorageKey = 'kwhChartViewSettings';
         var deviceCategoryMap = {};
         var categoryDowntimeMap = {};
@@ -1051,10 +1056,10 @@
         // ============================================
         function loadChartData(deviceKey, safeKey) {
             // Guard: skip if deviceKey is empty to prevent invalid API calls
-            if (!deviceKey || deviceKey.trim() === '') return;
+            if (!deviceKey || deviceKey.trim() === '') return $.Deferred().resolve().promise();
 
             var points = systemSettings.chartDataPoints || 20;
-            $.ajax({
+            return $.ajax({
                 url: '/api/Api/panels/' + deviceKey + '/chart?points=' + points,
                 method: 'GET',
                 dataType: 'json',
@@ -1173,21 +1178,32 @@
                 refreshWatcherId = null;
             }
 
-            var refreshCharts = function() {
-                panelList.forEach(function(panel) {
-                    loadChartData(panel.deviceKey, panel.safeKey);
+            var refreshCharts = function(changedKeys, forced) {
+                var requests = panelList.map(function(panel) {
+                    return loadChartData(panel.deviceKey, panel.safeKey);
                 });
 
-                // Trigger event untuk anomaly service setelah chart update
-                setTimeout(function() {
-                    window.dispatchEvent(new CustomEvent('chartDataUpdated'));
-                }, 500); // Delay 500ms untuk memastikan chart selesai update
+                // Anomaly detection must start only after the same chart refresh
+                // requests have completed. This removes the race where anomaly
+                // sampling read the previous telemetry while the chart was still
+                // loading the new telemetry.
+                $.when.apply($, requests).always(function() {
+                    window.dispatchEvent(new CustomEvent('chartDataUpdated', {
+                        detail: {
+                            changedKeys: changedKeys || [],
+                            forced: !!forced
+                        }
+                    }));
+                });
             };
 
             // Utama: reload chart begitu ada data pengukuran baru (realtime),
             // bukan menunggu tick interval systemSettings.refreshInterval.
             if (window.RealtimeRefresh) {
-                refreshWatcherId = window.RealtimeRefresh.watch(['kwh'], refreshCharts, { throttleMs: 5000 });
+                // The shared realtime poll already provides the pacing (about
+                // once per second). Do not add a second 5-second delay here;
+                // otherwise anomaly sampling would lag behind the chart.
+                refreshWatcherId = window.RealtimeRefresh.watch(['kwh'], refreshCharts, { throttleMs: 0 });
                 return;
             }
 

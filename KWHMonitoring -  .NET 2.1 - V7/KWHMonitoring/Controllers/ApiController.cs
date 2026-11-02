@@ -559,12 +559,15 @@ namespace KWHMonitoring.Controllers
                 var data = await _context.KWH_Monitoring
                     .Where(x => x.DeviceKey == deviceKey)
                     .OrderByDescending(x => x.Waktu_Server)
+                    .ThenByDescending(x => x.Id)
                     .Take(points)
                     .OrderBy(x => x.Waktu_Server)
+                    .ThenBy(x => x.Id)
                     .ToListAsync();
 
                 var labels = data.Select(x => x.Waktu_Server.ToString("HH:mm:ss")).ToList();
                 var timestamps = data.Select(x => x.Waktu_Server).ToList();
+                var sampleIds = data.Select(x => x.Id).ToList();
                 var voltageR = data.Select(x => (double)(x.Volt_R ?? 0m)).ToList();
                 var voltageS = data.Select(x => x.Volt_S.HasValue ? (double?)x.Volt_S.Value : null).ToList();
                 var voltageT = data.Select(x => x.Volt_T.HasValue ? (double?)x.Volt_T.Value : null).ToList();
@@ -586,6 +589,7 @@ namespace KWHMonitoring.Controllers
                 return Ok(new
                 {
                     deviceKey = deviceKey,
+                    sampleIds = sampleIds,
                     labels = labels,
                     timestamps = timestamps,
                     powerValid = powerValid,
@@ -6076,15 +6080,14 @@ namespace KWHMonitoring.Controllers
                 }
             }
 
-            var mode = GetString(settingsRows, "emaMode", "manual");
             var currentPower = (double)latest.Daya_Watt.Value;
             var currentEma = ema[ema.Length - 1];
-            var upper = string.Equals(mode, "fibonacci", StringComparison.OrdinalIgnoreCase)
-                ? currentEma * upperValue
-                : currentEma * (1d + upperValue / 100d);
-            var lower = string.Equals(mode, "fibonacci", StringComparison.OrdinalIgnoreCase)
-                ? currentEma * lowerValue
-                : currentEma * (1d - lowerValue / 100d);
+            // Per-device EMA thresholds are stored as percentages and are the
+            // source of truth for chart, browser detection, and server verification.
+            // The global EMA mode must not change this device-level rule.
+            const string mode = "manual";
+            var upper = currentEma * (1d + upperValue / 100d);
+            var lower = currentEma * (1d - lowerValue / 100d);
             var category = await _context.AppSettingsRecords.AsNoTracking()
                 .Where(x => x.SettingKey == "DeviceCategory." + request.DeviceKey)
                 .Select(x => x.SettingValue).FirstOrDefaultAsync() ?? deviceSettings?.DeviceCategory;

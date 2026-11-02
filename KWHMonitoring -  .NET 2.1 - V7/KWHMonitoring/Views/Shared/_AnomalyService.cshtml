@@ -34,11 +34,12 @@
         let anomalyTimer = null;
         let anomalyTimerInterval = 0;    // Track current interval value (ms) - setInterval returns primitive, can't hold properties
         let anomalyRealtimeWatcher = null;
+        let chartDataUpdatedHandler = null;
+        let chartRealtimeReadyHandler = null;
         let settingsReloadTimer = null;  // Timer untuk reload settings secara berkala
         let anomalyChecksInFlight = {};  // Hindari pemrosesan bersamaan untuk device yang sama
         let silenceChecksInFlight = {};  // Satu pemeriksaan keterlambatan telemetry per device
-        let lastProcessedSampleByDevice = {}; // Satu sampel hanya boleh dihitung sekali
-        let lastConfirmationSampleTimeByDevice = {}; // Track gaps between distinct telemetry samples
+        let lastProcessedSampleByDevice = {}; // Signature sampel terakhir yang sudah diproses
 
         // Konfirmasi anomali - AKAN DI-LOAD DARI DATABASE
         let anomalyConfirmation = {
@@ -184,9 +185,11 @@
         // EMA baseline setting - AKAN DI-LOAD DARI DATABASE
         var useInitial100ForEma = false;  // Akan di-load dari DB
 
-        // Debounce timer untuk save anomaly state ke database
+        // Ordered state save queue for confirmation/cooldown persistence.
         let anomalyStateSaveTimer = null;
         let anomalyStateSaveInFlight = false;
+        let anomalyStateSavePending = false;
+        let anomalyStateSaveDirty = false;
         let anomalyStateScopeId;
         try {
             anomalyStateScopeId = sessionStorage.getItem('kwhAnomalyStateScopeId');
@@ -252,80 +255,58 @@
                                     }
                                 });
                             }
-                        } catch  (e) {
-                            @* console.warn('âš ï¸ C ould not parse cooldown state:', e); *@
+                        } catch (e) {
+                            @* console.warn('Could not parse cooldown state:', e); *@
                         }
                     }
                 },
-                error : function() {
-                    @* console.warn('âš ï¸ Could not load anom aly state from DB, using defaults'); *@
+                error: function() {
+                    @* console.warn('Could not load anomaly state from DB, using defaults'); *@
                 }
             });
         }
 
         function saveAnomalyState() {
-            // Tamu (belum login): state disimpan hanya di memori halaman.
-            // Endpoint save-anomaly-state membutuhkan role Operator/Admin.
             if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
-            // Debounce: wait 2 seconds before saving to avoid excessive DB writes
-            if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
-            anomalyStateSaveTimer = setTimeout(function() {
-                if (anomalyStateSaveInFlight) return;
-                anomalyStateSaveInFlight = true;
-                $.ajax({
-                    url: '/api/Api/save-anomaly-state',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
-                        cooldownState: JSON.stringify(anomalyCooldownState),
-                        scopeId: anomalyStateScopeId
-                    }),
-                    success: function() {
-                        anomalyStateSaveInFlight = false;
-                        @* console.log('Anomaly state saved to DB'); *@
-                    },
-                    error: function(xhr) {
-                        anomalyStateSaveInFlight = false;
-                        if (xhr.status === 401) {
-                            @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
-                            if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
-                        } else {
-                            @* console.error('âŒ Error saving anomaly state:', xhr.statusText); *@
-                        }
-                    }
-                });
-            }, 2000);
+            anomalyStateSaveDirty = true;
+            anomalyStateSavePending = true;
+            flushAnomalyStateSave();
         }
 
         function saveAnomalyStateImmediate() {
-            // Tamu (belum login): state disimpan hanya di memori halaman.
-            // Endpoint save-anomaly-state membutuhkan role Operator/Admin.
+            saveAnomalyState();
+        }
+
+        function flushAnomalyStateSave() {
             if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
-            // Immediate save for critical state changes (cooldown enter/exit)
-            if (anomalyStateSaveTimer) clearTimeout(anomalyStateSaveTimer);
-            if (anomalyStateSaveInFlight) return;
+            if (!anomalyStateSaveDirty || anomalyStateSaveInFlight) return;
+
+            anomalyStateSaveDirty = false;
             anomalyStateSaveInFlight = true;
+            var payload = {
+                confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
+                cooldownState: JSON.stringify(anomalyCooldownState),
+                scopeId: anomalyStateScopeId
+            };
+
             $.ajax({
                 url: '/api/Api/save-anomaly-state',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({
-                    confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
-                    cooldownState: JSON.stringify(anomalyCooldownState),
-                    scopeId: anomalyStateScopeId
-                }),
+                data: JSON.stringify(payload),
                 success: function() {
                     anomalyStateSaveInFlight = false;
-                    @* console.log('ðŸ’¾ Anomaly state saved to DB (immediate)'); *@
+                    anomalyStateSavePending = false;
+                    flushAnomalyStateSave();
                 },
                 error: function(xhr) {
                     anomalyStateSaveInFlight = false;
+                    anomalyStateSavePending = true;
                     if (xhr.status === 401) {
-                        @* console.warn('ðŸ”’ Session expired â€” stopping anomaly timer'); *@
                         if (anomalyTimer) { clearInterval(anomalyTimer); anomalyTimer = null; }
                     } else {
-                        @* console.error('âŒ Error saving anomaly state:', xhr.statusText); *@
+                        anomalyStateSaveDirty = true;
+                        setTimeout(flushAnomalyStateSave, 500);
                     }
                 }
             });
@@ -460,17 +441,24 @@
                     timeout: 5000,
                     success: function(data) {
                         // Anomaly detection settings
-                        if (data.anomalyCheckInterval !== null && data.anomalyCheckInterval !== undefined && Number(data.anomalyCheckInterval) > 0) {
-                            var configuredInterval = Number(data.anomalyCheckInterval);
-                            var newInterval = configuredInterval * 1000; // Convert ke ms
+                        var configuredInterval = Number(data.anomalyCheckInterval);
+                        if (Number.isFinite(configuredInterval) && configuredInterval > 0) {
                             anomalyServiceConfig.checkInterval = configuredInterval;
-                            anomalyConfirmation.maxConfirmations = (typeof data.anomalyMaxConfirmations === 'number') ? data.anomalyMaxConfirmations : 3;
-                            anomalyConfirmation.cooldownTime = Number(settingValue(data.anomalyCooldownTime, 60)) * 1000; // Convert ke ms
-
-                            // Jika realtime-refresh tersedia, sampling dipicu oleh
-                            // perubahan token KWH, bukan oleh interval ini.
-                            // Nilai checkInterval hanya dipakai oleh fallback lama.
                         }
+
+                        var configuredMaxConfirmations = Number(data.anomalyMaxConfirmations);
+                        anomalyConfirmation.maxConfirmations = Number.isFinite(configuredMaxConfirmations)
+                            ? Math.max(1, Math.min(100, Math.floor(configuredMaxConfirmations)))
+                            : 3;
+
+                        var configuredCooldown = Number(settingValue(data.anomalyCooldownTime, 60));
+                        anomalyConfirmation.cooldownTime = Number.isFinite(configuredCooldown) && configuredCooldown >= 0
+                            ? configuredCooldown * 1000
+                            : 60000;
+
+                        // Jika realtime-refresh tersedia, sampling dipicu oleh
+                        // perubahan token KWH, bukan oleh interval ini.
+                        // Nilai checkInterval hanya dipakai oleh fallback lama.
 
                         // Notification settings
                         if (data.enableEmail !== undefined) {
@@ -651,20 +639,31 @@
                         delete anomalyChecksInFlight[deviceKey];
                         return;
                     }
-                    const sampleTime = data.timestamps && data.timestamps[lastIndex];
+                    const timestamps = getTimestampsFromChart(data);
+                    const sampleTime = timestamps && timestamps[lastIndex];
                     if (!sampleTime) {
                         delete anomalyChecksInFlight[deviceKey];
                         return;
                     }
                     const sampleKey = new Date(sampleTime).getTime();
-                    if (!Number.isFinite(sampleKey) || lastProcessedSampleByDevice[deviceKey] === sampleKey) {
+                    const samplePower = Number(data.power[lastIndex]);
+                    const sampleId = data.sampleIds && data.sampleIds[lastIndex] != null
+                        ? String(data.sampleIds[lastIndex])
+                        : '';
+                    // Sampling mengikuti perubahan record telemetry, bukan detik.
+                    // Primary key menjadi identitas utama; timestamp + power tetap
+                    // dipakai sebagai fallback untuk kompatibilitas endpoint lama.
+                    const sampleSignature = sampleId
+                        ? 'id:' + sampleId
+                        : (Number.isFinite(samplePower)
+                            ? 'time:' + sampleKey + '|power:' + samplePower
+                            : 'time:' + sampleKey + '|power:null');
+                    if (!Number.isFinite(sampleKey) || lastProcessedSampleByDevice[deviceKey] === sampleSignature) {
                         delete anomalyChecksInFlight[deviceKey];
                         return;
                     }
-                    lastProcessedSampleByDevice[deviceKey] = sampleKey;
 
                     const powerData = data.power;
-                    const timestamps = getTimestampsFromChart(data);
 
                     // ============================================
                     // TAHAP 2: Hitung EMA atau ambil baseline statis
@@ -679,6 +678,12 @@
                             emaValues = calculateEMAWithBaseline(powerData, anomalyServiceConfig.emaPeriod, baseline);
 
                             processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue, timestamps);
+                            // Persist the state after every newly processed chart
+                            // sample, including samples that do not change the
+                            // anomaly type. The ordered save queue coalesces
+                            // overlapping requests without losing the newest state.
+                            saveAnomalyState();
+                            lastProcessedSampleByDevice[deviceKey] = sampleSignature;
                             delete anomalyChecksInFlight[deviceKey];
                         });
                     } else {
@@ -686,6 +691,10 @@
                         emaValues = calculateEMA(powerData, anomalyServiceConfig.emaPeriod);
 
                         processAnomalyCheck(deviceKey, powerData, emaValues, null, timestamps);
+                        // Keep ActiveAnomalyState synchronized with each chart
+                        // sample, not only with threshold transitions.
+                        saveAnomalyState();
+                        lastProcessedSampleByDevice[deviceKey] = sampleSignature;
                         delete anomalyChecksInFlight[deviceKey];
                     }
                 },
@@ -781,12 +790,14 @@
             // ============================================
             // PENTING: Thresholds HARUS SAMA DENGAN CHART
             // ============================================
-            // Chart menggunakan calculateThresholds(ema, mode, upper, lower)
-            // Jadi anomaly service juga harus menggunakan cara yang SAMA
-            // Threshold dihitung dari EMA, bukan dari baseline statis!
+            // Chart memakai threshold per-device dalam mode manual.
+            // Mode global hanya mengatur tampilan/global EMA; jangan gunakan
+            // mode fibonacci global untuk mengganti aturan threshold device.
+            // Threshold dihitung dari EMA/baseline yang sama dengan chart.
             // ============================================
 
-            const thresholds = calculateThresholds(ema, anomalyServiceConfig.mode, upperValue, lowerValue);
+            const thresholdMode = 'manual';
+            const thresholds = calculateThresholds(ema, thresholdMode, upperValue, lowerValue);
 
             const lastIndex = powerData.length - 1;
             const currentPower = powerData[lastIndex];
@@ -838,7 +849,6 @@
 
             // Debug logging - pastikan nilai SAMA dengan yang ditampilkan di chart
             // Tampilkan juga threshold settings yang digunakan
-            const thresholdMode = anomalyServiceConfig.mode;
             const thresholdPercent = thresholdMode === 'fibonacci' ?
                 `FIB: Ã—${upperValue}/${lowerValue}` :
                 `MANUAL: +${upperValue}%/-${lowerValue}%`;
@@ -901,14 +911,6 @@
 
             var sampleTimestamp = timestamps && timestamps[lastIndex] ? new Date(timestamps[lastIndex]).getTime() : NaN;
             if (!Number.isFinite(sampleTimestamp)) return;
-            var previousSampleTimestamp = lastConfirmationSampleTimeByDevice[deviceKey];
-            var allowedGapMs = Math.max(120000, (anomalyServiceConfig.checkInterval || 30) * 3000);
-            if (!previousSampleTimestamp || sampleTimestamp - previousSampleTimestamp > allowedGapMs) {
-                anomalyConfirmation.counts[deviceKey + '_OVERLOAD'] = 0;
-                anomalyConfirmation.counts[deviceKey + '_DROP'] = 0;
-            }
-            lastConfirmationSampleTimeByDevice[deviceKey] = sampleTimestamp;
-
             if (!anomalyType) {
                 // Tidak ada anomali - RESET semua counter untuk device ini
                 const resetKeys = Object.keys(anomalyConfirmation.counts).filter(k => k.startsWith(deviceKey + '_'));
@@ -1021,7 +1023,7 @@
             
             // Log confirmation progress dengan detail lengkap
             const statusMessage = isDowntime ? '[DOWNTIME]' : '[NORMAL]';
-            const modeLabel = anomalyServiceConfig.mode === 'fibonacci' ? 'FIB' : 'MANUAL';
+            const modeLabel = thresholdMode === 'fibonacci' ? 'FIB' : 'MANUAL';
             @* console.log(`ANOMALY DETECTED #${confirmedCount}: ${anomalyType} for ${deviceKey} ${statusMessage}`); *@
 
             if (isDowntime) {
@@ -1074,7 +1076,7 @@
                         thresholdValue: thresholdValue,
                         deviation: Math.round(deviation * 10) / 10,
                         emaValue: emaValue,
-                        thresholdMode: anomalyServiceConfig. mode,
+                        thresholdMode: thresholdMode,
                         sampleTime: formatServerLocalTimestamp(new Date(sampleTimestamp)),
                         chartSnapshot: chartSnapshotPayload
                     }),
@@ -1161,9 +1163,32 @@
                 @* console.log('Starting anomaly checks...'); *@
                 setTimeout(runAnomalyCheck, 2000);
                 
-                // Sampling anomaly harus mengikuti perubahan data KWH yang sama
-                // dengan refresh chart, bukan berjalan berdasarkan detik.
-                if (window.RealtimeRefresh && typeof window.RealtimeRefresh.watch === 'function') {
+                // Listen before the chart page script is loaded. The chart
+                // announces readiness and then becomes the only owner of the
+                // KWH refresh cycle for this page.
+                if (window.addEventListener) {
+                    chartDataUpdatedHandler = function() {
+                        // Forced chart refreshes are safe here because the
+                        // sampleId deduplication prevents duplicate counting.
+                        runAnomalyCheck();
+                    };
+                    chartRealtimeReadyHandler = function() {
+                        if (anomalyRealtimeWatcher && window.RealtimeRefresh) {
+                            window.RealtimeRefresh.unwatch(anomalyRealtimeWatcher);
+                            anomalyRealtimeWatcher = null;
+                        }
+                        window.addEventListener('chartDataUpdated', chartDataUpdatedHandler);
+                    };
+                    window.addEventListener('chartRealtimeSyncReady', chartRealtimeReadyHandler, { once: true });
+                }
+
+                if (window.__chartRealtimeSyncActive) {
+                    if (!chartDataUpdatedHandler) {
+                        chartDataUpdatedHandler = function() { runAnomalyCheck(); };
+                        window.addEventListener('chartDataUpdated', chartDataUpdatedHandler);
+                    }
+                } else if (window.RealtimeRefresh && typeof window.RealtimeRefresh.watch === 'function') {
+                    // Non-chart pages use the shared realtime token.
                     anomalyRealtimeWatcher = window.RealtimeRefresh.watch(['kwh'], function(changedKeys, forced) {
                         if (forced) return;
                         runAnomalyCheck();
@@ -1236,6 +1261,14 @@
             if (anomalyRealtimeWatcher && window.RealtimeRefresh && typeof window.RealtimeRefresh.unwatch === 'function') {
                 window.RealtimeRefresh.unwatch(anomalyRealtimeWatcher);
                 anomalyRealtimeWatcher = null;
+            }
+            if (chartDataUpdatedHandler && window.removeEventListener) {
+                window.removeEventListener('chartDataUpdated', chartDataUpdatedHandler);
+                chartDataUpdatedHandler = null;
+            }
+            if (chartRealtimeReadyHandler && window.removeEventListener) {
+                window.removeEventListener('chartRealtimeSyncReady', chartRealtimeReadyHandler);
+                chartRealtimeReadyHandler = null;
             }
             if (anomalyTimer) clearInterval(anomalyTimer);
             if (settingsReloadTimer) clearInterval(settingsReloadTimer);
