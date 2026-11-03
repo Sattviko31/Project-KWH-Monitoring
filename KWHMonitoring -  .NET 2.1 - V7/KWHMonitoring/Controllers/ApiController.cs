@@ -5704,6 +5704,12 @@ namespace KWHMonitoring.Controllers
                 // a log that is still referenced by an active episode.
                 await CleanupExpiredAnomalyLogsAsync();
 
+                // Active episode state is only valid while the detector is still
+                // receiving samples. A browser tab can be closed, suspended, or
+                // lose authentication after an episode is confirmed; without an
+                // expiry the old row would suppress every future episode forever.
+                await RemoveStaleActiveAnomalyStatesAsync();
+
                 // ActiveAnomalyStates is the authoritative episode registry. Do not
                 // create a second log while the same confirmed episode is active.
                 var authoritativeState = await _context.ActiveAnomalyStates
@@ -8124,6 +8130,11 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
+                // Do not restore counters/cooldowns from an abandoned browser
+                // session. The detector uses the same 24-hour freshness rule as
+                // the client-side state restoration.
+                await RemoveStaleActiveAnomalyStatesAsync();
+
                 // scopeId is retained only for backwards compatibility with old clients.
                 // Runtime state is now one row per device and is no longer partitioned by tab.
                 var activeStates = await _context.ActiveAnomalyStates.AsNoTracking().ToListAsync();
@@ -8267,6 +8278,31 @@ namespace KWHMonitoring.Controllers
             if (state == null) return;
             await CompleteAnomalyEpisodeAsync(state);
             _context.ActiveAnomalyStates.Remove(state);
+        }
+
+        private async Task RemoveStaleActiveAnomalyStatesAsync()
+        {
+            var cutoff = DateTime.Now.AddHours(-24);
+            var staleStates = await _context.ActiveAnomalyStates
+                .Where(x => x.LastDetectedAt < cutoff)
+                .ToListAsync();
+
+            if (staleStates.Count == 0)
+                return;
+
+            foreach (var staleState in staleStates)
+            {
+                _logger.LogInformation(
+                    "Removing stale active anomaly state for {DeviceKey} ({AnomalyType}); last detected at {LastDetectedAt}",
+                    staleState.DeviceKey,
+                    staleState.AnomalyType,
+                    staleState.LastDetectedAt);
+
+                await CompleteAnomalyEpisodeAsync(staleState);
+                _context.ActiveAnomalyStates.Remove(staleState);
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         /// <summary>

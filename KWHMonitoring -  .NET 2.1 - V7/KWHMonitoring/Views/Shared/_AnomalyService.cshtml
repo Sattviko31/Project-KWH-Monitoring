@@ -33,6 +33,7 @@
         
         let anomalyTimer = null;
         let anomalyTimerInterval = 0;    // Track current interval value (ms) - setInterval returns primitive, can't hold properties
+        let anomalyHeartbeatTimer = null; // Detector heartbeat; independent from chart/realtime events
         let anomalyRealtimeWatcher = null;
         let chartDataUpdatedHandler = null;
         let chartRealtimeReadyHandler = null;
@@ -685,6 +686,10 @@
                             saveAnomalyState();
                             lastProcessedSampleByDevice[deviceKey] = sampleSignature;
                             delete anomalyChecksInFlight[deviceKey];
+                        }, function() {
+                            // A baseline request must never leave the device locked
+                            // in anomalyChecksInFlight. The next heartbeat can retry.
+                            delete anomalyChecksInFlight[deviceKey];
                         });
                     } else {
                         // NORMAL MODE: Calculate EMA from current data points
@@ -1162,6 +1167,13 @@
                  @* console.log ('Settings, anomaly state, and per-device  settings loaded. Devices:', Object.keys(window._deviceSettings || {}).length); *@
                 @* console.log('Starting anomaly checks...'); *@
                 setTimeout(runAnomalyCheck, 2000);
+
+                // Do not make anomaly detection depend solely on chart events or
+                // data-version notifications. Those events are UI optimizations;
+                // telemetry detection must keep polling even when a chart event
+                // is missed or the realtime token endpoint temporarily fails.
+                anomalyTimerInterval = Math.max(5000, Math.min((anomalyServiceConfig.checkInterval || 30) * 1000, 10000));
+                anomalyHeartbeatTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
                 
                 // Listen before the chart page script is loaded. The chart
                 // announces readiness and then becomes the only owner of the
@@ -1193,11 +1205,6 @@
                         if (forced) return;
                         runAnomalyCheck();
                     }, { throttleMs: 0, ignoreForced: true });
-                } else {
-                    // Fallback hanya untuk halaman/deployment yang belum memuat
-                    // realtime-refresh.js. Dedup tetap berdasarkan timestamp sample.
-                    anomalyTimerInterval = (anomalyServiceConfig.checkInterval || 30) * 1000;
-                    anomalyTimer = setInterval(runAnomalyCheck, anomalyTimerInterval);
                 }
                 
                 // ============================================
@@ -1271,6 +1278,7 @@
                 chartRealtimeReadyHandler = null;
             }
             if (anomalyTimer) clearInterval(anomalyTimer);
+            if (anomalyHeartbeatTimer) clearInterval(anomalyHeartbeatTimer);
             if (settingsReloadTimer) clearInterval(settingsReloadTimer);
             @* console.log('ðŸ›‘ Anomaly service stopped'); *@
         });
