@@ -8140,9 +8140,11 @@ namespace KWHMonitoring.Controllers
                 var activeStates = await _context.ActiveAnomalyStates.AsNoTracking().ToListAsync();
                 var counts = new JObject();
                 var cooldown = new JObject();
+                var sampleTimes = new JObject();
                 foreach (var state in activeStates)
                 {
                     counts[state.DeviceKey + "_" + state.AnomalyType] = state.ConfirmationCount;
+                    sampleTimes[state.DeviceKey] = new DateTimeOffset(state.LastDetectedAt).ToUnixTimeMilliseconds();
                     if (state.IsConfirmed)
                     {
                         cooldown[state.DeviceKey] = new JObject
@@ -8158,7 +8160,8 @@ namespace KWHMonitoring.Controllers
                 {
                     success = true,
                     confirmationCounts = counts.ToString(Formatting.None),
-                    cooldownState = cooldown.ToString(Formatting.None)
+                    cooldownState = cooldown.ToString(Formatting.None),
+                    sampleTimes = sampleTimes.ToString(Formatting.None)
                 });
             }
             catch (Exception ex)
@@ -8180,11 +8183,13 @@ namespace KWHMonitoring.Controllers
                 if (data == null) return BadRequest(new { success = false, error = "State payload is required" });
                 var counts = JObject.Parse(string.IsNullOrWhiteSpace(data.confirmationCounts) ? "{}" : data.confirmationCounts);
                 var cooldown = JObject.Parse(string.IsNullOrWhiteSpace(data.cooldownState) ? "{}" : data.cooldownState);
+                var sampleTimes = JObject.Parse(string.IsNullOrWhiteSpace(data.sampleTimes) ? "{}" : data.sampleTimes);
                 var maxConfirmations = await GetMaxConfirmationsAsync();
                 var deviceKeys = counts.Properties().Select(x =>
                     x.Name.EndsWith("_OVERLOAD", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 9) :
                     x.Name.EndsWith("_DROP", StringComparison.Ordinal) ? x.Name.Substring(0, x.Name.Length - 5) : string.Empty)
                     .Concat(cooldown.Properties().Select(x => x.Name))
+                    .Concat(sampleTimes.Properties().Select(x => x.Name))
                     .Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 20)
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
@@ -8201,16 +8206,40 @@ namespace KWHMonitoring.Controllers
                     if (cooldownState != null && cooldownState["type"] != null)
                         anomalyType = cooldownState.Value<string>("type") ?? anomalyType;
 
+                    var sampleToken = sampleTimes[deviceKey];
+                    if (sampleToken == null || sampleToken.Type != JTokenType.Integer)
+                        continue;
+
+                    DateTime sampleTime;
+                    try
+                    {
+                        sampleTime = DateTimeOffset.FromUnixTimeMilliseconds(sampleToken.Value<long>()).LocalDateTime;
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        continue;
+                    }
+
                     var state = await _context.ActiveAnomalyStates
                         .FirstOrDefaultAsync(x => x.DeviceKey == deviceKey);
                     if (count <= 0 && cooldownState == null)
                     {
-                        if (state != null)
+                        if (state != null
+                            && !state.IsConfirmed
+                            && sampleTime > state.LastDetectedAt)
                         {
-                            await DeleteActiveAnomalyEpisodeAsync(state);
+                            state.ConfirmationCount = 0;
+                            state.LastDetectedAt = sampleTime;
+                            state.UpdatedAt = DateTime.Now;
                         }
                         continue;
                     }
+
+                    if (state != null && state.IsConfirmed && state.AnomalyLogId.HasValue)
+                        continue;
+
+                    if (state != null && sampleTime <= state.LastDetectedAt)
+                        continue;
 
                     if (state == null)
                     {
@@ -8221,8 +8250,8 @@ namespace KWHMonitoring.Controllers
                             ConfirmationCount = count,
                             MaxConfirmations = maxConfirmations,
                             IsConfirmed = cooldownState != null,
-                            FirstDetectedAt = DateTime.Now,
-                            LastDetectedAt = DateTime.Now,
+                            FirstDetectedAt = sampleTime,
+                            LastDetectedAt = sampleTime,
                             UpdatedAt = DateTime.Now
                         };
                         _context.ActiveAnomalyStates.Add(state);
@@ -8238,8 +8267,8 @@ namespace KWHMonitoring.Controllers
                         state.ConfirmationCount = count;
                         state.MaxConfirmations = maxConfirmations;
                         state.IsConfirmed = cooldownState != null;
-                        state.FirstDetectedAt = DateTime.Now;
-                        state.LastDetectedAt = DateTime.Now;
+                        state.FirstDetectedAt = sampleTime;
+                        state.LastDetectedAt = sampleTime;
                         state.UpdatedAt = DateTime.Now;
                     }
                     else
@@ -8247,7 +8276,7 @@ namespace KWHMonitoring.Controllers
                         state.ConfirmationCount = Math.Max(state.ConfirmationCount, count);
                         state.MaxConfirmations = maxConfirmations;
                         state.IsConfirmed = state.IsConfirmed || cooldownState != null;
-                        state.LastDetectedAt = DateTime.Now;
+                        state.LastDetectedAt = sampleTime;
                         state.UpdatedAt = DateTime.Now;
                     }
                 }
@@ -9950,6 +9979,7 @@ namespace KWHMonitoring.Controllers
     {
         public string confirmationCounts { get; set; } = "{}";
         public string cooldownState { get; set; } = "{}";
+        public string sampleTimes { get; set; } = "{}";
         public string scopeId { get; set; }
     }
 

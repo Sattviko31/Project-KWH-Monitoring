@@ -39,8 +39,10 @@
         let chartRealtimeReadyHandler = null;
         let settingsReloadTimer = null;  // Timer untuk reload settings secara berkala
         let anomalyChecksInFlight = {};  // Hindari pemrosesan bersamaan untuk device yang sama
+        let anomalyCheckStartedAt = {};  // Watchdog untuk lock yang tertinggal akibat exception/runtime hang
         let silenceChecksInFlight = {};  // Satu pemeriksaan keterlambatan telemetry per device
         let lastProcessedSampleByDevice = {}; // Signature sampel terakhir yang sudah diproses
+        let lastProcessedSampleTimeByDevice = {}; // Waktu sample telemetry terakhir per device
 
         // Konfirmasi anomali - AKAN DI-LOAD DARI DATABASE
         let anomalyConfirmation = {
@@ -228,6 +230,20 @@
                             @* console.warn('âš ï¸ Could not parse confirmation counts:', e); *@
                         }
 
+                        try {
+                            var sampleTimes = JSON.parse(data.sampleTimes || '{}');
+                            if (sampleTimes && typeof sampleTimes === 'object') {
+                                Object.keys(sampleTimes).forEach(function(deviceKey) {
+                                    var sampleTime = Number(sampleTimes[deviceKey]);
+                                    if (Number.isFinite(sampleTime)) {
+                                        lastProcessedSampleTimeByDevice[deviceKey] = sampleTime;
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            @* console.warn('Could not parse anomaly sample times:', e); *@
+                        }
+
                         // Restore cooldown state
                         try {
                             var cooldown = JSON.parse(data.cooldownState);
@@ -287,6 +303,7 @@
             var payload = {
                 confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
                 cooldownState: JSON.stringify(anomalyCooldownState),
+                sampleTimes: JSON.stringify(lastProcessedSampleTimeByDevice),
                 scopeId: anomalyStateScopeId
             };
 
@@ -613,8 +630,17 @@
             if (anomalyConfirmation.maxConfirmations <= 0) {
                 return;
             }
-            if (anomalyChecksInFlight[deviceKey]) return;
+            if (anomalyChecksInFlight[deviceKey]) {
+                // A failed callback must never permanently stop detection for a
+                // device. Normal chart requests finish within 5 seconds; allow
+                // a wider margin before recovering a stale lock.
+                var startedAt = anomalyCheckStartedAt[deviceKey] || 0;
+                if (startedAt > 0 && (Date.now() - startedAt) < 15000) return;
+                delete anomalyChecksInFlight[deviceKey];
+                delete anomalyCheckStartedAt[deviceKey];
+            }
             anomalyChecksInFlight[deviceKey] = true;
+            anomalyCheckStartedAt[deviceKey] = Date.now();
 
             // Gunakan chartDataPoints yang sudah diload dari system settings
             // Fetch MORE points for snapshot buffer: max(chartDataPoints, CHART_SNAPSHOT_SIZE)
@@ -675,35 +701,53 @@
                         // USE STATIC BASELINE FROM INITIAL 100 DATA POINTS
                         // Baseline ini TIDAK BERUBAH meski jumlah data points chart berubah
                         fetchInitialEmaBaseline(deviceKey).then(function(baseline) {
-                            baselineValue = baseline;
-                            emaValues = calculateEMAWithBaseline(powerData, anomalyServiceConfig.emaPeriod, baseline);
+                            try {
+                                baselineValue = baseline;
+                                emaValues = calculateEMAWithBaseline(powerData, anomalyServiceConfig.emaPeriod, baseline);
 
-                            processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue, timestamps);
-                            // Persist the state after every newly processed chart
-                            // sample, including samples that do not change the
-                            // anomaly type. The ordered save queue coalesces
-                            // overlapping requests without losing the newest state.
-                            saveAnomalyState();
-                            lastProcessedSampleByDevice[deviceKey] = sampleSignature;
-                            delete anomalyChecksInFlight[deviceKey];
+                                lastProcessedSampleByDevice[deviceKey] = sampleSignature;
+                                lastProcessedSampleTimeByDevice[deviceKey] = sampleKey;
+                                processAnomalyCheck(deviceKey, powerData, emaValues, baselineValue, timestamps);
+                                // Persist the state after every newly processed chart
+                                // sample, including samples that do not change the
+                                // anomaly type. The ordered save queue coalesces
+                                // overlapping requests without losing the newest state.
+                                saveAnomalyState();
+                            } catch (error) {
+                                @* console.error('Anomaly processing failed for ' + deviceKey, error); *@
+                            } finally {
+                                delete anomalyChecksInFlight[deviceKey];
+                                delete anomalyCheckStartedAt[deviceKey];
+                            }
                         }, function() {
                             // A baseline request must never leave the device locked
                             // in anomalyChecksInFlight. The next heartbeat can retry.
                             delete anomalyChecksInFlight[deviceKey];
+                            delete anomalyCheckStartedAt[deviceKey];
                         });
                     } else {
                         // NORMAL MODE: Calculate EMA from current data points
-                        emaValues = calculateEMA(powerData, anomalyServiceConfig.emaPeriod);
+                        try {
+                            emaValues = calculateEMA(powerData, anomalyServiceConfig.emaPeriod);
 
-                        processAnomalyCheck(deviceKey, powerData, emaValues, null, timestamps);
-                        // Keep ActiveAnomalyState synchronized with each chart
-                        // sample, not only with threshold transitions.
-                        saveAnomalyState();
-                        lastProcessedSampleByDevice[deviceKey] = sampleSignature;
-                        delete anomalyChecksInFlight[deviceKey];
+                            lastProcessedSampleByDevice[deviceKey] = sampleSignature;
+                            lastProcessedSampleTimeByDevice[deviceKey] = sampleKey;
+                            processAnomalyCheck(deviceKey, powerData, emaValues, null, timestamps);
+                            // Keep ActiveAnomalyState synchronized with each chart
+                            // sample, not only with threshold transitions.
+                            saveAnomalyState();
+                        } catch (error) {
+                            @* console.error('Anomaly processing failed for ' + deviceKey, error); *@
+                        } finally {
+                            delete anomalyChecksInFlight[deviceKey];
+                            delete anomalyCheckStartedAt[deviceKey];
+                        }
                     }
                 },
-                error: function() { delete anomalyChecksInFlight[deviceKey]; }
+                error: function() {
+                    delete anomalyChecksInFlight[deviceKey];
+                    delete anomalyCheckStartedAt[deviceKey];
+                }
             });
         }
 
