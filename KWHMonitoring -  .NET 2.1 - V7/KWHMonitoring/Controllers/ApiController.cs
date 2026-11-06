@@ -1722,7 +1722,12 @@ namespace KWHMonitoring.Controllers
                     }).ToList();
 
                     var billingEvaluations = new Dictionary<string, BillingAnomalyEvaluation>(StringComparer.OrdinalIgnoreCase);
-                    if (request?.IncludeBillingAnomalyDetails != false)
+                    var includeBillingAnomalyDetails = request?.IncludeBillingAnomalyDetails != false;
+                    // The comparison endpoint is read-only with respect to anomaly
+                    // persistence. Detection and notification are handled by
+                    // BillingAnomalyDetectionBackgroundService so table loading
+                    // does not block on workflow transactions or outbox writes.
+                    if (includeBillingAnomalyDetails)
                     {
                         foreach (var row in periodRows)
                         {
@@ -1744,13 +1749,14 @@ namespace KWHMonitoring.Controllers
                             if (billing == null || row.actualCost == null) continue;
                             try
                             {
-                                billingEvaluations[row.period] = await _billingAnomalyDetectionService.EvaluateAsync(
+                                var evaluation = await _billingAnomalyDetectionService.EvaluateAsync(
                                     deviceKey,
                                     new DateTime(row.year, row.month, 1),
                                     row.estimatedCost,
                                     billing,
                                     previousBilling,
                                     persistAnomaly: false);
+                                billingEvaluations[row.period] = evaluation;
                             }
                             catch (Exception billingEx)
                             {

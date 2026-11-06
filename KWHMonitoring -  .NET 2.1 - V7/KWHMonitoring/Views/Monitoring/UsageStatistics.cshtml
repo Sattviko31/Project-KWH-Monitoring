@@ -1441,6 +1441,7 @@
                     // Load device categories to ensure accurate filtering
                     loadUsageDeviceCategories();
 
+                    var comparisonStarted = false;
                     if (listChanged || previousActiveKey !== activeUsageChipDeviceKey) {
                         resetUsageComparisonState();
                         if (usageCycleInProgress) usageRefreshPending = true;
@@ -1448,6 +1449,7 @@
                         if (usagePanelView === 'combined') {
                             comparisonLoadPending = false;
                             loadUsageErpComparison();
+                            comparisonStarted = true;
                         }
                     }
                     if (usageInitialLoadPending) {
@@ -1458,7 +1460,7 @@
                         comparisonLoadPending = false;
                         loadUsageErpComparison();
                     }
-                    else if (usagePanelView === 'combined') {
+                    else if (!comparisonStarted && usagePanelView === 'combined') {
                         loadUsageErpComparison();
                     }
                 },

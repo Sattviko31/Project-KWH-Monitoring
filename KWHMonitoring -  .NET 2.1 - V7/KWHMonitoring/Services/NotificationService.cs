@@ -2294,7 +2294,7 @@ namespace KWHMonitoring.Services
         /// <summary>
         /// Sends a billing-specific alert without changing the existing device anomaly alert format.
         /// </summary>
-        public async Task SendBillingAnomalyAlertAsync(
+        public async Task<bool> SendBillingAnomalyAlertAsync(
             string deviceKey,
             DateTime billingPeriod,
             decimal estimatedBilling,
@@ -2307,7 +2307,7 @@ namespace KWHMonitoring.Services
             EnsureSettingsLoaded();
             if ((!_settings.EnableEmailNotification && !_settings.EnableWhatsAppNotification)
                 || !_settings.SendInstantAlert)
-                return;
+                return false;
 
             var direction = difference >= 0m ? "lebih tinggi" : "lebih rendah";
             var percentText = differencePercent.HasValue
@@ -2385,6 +2385,7 @@ namespace KWHMonitoring.Services
             {
                 _logger.LogWarning("Billing anomaly alert was not delivered by any enabled channel for {DeviceKey}, ERP billing {ErpBillingId}.", deviceKey, erpBillingId);
             }
+            return notificationSent;
         }
 
         // ============================================

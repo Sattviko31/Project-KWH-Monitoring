@@ -19,15 +19,21 @@
             }
             else if (Model.Details != null)
             {
+                var periodDifference = Model.Details.PeriodDifference ?? Model.Details.BillingDifference;
+                var periodDifferencePercent = Model.Details.PeriodDifferencePercent;
+                var isDecrease = periodDifference.HasValue && periodDifference.Value < 0m;
+                var valueClass = isDecrease ? "text-success" : "text-danger";
+                var directionText = isDecrease ? "Tagihan periode berjalan lebih kecil dari periode sebelumnya." : "Tagihan periode berjalan lebih besar dari periode sebelumnya.";
                 <p>Jenis anomaly: <strong>Periode-ke-periode</strong>. Nilai di bawah membandingkan tagihan ERP periode berjalan dengan periode sebelumnya, bukan estimasi sistem.</p>
                 <dl class="row">
-                    <dt class="col-sm-5">Perangkat</dt><dd class="col-sm-7">@Model.Details.DeviceKey</dd>
+                    <dt class="col-sm-5">Perangkat</dt><dd class="col-sm-7">@Model.Details.GroupName</dd>
                     <dt class="col-sm-5">Periode berjalan</dt><dd class="col-sm-7">@(Model.Details.BillingPeriod?.ToString("MMMM yyyy") ?? "-")</dd>
                     <dt class="col-sm-5">Tagihan ERP berjalan</dt><dd class="col-sm-7">@(Model.Details.ActualBilling?.ToString("N2") ?? "-")</dd>
                     <dt class="col-sm-5">Periode sebelumnya</dt><dd class="col-sm-7">@(Model.Details.PreviousBillingPeriod?.ToString("MMMM yyyy") ?? "-")</dd>
                     <dt class="col-sm-5">Tagihan ERP sebelumnya</dt><dd class="col-sm-7">@(Model.Details.PreviousBilling?.ToString("N2") ?? "-")</dd>
-                    <dt class="col-sm-5">Selisih periode-ke-periode</dt><dd class="col-sm-7 text-danger fw-bold">@(Model.Details.PeriodDifference?.ToString("N2") ?? Model.Details.BillingDifference?.ToString("N2") ?? "-")</dd>
-                    <dt class="col-sm-5">Persentase perubahan</dt><dd class="col-sm-7 text-danger fw-bold">@(Model.Details.PeriodDifferencePercent?.ToString("N2") ?? "-")%</dd>
+                    <dt class="col-sm-5">Selisih periode-ke-periode</dt><dd class="col-sm-7 @valueClass fw-bold">@(periodDifference.HasValue ? (periodDifference.Value > 0m ? "+" : "") + periodDifference.Value.ToString("N2") : "-")</dd>
+                    <dt class="col-sm-5">Persentase perubahan</dt><dd class="col-sm-7 @valueClass fw-bold">@(periodDifferencePercent.HasValue ? (periodDifferencePercent.Value > 0m ? "+" : "") + periodDifferencePercent.Value.ToString("N2") : "-")%</dd>
+                    <dt class="col-sm-5">Catatan anomaly</dt><dd class="col-sm-7 @valueClass">@directionText</dd>
                     <dt class="col-sm-4">Berlaku sampai</dt><dd class="col-sm-8">@Model.Details.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd>
                 </dl>
                 <form method="post" action="/BillingConfirmation">

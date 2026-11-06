@@ -99,6 +99,7 @@ namespace KWHMonitoring
             if (string.IsNullOrEmpty(disableNotificationBg) || disableNotificationBg == "0" || disableNotificationBg.Equals("false", StringComparison.OrdinalIgnoreCase))
             {
                 services.AddHostedService<AnomalyNotificationBackgroundService>();
+                services.AddHostedService<BillingAnomalyDetectionBackgroundService>();
                 services.AddHostedService<BillingNotificationOutboxService>();
             }
 

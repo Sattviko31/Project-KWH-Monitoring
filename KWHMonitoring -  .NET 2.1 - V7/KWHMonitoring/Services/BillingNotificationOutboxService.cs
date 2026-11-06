@@ -69,6 +69,30 @@ namespace KWHMonitoring.Services
                     {
                         var payload = JObject.Parse(row.PayloadJson ?? "{}");
                         var anomalyId = (long?)payload["anomalyLogId"];
+                        if (string.Equals(row.NotificationType, "BILLING_VARIANCE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (anomalyId.HasValue && await db.AnomalyLogs.AnyAsync(x => x.Id == anomalyId.Value && x.IsResolved, cancellationToken))
+                            {
+                                db.BillingNotificationOutbox.Remove(row);
+                                continue;
+                            }
+
+                            var billingResult = await notification.SendBillingAnomalyAlertAsync(
+                                (string)payload["deviceKey"],
+                                (DateTime?)payload["billingPeriod"] ?? DateTime.MinValue,
+                                (decimal?)payload["estimatedBilling"] ?? 0m,
+                                (decimal?)payload["actualBilling"] ?? 0m,
+                                (decimal?)payload["difference"] ?? 0m,
+                                (decimal?)payload["differencePercent"],
+                                (decimal?)payload["threshold"] ?? 0m,
+                                (long?)payload["erpBillingId"] ?? 0L);
+                            row.Status = billingResult ? "SENT" : "RETRY";
+                            row.SentAt = billingResult ? now : (DateTime?)null;
+                            row.LastError = billingResult ? null : "No billing notification channel delivered the alert.";
+                            row.NextAttemptAt = billingResult ? (DateTime?)null : now.AddMinutes(Math.Min(60, row.AttemptCount * row.AttemptCount));
+                            row.UpdatedAt = DateTime.UtcNow;
+                            continue;
+                        }
                         if (string.Equals(row.Channel, "WEB_MODAL", StringComparison.OrdinalIgnoreCase))
                         {
                             row.Status = "SENT";

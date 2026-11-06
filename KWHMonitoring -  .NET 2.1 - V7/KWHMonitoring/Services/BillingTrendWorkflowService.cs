@@ -53,6 +53,7 @@ namespace KWHMonitoring.Services
         public string Error { get; set; }
         public long AnomalyLogId { get; set; }
         public string DeviceKey { get; set; }
+        public string GroupName { get; set; }
         public DateTime? BillingPeriod { get; set; }
         public decimal? EstimatedBilling { get; set; }
         public decimal? ActualBilling { get; set; }
@@ -603,8 +604,17 @@ namespace KWHMonitoring.Services
         {
             var isPeriodOverPeriod = IsPeriodOverPeriodAnomaly(billingAnomalyType);
             var isEstimateVsErp = IsEstimateVsErpAnomaly(billingAnomalyType);
+            // For period-over-period anomalies, the previous billing period is
+            // always the calendar month immediately before the current period.
+            // Do not trust a same-month/stale value supplied by an older caller.
+            var normalizedPreviousBillingPeriod = previousBilling.HasValue && isPeriodOverPeriod
+                ? billingPeriod.Date.AddMonths(-1)
+                : previousBillingPeriod;
             var periodDifference = previousBilling.HasValue
                 ? actualBilling - previousBilling.Value
+                : (decimal?)null;
+            var periodDifferencePercent = previousBilling.HasValue && previousBilling.Value != 0m
+                ? periodDifference.Value / previousBilling.Value * 100m
                 : (decimal?)null;
 
             // Estimate-vs-actual is a regular note only. It must never enter
@@ -627,13 +637,17 @@ namespace KWHMonitoring.Services
                     existing.BillingAnomalyType = MergeBillingAnomalyTypes(
                         existing.BillingAnomalyType, billingAnomalyType);
                     existing.PreviousBilling = previousBilling;
-                    existing.PreviousBillingPeriod = previousBillingPeriod;
+                    existing.PreviousBillingPeriod = normalizedPreviousBillingPeriod;
                     existing.PreviousErpBillingId = previousErpBillingId;
+                    existing.PeriodDifference = periodDifference;
+                    existing.PeriodDifferencePercent = periodDifferencePercent;
                     existing.Notes = "Billing anomaly aktual periode berjalan dibanding aktual periode sebelumnya.";
                     await _context.SaveChangesAsync();
                 }
                 if (isPeriodOverPeriod && !existing.IsResolved)
                     await QueueAnomalyNotificationsAsync(existing.Id);
+                if (isEstimateVsErp && !isPeriodOverPeriod && !existing.IsResolved)
+                    await QueueBillingVarianceNotificationAsync(existing.Id);
                 return existing.Id;
             }
             var anomaly = new AnomalyLog
@@ -643,7 +657,8 @@ namespace KWHMonitoring.Services
                 BillingPeriod = billingPeriod.Date, ErpBillingId = erpBillingId,
                 EstimatedBilling = estimatedBilling, ActualBilling = actualBilling,
                 BillingDifference = difference, BillingDifferencePercent = differencePercent,
-                PreviousBilling = previousBilling, PreviousBillingPeriod = previousBillingPeriod,
+                PeriodDifference = periodDifference, PeriodDifferencePercent = periodDifferencePercent,
+                PreviousBilling = previousBilling, PreviousBillingPeriod = normalizedPreviousBillingPeriod,
                 PreviousErpBillingId = previousErpBillingId, ThresholdValue = threshold,
                 Deviation = differencePercent ?? 0m, DetectedTime = DateTime.UtcNow,
                 Severity = Math.Abs(difference) >= threshold * 3m ? "critical" : "high",
@@ -655,7 +670,49 @@ namespace KWHMonitoring.Services
             await _context.SaveChangesAsync();
             if (isPeriodOverPeriod)
                 await QueueAnomalyNotificationsAsync(anomaly.Id);
+            else if (isEstimateVsErp)
+                await QueueBillingVarianceNotificationAsync(anomaly.Id);
             return anomaly.Id;
+        }
+
+        private async Task QueueBillingVarianceNotificationAsync(long anomalyLogId)
+        {
+            var anomaly = await _context.AnomalyLogs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == anomalyLogId
+                    && x.AnomalyType == "BILLING_VARIANCE");
+            if (anomaly == null || anomaly.IsResolved)
+                return;
+
+            var eventKey = anomaly.Id + ":BILLING_VARIANCE";
+            var exists = await _context.BillingNotificationOutbox.AnyAsync(x =>
+                x.EventKey == eventKey && x.NotificationType == "BILLING_VARIANCE"
+                && x.Status != "CANCELLED");
+            if (exists)
+                return;
+
+            _context.BillingNotificationOutbox.Add(new BillingNotificationOutbox
+            {
+                EventKey = eventKey,
+                Channel = "BILLING_ALERT",
+                NotificationType = "BILLING_VARIANCE",
+                PayloadJson = JsonConvert.SerializeObject(new
+                {
+                    anomalyLogId = anomaly.Id,
+                    deviceKey = anomaly.DeviceKey,
+                    billingPeriod = anomaly.BillingPeriod,
+                    estimatedBilling = anomaly.EstimatedBilling,
+                    actualBilling = anomaly.ActualBilling,
+                    difference = anomaly.BillingDifference,
+                    differencePercent = anomaly.BillingDifferencePercent,
+                    threshold = anomaly.ThresholdValue,
+                    erpBillingId = anomaly.ErpBillingId
+                }),
+                Status = "PENDING",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
         }
 
         private static bool IsPeriodOverPeriodAnomaly(string billingAnomalyType)
@@ -694,12 +751,37 @@ namespace KWHMonitoring.Services
                 : null;
             if (anomaly == null || anomaly.IsResolved)
                 return new BillingConfirmationTokenView { Valid = false, Error = "Anomaly sudah terkonfirmasi atau tidak ditemukan." };
+            // DeviceRegistry is the preferred master source, but older or
+            // partially synchronized devices may only have GroupName in the
+            // latest telemetry row. Do not expose the numeric DeviceKey when
+            // a real group name is available in either source.
+            var groupName = await _context.DeviceRegistry.AsNoTracking()
+                .Where(x => x.DeviceKey == anomaly.DeviceKey
+                    && !string.IsNullOrWhiteSpace(x.GroupName))
+                .OrderByDescending(x => x.UpdatedAt)
+                .Select(x => x.GroupName)
+                .FirstOrDefaultAsync();
+            if (string.IsNullOrWhiteSpace(groupName))
+            {
+                groupName = await _context.KWH_Monitoring.AsNoTracking()
+                    .Where(x => x.DeviceKey == anomaly.DeviceKey
+                        && !string.IsNullOrWhiteSpace(x.GroupName))
+                    .OrderByDescending(x => x.Waktu_Server)
+                    .Select(x => x.GroupName)
+                    .FirstOrDefaultAsync();
+            }
+            var normalizedPreviousPeriod = anomaly.BillingPeriod.HasValue
+                && IsPeriodOverPeriodAnomaly(anomaly.BillingAnomalyType)
+                && anomaly.PreviousBilling.HasValue
+                ? anomaly.BillingPeriod.Value.Date.AddMonths(-1)
+                : anomaly.PreviousBillingPeriod;
             return new BillingConfirmationTokenView
             {
                 Valid = true, AnomalyLogId = anomaly.Id, DeviceKey = anomaly.DeviceKey,
+                GroupName = string.IsNullOrWhiteSpace(groupName) ? anomaly.DeviceKey : groupName,
                 BillingPeriod = anomaly.BillingPeriod, EstimatedBilling = anomaly.EstimatedBilling,
                 ActualBilling = anomaly.ActualBilling, BillingDifference = anomaly.BillingDifference,
-                PreviousBilling = anomaly.PreviousBilling, PreviousBillingPeriod = anomaly.PreviousBillingPeriod,
+                PreviousBilling = anomaly.PreviousBilling, PreviousBillingPeriod = normalizedPreviousPeriod,
                 PeriodDifference = anomaly.PeriodDifference, PeriodDifferencePercent = anomaly.PeriodDifferencePercent,
                 ExpiresAt = token.ExpiresAt
             };
