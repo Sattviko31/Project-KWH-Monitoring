@@ -33,6 +33,9 @@ namespace KWHMonitoring.Models
         [Column("AnomalyLogId")]
         public long? AnomalyLogId { get; set; }
 
+        [Column("LastSampleId")]
+        public long? LastSampleId { get; set; }
+
         [Column("FirstDetectedAt", TypeName = "datetime2")]
         public DateTime FirstDetectedAt { get; set; }
 

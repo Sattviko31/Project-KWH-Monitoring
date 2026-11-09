@@ -82,6 +82,9 @@ namespace KWHMonitoring.Migrations
                     b.Property<bool?>("Acknowledged")
                         .HasColumnName("Acknowledged");
 
+                b.Property<long?>("LastSampleId")
+                    .HasColumnType("bigint");
+
                     b.Property<string>("AcknowledgedBy")
                         .HasColumnName("AcknowledgedBy")
                         .HasColumnType("nvarchar(256)")

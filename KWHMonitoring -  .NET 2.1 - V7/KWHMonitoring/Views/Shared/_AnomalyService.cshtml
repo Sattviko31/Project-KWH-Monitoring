@@ -284,10 +284,10 @@
         }
 
         function saveAnomalyState() {
-            if (typeof IS_USER_AUTHENTICATED !== 'undefined' && !IS_USER_AUTHENTICATED) return;
-            anomalyStateSaveDirty = true;
-            anomalyStateSavePending = true;
-            flushAnomalyStateSave();
+            // Server-side anomaly detection owns ActiveAnomalyStates now.
+            // Browser confirmation/cooldown state is display-only and must not
+            // overwrite authoritative telemetry state.
+            return;
         }
 
         function saveAnomalyStateImmediate() {
@@ -331,27 +331,17 @@
         }
 
         // Reset server-side anomaly alert state saat power kembali normal
-        // Ini memungkinkan alert baru dikirim lagi untuk device yang sama
+        // Reset is performed by AnomalyDetectionBackgroundService after it
+        // evaluates the latest telemetry directly from the database.
         function resetServerAnomalyAlert(deviceKey) {
-            // Tamu (belum login): lewati â€” endpoint reset-anomaly-alert membutuhkan role Operator/Admin.
-            $.ajax({
-                url: '/api/Api/reset-anomaly-alert',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ deviceKey: deviceKey }),
-                success: function() {
-                 @* console.log('ðŸ”“ Server anomaly a lert reset for ' + deviceKey); *@
-                },
-                error: function(xhr, status, error) {
-                    @* console.error('âŒ Error reset ting server anomaly alert:', error); *@
-                }
-            });
+            return;
         }
 
         function loadAnomalySettings() {
             @* console.log('ï¿½ ï¿½ Loading all settings from database...'); *@
             
             return $.when(
+                // Load EMA, Anomaly, AND Notification settings PERSIS SAMA
                 // Load EMA, Anomaly, AND Notification settings PERSIS SAMA
                 $.ajax({
                     url: '/api/Api/get-ema-settings',
@@ -792,33 +782,15 @@
                     return;
                 }
 
-                $.ajax({
-                    url: '/api/Api/log-anomaly',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        deviceKey: deviceKey,
-                        deviceId: deviceKey,
-                        anomalyType: 'DEVICE_OFFLINE',
-                        powerValue: health.lastPowerValue || 0,
-                        thresholdValue: 0,
-                        deviation: 0,
-                        emaValue: null,
-                        thresholdMode: 'telemetry-silence',
-                        sampleTime: health.sampleTime
-                    })
-                }).done(function(response) {
-                    if (!response || !response.success) return;
-                    anomalyCooldownState[deviceKey] = {
-                        type: 'DEVICE_OFFLINE',
-                        loggedAt: Date.now(),
-                        waitingForNormal: true
-                    };
-                    notifyCooldownChanged(deviceKey, true, 'DEVICE_OFFLINE');
-                    saveAnomalyStateImmediate();
-                }).always(function() {
-                    delete silenceChecksInFlight[deviceKey];
-                });
+                // Offline episode persistence is server-owned. The background
+                // detector evaluates telemetry silence and writes the state.
+                anomalyCooldownState[deviceKey] = {
+                    type: 'DEVICE_OFFLINE',
+                    loggedAt: Date.now(),
+                    waitingForNormal: true
+                };
+                notifyCooldownChanged(deviceKey, true, 'DEVICE_OFFLINE');
+                delete silenceChecksInFlight[deviceKey];
             }).fail(function() {
                 delete silenceChecksInFlight[deviceKey];
             });
@@ -1107,9 +1079,15 @@
                     After: [],  // Will be collected and sent separately
                     UpperThreshold: upper,
                     LowerThreshold: lower,
+
                     EMAValue: emaValue
  
                 };
+
+                // ActiveAnomalyStates/AnomalyLogs are written only by the
+                // server-side background detector. The chart script remains a
+                // display helper and must not submit anomaly records.
+                return;
 
                 /* console.log('ðŸ“Š Chart snapshot BEFORE data captured: ' + beforeData.length + ' points for ' + deviceKey) */;
 
@@ -1281,7 +1259,7 @@
             // ke BillingConfirmation, pagehide dapat terjadi hampir bersamaan dengan
             // saveAnomalyStateImmediate() dan menyebabkan duplicate insert pada
             // unique index ActiveAnomalyStates.DeviceKey.
-            if (!anomalyStateSaveInFlight) try {
+            if (false && !anomalyStateSaveInFlight) try {
                 var payload = JSON.stringify({
                     confirmationCounts: JSON.stringify(anomalyConfirmation.counts),
                     cooldownState: JSON.stringify(anomalyCooldownState),

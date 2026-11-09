@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -8,6 +9,7 @@ using System.Net.Http;
 using System.Net.Mail;
 using System.Security.Claims;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -32,6 +34,18 @@ namespace KWHMonitoring.Controllers
     [ApiController]
     public class ApiController : ControllerBase
     {
+        // Serialize anomaly state transitions per device. Without this gate,
+        // two browser requests or a browser request plus the hosted detector can
+        // read the same ActiveAnomalyState and both increment/create an episode.
+        // The lock is deliberately scoped only to anomaly operations and only to
+        // the affected device; other devices and unrelated APIs remain concurrent.
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> AnomalyDeviceGates =
+            new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.Ordinal);
+
+        private static SemaphoreSlim GetAnomalyDeviceGate(string deviceKey)
+        {
+            return AnomalyDeviceGates.GetOrAdd(deviceKey, key => new SemaphoreSlim(1, 1));
+        }
         private const decimal DefaultTariffPerKWh = 1444.70m;
         private readonly ApplicationDbContext _context;
         private readonly IMemoryCache _cache;
@@ -5525,7 +5539,7 @@ namespace KWHMonitoring.Controllers
             }
         }
 
-        private async Task<DeviceSilenceAssessment> AssessDeviceSilenceAsync(string deviceKey)
+        internal async Task<DeviceSilenceAssessment> AssessDeviceSilenceAsync(string deviceKey)
         {
             var recentTimes = await _context.KWH_Monitoring.AsNoTracking()
                 .Where(x => x.DeviceKey == deviceKey)
@@ -5694,6 +5708,10 @@ namespace KWHMonitoring.Controllers
                 if (data == null || string.IsNullOrWhiteSpace(data.DeviceKey) || data.DeviceKey.Length > 20)
                     return BadRequest(new { success = false, error = "DeviceKey is required and must match a configured device" });
 
+                var anomalyGate = GetAnomalyDeviceGate(data.DeviceKey);
+                await anomalyGate.WaitAsync();
+                try
+                {
                 var verified = await VerifyAnomalySampleAsync(data);
                 if (!verified.IsValid)
                     return BadRequest(new { success = false, error = verified.Error });
@@ -5716,17 +5734,81 @@ namespace KWHMonitoring.Controllers
                 // expiry the old row would suppress every future episode forever.
                 await RemoveStaleActiveAnomalyStatesAsync();
 
+                var configuredMaxConfirmations = IsDeviceOfflineType(data.AnomalyType)
+                    ? 1
+                    : await GetMaxConfirmationsAsync();
+
                 // ActiveAnomalyStates is the authoritative episode registry. Do not
                 // create a second log while the same confirmed episode is active.
                 var authoritativeState = await _context.ActiveAnomalyStates
                     .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+
+                // Confirmation is sample-based, not request-based. The first new
+                // anomaly sample is count 1; the same telemetry sample is ignored;
+                // only a newer sample increments the candidate.
+                if (authoritativeState != null &&
+                    string.Equals(authoritativeState.AnomalyType, data.AnomalyType, StringComparison.Ordinal) &&
+                    !authoritativeState.IsConfirmed)
+                {
+                    if (data.SampleId.HasValue && authoritativeState.LastSampleId.HasValue
+                        ? data.SampleId.Value <= authoritativeState.LastSampleId.Value
+                        : verified.SampleTime <= authoritativeState.LastDetectedAt)
+                    {
+                        return Ok(new
+                        {
+                            success = true,
+                            pending = true,
+                            duplicate = true,
+                            confirmationCount = authoritativeState.ConfirmationCount,
+                            maxConfirmations = configuredMaxConfirmations
+                        });
+                    }
+
+                    authoritativeState.ConfirmationCount = Math.Min(
+                        configuredMaxConfirmations,
+                        Math.Max(0, authoritativeState.ConfirmationCount) + 1);
+                    authoritativeState.LastDetectedAt = verified.SampleTime;
+                    authoritativeState.LastSampleId = data.SampleId;
+                    authoritativeState.MaxConfirmations = configuredMaxConfirmations;
+                    authoritativeState.UpdatedAt = DateTime.Now;
+
+                    if (authoritativeState.ConfirmationCount < configuredMaxConfirmations)
+                    {
+                        await _context.SaveChangesAsync();
+                        return Ok(new
+                        {
+                            success = true,
+                            pending = true,
+                            confirmationCount = authoritativeState.ConfirmationCount,
+                            maxConfirmations = configuredMaxConfirmations
+                        });
+                    }
+
+                    // The current newer sample reaches the configured count.
+                    // Continue below to create the confirmed log and snapshot.
+                }
+
                 if (authoritativeState != null &&
                     authoritativeState.IsConfirmed &&
                     authoritativeState.AnomalyLogId.HasValue &&
                     string.Equals(authoritativeState.AnomalyType, data.AnomalyType, StringComparison.Ordinal))
                 {
-                    authoritativeState.ConfirmationCount++;
-                    authoritativeState.LastDetectedAt = verified.DetectedTime;
+                    if (data.SampleId.HasValue && authoritativeState.LastSampleId.HasValue
+                        ? data.SampleId.Value <= authoritativeState.LastSampleId.Value
+                        : verified.SampleTime <= authoritativeState.LastDetectedAt)
+                    {
+                        return Ok(new
+                        {
+                            success = true,
+                            suppressed = true,
+                            duplicate = true,
+                            reason = "Telemetry sample already processed",
+                            logId = authoritativeState.AnomalyLogId
+                        });
+                    }
+
+                    authoritativeState.LastDetectedAt = verified.SampleTime;
+                    authoritativeState.LastSampleId = data.SampleId;
                     authoritativeState.UpdatedAt = DateTime.Now;
                     await _context.SaveChangesAsync();
                     return Ok(new
@@ -5741,9 +5823,50 @@ namespace KWHMonitoring.Controllers
                 if (authoritativeState != null &&
                     !string.Equals(authoritativeState.AnomalyType, data.AnomalyType, StringComparison.Ordinal))
                 {
+                    // A condition change starts a new confirmation sequence.
+                    _logger.LogInformation(
+                        "Anomaly condition changed for {DeviceKey}: {PreviousType} -> {CurrentType}; resetting confirmation sequence",
+                        data.DeviceKey,
+                        authoritativeState.AnomalyType,
+                        data.AnomalyType);
                     await DeleteActiveAnomalyEpisodeAsync(authoritativeState);
                     await _context.SaveChangesAsync();
+                    authoritativeState = null;
                 }
+
+                if (authoritativeState == null)
+                {
+                    if (configuredMaxConfirmations > 1)
+                    {
+                        _context.ActiveAnomalyStates.Add(new ActiveAnomalyState
+                        {
+                            DeviceKey = data.DeviceKey,
+                            AnomalyType = data.AnomalyType,
+                            ConfirmationCount = 1,
+                            MaxConfirmations = configuredMaxConfirmations,
+                            IsConfirmed = false,
+                            FirstDetectedAt = verified.SampleTime,
+                            LastDetectedAt = verified.SampleTime,
+                            LastSampleId = data.SampleId,
+                            UpdatedAt = DateTime.Now
+                        });
+                        await _context.SaveChangesAsync();
+                        return Ok(new
+                        {
+                            success = true,
+                            pending = true,
+                            confirmationCount = 1,
+                            maxConfirmations = configuredMaxConfirmations
+                        });
+                    }
+                }
+
+                // Browser requests historically supplied the initial chart
+                // snapshot. Server-side detection must produce the same snapshot
+                // when no chart tab is open. Build it only after confirmation so
+                // pending samples do not create logs or snapshots.
+                if (data.ChartSnapshot == null)
+                    data.ChartSnapshot = await BuildServerChartSnapshotAsync(data.DeviceKey, verified);
 
                 // ============================================
                 // SERVER-SIDE DEDUPLICATION:
@@ -5848,17 +5971,18 @@ namespace KWHMonitoring.Controllers
                 // samples update the same episode instead of creating another log.
                 var activeStateAfterInsert = await _context.ActiveAnomalyStates
                     .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
-                var configuredMaxConfirmations = await GetMaxConfirmationsAsync();
                 if (activeStateAfterInsert == null)
                 {
                     activeStateAfterInsert = new ActiveAnomalyState
                     {
                         DeviceKey = data.DeviceKey,
                         AnomalyType = data.AnomalyType,
-                        ConfirmationCount = configuredMaxConfirmations,
+                        ConfirmationCount = 1,
                         MaxConfirmations = configuredMaxConfirmations,
                         FirstDetectedAt = verified.DetectedTime,
                         LastDetectedAt = verified.DetectedTime,
+                        LastSampleId = data.SampleId,
+                        IsConfirmed = false,
                         UpdatedAt = DateTime.Now
                     };
                     _context.ActiveAnomalyStates.Add(activeStateAfterInsert);
@@ -5869,6 +5993,7 @@ namespace KWHMonitoring.Controllers
                     activeStateAfterInsert.IsConfirmed = true;
                     activeStateAfterInsert.AnomalyLogId = log.Id;
                     activeStateAfterInsert.LastDetectedAt = verified.DetectedTime;
+                    activeStateAfterInsert.LastSampleId = data.SampleId;
                     activeStateAfterInsert.UpdatedAt = DateTime.Now;
                     await _context.SaveChangesAsync();
                 }
@@ -5958,6 +6083,8 @@ namespace KWHMonitoring.Controllers
                 // activeAlertKey already declared at top of method
                 var activeAlert = await _context.AppSettingsRecords
                     .FirstOrDefaultAsync(x => x.SettingKey == activeAlertKey);
+                var activeState = await _context.ActiveAnomalyStates
+                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
                 var alertValue = data.AnomalyType + "|" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 if (activeAlert == null)
@@ -5983,6 +6110,11 @@ namespace KWHMonitoring.Controllers
                     downtime = downtime.IsDowntime,
                     logId = log.Id
                 });
+                }
+                finally
+                {
+                    anomalyGate.Release();
+                }
             }
             catch (Exception ex)
             {
@@ -6030,16 +6162,21 @@ namespace KWHMonitoring.Controllers
                 && !string.Equals(request.AnomalyType, "DROP", StringComparison.OrdinalIgnoreCase))
                 return VerifiedAnomalySample.Invalid("Unsupported anomaly type");
 
-            var latest = await _context.KWH_Monitoring.AsNoTracking()
-                .Where(x => x.DeviceKey == request.DeviceKey)
-                .OrderByDescending(x => x.Waktu_Server)
-                .FirstOrDefaultAsync();
+            var hasExplicitSample = request.SampleId.HasValue;
+            var latest = hasExplicitSample
+                ? await _context.KWH_Monitoring.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == request.SampleId.Value && x.DeviceKey == request.DeviceKey)
+                : await _context.KWH_Monitoring.AsNoTracking()
+                    .Where(x => x.DeviceKey == request.DeviceKey)
+                    .OrderByDescending(x => x.Waktu_Server)
+                    .ThenByDescending(x => x.Id)
+                    .FirstOrDefaultAsync();
             if (latest == null || !latest.Daya_Watt.HasValue)
                 return VerifiedAnomalySample.Invalid("No valid telemetry sample is available");
 
             // Browser Date objects have millisecond precision; SQL datetime2 can retain finer precision.
             if (Math.Abs((latest.Waktu_Server - request.SampleTime.Value).TotalSeconds) > 1.1)
-                return VerifiedAnomalySample.Invalid("The submitted sample is not the latest telemetry sample");
+                return VerifiedAnomalySample.Invalid("The submitted sample does not match telemetry");
 
             var settingsRows = await _context.AppSettingsRecords.AsNoTracking()
                 .Where(x => x.SettingKey.StartsWith("Anomaly.") || x.SettingKey.StartsWith("ema")
@@ -6048,18 +6185,22 @@ namespace KWHMonitoring.Controllers
             var intervalSeconds = GetInt(settingsRows, "Anomaly.CheckInterval", 30);
             if (intervalSeconds <= 0) intervalSeconds = 30;
             var maxAgeSeconds = Math.Max(120, intervalSeconds * 3);
-            if ((DateTime.Now - latest.Waktu_Server).TotalSeconds > maxAgeSeconds || latest.Waktu_Server > DateTime.Now.AddSeconds(10))
+            if ((!hasExplicitSample && (DateTime.Now - latest.Waktu_Server).TotalSeconds > maxAgeSeconds)
+                || latest.Waktu_Server > DateTime.Now.AddSeconds(10))
                 return VerifiedAnomalySample.Invalid("The latest telemetry sample is stale");
 
             var pointCount = Math.Max(50, GetInt(settingsRows, "chartDataPoints", 20));
             pointCount = Math.Min(pointCount, 1000);
+
             var samples = await _context.KWH_Monitoring.AsNoTracking()
-                .Where(x => x.DeviceKey == request.DeviceKey)
+                .Where(x => x.DeviceKey == request.DeviceKey && x.Waktu_Server <= latest.Waktu_Server)
                 .OrderByDescending(x => x.Waktu_Server)
+                .ThenByDescending(x => x.Id)
                 .Take(pointCount)
                 .OrderBy(x => x.Waktu_Server)
+                .ThenBy(x => x.Id)
                 .ToListAsync();
-            if (samples.Count == 0 || samples[samples.Count - 1].Waktu_Server != latest.Waktu_Server)
+            if (samples.Count == 0 || samples[samples.Count - 1].Id != latest.Id)
                 return VerifiedAnomalySample.Invalid("Telemetry changed while the anomaly was being verified");
 
             var deviceSettings = await _deviceSettingsService.GetEffectiveAsync(request.DeviceKey);
@@ -6147,6 +6288,91 @@ namespace KWHMonitoring.Controllers
             };
         }
 
+        private async Task<ChartSnapshotRequest> BuildServerChartSnapshotAsync(
+            string deviceKey,
+            VerifiedAnomalySample verified)
+        {
+            var settingsRows = await _context.AppSettingsRecords.AsNoTracking()
+                .Where(x => x.SettingKey.StartsWith("Anomaly.") || x.SettingKey.StartsWith("ema")
+                    || x.SettingKey == "chartDataPoints" || x.SettingKey == "useInitial100ForEma")
+                .ToDictionaryAsync(x => x.SettingKey, x => x.SettingValue);
+
+            var pointCount = Math.Max(50, GetInt(settingsRows, "chartDataPoints", 20));
+            pointCount = Math.Min(pointCount, 1000);
+            var samples = await _context.KWH_Monitoring.AsNoTracking()
+                .Where(x => x.DeviceKey == deviceKey && x.Daya_Watt.HasValue)
+                .OrderByDescending(x => x.Waktu_Server)
+                .Take(pointCount)
+                .OrderBy(x => x.Waktu_Server)
+                .ToListAsync();
+
+            var snapshotSamples = samples
+                .Skip(Math.Max(0, samples.Count - 50))
+                .ToList();
+            var ema = CalculateSnapshotEma(samples, settingsRows);
+            var upperPercent = await GetDeviceEmaThresholdAsync(deviceKey, true);
+            var lowerPercent = await GetDeviceEmaThresholdAsync(deviceKey, false);
+            var before = new List<ChartDataPointRequest>();
+
+            for (var i = Math.Max(0, samples.Count - snapshotSamples.Count); i < samples.Count; i++)
+            {
+                var emaValue = ema.Length > i ? (decimal?)ema[i] : null;
+                before.Add(new ChartDataPointRequest
+                {
+                    Timestamp = samples[i].Waktu_Server,
+                    Power = samples[i].Daya_Watt.Value,
+                    Upper = emaValue.HasValue ? emaValue.Value * (1m + (decimal)upperPercent / 100m) : (decimal?)null,
+                    Lower = emaValue.HasValue ? emaValue.Value * (1m - (decimal)lowerPercent / 100m) : (decimal?)null,
+                    EMA = emaValue
+                });
+            }
+
+            return new ChartSnapshotRequest
+            {
+                Before = before,
+                After = new List<ChartDataPointRequest>(),
+                UpperThreshold = ema.Length == 0
+                    ? verified.ThresholdValue
+                    : (decimal)(ema[ema.Length - 1] * (1d + upperPercent / 100d)),
+                LowerThreshold = ema.Length == 0
+                    ? verified.ThresholdValue
+                    : (decimal)(ema[ema.Length - 1] * (1d - lowerPercent / 100d)),
+                EMAValue = verified.EmaValue,
+                IsFinal = false
+            };
+        }
+
+        private double[] CalculateSnapshotEma(IList<KWHData> samples, Dictionary<string, string> settingsRows)
+        {
+            var ema = new double[samples.Count];
+            if (samples.Count == 0)
+                return ema;
+
+            var useInitialBaseline = GetBool(settingsRows, "useInitial100ForEma", false);
+            if (useInitialBaseline)
+            {
+                var baseline = samples.Take(100).Average(x => (double)(x.Daya_Watt ?? 0m));
+                for (var i = 0; i < ema.Length; i++)
+                    ema[i] = baseline;
+                return ema;
+            }
+
+            var period = Math.Max(1, GetInt(settingsRows, "emaPeriod", 20));
+            var k = 2d / (period + 1d);
+            ema[0] = (double)(samples[0].Daya_Watt ?? 0m);
+            for (var i = 1; i < samples.Count; i++)
+                ema[i] = (double)(samples[i].Daya_Watt ?? 0m) * k + ema[i - 1] * (1d - k);
+            return ema;
+        }
+
+        private async Task<double> GetDeviceEmaThresholdAsync(string deviceKey, bool upper)
+        {
+            var settings = await _deviceSettingsService.GetEffectiveAsync(deviceKey);
+            if (settings == null)
+                return 0d;
+            return upper ? settings.EmaUpperThreshold : settings.EmaLowerThreshold;
+        }
+
         // ============================================
         // RESET ANOMALY ALERT
         // Dipanggil saat power kembali normal untuk meng-clear active alert state
@@ -6160,41 +6386,57 @@ namespace KWHMonitoring.Controllers
                 if (data == null || string.IsNullOrEmpty(data.DeviceKey) || data.DeviceKey.Length > 20)
                     return BadRequest(new { error = "DeviceKey is required" });
 
+                var anomalyGate = GetAnomalyDeviceGate(data.DeviceKey);
+                await anomalyGate.WaitAsync();
+                try
+                {
                 var activeAlertKey = "AnomalyAlert.Active." + data.DeviceKey;
                 var activeAlert = await _context.AppSettingsRecords
                     .FirstOrDefaultAsync(x => x.SettingKey == activeAlertKey);
+                var activeState = await _context.ActiveAnomalyStates
+                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+                var activeType = activeAlert?.SettingValue?.Split('|').FirstOrDefault();
 
-                if (activeAlert != null)
+                if (activeType == "DEVICE_OFFLINE" || activeType == "DEVICE_DROP")
                 {
-                    var activeType = activeAlert.SettingValue?.Split('|').FirstOrDefault();
-                    if (activeType == "DEVICE_OFFLINE" || activeType == "DEVICE_DROP")
-                        return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
+                    // Offline episodes are reset by device-health recovery.
+                    return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
+                }
 
-                    var latest = await _context.KWH_Monitoring.AsNoTracking()
-                        .Where(x => x.DeviceKey == data.DeviceKey)
-                        .OrderByDescending(x => x.Waktu_Server)
-                        .FirstOrDefaultAsync();
-                    if (latest == null || !latest.Daya_Watt.HasValue
-                        || (DateTime.Now - latest.Waktu_Server).TotalSeconds > 120
-                        || latest.Waktu_Server > DateTime.Now.AddSeconds(10))
-                        return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
-
-                    var currentAssessment = await VerifyAnomalySampleAsync(new AnomalyLogRequest
+                var latest = await _context.KWH_Monitoring.AsNoTracking()
+                    .Where(x => x.DeviceKey == data.DeviceKey
+                        && (!data.SampleId.HasValue || x.Id == data.SampleId.Value))
+                    .OrderByDescending(x => x.Waktu_Server)
+                    .ThenByDescending(x => x.Id)
+                    .FirstOrDefaultAsync();
+                if (latest != null && latest.Daya_Watt.HasValue
+                    && (data.SampleId.HasValue || (DateTime.Now - latest.Waktu_Server).TotalSeconds <= 120)
+                    && latest.Waktu_Server <= DateTime.Now.AddSeconds(10)
+                    && !string.IsNullOrWhiteSpace(activeType))
+                {
+                    var assessment = await VerifyAnomalySampleAsync(new AnomalyLogRequest
                     {
                         DeviceKey = data.DeviceKey,
+                        SampleId = data.SampleId,
                         SampleTime = latest.Waktu_Server,
                         AnomalyType = activeType
                     });
-                    if (currentAssessment.IsValid && currentAssessment.AnomalyType == activeType)
+                    if (assessment.IsValid
+                        && string.Equals(assessment.AnomalyType, activeType, StringComparison.Ordinal))
                         return Ok(new { success = true, deviceKey = data.DeviceKey, unchanged = true });
-
-                    _context.AppSettingsRecords.Remove(activeAlert);
                 }
 
-                var activeState = await _context.ActiveAnomalyStates
-                    .FirstOrDefaultAsync(x => x.DeviceKey == data.DeviceKey);
+                if (activeAlert != null)
+                    _context.AppSettingsRecords.Remove(activeAlert);
+
                 if (activeState != null)
                 {
+                    _logger.LogInformation(
+                        "Resetting anomaly confirmation state for {DeviceKey}: {AnomalyType}, count {ConfirmationCount}/{MaxConfirmations}",
+                        data.DeviceKey,
+                        activeState.AnomalyType,
+                        activeState.ConfirmationCount,
+                        activeState.MaxConfirmations);
                     await CompleteAnomalyEpisodeAsync(activeState);
                     _context.ActiveAnomalyStates.Remove(activeState);
                 }
@@ -6203,6 +6445,11 @@ namespace KWHMonitoring.Controllers
                 _logger.LogInformation("Anomaly episode reset for {DeviceKey}", data.DeviceKey);
 
                 return Ok(new { success = true, deviceKey = data.DeviceKey });
+                }
+                finally
+                {
+                    anomalyGate.Release();
+                }
             }
             catch (Exception ex)
             {
@@ -8186,7 +8433,30 @@ namespace KWHMonitoring.Controllers
         {
             try
             {
-                if (data == null) return BadRequest(new { success = false, error = "State payload is required" });
+                // Kept for compatibility with old browser clients. The browser
+                // must never write authoritative telemetry state.
+                await Task.CompletedTask;
+                return Ok(new { success = true, ignored = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[SAVE-ANOMALY-STATE] Ignored legacy state payload");
+                return SafeError(ex);
+            }
+        }
+
+        private async Task<int> GetMaxConfirmationsAsync()
+        {
+            var setting = await _context.AppSettingsRecords.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SettingKey == "Anomaly.MaxConfirmations");
+
+            if (setting != null && int.TryParse(setting.SettingValue, out var configuredValue))
+                return Math.Max(1, Math.Min(configuredValue, 100));
+
+            return 3;
+        }
+
+        /* Legacy implementation intentionally removed: browser state is not authoritative.
                 var counts = JObject.Parse(string.IsNullOrWhiteSpace(data.confirmationCounts) ? "{}" : data.confirmationCounts);
                 var cooldown = JObject.Parse(string.IsNullOrWhiteSpace(data.cooldownState) ? "{}" : data.cooldownState);
                 var sampleTimes = JObject.Parse(string.IsNullOrWhiteSpace(data.sampleTimes) ? "{}" : data.sampleTimes);
@@ -8287,26 +8557,7 @@ namespace KWHMonitoring.Controllers
                     }
                 }
 
-                await _context.SaveChangesAsync();
-                return Ok(new { success = true });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[SAVE-ANOMALY-STATE] Error while saving anomaly state");
-                return SafeError(ex);
-            }
-        }
-
-        private async Task<int> GetMaxConfirmationsAsync()
-        {
-            var setting = await _context.AppSettingsRecords.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SettingKey == "Anomaly.MaxConfirmations");
-
-            if (setting != null && int.TryParse(setting.SettingValue, out var configuredValue))
-                return Math.Max(1, Math.Min(configuredValue, 100));
-
-            return 3;
-        }
+        */
 
         private async Task DeleteActiveAnomalyEpisodeAsync(ActiveAnomalyState state)
         {
@@ -8319,7 +8570,9 @@ namespace KWHMonitoring.Controllers
         {
             var cutoff = DateTime.Now.AddHours(-24);
             var staleStates = await _context.ActiveAnomalyStates
-                .Where(x => x.LastDetectedAt < cutoff)
+                .Where(x => x.LastDetectedAt < cutoff
+                    && x.AnomalyType != "DEVICE_OFFLINE"
+                    && x.AnomalyType != "DEVICE_DROP")
                 .ToListAsync();
 
             if (staleStates.Count == 0)
@@ -9992,6 +10245,7 @@ namespace KWHMonitoring.Controllers
     public class AnomalyLogRequest
     {
         public string DeviceKey { get; set; } = string.Empty;
+        public long? SampleId { get; set; }
         public DateTime? SampleTime { get; set; }
         public string DeviceId { get; set; }
         public string AnomalyType { get; set; } = string.Empty;
@@ -10166,6 +10420,8 @@ namespace KWHMonitoring.Controllers
     public class ResetAnomalyAlertRequest
     {
         public string DeviceKey { get; set; } = string.Empty;
+        public long? SampleId { get; set; }
+        public DateTime? SampleTime { get; set; }
     }
 
     public class ChatbotSettingsData

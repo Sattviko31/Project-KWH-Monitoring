@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using KWHMonitoring.Models;
 using KWHMonitoring.Services;
+using KWHMonitoring.Controllers;
 using KWHMonitoring.Filters;
 
 namespace KWHMonitoring
@@ -72,6 +73,11 @@ namespace KWHMonitoring
             // Data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi)
             // untuk info lokasi pada tooltip header kartu panel monitoring.
             services.AddScoped<ITitikLokasiService, TitikLokasiService>();
+
+            // Device anomaly detection is a server responsibility. It must not
+            // depend on a logged-in user or an open chart browser tab.
+            services.AddTransient<ApiController>();
+            services.AddHostedService<AnomalyDetectionBackgroundService>();
 
             services.AddAuthentication("Cookies")
                 .AddCookie("Cookies", options =>

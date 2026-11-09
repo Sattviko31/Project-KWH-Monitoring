@@ -230,6 +230,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.MaxConfirmations).IsRequired();
                 entity.Property(x => x.IsConfirmed).IsRequired();
                 entity.Property(x => x.AnomalyLogId);
+                entity.Property(x => x.LastSampleId);
                 entity.Property(x => x.FirstDetectedAt).HasColumnType("datetime2").IsRequired();
                 entity.Property(x => x.LastDetectedAt).HasColumnType("datetime2").IsRequired();
                 entity.Property(x => x.UpdatedAt).HasColumnType("datetime2").IsRequired();
