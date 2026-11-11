@@ -108,6 +108,9 @@
                     <option value="all">🏷️ Semua Kategori</option>
                     <option value="Billboard">🔵 Billboard</option>
                 </select>
+                <select id="panelCityFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
+                    <option value="all">📍 Semua Kota</option>
+                </select>
                 <button id="btnClearFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
                     <i class="fas fa-times"></i>
                 </button>
@@ -686,6 +689,27 @@
             return cityText.trim().split(/\s+/)[0].toUpperCase();
         }
 
+        function populatePanelCityFilter() {
+            const $filter = $('#panelCityFilter');
+            const currentVal = $filter.val();
+            const cities = {};
+
+            (allPanelData || []).forEach(function(panel) {
+                const city = getCityName(panel.kotaProvinsi);
+                if (city) cities[city] = true;
+            });
+
+            $filter.find('option:not(:first)').remove();
+            Object.keys(cities).sort().forEach(function(city) {
+                $('<option>').val(city).text(city).appendTo($filter);
+            });
+            if (currentVal && $filter.find('option[value="' + currentVal + '"]').length) {
+                $filter.val(currentVal);
+            } else {
+                $filter.val('all');
+            }
+        }
+
         function updatePanelSummaryCards() {
             const cities = {};
             let totalCapacity = 0;
@@ -782,6 +806,7 @@
             const status = $('#panelStatusFilter').val();
             const phase = $('#panelPhaseFilter').val();
             const category = $('#panelCategoryFilter').val();
+            const city = $('#panelCityFilter').val();
 
             let visibleCount = 0;
 
@@ -844,6 +869,12 @@
                     if (panelCategory !== category) show = false;
                 }
 
+                // City filter uses the same normalized city value shown in the summary cards.
+                if (show && city && city !== 'all') {
+                    const data = allPanelData.find(p => p.deviceKey === panel.deviceKey);
+                    if (getCityName(data ? data.kotaProvinsi : '') !== city) show = false;
+                }
+
                 if (show) {
                     $card.show();
                     visibleCount++;
@@ -865,12 +896,14 @@
             $('#panelStatusFilter').on('change', applyPanelFilter);
             $('#panelPhaseFilter').on('change', applyPanelFilter);
             $('#panelCategoryFilter').on('change', applyPanelFilter);
+            $('#panelCityFilter').on('change', applyPanelFilter);
 
             $('#btnClearFilter').on('click', function() {
                 $('#panelSearch').val('');
                 $('#panelStatusFilter').val('all');
                 $('#panelPhaseFilter').val('all');
                 $('#panelCategoryFilter').val('all');
+                $('#panelCityFilter').val('all');
                 activeChipDeviceKey = null;
                 $('#panelChipList').find('.panel-chip').removeClass('active');
                 applyPanelFilter();
@@ -1084,6 +1117,7 @@
                 }
             });
             renderPanelChips();
+            populatePanelCityFilter();
             updatePanelSummaryCards();
 
             updateLastUpdate();
@@ -1581,6 +1615,7 @@
                 success: function(panels) {
                     // Update cached panel data for filtering
                     allPanelData = panels;
+                    populatePanelCityFilter();
 
                     panels.forEach(function(panel) {
                         if (deviceConnectivityMap[panel.deviceKey] === undefined) {

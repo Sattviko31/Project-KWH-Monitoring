@@ -19,6 +19,63 @@ namespace KWHMonitoring.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128)
                 .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
+            modelBuilder.Entity("KWHMonitoring.Models.ActiveAnomalyState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<long?>("AnomalyLogId")
+                        .HasColumnName("AnomalyLogId");
+
+                    b.Property<string>("AnomalyType")
+                        .IsRequired()
+                        .HasColumnName("AnomalyType")
+                        .HasColumnType("nvarchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<int>("ConfirmationCount")
+                        .HasColumnName("ConfirmationCount");
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnName("DeviceKey")
+                        .HasColumnType("nvarchar(50)")
+                        .HasMaxLength(50);
+
+                    b.Property<DateTime>("FirstDetectedAt")
+                        .HasColumnName("FirstDetectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsConfirmed")
+                        .HasColumnName("IsConfirmed");
+
+                    b.Property<DateTime>("LastDetectedAt")
+                        .HasColumnName("LastDetectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("LastSampleId")
+                        .HasColumnName("LastSampleId");
+
+                    b.Property<int>("MaxConfirmations")
+                        .HasColumnName("MaxConfirmations");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnName("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceKey")
+                        .IsUnique()
+                        .HasName("IX_ActiveAnomalyStates_DeviceKey");
+
+                    b.HasIndex("UpdatedAt")
+                        .HasName("IX_ActiveAnomalyStates_UpdatedAt");
+
+                    b.ToTable("ActiveAnomalyStates");
+                });
+
             modelBuilder.Entity("KWHMonitoring.Models.AnomalyChartSnapshot", b =>
                 {
                     b.Property<long>("Id")
@@ -81,9 +138,6 @@ namespace KWHMonitoring.Migrations
 
                     b.Property<bool?>("Acknowledged")
                         .HasColumnName("Acknowledged");
-
-                b.Property<long?>("LastSampleId")
-                    .HasColumnType("bigint");
 
                     b.Property<string>("AcknowledgedBy")
                         .HasColumnName("AcknowledgedBy")
@@ -1222,6 +1276,135 @@ namespace KWHMonitoring.Migrations
                         .HasName("IX_EmailVerificationTokens_Token_Purpose");
 
                     b.ToTable("EmailVerificationTokens");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.EnergyProjectionGap", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DetectionSource")
+                        .HasColumnType("varchar(40)")
+                        .HasMaxLength(40);
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime?>("GapEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GapStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(500)")
+                        .HasMaxLength(500);
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasName("IX_EnergyProjectionGaps_Status");
+
+                    b.HasIndex("DeviceKey", "GapStartUtc")
+                        .HasName("IX_EnergyProjectionGaps_Device_GapStart");
+
+                    b.HasIndex("Status", "DeviceKey", "GapStartUtc")
+                        .HasName("IX_EnergyProjectionGaps_Open_Device_Start");
+
+                    b.ToTable("EnergyProjectionGaps");
+                });
+
+            modelBuilder.Entity("KWHMonitoring.Models.EnergyProjectionValue", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
+
+                    b.Property<DateTime>("BucketStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CalculatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CalculationVersion")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)")
+                        .HasMaxLength(30);
+
+                    b.Property<string>("ConfidenceLevel")
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal?>("ConfidenceScore")
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<long?>("GapId");
+
+                    b.Property<decimal?>("LowerBoundKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ProjectedKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ProjectionMethod")
+                        .IsRequired()
+                        .HasColumnType("varchar(80)")
+                        .HasMaxLength(80);
+
+                    b.Property<DateTime?>("ReconciledAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SampleCount");
+
+                    b.Property<DateTime?>("SourcePeriodEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("SourcePeriodStartUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(20);
+
+                    b.Property<decimal?>("UpperBoundKWh")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GapId", "Status")
+                        .HasName("IX_EnergyProjectionValues_Gap_Status");
+
+                    b.HasIndex("Status", "BucketStartUtc")
+                        .HasName("IX_EnergyProjectionValues_Status_Bucket");
+
+                    b.HasIndex("DeviceKey", "BucketStartUtc", "CalculationVersion")
+                        .IsUnique()
+                        .HasName("IX_EnergyProjectionValues_Device_Bucket_Version");
+
+                    b.ToTable("EnergyProjectionValues");
                 });
 
             modelBuilder.Entity("KWHMonitoring.Models.FailedMessage", b =>

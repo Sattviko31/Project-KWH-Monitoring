@@ -68,6 +68,9 @@ namespace KWHMonitoring
 
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IDeviceSettingsService, DeviceSettingsService>();
+            services.Configure<EnergyProjectionOptions>(Configuration.GetSection("EnergyProjection"));
+            services.AddScoped<IHourlyEnergyProjectionService, HourlyEnergyProjectionService>();
+            services.AddHostedService<EnergyProjectionBackgroundService>();
             services.AddScoped<IBillingTrendWorkflowService, BillingTrendWorkflowService>();
 
             // Data master titik lokasi dari database ERP (WWMERP2019.dbo.TitikLokasi)

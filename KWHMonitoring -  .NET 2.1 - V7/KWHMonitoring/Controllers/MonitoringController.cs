@@ -245,6 +245,41 @@ namespace KWHMonitoring.Controllers
                     });
                 }
 
+                // Keep chart location data identical to the Panel Monitoring page.
+                // The city filter is built from KotaProvinsi, which is supplied by
+                // the ERP TitikLokasi data rather than the MQTT telemetry record.
+                try
+                {
+                    if (viewModel.Panels.Count > 0)
+                    {
+                        var lokasiMap = await _titikLokasiService.GetByDeviceKeysAsync(
+                            viewModel.Panels.Select(p => p.DeviceKey));
+
+                        foreach (var panel in viewModel.Panels)
+                        {
+                            var deviceKey = (panel.DeviceKey ?? string.Empty).Trim();
+                            if (!lokasiMap.TryGetValue(deviceKey, out var lokasi) || lokasi == null) continue;
+
+                            panel.KodeLokasi = lokasi.KodeLokasi;
+                            panel.Alamat = lokasi.Address;
+                            panel.KotaProvinsi = lokasi.KotaProvinsi;
+                            panel.IDPelanggan = lokasi.IDPelanggan;
+                            panel.Catatan = lokasi.Catatan;
+                            panel.Luas = lokasi.Luas;
+                            panel.Panjang = lokasi.Panjang;
+                            panel.Lebar = lokasi.Lebar;
+                            panel.Tinggi = lokasi.Tinggi;
+                            panel.LokasiStatus = lokasi.Status;
+                            panel.InstalledCapacityVA = lokasi.DayaVA;
+                            panel.MaxCapacity = PanelViewModel.CalculateMaxCapacityWatt(lokasi.DayaVA, panel.Cos_Phi);
+                        }
+                    }
+                }
+                catch (Exception lokasiEx)
+                {
+                    _logger.LogWarning(lokasiEx, "Gagal melengkapi info TitikLokasi pada halaman grafik.");
+                }
+
                 ViewBag.ChartGroupName = groupName?.Trim();
                 return View(viewModel);
             }

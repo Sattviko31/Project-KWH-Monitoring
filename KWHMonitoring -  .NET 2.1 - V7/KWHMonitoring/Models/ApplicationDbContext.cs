@@ -65,6 +65,8 @@ namespace KWHMonitoring.Models
         public DbSet<DailyEnergy> DailyEnergy { get; set; }
         public DbSet<FailedMessage> FailedMessages { get; set; }
         public DbSet<HourlyEnergy> HourlyEnergy { get; set; }
+        public DbSet<EnergyProjectionGap> EnergyProjectionGaps { get; set; }
+        public DbSet<EnergyProjectionValue> EnergyProjectionValues { get; set; }
         public DbSet<MonthlyEnergy> MonthlyEnergy { get; set; }
         public DbSet<YearlyEnergy> YearlyEnergy { get; set; }
         public DbSet<ApplicationUser> ApplicationUsers { get; set; }
@@ -539,6 +541,49 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Hour).HasColumnType("datetime2");
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+            });
+
+            modelBuilder.Entity<EnergyProjectionGap>(entity =>
+            {
+                entity.ToTable("EnergyProjectionGaps");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.GapStartUtc).HasColumnType("datetime2");
+                entity.Property(x => x.GapEndUtc).HasColumnType("datetime2");
+                entity.Property(x => x.Status).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.DetectionSource).HasColumnType("varchar(40)").HasMaxLength(40);
+                entity.Property(x => x.Reason).HasColumnType("nvarchar(500)").HasMaxLength(500);
+                entity.Property(x => x.CreatedAtUtc).HasColumnType("datetime2");
+                entity.Property(x => x.ClosedAtUtc).HasColumnType("datetime2");
+                entity.Property(x => x.UpdatedAtUtc).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.GapStartUtc }).HasName("IX_EnergyProjectionGaps_Device_GapStart");
+                entity.HasIndex(x => x.Status).HasName("IX_EnergyProjectionGaps_Status");
+                entity.HasIndex(x => new { x.Status, x.DeviceKey, x.GapStartUtc }).HasName("IX_EnergyProjectionGaps_Open_Device_Start");
+            });
+
+            modelBuilder.Entity<EnergyProjectionValue>(entity =>
+            {
+                entity.ToTable("EnergyProjectionValues");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Id).ValueGeneratedOnAdd();
+                entity.Property(x => x.DeviceKey).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.BucketStartUtc).HasColumnType("datetime2");
+                entity.Property(x => x.ProjectedKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.LowerBoundKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.UpperBoundKWh).HasColumnType("decimal(18,4)");
+                entity.Property(x => x.ConfidenceScore).HasColumnType("decimal(9,4)");
+                entity.Property(x => x.ConfidenceLevel).HasColumnType("varchar(20)").HasMaxLength(20);
+                entity.Property(x => x.Status).HasColumnType("varchar(20)").HasMaxLength(20).IsRequired();
+                entity.Property(x => x.ProjectionMethod).HasColumnType("varchar(80)").HasMaxLength(80).IsRequired();
+                entity.Property(x => x.SourcePeriodStartUtc).HasColumnType("datetime2");
+                entity.Property(x => x.SourcePeriodEndUtc).HasColumnType("datetime2");
+                entity.Property(x => x.CalculationVersion).HasColumnType("varchar(30)").HasMaxLength(30).IsRequired();
+                entity.Property(x => x.CalculatedAtUtc).HasColumnType("datetime2");
+                entity.Property(x => x.ReconciledAtUtc).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.BucketStartUtc, x.CalculationVersion }).IsUnique().HasName("IX_EnergyProjectionValues_Device_Bucket_Version");
+                entity.HasIndex(x => new { x.Status, x.BucketStartUtc }).HasName("IX_EnergyProjectionValues_Status_Bucket");
+                entity.HasIndex(x => new { x.GapId, x.Status }).HasName("IX_EnergyProjectionValues_Gap_Status");
             });
 
             modelBuilder.Entity<MonthlyEnergy>(entity =>

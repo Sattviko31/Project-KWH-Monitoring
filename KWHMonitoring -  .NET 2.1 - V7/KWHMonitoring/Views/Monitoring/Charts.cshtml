@@ -26,6 +26,9 @@
                 <select id="chartCategoryFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
                     <option value="all">🏷️ Semua Kategori</option>
                 </select>
+                <select id="chartCityFilter" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
+                    <option value="all">📍 Semua Kota</option>
+                </select>
                 <button id="btnClearChartFilter" class="btn btn-sm btn-outline-secondary" title="Reset filter">
                     <i class="fas fa-times"></i>
                 </button>
@@ -202,6 +205,7 @@
             deviceKey = p.DeviceKey,
             safeKey = p.DeviceKey.Replace("-", "_"),
             groupName = p.GroupName,
+            kotaProvinsi = p.KotaProvinsi,
             isThreePhase = p.IsThreePhase,
             deviceCategory = "Billboard"
         }).ToList()));
@@ -309,6 +313,32 @@
         var chartAnomalyStatusMap = {};
         var chartDeviceConnectivityMap = {};
 
+        function getChartCityName(cityText) {
+            if (!cityText || typeof cityText !== 'string') return '';
+            return cityText.trim().split(/\s+/)[0].toUpperCase();
+        }
+
+        function populateChartCityFilter() {
+            var $filter = $('#chartCityFilter');
+            var currentVal = $filter.val();
+            var cities = {};
+
+            (panelList || []).forEach(function(panel) {
+                var city = getChartCityName(panel.kotaProvinsi);
+                if (city) cities[city] = true;
+            });
+
+            $filter.find('option:not(:first)').remove();
+            Object.keys(cities).sort().forEach(function(city) {
+                $('<option>').val(city).text(city).appendTo($filter);
+            });
+            if (currentVal && $filter.find('option[value="' + currentVal + '"]').length) {
+                $filter.val(currentVal);
+            } else {
+                $filter.val('all');
+            }
+        }
+
         function getChartChipClass(deviceKey) {
             if (chartDeviceConnectivityMap[deviceKey] === false) return 'chip-offline';
             var anomaly = chartAnomalyStatusMap[deviceKey];
@@ -373,6 +403,7 @@
         function applyChartFilter() {
             var search = $('#chartSearch').val().trim().toLowerCase();
             var category = $('#chartCategoryFilter').val();
+            var city = $('#chartCityFilter').val();
             var visibleCount = 0;
 
             panelList.forEach(function(panel) {
@@ -401,6 +432,11 @@
                     if (panelCategory !== category) show = false;
                 }
 
+                // City filter uses the same normalized city value as the monitoring cards.
+                if (show && city && city !== 'all') {
+                    if (getChartCityName(panel.kotaProvinsi) !== city) show = false;
+                }
+
                 if (show) {
                     $card.show();
                     visibleCount++;
@@ -427,9 +463,15 @@
                 saveChartViewSettings();
             });
 
+            $('#chartCityFilter').on('change', function() {
+                applyChartFilter();
+                saveChartViewSettings();
+            });
+
             $('#btnClearChartFilter').on('click', function() {
                 $('#chartSearch').val('');
                 $('#chartCategoryFilter').val('all');
+                $('#chartCityFilter').val('all');
                 activeChartChipDeviceKey = null;
                 $('#chartChipList').find('.panel-chip').removeClass('active');
                 applyChartFilter();
@@ -731,6 +773,7 @@
                     chartTypes: chartTypes,
                     search: $('#chartSearch').val() || '',
                     category: $('#chartCategoryFilter').val() || 'all',
+                    city: $('#chartCityFilter').val() || 'all',
                     activeDeviceKey: activeChartChipDeviceKey || null
                 }));
             } catch (e) { }
@@ -752,6 +795,7 @@
                 });
                 $('#chartSearch').val(settings.search || '');
                 $('#chartCategoryFilter').val(settings.category || 'all');
+                $('#chartCityFilter').val(settings.city || 'all');
                 activeChartChipDeviceKey = settings.activeDeviceKey || null;
             } catch (e) { }
         }
@@ -1448,6 +1492,7 @@
 
             // Initialize chart filter
             setupChartFilterEvents();
+            populateChartCityFilter();
             if ($('#chartSearch').val().trim()) {
                 applyChartFilter();
             }

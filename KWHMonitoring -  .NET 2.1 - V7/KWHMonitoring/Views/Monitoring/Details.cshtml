@@ -1,4 +1,5 @@
 @model KWHMonitoring.Models.PanelViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = $"Details - {Model.GroupName}";
     var deviceKey = Model.DeviceKey;
@@ -6,6 +7,7 @@
     var isThreePhase = Model.IsThreePhase;
     // MaxCapacity is the ERP installed capacity converted from VA to Watt using CosPhi.
     var maxCapacity = Model.MaxCapacity;
+    var energyProjectionEnabled = string.Equals(Configuration["EnergyProjection:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
 }
 
 <!-- Breadcrumb -->
@@ -877,6 +879,7 @@
         };
         
         var deviceUsageDate = new Date();
+        var deviceServerDateText = '';
 
         // EMA Settings - akan di-load dari database
         var emaSettings = {
@@ -1273,7 +1276,12 @@
             var dateStr = deviceUsageDate.getDate() + ' ' + months[deviceUsageDate.getMonth()] + ' ' + deviceUsageDate.getFullYear();
 
             var today = new Date();
-            var isToday = deviceUsageDate.toDateString() === today.toDateString();
+            var serverDateText = deviceServerDateText || '';
+            var serverParts = serverDateText.split('-').map(Number);
+            var serverToday = serverParts.length === 3 && serverParts[0]
+                ? new Date(serverParts[0], serverParts[1] - 1, serverParts[2])
+                : today;
+            var isToday = deviceUsageDate.toDateString() === serverToday.toDateString();
 
             $('#deviceSelectedDayName').text(dayName + ' - ' + dateStr + (isToday ? ' (Hari Ini)' : ''));
         }
@@ -1373,6 +1381,9 @@
                         return;
                     }
 
+                    var projectionMeta = data.projection || {};
+                    deviceServerDateText = data.serverDate || projectionMeta.serverDate || deviceServerDateText;
+
                     // Update summary cards (dalam kWh)
                     lastDeviceEnergyData = data;
                     $('#usageToday').text(formatDecimal(data.today.total) + ' kWh');
@@ -1398,6 +1409,10 @@
                     // Update charts
                     updateDeviceUsageCharts(data);
 
+                    if (@energyProjectionEnabled.ToString().ToLowerInvariant()) {
+                        loadDeviceHourlyProjection(data, selectedDateText);
+                    }
+
                     // Update financial analysis sections
                     updateDeviceFinancialUI(data);
 
@@ -1409,7 +1424,42 @@
             });
         }
 
+        function loadDeviceHourlyProjection(data, selectedDateText) {
+            $.ajax({
+                url: '/api/Api/usage-projection/' + encodeURIComponent(deviceKey),
+                method: 'POST',
+                contentType: 'application/json',
+                dataType: 'json',
+                timeout: 15000,
+                data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
+                success: function (projection) {
+                    if (!projection || projection.success === false || !projection.hourlyData) return;
+                    var byHour = {};
+                    projection.hourlyData.forEach(function (item) { byHour[Number(item.sortKey)] = item; });
+                    data.today.hourlyData = (data.today.hourlyData || []).map(function (item) {
+                        var p = byHour[Number(item.sortKey)];
+                        return p ? Object.assign({}, item, {
+                            energy: Number(p.energy || 0), status: p.status, projected: p.projected,
+                            confidence: p.confidence, confidenceLevel: p.confidenceLevel
+                        }) : item;
+                    });
+                    // Respons endpoint per jam tidak membawa dailyData/monthlyData.
+                    // Gabungkan agar rerender grafik tidak menghapus proyeksi harian.
+                    data.projection = Object.assign({}, data.projection || {}, projection);
+                    updateDeviceUsageCharts(data);
+                    if (projection.completeCost != null) {
+                        $('#usageCost').text('Rp ' + formatNumber(projection.completeCost));
+                        $('#tariffDisplay').text('Rp ' + formatNumber(projection.tariffPerKWh) + ' · Aktual Rp ' + formatNumber(projection.actualCost) + ' · Proyeksi Rp ' + formatNumber(projection.projectedCost));
+                    }
+                }
+            });
+        }
+
         function updateDeviceUsageCharts(data) {
+            // Projection metadata belongs to the response being rendered. It must
+            // be resolved inside this function; the AJAX callback scope is not
+            // available here when the charts are rebuilt or refreshed.
+            var projectionMeta = data && data.projection ? data.projection : {};
             var commonOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1450,14 +1500,25 @@
                             var value = Number(ctx.parsed && ctx.parsed.y);
                             if (!isFinite(value)) return null;
                             cumulative = series.slice(0, ctx.dataIndex + 1).reduce(function(sum, item) {
-                                return sum + (Number(item.energy) || 0);
+                                var complete = Number(item.completeEnergy);
+                                return sum + (isFinite(complete) ? complete : (Number(item.energy) || 0));
                             }, 0);
-                            return [
+                            var currentItem = series[ctx.dataIndex] || {};
+                            var actual = Number(currentItem.actualEnergy);
+                            var projected = Number(currentItem.projectedEnergy);
+                            var status = currentItem.status || '';
+                            var lines = [
                                 'Konsumsi     ' + formatDecimal(value) + ' kWh',
                                 'Biaya titik  Rp ' + formatInteger(Math.round(value * info.tariff)),
                                 'Akumulasi    ' + formatDecimal(cumulative) + ' kWh',
                                 'Biaya total  Rp ' + formatInteger(Math.round(cumulative * info.tariff))
                             ];
+                            if (isFinite(actual) && projected > 0) {
+                                lines.splice(1, 0, 'Aktual       ' + formatDecimal(actual) + ' kWh');
+                                lines.splice(2, 0, 'Proyeksi     ' + formatDecimal(projected) + ' kWh');
+                            }
+                            if (status) lines.push('Status       ' + status);
+                            return lines;
                         },
                         afterBody: function() {
                             var lines = [
@@ -1475,21 +1536,41 @@
             }
 
             var today = new Date();
-            var isToday = deviceUsageDate.toDateString() === today.toDateString();
+            var chartServerDateText = deviceServerDateText || '';
+            var chartServerParts = chartServerDateText.split('-').map(Number);
+            var serverToday = chartServerParts.length === 3 && chartServerParts[0]
+                ? new Date(chartServerParts[0], chartServerParts[1] - 1, chartServerParts[2])
+                : today;
+            var isToday = deviceUsageDate.toDateString() === serverToday.toDateString();
+            var hourlySeries = data && data.today && Array.isArray(data.today.hourlyData)
+                ? data.today.hourlyData
+                : [];
+            var dailySeries = data && data.month && Array.isArray(data.month.dailyData)
+                ? data.month.dailyData
+                : [];
+            var monthlySeries = data && data.year && Array.isArray(data.year.monthlyData)
+                ? data.year.monthlyData
+                : [];
 
             // Hourly Chart - SORT BY HOUR
             var hourlyCtx = document.getElementById('deviceHourlyChart');
-            if (hourlyCtx && data.today.hourlyData.length > 0) {
+            if (hourlyCtx && hourlySeries.length > 0) {
                 if (deviceUsageCharts.hourly) deviceUsageCharts.hourly.destroy();
 
-                var sortedHourly = data.today.hourlyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
-                var currentHour = today.getHours();
+                var sortedHourly = hourlySeries.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
+                var currentHour = Number(data.serverHour);
+                if (!isFinite(currentHour)) currentHour = serverToday.getHours();
 
                 var hourlyColors = sortedHourly.map(function(h) {
+                    if (h.status === 'PROJECTED' && (!isToday || h.sortKey > currentHour)) return 'rgba(220, 53, 69, 0.88)';
                     if (!isToday) return 'rgba(13, 110, 253, 0.7)';
                     if (h.sortKey === currentHour) return 'rgba(255, 165, 0, 0.9)';
                     if (h.sortKey < currentHour) return 'rgba(13, 110, 253, 0.7)';
                     return 'rgba(200, 200, 200, 0.3)';
+                });
+
+                var hourlyBorders = hourlyColors.map(function(c) {
+                    return c.indexOf('220, 53, 69') >= 0 ? 'rgba(185, 28, 28, 1)' : c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5');
                 });
 
                 deviceUsageCharts.hourly = new Chart(hourlyCtx, {
@@ -1500,7 +1581,7 @@
                             label: 'Energy (kWh)',
                             data: sortedHourly.map(function(h) { return h.energy; }),
                             backgroundColor: hourlyColors,
-                            borderColor: hourlyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
+                            borderColor: hourlyBorders,
                             borderWidth: 1
                         }]
                     },
@@ -1519,15 +1600,25 @@
 
             // Daily Chart - SORT BY DAY
             var dailyCtx = document.getElementById('deviceDailyChart');
-            if (dailyCtx && data.month.dailyData.length > 0) {
+            if (dailyCtx && dailySeries.length > 0) {
                 if (deviceUsageCharts.daily) deviceUsageCharts.daily.destroy();
 
-                var sortedDaily = data.month.dailyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
-                var isThisMonth = deviceUsageDate.getMonth() === today.getMonth() && deviceUsageDate.getFullYear() === today.getFullYear();
-                var currentDay = today.getDate();
+                var dailyProjection = projectionMeta.enabled ? (projectionMeta.dailyData || []) : [];
+                var dailyProjectionByDay = {};
+                dailyProjection.forEach(function(p) { dailyProjectionByDay[Number(p.sortKey)] = p; });
+                var sortedDaily = dailySeries.slice().sort(function(a, b) { return a.sortKey - b.sortKey; }).map(function(item) {
+                    var p = dailyProjectionByDay[Number(item.sortKey)];
+                    return p ? Object.assign({}, item, {
+                        actualEnergy: Number(p.actualEnergy || item.energy || 0), projectedEnergy: Number(p.projectedEnergy || 0),
+                        completeEnergy: Number(p.completeEnergy || item.energy || 0), status: p.status
+                    }) : Object.assign({}, item, { actualEnergy: Number(item.energy || 0), projectedEnergy: 0, completeEnergy: Number(item.energy || 0), status: 'ACTUAL' });
+                });
+                var isThisMonth = deviceUsageDate.getMonth() === serverToday.getMonth() && deviceUsageDate.getFullYear() === serverToday.getFullYear();
+                var currentDay = serverToday.getDate();
 
                 var dailyColors = sortedDaily.map(function(d) {
                     if (!isThisMonth) return 'rgba(25, 135, 84, 0.7)';
+                    if (d.projectedEnergy > 0) return 'rgba(220, 53, 69, 0.88)';
                     if (d.sortKey === currentDay) return 'rgba(255, 165, 0, 0.9)';
                     if (d.sortKey < currentDay) return 'rgba(25, 135, 84, 0.7)';
                     return 'rgba(200, 200, 200, 0.3)';
@@ -1538,8 +1629,13 @@
                     data: {
                         labels: sortedDaily.map(function(d) { return d.dateLabel; }),
                         datasets: [{
-                            label: 'Energy (kWh)',
-                            data: sortedDaily.map(function(d) { return d.energy; }),
+                            label: 'Energi (kWh)',
+                            // Satu batang per hari: aktual + energi yang diproyeksikan.
+                            data: sortedDaily.map(function(d) {
+                                var completeEnergy = Number(d.completeEnergy);
+                                if (!isFinite(completeEnergy)) completeEnergy = Number(d.actualEnergy || d.energy || 0);
+                                return completeEnergy > 0 ? completeEnergy : null;
+                            }),
                             backgroundColor: dailyColors,
                             borderColor: dailyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
                             borderWidth: 1
@@ -1560,15 +1656,25 @@
 
             // Monthly Chart - SORT BY MONTH
             var monthlyCtx = document.getElementById('deviceMonthlyChart');
-            if (monthlyCtx && data.year.monthlyData.length > 0) {
+            if (monthlyCtx && monthlySeries.length > 0) {
                 if (deviceUsageCharts.monthly) deviceUsageCharts.monthly.destroy();
 
-                var sortedMonthly = data.year.monthlyData.slice().sort(function(a, b) { return a.sortKey - b.sortKey; });
-                var isThisYear = deviceUsageDate.getFullYear() === today.getFullYear();
-                var currentMonth = today.getMonth() + 1;
+                var monthlyProjection = projectionMeta.enabled ? (projectionMeta.monthlyData || []) : [];
+                var monthlyProjectionByMonth = {};
+                monthlyProjection.forEach(function(p) { monthlyProjectionByMonth[Number(p.sortKey)] = p; });
+                var sortedMonthly = monthlySeries.slice().sort(function(a, b) { return a.sortKey - b.sortKey; }).map(function(item) {
+                    var p = monthlyProjectionByMonth[Number(item.sortKey)];
+                    return p ? Object.assign({}, item, {
+                        actualEnergy: Number(p.actualEnergy || item.energy || 0), projectedEnergy: Number(p.projectedEnergy || 0),
+                        completeEnergy: Number(p.completeEnergy || item.energy || 0), status: p.status
+                    }) : Object.assign({}, item, { actualEnergy: Number(item.energy || 0), projectedEnergy: 0, completeEnergy: Number(item.energy || 0), status: 'ACTUAL' });
+                });
+                var isThisYear = deviceUsageDate.getFullYear() === serverToday.getFullYear();
+                var currentMonth = serverToday.getMonth() + 1;
 
                 var monthlyColors = sortedMonthly.map(function(m) {
                     if (!isThisYear) return 'rgba(13, 202, 240, 0.7)';
+                    if (m.projectedEnergy > 0) return 'rgba(220, 53, 69, 0.88)';
                     if (m.sortKey === currentMonth) return 'rgba(255, 165, 0, 0.9)';
                     if (m.sortKey < currentMonth) return 'rgba(13, 202, 240, 0.7)';
                     return 'rgba(200, 200, 200, 0.3)';
@@ -1579,11 +1685,16 @@
                     data: {
                         labels: sortedMonthly.map(function(m) { return m.monthName; }),
                         datasets: [{
-                            label: 'Energy (kWh)',
-                            data: sortedMonthly.map(function(m) { return m.energy; }),
+                            label: 'Aktual (kWh)',
+                            data: sortedMonthly.map(function(m) { return m.actualEnergy > 0 ? m.actualEnergy : null; }),
                             backgroundColor: monthlyColors,
                             borderColor: monthlyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
                             borderWidth: 1
+                        }, {
+                            label: 'Proyeksi (kWh)',
+                            data: sortedMonthly.map(function(m) { return m.projectedEnergy > 0 ? m.projectedEnergy : null; }),
+                            backgroundColor: 'rgba(220, 53, 69, 0.88)',
+                            borderColor: 'rgba(185, 28, 28, 1)', borderWidth: 1
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
@@ -1995,51 +2106,53 @@
         }
 
         function renderDevMonthlyProj(d, $canvas, $footer) {
-            var now = new Date();
-            var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            var dayOfMonth = now.getDate();
-
-            var dailyData = (d.month && d.month.dailyData) || [];
+            var projection = d.projection || {};
+            var serverDate = projection.serverDate || d.serverDate || '';
+            var serverParts = serverDate.split('-').map(Number);
+            var serverYear = serverParts.length === 3 && serverParts[0] ? serverParts[0] : new Date().getFullYear();
+            var serverMonth = serverParts.length === 3 && serverParts[1] ? serverParts[1] : new Date().getMonth() + 1;
+            var dayOfMonth = serverParts.length === 3 && serverParts[2] ? serverParts[2] : new Date().getDate();
+            var daysInMonth = new Date(serverYear, serverMonth, 0).getDate();
+            var dailyData = projection.enabled ? (projection.dailyData || []) : ((d.month && d.month.dailyData) || []).map(function(dd) {
+                return { sortKey: dd.sortKey, actualEnergy: Number(dd.energy || 0), projectedEnergy: 0 };
+            });
             var budget = d.budget || {};
 
             var actualDaily = new Array(daysInMonth).fill(0);
+            var projectedDaily = new Array(daysInMonth).fill(0);
             dailyData.forEach(function(dd) {
                 var idx = (dd.sortKey || 0) - 1;
-                if (idx >= 0 && idx < daysInMonth) actualDaily[idx] = dd.energy || 0;
+                if (idx >= 0 && idx < daysInMonth) {
+                    actualDaily[idx] = Number(dd.actualEnergy || 0);
+                    projectedDaily[idx] = Number(dd.projectedEnergy || 0);
+                }
             });
 
             var filledDays = 0, filledSum = 0;
             for (var i = 0; i < Math.min(dayOfMonth, daysInMonth); i++) {
                 if (actualDaily[i] > 0) { filledDays++; filledSum += actualDaily[i]; }
             }
-
-            var recentWindow = 7, recentSum = 0, recentCount = 0, olderSum = 0, olderCount = 0;
-            var cutoff = Math.max(0, dayOfMonth - recentWindow);
-            for (var i = cutoff; i < Math.min(dayOfMonth, daysInMonth); i++) { if (actualDaily[i] > 0) { recentSum += actualDaily[i]; recentCount++; } }
-            for (var i = 0; i < cutoff; i++) { if (actualDaily[i] > 0) { olderSum += actualDaily[i]; olderCount++; } }
-            var recentAvg = recentCount > 0 ? recentSum / recentCount : 0;
-            var olderAvg = olderCount > 0 ? olderSum / olderCount : 0;
-            var projKWh = (recentAvg > 0 && olderAvg > 0) ? recentAvg * 0.6 + olderAvg * 0.4 : (recentAvg > 0 ? recentAvg : (olderAvg > 0 ? olderAvg : (filledDays > 0 ? filledSum / filledDays : 0)));
-
-            var projectedDaily = new Array(daysInMonth).fill(0);
-            for (var i = 0; i < daysInMonth; i++) projectedDaily[i] = i < dayOfMonth ? actualDaily[i] : projKWh;
+            var projectedTotal = projectedDaily.reduce(function(sum, value) { return sum + value; }, 0);
+            var completeDaily = actualDaily.map(function(value, index) { return value + projectedDaily[index]; });
 
             var actualCum = [], projCum = [], budgetPace = [];
             var cA = 0, cP = 0, budgetKwh = budget.budgetKWH || budget.budgetKWh || 0;
             var dailyBud = budgetKwh > 0 ? budgetKwh / daysInMonth : 0;
             for (var i = 0; i < daysInMonth; i++) {
-                if (i < dayOfMonth) { cA += actualDaily[i]; actualCum.push(cA); projCum.push(cA); }
-                else { actualCum.push(null); cP += projectedDaily[i]; projCum.push(cA + cP); }
+                cA += actualDaily[i];
+                cP += projectedDaily[i];
+                actualCum.push(i < dayOfMonth ? cA : null);
+                projCum.push(cA + cP);
                 budgetPace.push(dailyBud * (i + 1));
             }
 
             var labels = []; for (var i = 1; i <= daysInMonth; i++) labels.push(i);
-            var totalActual = 0; for (var i = 0; i < dayOfMonth; i++) totalActual += actualDaily[i];
-            var totalProj = totalActual + projKWh * (daysInMonth - dayOfMonth);
+            var totalActual = actualDaily.reduce(function(sum, value) { return sum + value; }, 0);
+            var totalComplete = completeDaily.reduce(function(sum, value) { return sum + value; }, 0);
 
             var datasets = [
                 { label: 'Aktual (kWh)', data: actualDaily.slice(0, dayOfMonth).concat(new Array(daysInMonth - dayOfMonth).fill(null)), type: 'bar', backgroundColor: 'rgba(59,130,246,0.7)', borderColor: 'rgba(59,130,246,1)', borderWidth: 1, borderRadius: 2, order: 3 },
-                { label: 'Proyeksi (kWh)', data: new Array(dayOfMonth).fill(null).concat(projectedDaily.slice(dayOfMonth)), type: 'bar', backgroundColor: 'rgba(251,146,60,0.4)', borderColor: 'rgba(251,146,60,0.8)', borderWidth: 1, borderDash: [3,3], borderRadius: 2, order: 3 },
+                { label: 'Proyeksi (kWh)', data: projectedDaily.map(function(value) { return value > 0 ? value : null; }), type: 'bar', backgroundColor: 'rgba(251,146,60,0.4)', borderColor: 'rgba(251,146,60,0.8)', borderWidth: 1, borderDash: [3,3], borderRadius: 2, order: 3 },
                 { label: 'Kumulatif Aktual', data: actualCum, type: 'line', borderColor: 'rgba(59,130,246,1)', borderWidth: 2, pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 },
                 { label: 'Kumulatif Proyeksi', data: projCum, type: 'line', borderColor: 'rgba(251,146,60,0.9)', borderWidth: 2, borderDash: [5,3], pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 }
             ];
@@ -2050,19 +2163,22 @@
                 type: 'bar', data: { labels: labels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: detailEnergyTooltipOptions(actualDaily, actualCum, d, 'Akumulasi bulan'), },
+                        tooltip: detailEnergyTooltipOptions(completeDaily, projCum, d, 'Akumulasi bulan'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return formatDecimal(v); } } } }
                 }
             });
 
-            var fh = '<div><strong>Aktual:</strong> ' + formatDecimal(totalActual) + ' kWh · <strong>Proyeksi EOM:</strong> ' + formatDecimal(totalProj) + ' kWh</div>';
-            fh += '<div>Rata² aktual: ' + formatDecimal(filledDays > 0 ? filledSum / filledDays : 0) + ' kWh/hari · Proyeksi sisa: ' + formatDecimal(projKWh) + ' kWh/hari · Sisa ' + (daysInMonth - dayOfMonth) + ' hari</div>';
-            if (budgetKwh > 0) { var bp = Math.round(totalProj / budgetKwh * 100); fh += '<div class="' + (bp > 100 ? 'text-danger' : (bp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + bp + '% (' + formatDecimal(budgetKwh) + ' kWh)</div>'; }
+            var fh = '<div><strong>Aktual:</strong> ' + formatDecimal(totalActual) + ' kWh · <strong>Proyeksi gap:</strong> ' + formatDecimal(projectedTotal) + ' kWh · <strong>Total:</strong> ' + formatDecimal(totalComplete) + ' kWh</div>';
+            fh += '<div>Rata² aktual: ' + formatDecimal(filledDays > 0 ? filledSum / filledDays : 0) + ' kWh/hari · Cakupan: bulan berjalan sampai ' + dayOfMonth + '</div>';
+            if (budgetKwh > 0) { var bp = Math.round(totalComplete / budgetKwh * 100); fh += '<div class="' + (bp > 100 ? 'text-danger' : (bp > 80 ? 'text-warning' : 'text-success')) + '">Total dibandingkan dengan anggaran: ' + bp + '% (' + formatDecimal(budgetKwh) + ' kWh)</div>'; }
             $footer.html(fh).show();
         }
 
         function renderDevYearlyProj(d, $canvas, $footer) {
-            var currentMonth = new Date().getMonth() + 1;
+            var projection = d.projection || {};
+            var serverParts = (projection.serverDate || d.serverDate || '').split('-').map(Number);
+            var currentYear = serverParts.length === 3 && serverParts[0] ? serverParts[0] : new Date().getFullYear();
+            var currentMonth = serverParts.length === 3 && serverParts[1] ? serverParts[1] : new Date().getMonth() + 1;
             var monthlyData = (d.year && d.year.monthlyData) || [];
             var budget = d.budget || {};
             var monthLabels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
@@ -2070,31 +2186,30 @@
             var actualMonthly = new Array(12).fill(0);
             monthlyData.forEach(function(m) { var idx = (m.sortKey || 0) - 1; if (idx >= 0 && idx < 12) actualMonthly[idx] = m.energy || 0; });
 
-            var filledMonths = 0, filledSum = 0;
-            for (var i = 0; i < currentMonth; i++) { if (actualMonthly[i] > 0) { filledMonths++; filledSum += actualMonthly[i]; } }
-
-            var recentWindow = 3, recentSum = 0, recentCount = 0, olderSum = 0, olderCount = 0;
-            var cutoff = Math.max(0, currentMonth - recentWindow);
-            for (var i = cutoff; i < currentMonth; i++) { if (actualMonthly[i] > 0) { recentSum += actualMonthly[i]; recentCount++; } }
-            for (var i = 0; i < cutoff; i++) { if (actualMonthly[i] > 0) { olderSum += actualMonthly[i]; olderCount++; } }
-            var recentAvg = recentCount > 0 ? recentSum / recentCount : 0;
-            var olderAvg = olderCount > 0 ? olderSum / olderCount : 0;
-            var projKWh = (recentAvg > 0 && olderAvg > 0) ? recentAvg * 0.6 + olderAvg * 0.4 : (recentAvg > 0 ? recentAvg : (olderAvg > 0 ? olderAvg : (filledMonths > 0 ? filledSum / filledMonths : 0)));
+            var projectionMonthly = new Array(12).fill(0);
+            (projection.dailyData || []).forEach(function(dd) {
+                var dayProjection = Number(dd.projectedEnergy || 0);
+                if (dayProjection > 0) projectionMonthly[currentMonth - 1] += dayProjection;
+            });
 
             var actualCum = [], projCum = [], budgetPace = [];
             var cA = 0, cP = 0, budgetKwh = budget.budgetKWH || budget.budgetKWh || 0;
             var yearlyBudget = budgetKwh > 0 ? budgetKwh * 12 : 0;
             var monthlyBud = yearlyBudget > 0 ? yearlyBudget / 12 : 0;
             for (var i = 0; i < 12; i++) {
-                if (i < currentMonth) { cA += actualMonthly[i]; actualCum.push(cA); projCum.push(cA); }
-                else { actualCum.push(null); cP += projKWh; projCum.push(cA + cP); }
+                cA += actualMonthly[i];
+                cP += projectionMonthly[i];
+                actualCum.push(i <= currentMonth - 1 ? cA : null);
+                projCum.push(cA + cP);
                 budgetPace.push(monthlyBud * (i + 1));
             }
-            var totalActualYear = cA, totalProjYear = totalActualYear + projKWh * (12 - currentMonth);
+            var totalActualYear = actualMonthly.reduce(function(sum, value) { return sum + value; }, 0);
+            var totalProjectedYear = projectionMonthly.reduce(function(sum, value) { return sum + value; }, 0);
+            var totalCompleteYear = totalActualYear + totalProjectedYear;
 
             var datasets = [
                 { label: 'Aktual (kWh)', data: actualMonthly.slice(0, currentMonth).concat(new Array(12 - currentMonth).fill(null)), type: 'bar', backgroundColor: 'rgba(99,102,241,0.7)', borderColor: 'rgba(99,102,241,1)', borderWidth: 1, borderRadius: 3, order: 3 },
-                { label: 'Proyeksi (kWh)', data: new Array(currentMonth).fill(null).concat(new Array(12 - currentMonth).fill(projKWh)), type: 'bar', backgroundColor: 'rgba(251,146,60,0.35)', borderColor: 'rgba(251,146,60,0.7)', borderWidth: 1, borderDash: [3,3], borderRadius: 3, order: 3 },
+                { label: 'Proyeksi (kWh)', data: projectionMonthly.map(function(value) { return value > 0 ? value : null; }), type: 'bar', backgroundColor: 'rgba(251,146,60,0.35)', borderColor: 'rgba(251,146,60,0.7)', borderWidth: 1, borderDash: [3,3], borderRadius: 3, order: 3 },
                 { label: 'Kumulatif Aktual', data: actualCum, type: 'line', borderColor: 'rgba(99,102,241,1)', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.3, order: 1 },
                 { label: 'Kumulatif Proyeksi', data: projCum, type: 'line', borderColor: 'rgba(251,146,60,0.9)', borderWidth: 2, borderDash: [5,3], pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 }
             ];
@@ -2110,9 +2225,9 @@
                 }
             });
 
-            var fh = '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> ' + formatDecimal(totalActualYear) + ' kWh · <strong>Proyeksi EOY:</strong> ' + formatDecimal(totalProjYear) + ' kWh</div>';
-            fh += '<div>Rata² bulanan: ' + formatDecimal(filledMonths > 0 ? filledSum / filledMonths : 0) + ' kWh · Proyeksi sisa: ' + formatDecimal(projKWh) + ' kWh/bln</div>';
-            if (yearlyBudget > 0) { var yp = Math.round(totalProjYear / yearlyBudget * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + yp + '% (' + formatDecimal(yearlyBudget) + ' kWh/tahun)</div>'; }
+            var fh = '<div><strong>Aktual tahun ' + currentYear + ':</strong> ' + formatDecimal(totalActualYear) + ' kWh · <strong>Proyeksi gap bulan berjalan:</strong> ' + formatDecimal(totalProjectedYear) + ' kWh · <strong>Total:</strong> ' + formatDecimal(totalCompleteYear) + ' kWh</div>';
+            fh += '<div>Projection scope: hanya bulan berjalan (' + monthLabels[currentMonth - 1] + '), bulan sebelumnya actual-only</div>';
+            if (yearlyBudget > 0) { var yp = Math.round(totalCompleteYear / yearlyBudget * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Total dibandingkan dengan anggaran: ' + yp + '% (' + formatDecimal(yearlyBudget) + ' kWh/tahun)</div>'; }
             $footer.html(fh).show();
         }
 
@@ -2135,24 +2250,38 @@
             var $canvas = $('#deviceCostProjectionChart');
             var $footer = $('#deviceCostProjectionFooter');
 
-            var now = new Date();
-            var dayOfMonth = now.getDate();
-            var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            var projection = d.projection || {};
+            var serverParts = (projection.serverDate || d.serverDate || '').split('-').map(Number);
+            var serverYear = serverParts.length === 3 && serverParts[0] ? serverParts[0] : new Date().getFullYear();
+            var serverMonth = serverParts.length === 3 && serverParts[1] ? serverParts[1] : new Date().getMonth() + 1;
+            var dayOfMonth = serverParts.length === 3 && serverParts[2] ? serverParts[2] : new Date().getDate();
+            var daysInMonth = new Date(serverYear, serverMonth, 0).getDate();
 
-            var dailyData = (d.month && d.month.dailyData) || [];
+            var dailyData = projection.enabled ? (projection.dailyData || []) : ((d.month && d.month.dailyData) || []).map(function(dd) {
+                return { sortKey: dd.sortKey, actualEnergy: Number(dd.energy || 0), projectedEnergy: 0 };
+            });
             var budget = d.budget || {};
             var costPerKWh = calculateCostPerKWh(d);
 
             var dailyCost = new Array(daysInMonth).fill(0);
-            dailyData.forEach(function(dd) { var idx = (dd.sortKey || 0) - 1; if (idx >= 0 && idx < daysInMonth) dailyCost[idx] = Math.round((dd.energy || 0) * costPerKWh); });
+            var projectedDailyCost = new Array(daysInMonth).fill(0);
+            dailyData.forEach(function(dd) {
+                var idx = (dd.sortKey || 0) - 1;
+                if (idx >= 0 && idx < daysInMonth) {
+                    dailyCost[idx] = Math.round(Number(dd.actualEnergy || 0) * costPerKWh);
+                    projectedDailyCost[idx] = Math.round(Number(dd.projectedEnergy || 0) * costPerKWh);
+                }
+            });
 
             var cumCost = 0, cumProjCost = 0;
             var costCum = [], projCostCum = [];
             for (var i = 0; i < daysInMonth; i++) {
-                if (i < dayOfMonth) { cumCost += dailyCost[i]; costCum.push(cumCost); projCostCum.push(cumCost); }
-                else { costCum.push(null); var avg = dayOfMonth > 0 ? cumCost / dayOfMonth : 0; cumProjCost += avg; projCostCum.push(cumCost + cumProjCost); }
+                cumCost += dailyCost[i];
+                cumProjCost += projectedDailyCost[i];
+                costCum.push(i < dayOfMonth ? cumCost : null);
+                projCostCum.push(cumCost + cumProjCost);
             }
-            var totalProjMonthCost = cumCost + (dayOfMonth > 0 ? cumCost / dayOfMonth : 0) * (daysInMonth - dayOfMonth);
+            var totalProjMonthCost = cumCost + cumProjCost;
 
             var budgetKwh = budget.budgetKWH || budget.budgetKWh || 0;
             var budgetCostPerDay = budgetKwh > 0 ? (budgetKwh * costPerKWh) / daysInMonth : 0;
@@ -2172,13 +2301,13 @@
                 type: 'line', data: { labels: dayLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: detailCostTooltipOptions(actualDaily, d, 'Akumulasi bulan'), },
+                        tooltip: detailCostTooltipOptions(dailyCost.map(function(value, index) { return value + projectedDailyCost[index]; }), d, 'Akumulasi bulan'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 15 } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });
 
-            var fh = '<div><strong>Biaya aktual bulan ini:</strong> Rp ' + formatInteger(cumCost) + ' · <strong>Proyeksi EOM:</strong> Rp ' + formatInteger(Math.round(totalProjMonthCost)) + '</div>';
-            fh += '<div>Tarif efektif: Rp ' + formatInteger(Math.round(costPerKWh)) + '/kWh · Rata² harian: Rp ' + formatInteger(dayOfMonth > 0 ? Math.round(cumCost / dayOfMonth) : 0) + '</div>';
+            fh = '<div><strong>Biaya aktual:</strong> Rp ' + formatInteger(cumCost) + ' · <strong>Biaya proyeksi gap:</strong> Rp ' + formatInteger(Math.round(cumProjCost)) + ' · <strong>Total:</strong> Rp ' + formatInteger(Math.round(totalProjMonthCost)) + '</div>';
+            fh += '<div>Tarif efektif: Rp ' + formatInteger(Math.round(costPerKWh)) + '/kWh · Cakupan: bulan berjalan sampai ' + dayOfMonth + '</div>';
             if (budgetKwh > 0) { var budgetCostMonth = Math.round(budgetKwh * costPerKWh); var bpPct = Math.round(totalProjMonthCost / budgetCostMonth * 100); fh += '<div class="' + (bpPct > 100 ? 'text-danger' : (bpPct > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + bpPct + '% (Rp ' + formatInteger(budgetCostMonth) + ')</div>'; }
             $footer.html(fh).show();
         }
@@ -2187,21 +2316,27 @@
             var $canvas = $('#deviceCostProjectionChart');
             var $footer = $('#deviceCostProjectionFooter');
 
-            var currentMonth = new Date().getMonth() + 1;
+            var projection = d.projection || {};
+            var serverParts = (projection.serverDate || d.serverDate || '').split('-').map(Number);
+            var currentMonth = serverParts.length === 3 && serverParts[1] ? serverParts[1] : new Date().getMonth() + 1;
             var monthlyData = (d.year && d.year.monthlyData) || [];
             var budget = d.budget || {};
             var costPerKWh = calculateCostPerKWh(d);
 
             var monthlyCost = new Array(12).fill(0);
             monthlyData.forEach(function(m) { var idx = (m.sortKey || 0) - 1; if (idx >= 0 && idx < 12) monthlyCost[idx] = Math.round((m.energy || 0) * costPerKWh); });
+            var projectedMonthlyCost = new Array(12).fill(0);
+            (projection.dailyData || []).forEach(function(dd) { projectedMonthlyCost[currentMonth - 1] += Math.round(Number(dd.projectedEnergy || 0) * costPerKWh); });
 
             var yCostCum = [], yProjCostCum = [];
             var yCumCost = 0, yProjCost = 0;
             for (var i = 0; i < 12; i++) {
-                if (i < currentMonth) { yCumCost += monthlyCost[i]; yCostCum.push(yCumCost); yProjCostCum.push(yCumCost); }
-                else { yCostCum.push(null); var avgM = currentMonth > 0 ? yCumCost / currentMonth : 0; yProjCost += avgM; yProjCostCum.push(yCumCost + yProjCost); }
+                yCumCost += monthlyCost[i];
+                yProjCost += projectedMonthlyCost[i];
+                yCostCum.push(i < currentMonth ? yCumCost : null);
+                yProjCostCum.push(yCumCost + yProjCost);
             }
-            var totalProjYearCost = yCumCost + (currentMonth > 0 ? yCumCost / currentMonth : 0) * (12 - currentMonth);
+            var totalProjYearCost = yCumCost + yProjCost;
 
             var budgetKwh = budget.budgetKWH || budget.budgetKWh || 0;
             var yearlyBudgetCost = budgetKwh > 0 ? budgetKwh * 12 * costPerKWh : 0;
@@ -2213,7 +2348,7 @@
 
             var datasets = [
                 { label: 'Biaya Aktual (Rp)', data: monthlyCost.slice(0, currentMonth).concat(new Array(12 - currentMonth).fill(null)), type: 'bar', backgroundColor: 'rgba(13,148,136,0.7)', borderColor: 'rgba(13,148,136,1)', borderWidth: 1, borderRadius: 3, order: 3 },
-                { label: 'Biaya Proyeksi (Rp)', data: new Array(currentMonth).fill(null).concat(new Array(12 - currentMonth).fill(currentMonth > 0 ? Math.round(yCumCost / currentMonth) : 0)), type: 'bar', backgroundColor: 'rgba(251,146,60,0.35)', borderColor: 'rgba(251,146,60,0.7)', borderWidth: 1, borderDash: [3,3], borderRadius: 3, order: 3 },
+                { label: 'Biaya Proyeksi (Rp)', data: projectedMonthlyCost.map(function(value) { return value > 0 ? value : null; }), type: 'bar', backgroundColor: 'rgba(251,146,60,0.35)', borderColor: 'rgba(251,146,60,0.7)', borderWidth: 1, borderDash: [3,3], borderRadius: 3, order: 3 },
                 { label: 'Kumulatif Aktual', data: yCostCum, type: 'line', borderColor: 'rgba(13,148,136,1)', borderWidth: 2, pointRadius: 2, fill: false, tension: 0.3, order: 1 },
                 { label: 'Kumulatif Proyeksi', data: yProjCostCum, type: 'line', borderColor: 'rgba(251,146,60,0.9)', borderWidth: 2, borderDash: [5,3], pointRadius: 0, pointHitRadius: 0, fill: false, tension: 0.3, order: 1 }
             ];
@@ -2224,13 +2359,13 @@
                 type: 'bar', data: { labels: monthLabels, datasets: datasets },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
                     plugins: { legend: { display: true, position: 'top', labels: { font: { size: 10 }, boxWidth: 12 } },
-                        tooltip: detailCostTooltipOptions(actualMonthly, d, 'Akumulasi tahun'), },
+                        tooltip: detailCostTooltipOptions(monthlyCost, d, 'Akumulasi tahun'), },
                     scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { font: { size: 9 }, callback: function(v) { return 'Rp ' + formatInteger(v); } } } }
                 }
             });
 
             var fh = '<div><strong>Aktual ' + currentMonth + ' bulan:</strong> Rp ' + formatInteger(yCumCost) + ' · <strong>Proyeksi EOY:</strong> Rp ' + formatInteger(Math.round(totalProjYearCost)) + '</div>';
-            fh += '<div>Rata² bulanan: Rp ' + formatInteger(currentMonth > 0 ? Math.round(yCumCost / currentMonth) : 0) + '</div>';
+            fh += '<div>Biaya proyeksi gap bulan berjalan: Rp ' + formatInteger(Math.round(yProjCost)) + '</div>';
             if (yearlyBudgetCost > 0) { var yp = Math.round(totalProjYearCost / yearlyBudgetCost * 100); fh += '<div class="' + (yp > 100 ? 'text-danger' : (yp > 80 ? 'text-warning' : 'text-success')) + '">Proyeksi dibandingkan dengan anggaran: ' + yp + '% (Rp ' + formatInteger(Math.round(yearlyBudgetCost)) + '/tahun)</div>'; }
             $footer.html(fh).show();
         }
