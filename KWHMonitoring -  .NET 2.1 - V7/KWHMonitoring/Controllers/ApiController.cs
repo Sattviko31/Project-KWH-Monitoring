@@ -810,7 +810,11 @@ namespace KWHMonitoring.Controllers
                 var dailyData = Enumerable.Range(1, daysInMonth).Select(d => new
                 {
                     dateLabel = string.Format("{0}/{1}/{2}", d, startDate.Month, startDate.Year),
+                    actualEnergy = Math.Round(dailyRecords.FirstOrDefault(x => x.Day == d)?.EnergyKWh ?? 0, 4),
+                    projectedEnergy = 0m,
+                    completeEnergy = Math.Round(dailyRecords.FirstOrDefault(x => x.Day == d)?.EnergyKWh ?? 0, 4),
                     energy = Math.Round(dailyRecords.FirstOrDefault(x => x.Day == d)?.EnergyKWh ?? 0, 2),
+                    status = (dailyRecords.FirstOrDefault(x => x.Day == d)?.EnergyKWh ?? 0) > 0 ? "ACTUAL" : "NO_DATA",
                     sortKey = d
                 }).ToList();
 
@@ -829,7 +833,11 @@ namespace KWHMonitoring.Controllers
                 var monthlyData = Enumerable.Range(1, 12).Select(m => new
                 {
                     monthName = GetMonthName(m),
+                    actualEnergy = Math.Round(monthlyRecords.FirstOrDefault(x => x.Month == m)?.EnergyKWh ?? 0, 4),
+                    projectedEnergy = 0m,
+                    completeEnergy = Math.Round(monthlyRecords.FirstOrDefault(x => x.Month == m)?.EnergyKWh ?? 0, 4),
                     energy = Math.Round(monthlyRecords.FirstOrDefault(x => x.Month == m)?.EnergyKWh ?? 0, 2),
+                    status = (monthlyRecords.FirstOrDefault(x => x.Month == m)?.EnergyKWh ?? 0) > 0 ? "ACTUAL" : "NO_DATA",
                     sortKey = m
                 }).ToList();
 
@@ -881,7 +889,11 @@ namespace KWHMonitoring.Controllers
                         dailyData[todayDailyIdx] = new
                         {
                             dateLabel = string.Format("{0}/{1}/{2}", todayDay, startDate.Month, startDate.Year),
+                            actualEnergy = hourlyData.Sum(x => x.energy),
+                            projectedEnergy = 0m,
+                            completeEnergy = todayKWh,
                             energy = todayKWh,
+                            status = "ACTUAL",
                             sortKey = todayDay
                         };
                     }
@@ -893,7 +905,11 @@ namespace KWHMonitoring.Controllers
                         monthlyData[currentMonthIdx] = new
                         {
                             monthName = GetMonthName(serverNow.Month),
+                            actualEnergy = monthKWh,
+                            projectedEnergy = 0m,
+                            completeEnergy = monthKWh,
                             energy = monthKWh,
+                            status = "ACTUAL",
                             sortKey = serverNow.Month
                         };
                     }
@@ -1171,14 +1187,14 @@ namespace KWHMonitoring.Controllers
                 {
                     var cacheIdentity = string.Join("|", new[]
                     {
-                        "hourly-future-rule-v2",
+                        "hourly-future-rule-v5-fast-persisted-projections",
                         startDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
                         string.Join(",", deviceKeys),
                         energyVersionToken,
                         anomalyVersionToken,
                         settingsVersion,
                         "projection-enabled:" + _hourlyEnergyProjectionService.IsEnabled.ToString(CultureInfo.InvariantCulture),
-                        "projection-version:" + (_hourlyEnergyProjectionService.IsEnabled ? "v1" : "disabled")
+                        "projection-version:" + (_hourlyEnergyProjectionService.IsEnabled ? "v1-fast-current-day-gaps" : "disabled")
                     });
                     using (var sha256 = SHA256.Create())
                     {
@@ -1214,6 +1230,9 @@ namespace KWHMonitoring.Controllers
                     .Where(x => x.Hour >= monthStart && x.Hour < monthEnd);
                 if (singleDeviceKey != null) projectionActualQuery = projectionActualQuery.Where(x => x.DeviceKey == singleDeviceKey);
                 var projectionActualRows = await projectionActualQuery
+                    // A zero-valued placeholder row is not actual consumption and
+                    // must remain eligible for projection.
+                    .Where(x => x.EnergyKWh > 0m)
                     .Select(x => new { x.DeviceKey, x.Hour })
                     .ToListAsync();
                 // Index actual buckets once. The projection loop checks the same
@@ -1310,7 +1329,26 @@ namespace KWHMonitoring.Controllers
                     && calculationDate.Year == serverToday.Year
                     && calculationDate.Month == serverToday.Month
                     && !isFutureSameMonth;
-                if (batchCurrentMonthProjectionEnabled)
+                // Persisted projection rows are also needed for historical months.
+                // Only newly calculated values remain restricted to the current day.
+                var batchProjectionDataEnabled = _hourlyEnergyProjectionService.IsEnabled
+                    && !isFutureSameMonth;
+                // Keep the realtime request bounded. Persisted projections cover the
+                // remaining days in the selected month; only the server's active day
+                // may perform new historical-baseline calculations in this request.
+                var projectionCalculationDate = calculationDate;
+                if (calculationDate.Year == serverToday.Year
+                    && calculationDate.Month == serverToday.Month
+                    && !isFutureSameMonth)
+                {
+                    projectionCalculationDate = serverToday;
+                }
+                // The main dashboard requests all devices at once. Never run one
+                // historical database query per missing hour/device in that path;
+                // persisted projection rows are already loaded in bulk above. A
+                // single-device request may calculate the active-day gaps on demand.
+                var allowOnDemandProjectionCalculation = singleDeviceKey != null;
+                if (batchProjectionDataEnabled)
                 {
                     // EnergyProjectionValues stores UTC bucket timestamps, while
                     // HourlyEnergy and the selected filter use server-local time.
@@ -1339,9 +1377,10 @@ namespace KWHMonitoring.Controllers
                     foreach (var projectionDeviceKey in allKeys)
                     {
                         var projectedByHour = new Dictionary<Tuple<DateTime, int>, HourlyEnergyProjectionResult>();
-                        var projectionLastDay = batchCurrentMonthProjectionEnabled
+                        var projectionLastDay = startDate.Year == serverToday.Year
+                            && startDate.Month == serverToday.Month
                             ? Math.Min(DateTime.DaysInMonth(startDate.Year, startDate.Month), serverToday.Day)
-                            : 0;
+                            : DateTime.DaysInMonth(startDate.Year, startDate.Month);
                         for (var projectionDay = 1; projectionDay <= projectionLastDay; projectionDay++)
                         {
                             var projectionDate = new DateTime(startDate.Year, startDate.Month, projectionDay);
@@ -1377,6 +1416,18 @@ namespace KWHMonitoring.Controllers
                                 }
                                 else
                                 {
+                                    // Do not calculate a new projection for every missing
+                                    // bucket in the whole month during a UI refresh. The
+                                    // projection service performs a historical database
+                                    // query per bucket, which can turn one request into
+                                    // hundreds of serial queries across many devices.
+                                    // Do not calculate every historical gap during a UI
+                                    // refresh. Calculate only the active realtime day; older
+                                    // days must come from persisted EnergyProjectionValues so
+                                    // this endpoint remains responsive for many devices.
+                                    if (!allowOnDemandProjectionCalculation
+                                        || projectionDate.Date != projectionCalculationDate.Date)
+                                        continue;
                                     projection = await _hourlyEnergyProjectionService.CalculateAsync(projectionDeviceKey, bucket);
                                 }
                                 if (projection != null && projection.Status == "PROJECTED")
@@ -1478,6 +1529,40 @@ namespace KWHMonitoring.Controllers
                         confidenceLevel = deviceProjections.ContainsKey(Tuple.Create(calculationDate.Date, h)) ? deviceProjections[Tuple.Create(calculationDate.Date, h)].ConfidenceLevel : null
                     }).ToList();
                     var todayKWh = Math.Round(hourlyData.Sum(x => x.energy), 2);
+                     var dailyData = Enumerable.Range(1, DateTime.DaysInMonth(startDate.Year, startDate.Month)).Select(day =>
+                     {
+                         var actualEnergy = dailyMap.ContainsKey(day) ? dailyMap[day] : 0m;
+                         var projectedEnergy = deviceProjections
+                             .Where(x => x.Value.Status == "PROJECTED" && x.Value.ProjectedKWh.HasValue
+                                 && x.Key.Item1.Year == startDate.Year && x.Key.Item1.Month == startDate.Month && x.Key.Item1.Day == day)
+                             .Sum(x => x.Value.ProjectedKWh.Value);
+                         return new
+                         {
+                             dateLabel = string.Format("{0}/{1}/{2}", day, startDate.Month, startDate.Year),
+                             sortKey = day,
+                             actualEnergy = Math.Round(actualEnergy, 4),
+                             projectedEnergy = Math.Round(projectedEnergy, 4),
+                             completeEnergy = Math.Round(actualEnergy + projectedEnergy, 4),
+                             energy = Math.Round(actualEnergy + projectedEnergy, 2),
+                             status = projectedEnergy > 0m ? (actualEnergy > 0m ? "MIXED" : "PROJECTED") : (actualEnergy > 0m ? "ACTUAL" : "NO_DATA"),
+                             projected = projectedEnergy > 0m
+                         };
+                     }).ToList();
+                     var monthlyData = Enumerable.Range(1, 12).Select(month =>
+                     {
+                         var actualEnergy = monthlyMap.ContainsKey(Tuple.Create(startDate.Year, month)) ? monthlyMap[Tuple.Create(startDate.Year, month)] : 0m;
+                         return new
+                         {
+                             monthLabel = CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedMonthName(month),
+                             sortKey = month,
+                             actualEnergy = Math.Round(actualEnergy, 4),
+                             projectedEnergy = 0m,
+                             completeEnergy = Math.Round(actualEnergy, 4),
+                             energy = Math.Round(actualEnergy, 2),
+                             status = actualEnergy > 0m ? "ACTUAL" : "NO_DATA",
+                             projected = false
+                         };
+                     }).ToList();
                     var monthKWh = Math.Round(dailyMap.Values.Sum(x => Math.Round(x, 2)), 2);
                     var yearKWh = Math.Round(monthlyMap.Where(x => x.Key.Item1 == startDate.Year).Sum(x => Math.Round(x.Value, 2)), 2);
                     decimal realtimeKWh = 0m;
@@ -1561,9 +1646,9 @@ namespace KWHMonitoring.Controllers
                     result.Add(new
                     {
                         success = true, deviceKey, dataStatus = hasPeriodData ? "available" : "no-aggregate",
-                        today = new { total = todayKWh, actualKWh = actualTodayKWh, projectedKWh = Math.Round(projectedTodayKWh, 4), completeKWh = completeTodayKWh },
-                        month = new { total = monthKWh },
-                        year = new { total = yearKWh },
+                         today = new { total = todayKWh, avgPerHour = Math.Round(todayKWh / 24m, 2), actualKWh = actualTodayKWh, projectedKWh = Math.Round(projectedTodayKWh, 4), completeKWh = completeTodayKWh, hourlyData },
+                         month = new { total = monthKWh, avgPerDay = calculationDate.Day > 0 ? Math.Round(monthKWh / calculationDate.Day, 2) : 0m, dailyData },
+                         year = new { total = yearKWh, avgPerMonth = Math.Round(yearKWh / 12m, 2), monthlyData },
                         tariffPerKWh = tariff, estimatedCost, realtimeKWh = Math.Round(realtimeKWh, 4), currentHourLabel, secondsToNextHour,
                         isToday, dataUpdatedAt = deviceUpdatedAt,
                         wbpLwbp = new { configured = wbp.configured, wbpKWh = wbp.wbpKWh, lwbpKWh = wbp.lwbpKWh, wbpCost = wbp.wbpCost, lwbpCost = wbp.lwbpCost, totalCostWBP = wbp.totalCostWBP, wbpRatio = wbp.wbpRatio, tariffWBP = wbp.tariffWBP, tariffLWBP = wbp.tariffLWBP, wbpStart = deviceSettings.WbpStartHour, wbpEnd = deviceSettings.WbpEndHour },
@@ -1628,7 +1713,7 @@ namespace KWHMonitoring.Controllers
                 var summaryDailyTotals = dailyRecords.GroupBy(x => x.Day)
                     .ToDictionary(g => g.Key, g => g.Sum(x => x.EnergyKWh));
                 var summaryProjectedDailyTotals = new Dictionary<int, decimal>();
-                if (batchCurrentMonthProjectionEnabled)
+                if (batchProjectionDataEnabled)
                 {
                     foreach (var item in summaryProjectedHourlyByDate)
                     {
@@ -1675,7 +1760,7 @@ namespace KWHMonitoring.Controllers
                 var summaryMonthlyData = Enumerable.Range(1, 12).Select(month =>
                 {
                         var actualEnergy = summaryMonthlyTotals.ContainsKey(month) ? summaryMonthlyTotals[month] : 0m;
-                        var projectedEnergy = batchCurrentMonthProjectionEnabled && month == calculationDate.Month
+                        var projectedEnergy = batchProjectionDataEnabled && month == startDate.Month
                             ? summaryProjectedDailyTotals.Values.Sum()
                             : 0m;
                     var energy = actualEnergy + projectedEnergy;
@@ -1710,8 +1795,8 @@ namespace KWHMonitoring.Controllers
                     var todayIndex = summaryDailyData.FindIndex(x => x.sortKey == serverToday.Day);
                     if (todayIndex >= 0)
                     {
-                        var actualToday = summaryDailyData[todayIndex].actualEnergy;
-                        var projectedToday = summaryDailyData[todayIndex].projectedEnergy;
+                        var actualToday = Math.Round(summaryHourlyData.Sum(x => x.actualEnergy), 4);
+                        var projectedToday = Math.Round(summaryHourlyData.Sum(x => x.projectedEnergy), 4);
                         summaryDailyData[todayIndex] = new
                         {
                             dateLabel = string.Format("{0}/{1}/{2}", serverToday.Day, startDate.Month, startDate.Year),
@@ -1726,8 +1811,9 @@ namespace KWHMonitoring.Controllers
                     var monthIndex = summaryMonthlyData.FindIndex(x => x.sortKey == serverNow.Month);
                     if (monthIndex >= 0)
                     {
-                        var actualMonth = summaryMonthlyData[monthIndex].actualEnergy;
-                        var projectedMonth = summaryMonthlyData[monthIndex].projectedEnergy;
+                        var actualMonth = Math.Round(summaryDailyData.Sum(x => x.actualEnergy), 4);
+                        var projectedMonth = Math.Round(summaryDailyData.Sum(x => x.projectedEnergy), 4);
+                        summaryMonthKWh = Math.Round(actualMonth + projectedMonth, 2);
                         summaryMonthlyData[monthIndex] = new
                         {
                             monthName = GetMonthName(serverNow.Month),
@@ -1738,6 +1824,7 @@ namespace KWHMonitoring.Controllers
                             status = projectedMonth > 0m ? (actualMonth > 0m ? "MIXED" : "PROJECTED") : (actualMonth > 0m ? "ACTUAL" : "NO_DATA"),
                             sortKey = serverNow.Month
                         };
+                        summaryYearKWh = Math.Round(summaryMonthlyData.Sum(x => x.energy), 2);
                     }
                 }
                 var summaryPeakHour = summaryHourlyData.Max(x => x.energy);
@@ -2903,6 +2990,11 @@ namespace KWHMonitoring.Controllers
                 {
                     timeLabel = string.Format("{0:D2}:00", h),
                     energy = Math.Round(hourlyRecords.GetValueOrDefault(h), 2),
+                    actualEnergy = Math.Round(hourlyRecords.GetValueOrDefault(h), 4),
+                    projectedEnergy = 0m,
+                    completeEnergy = Math.Round(hourlyRecords.GetValueOrDefault(h), 4),
+                    status = hourlyRecords.ContainsKey(h) ? "ACTUAL" : "NO_DATA",
+                    projected = false,
                     sortKey = h
                 }).ToList();
 
@@ -2923,6 +3015,8 @@ namespace KWHMonitoring.Controllers
                 var projectionDailyData = new List<object>();
                 var projectionMonthlyData = new List<object>();
                 var projectionHourlyData = new List<object>();
+                var projectionActualByDay = new Dictionary<int, decimal>();
+                var projectionProjectedByDay = new Dictionary<int, decimal>();
                 var projectedMonthKWhFromGaps = 0m;
                 if (currentMonthProjectionEnabled)
                 {
@@ -2937,6 +3031,23 @@ namespace KWHMonitoring.Controllers
                     var projectionHourlyByDay = projectionHourlyRows
                         .GroupBy(x => x.Hour.Date)
                         .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Hour.Hour, x => Math.Max(0m, x.EnergyKWh)));
+                    var projectionUtcStart = DateTime.SpecifyKind(monthStart, DateTimeKind.Local).ToUniversalTime();
+                    var projectionUtcEnd = DateTime.SpecifyKind(monthEnd, DateTimeKind.Local).ToUniversalTime();
+                    var persistedProjectionRows = await _context.EnergyProjectionValues
+                        .AsNoTracking()
+                        .Where(x => x.DeviceKey == deviceKey
+                            && x.CalculationVersion == _hourlyEnergyProjectionService.CalculationVersion
+                            && x.Status == "PROJECTED"
+                            && x.BucketStartUtc >= projectionUtcStart
+                            && x.BucketStartUtc < projectionUtcEnd)
+                        .ToListAsync();
+                    var persistedProjectionByHour = persistedProjectionRows
+                        .GroupBy(x =>
+                        {
+                            var localBucket = DateTime.SpecifyKind(x.BucketStartUtc, DateTimeKind.Utc).ToLocalTime();
+                            return Tuple.Create(localBucket.Date, localBucket.Hour);
+                        })
+                        .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CalculatedAtUtc).First());
 
                     for (var day = 1; day <= Math.Min(daysInMonth, serverToday.Day); day++)
                     {
@@ -2960,10 +3071,33 @@ namespace KWHMonitoring.Controllers
                             {
                                 var bucket = date.AddHours(hour);
                                 if (bucket >= serverNow) continue;
-                                if (date.Date == serverToday && hour <= serverNow.Hour) continue;
+                                var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
+                                if (date.Date == serverToday && bucket >= currentHourStart) continue;
                                 if (actualByHour != null && actualByHour.ContainsKey(hour)) continue;
 
-                                var candidate = await _hourlyEnergyProjectionService.CalculateAsync(deviceKey, bucket);
+                                EnergyProjectionValue persistedProjection;
+                                HourlyEnergyProjectionResult candidate;
+                                if (persistedProjectionByHour.TryGetValue(Tuple.Create(date.Date, hour), out persistedProjection))
+                                {
+                                    candidate = new HourlyEnergyProjectionResult
+                                    {
+                                        DeviceKey = persistedProjection.DeviceKey,
+                                        BucketStart = bucket,
+                                        Status = persistedProjection.Status,
+                                        ProjectedKWh = persistedProjection.ProjectedKWh,
+                                        LowerBoundKWh = persistedProjection.LowerBoundKWh,
+                                        UpperBoundKWh = persistedProjection.UpperBoundKWh,
+                                        ConfidenceScore = persistedProjection.ConfidenceScore,
+                                        ConfidenceLevel = persistedProjection.ConfidenceLevel,
+                                        ProjectionMethod = persistedProjection.ProjectionMethod,
+                                        SampleCount = persistedProjection.SampleCount,
+                                        CalculationVersion = persistedProjection.CalculationVersion
+                                    };
+                                }
+                                else
+                                {
+                                    candidate = await _hourlyEnergyProjectionService.CalculateAsync(deviceKey, bucket);
+                                }
                                 if (candidate.Status == "PROJECTED" && candidate.ProjectedKWh.HasValue)
                                 {
                                     var projectedValue = Math.Max(0m, candidate.ProjectedKWh.Value);
@@ -2992,6 +3126,9 @@ namespace KWHMonitoring.Controllers
                             actual = Math.Max(0m, dailyRecords.GetValueOrDefault(day));
                         }
 
+                        projectionActualByDay[day] = Math.Round(actual, 4);
+                        projectionProjectedByDay[day] = Math.Round(projected, 4);
+
                         projectionDailyData.Add(new
                         {
                             dateLabel = string.Format("{0}/{1}/{2}", day, serverToday.Month, serverToday.Year),
@@ -3001,7 +3138,9 @@ namespace KWHMonitoring.Controllers
                             completeEnergy = Math.Round(actual + projected, 4),
                             actualHours,
                             projectedHours,
-                            status = projected > 0m ? (actual > 0m ? "MIXED" : "PROJECTED") : "ACTUAL"
+                            status = projected > 0m
+                                ? (actual > 0m ? "MIXED" : "PROJECTED")
+                                : (actual > 0m ? "ACTUAL" : "NO_DATA")
                         });
                         projectedMonthKWhFromGaps += projected;
                     }
@@ -3010,7 +3149,7 @@ namespace KWHMonitoring.Controllers
                     {
                         var isCurrentMonth = month == serverToday.Month;
                         var actualEnergy = isCurrentMonth
-                            ? dailyRows.Where(x => x.Date.Year == serverToday.Year && x.Date.Month == month && x.Date.Date <= serverToday).Sum(x => Math.Max(0m, x.EnergyKWh))
+                            ? projectionActualByDay.Values.Sum()
                             : 0m;
                         var projectedEnergy = isCurrentMonth ? projectedMonthKWhFromGaps : 0m;
                         return new
@@ -3028,7 +3167,21 @@ namespace KWHMonitoring.Controllers
                 var dailyData = Enumerable.Range(1, daysInMonth).Select(d => new
                 {
                     dateLabel = string.Format("{0}/{1}/{2}", d, startDate.Month, startDate.Year),
-                    energy = Math.Round(dailyRecords.GetValueOrDefault(d), 2),
+                    actualEnergy = currentMonthProjectionEnabled && projectionActualByDay.ContainsKey(d)
+                        ? projectionActualByDay[d]
+                        : Math.Round(dailyRecords.GetValueOrDefault(d), 4),
+                    projectedEnergy = currentMonthProjectionEnabled && projectionProjectedByDay.ContainsKey(d)
+                        ? projectionProjectedByDay[d]
+                        : 0m,
+                    completeEnergy = currentMonthProjectionEnabled && projectionActualByDay.ContainsKey(d)
+                        ? Math.Round(projectionActualByDay[d] + projectionProjectedByDay.GetValueOrDefault(d), 4)
+                        : Math.Round(dailyRecords.GetValueOrDefault(d), 4),
+                    energy = currentMonthProjectionEnabled && projectionActualByDay.ContainsKey(d)
+                        ? Math.Round(projectionActualByDay[d] + projectionProjectedByDay.GetValueOrDefault(d), 2)
+                        : Math.Round(dailyRecords.GetValueOrDefault(d), 2),
+                    status = currentMonthProjectionEnabled && projectionProjectedByDay.GetValueOrDefault(d) > 0m
+                        ? (projectionActualByDay.GetValueOrDefault(d) > 0m ? "MIXED" : "PROJECTED")
+                        : (dailyRecords.GetValueOrDefault(d) > 0m ? "ACTUAL" : "NO_DATA"),
                     sortKey = d
                 }).ToList();
 
@@ -3043,7 +3196,25 @@ namespace KWHMonitoring.Controllers
                 var monthlyData = Enumerable.Range(1, 12).Select(m => new
                 {
                     monthName = GetMonthName(m),
-                    energy = Math.Round(monthlyRecords.GetValueOrDefault(m), 2),
+                    actualEnergy = Math.Round(currentMonthProjectionEnabled && m == startDate.Month
+                        ? dailyData.Sum(x => x.actualEnergy)
+                        : monthlyRecords.GetValueOrDefault(m), 4),
+                    projectedEnergy = Math.Round(currentMonthProjectionEnabled && m == startDate.Month
+                        ? dailyData.Sum(x => x.projectedEnergy)
+                        : 0m, 4),
+                    completeEnergy = Math.Round(currentMonthProjectionEnabled && m == startDate.Month
+                        ? dailyData.Sum(x => x.completeEnergy)
+                        : monthlyRecords.GetValueOrDefault(m), 4),
+                    energy = Math.Round(currentMonthProjectionEnabled && m == startDate.Month
+                        ? dailyData.Sum(x => x.completeEnergy)
+                        : monthlyRecords.GetValueOrDefault(m), 2),
+                    status = (currentMonthProjectionEnabled && m == startDate.Month
+                        ? dailyData.Sum(x => x.projectedEnergy)
+                        : 0m) > 0
+                        ? (dailyData.Sum(x => x.actualEnergy) > 0 ? "MIXED" : "PROJECTED")
+                        : ((currentMonthProjectionEnabled && m == startDate.Month
+                            ? dailyData.Sum(x => x.actualEnergy)
+                            : monthlyRecords.GetValueOrDefault(m)) > 0 ? "ACTUAL" : "NO_DATA"),
                     sortKey = m
                 }).ToList();
 
@@ -3118,31 +3289,6 @@ namespace KWHMonitoring.Controllers
                     avgPerHour = Math.Round(hourlyData.Average(x => x.energy), 2);
                     peakHour = Math.Round(hourlyData.Max(x => x.energy), 2);
                     peakHourTime = hourlyData.First(x => x.energy == hourlyData.Max(y => y.energy)).sortKey;
-
-                    // Update daily chart for today
-                    var todayDay = serverNow.Day;
-                    var todayDailyIdx = dailyData.FindIndex(x => x.sortKey == todayDay);
-                    if (todayDailyIdx >= 0)
-                    {
-                        dailyData[todayDailyIdx] = new
-                        {
-                            dateLabel = string.Format("{0}/{1}/{2}", todayDay, startDate.Month, startDate.Year),
-                            energy = todayKWh,
-                            sortKey = todayDay
-                        };
-                    }
-
-                    // Update monthly chart for current month
-                    var currentMonthIdx = monthlyData.FindIndex(x => x.sortKey == serverNow.Month);
-                    if (currentMonthIdx >= 0)
-                    {
-                        monthlyData[currentMonthIdx] = new
-                        {
-                            monthName = GetMonthName(serverNow.Month),
-                            energy = monthKWh,
-                            sortKey = serverNow.Month
-                        };
-                    }
 
                     avgPerMonth = Math.Round(monthlyData.Average(x => x.energy), 2);
                     peakMonth = Math.Round(monthlyData.Max(x => x.energy), 2);
@@ -3372,9 +3518,25 @@ namespace KWHMonitoring.Controllers
                     .Where(x => x.DeviceKey == deviceKey && x.Hour >= date && x.Hour < date.AddDays(1))
                     .ToListAsync();
                 var actualByHour = actualRows.ToDictionary(x => x.Hour.Hour, x => x);
+                var projectionUtcStart = DateTime.SpecifyKind(date, DateTimeKind.Local).ToUniversalTime();
+                var projectionUtcEnd = DateTime.SpecifyKind(date.AddDays(1), DateTimeKind.Local).ToUniversalTime();
+                var persistedProjectionRows = projectionAllowed
+                    ? await _context.EnergyProjectionValues
+                        .AsNoTracking()
+                        .Where(x => x.DeviceKey == deviceKey
+                            && x.CalculationVersion == _hourlyEnergyProjectionService.CalculationVersion
+                            && x.Status == "PROJECTED"
+                            && x.BucketStartUtc >= projectionUtcStart
+                            && x.BucketStartUtc < projectionUtcEnd)
+                        .ToListAsync()
+                    : new List<EnergyProjectionValue>();
+                var persistedProjectionByHour = persistedProjectionRows
+                    .GroupBy(x => DateTime.SpecifyKind(x.BucketStartUtc, DateTimeKind.Utc).ToLocalTime().Hour)
+                    .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CalculatedAtUtc).First());
                 var buckets = new List<object>();
                 decimal actualTotal = 0m;
                 decimal projectedTotal = 0m;
+                var currentHourStart = new DateTime(serverNow.Year, serverNow.Month, serverNow.Day, serverNow.Hour, 0, 0);
 
                 for (var hour = 0; hour < 24; hour++)
                 {
@@ -3386,32 +3548,58 @@ namespace KWHMonitoring.Controllers
                         buckets.Add(new
                         {
                             timeLabel = string.Format("{0:D2}:00", hour), sortKey = hour,
-                            energy = Math.Round(value, 4), status = "ACTUAL", projected = false,
+                            energy = Math.Round(value, 4), actualEnergy = Math.Round(value, 4), projectedEnergy = 0m,
+                            completeEnergy = Math.Round(value, 4), status = "ACTUAL", projected = false,
                             confidence = (decimal?)null, confidenceLevel = (string)null
                         });
                         continue;
                     }
 
-                    // On the current day, never project hours up to or including the
-                    // server's current hour. Those buckets are still actual/no-data.
-                    if (!projectionAllowed || (date.Date == serverToday && hour <= serverNow.Hour))
+                    // The current hour is still open. Only completed buckets before
+                    // the current hour may be classified as MQTT-gap projections.
+                    var bucketIsOpen = date.Date == serverToday && date.AddHours(hour) >= currentHourStart;
+                    if (!projectionAllowed || bucketIsOpen)
                     {
                         buckets.Add(new
                         {
                             timeLabel = string.Format("{0:D2}:00", hour), sortKey = hour,
-                            energy = 0m, status = "NO_DATA", projected = false,
+                            energy = 0m, actualEnergy = 0m, projectedEnergy = 0m,
+                            completeEnergy = 0m, status = "NO_DATA", projected = false,
                             confidence = (decimal?)null, confidenceLevel = (string)null
                         });
                         continue;
                     }
 
-                    var candidate = await _hourlyEnergyProjectionService.CalculateAsync(deviceKey, bucket);
+                    HourlyEnergyProjectionResult candidate;
+                    EnergyProjectionValue persistedProjection;
+                    if (persistedProjectionByHour.TryGetValue(hour, out persistedProjection))
+                    {
+                        candidate = new HourlyEnergyProjectionResult
+                        {
+                            DeviceKey = persistedProjection.DeviceKey,
+                            BucketStart = bucket,
+                            Status = persistedProjection.Status,
+                            ProjectedKWh = persistedProjection.ProjectedKWh,
+                            LowerBoundKWh = persistedProjection.LowerBoundKWh,
+                            UpperBoundKWh = persistedProjection.UpperBoundKWh,
+                            ConfidenceScore = persistedProjection.ConfidenceScore,
+                            ConfidenceLevel = persistedProjection.ConfidenceLevel,
+                            ProjectionMethod = persistedProjection.ProjectionMethod,
+                            SampleCount = persistedProjection.SampleCount,
+                            CalculationVersion = persistedProjection.CalculationVersion
+                        };
+                    }
+                    else
+                    {
+                        candidate = await _hourlyEnergyProjectionService.CalculateAsync(deviceKey, bucket);
+                    }
                     var projected = candidate.Status == "PROJECTED" ? candidate.ProjectedKWh ?? 0m : 0m;
                     projectedTotal += projected;
                     buckets.Add(new
                     {
                         timeLabel = string.Format("{0:D2}:00", hour), sortKey = hour,
-                        energy = Math.Round(projected, 4), status = candidate.Status,
+                        energy = Math.Round(projected, 4), actualEnergy = 0m,
+                        projectedEnergy = Math.Round(projected, 4), completeEnergy = Math.Round(projected, 4), status = candidate.Status,
                         projected = candidate.Status == "PROJECTED",
                         confidence = candidate.ConfidenceScore,
                         confidenceLevel = candidate.ConfidenceLevel

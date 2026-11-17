@@ -511,6 +511,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Date).HasColumnType("date");
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.Date }).HasName("IX_DailyEnergy_Device_Date");
             });
 
             modelBuilder.Entity<FailedMessage>(entity =>
@@ -541,6 +542,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Hour).HasColumnType("datetime2");
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.Hour }).HasName("IX_HourlyEnergy_Device_Hour");
             });
 
             modelBuilder.Entity<EnergyProjectionGap>(entity =>
@@ -597,6 +599,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Month);
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.Year, x.Month }).HasName("IX_MonthlyEnergy_Device_Year_Month");
             });
 
             modelBuilder.Entity<YearlyEnergy>(entity =>
@@ -609,6 +612,7 @@ namespace KWHMonitoring.Models
                 entity.Property(x => x.Year);
                 entity.Property(x => x.EnergyKWh).HasColumnType("decimal(18,4)");
                 entity.Property(x => x.CalculatedAt).HasColumnType("datetime2");
+                entity.HasIndex(x => new { x.DeviceKey, x.Year }).HasName("IX_YearlyEnergy_Device_Year");
             });
 
             modelBuilder.Entity<ApplicationUser>(entity =>

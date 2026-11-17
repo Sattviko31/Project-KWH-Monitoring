@@ -1366,20 +1366,35 @@
             var selectedDateText = getDeviceUsageDateText();
 
             $.ajax({
-                url: '/api/Api/usage-statistics/' + deviceKey,
+                // Use the optimized batch contract even for one device. It performs
+                // bounded aggregate queries and returns persisted projection data in
+                // the same response, avoiding the slow legacy endpoint plus a second
+                // /usage-projection request.
+                url: '/api/Api/usage-statistics/batch',
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify({
                     startDate: selectedDateText,
-                    endDate: selectedDateText
+                    endDate: selectedDateText,
+                    deviceKey: deviceKey
                 }),
                 dataType: 'json',
-                timeout: 15000,
-                success: function(data) {
-                    if (!data.success) {
+                timeout: 30000,
+                success: function(batchResponse) {
+                    if (!batchResponse || batchResponse.success === false) {
                         @* console.error('Err or loading usage statistics'); *@
                         return;
                     }
+
+                    var data = Array.isArray(batchResponse.devices)
+                        ? batchResponse.devices.find(function(item) { return item && item.success !== false; })
+                        : null;
+                    if (!data) {
+                        @* console.error('No device usage data returned'); *@
+                        return;
+                    }
+                    data.serverDate = batchResponse.serverDate || data.serverDate;
+                    data.serverTime = batchResponse.serverTime || data.serverTime;
 
                     var projectionMeta = data.projection || {};
                     deviceServerDateText = data.serverDate || projectionMeta.serverDate || deviceServerDateText;
@@ -1409,44 +1424,9 @@
                     // Update charts
                     updateDeviceUsageCharts(data);
 
-                    if (@energyProjectionEnabled.ToString().ToLowerInvariant()) {
-                        loadDeviceHourlyProjection(data, selectedDateText);
+                        $('#usageToday').text(formatDecimal(projection.completeKWh) + ' kWh');
+                        $('#usageTodayAvg').text(formatDecimal(projection.completeKWh / 24));
                     }
-
-                    // Update financial analysis sections
-                    updateDeviceFinancialUI(data);
-
-                    @* console.log('Device usage statistics loaded'); *@
-                },
-                error: function(xhr, status, error) {
-                    @* console.error('Error loading device usage statistics:', error); *@
-                }
-            });
-        }
-
-        function loadDeviceHourlyProjection(data, selectedDateText) {
-            $.ajax({
-                url: '/api/Api/usage-projection/' + encodeURIComponent(deviceKey),
-                method: 'POST',
-                contentType: 'application/json',
-                dataType: 'json',
-                timeout: 15000,
-                data: JSON.stringify({ startDate: selectedDateText, endDate: selectedDateText }),
-                success: function (projection) {
-                    if (!projection || projection.success === false || !projection.hourlyData) return;
-                    var byHour = {};
-                    projection.hourlyData.forEach(function (item) { byHour[Number(item.sortKey)] = item; });
-                    data.today.hourlyData = (data.today.hourlyData || []).map(function (item) {
-                        var p = byHour[Number(item.sortKey)];
-                        return p ? Object.assign({}, item, {
-                            energy: Number(p.energy || 0), status: p.status, projected: p.projected,
-                            confidence: p.confidence, confidenceLevel: p.confidenceLevel
-                        }) : item;
-                    });
-                    // Respons endpoint per jam tidak membawa dailyData/monthlyData.
-                    // Gabungkan agar rerender grafik tidak menghapus proyeksi harian.
-                    data.projection = Object.assign({}, data.projection || {}, projection);
-                    updateDeviceUsageCharts(data);
                     if (projection.completeCost != null) {
                         $('#usageCost').text('Rp ' + formatNumber(projection.completeCost));
                         $('#tariffDisplay').text('Rp ' + formatNumber(projection.tariffPerKWh) + ' · Aktual Rp ' + formatNumber(projection.actualCost) + ' · Proyeksi Rp ' + formatNumber(projection.projectedCost));
@@ -1544,13 +1524,35 @@
             var isToday = deviceUsageDate.toDateString() === serverToday.toDateString();
             var hourlySeries = data && data.today && Array.isArray(data.today.hourlyData)
                 ? data.today.hourlyData
-                : [];
+                : (data && Array.isArray(data.hourlyData) ? data.hourlyData : []);
             var dailySeries = data && data.month && Array.isArray(data.month.dailyData)
                 ? data.month.dailyData
-                : [];
+                : (data && Array.isArray(data.dailyData) ? data.dailyData : []);
             var monthlySeries = data && data.year && Array.isArray(data.year.monthlyData)
                 ? data.year.monthlyData
-                : [];
+                : (data && Array.isArray(data.monthlyData) ? data.monthlyData : []);
+
+            function normalizeChartPoint(item, index) {
+                item = item || {};
+                var total = Number(item.completeEnergy);
+                if (!isFinite(total)) total = Number(item.energy);
+                var actual = Number(item.actualEnergy);
+                var projected = Number(item.projectedEnergy);
+                if (!isFinite(total) || total < 0) total = 0;
+                if (!isFinite(actual) || actual < 0) actual = 0;
+                if (!isFinite(projected) || projected < 0) projected = 0;
+                if (actual === 0 && projected === 0 && total > 0) actual = total;
+                return Object.assign({}, item, {
+                    sortKey: isFinite(Number(item.sortKey)) ? Number(item.sortKey) : index,
+                    energy: total,
+                    actualEnergy: actual,
+                    projectedEnergy: projected,
+                    completeEnergy: Math.max(total, actual + projected)
+                });
+            }
+            hourlySeries = hourlySeries.map(normalizeChartPoint);
+            dailySeries = dailySeries.map(normalizeChartPoint);
+            monthlySeries = monthlySeries.map(normalizeChartPoint);
 
             // Hourly Chart - SORT BY HOUR
             var hourlyCtx = document.getElementById('deviceHourlyChart');
@@ -1562,7 +1564,9 @@
                 if (!isFinite(currentHour)) currentHour = serverToday.getHours();
 
                 var hourlyColors = sortedHourly.map(function(h) {
-                    if (h.status === 'PROJECTED' && (!isToday || h.sortKey > currentHour)) return 'rgba(220, 53, 69, 0.88)';
+                    // Red is reserved for a bucket explicitly marked PROJECTED.
+                    // The hour position alone must never turn actual data red.
+                    if (h.status === 'PROJECTED' || h.projected === true) return 'rgba(220, 53, 69, 0.88)';
                     if (!isToday) return 'rgba(13, 110, 253, 0.7)';
                     if (h.sortKey === currentHour) return 'rgba(255, 165, 0, 0.9)';
                     if (h.sortKey < currentHour) return 'rgba(13, 110, 253, 0.7)';
@@ -1608,37 +1612,51 @@
                 dailyProjection.forEach(function(p) { dailyProjectionByDay[Number(p.sortKey)] = p; });
                 var sortedDaily = dailySeries.slice().sort(function(a, b) { return a.sortKey - b.sortKey; }).map(function(item) {
                     var p = dailyProjectionByDay[Number(item.sortKey)];
-                    return p ? Object.assign({}, item, {
-                        actualEnergy: Number(p.actualEnergy || item.energy || 0), projectedEnergy: Number(p.projectedEnergy || 0),
-                        completeEnergy: Number(p.completeEnergy || item.energy || 0), status: p.status
-                    }) : Object.assign({}, item, { actualEnergy: Number(item.energy || 0), projectedEnergy: 0, completeEnergy: Number(item.energy || 0), status: 'ACTUAL' });
+                    if (!p) {
+                        var fallbackActual = Number(item.actualEnergy);
+                        if (!isFinite(fallbackActual)) fallbackActual = Number(item.energy) || 0;
+                        return Object.assign({}, item, {
+                            actualEnergy: Math.max(0, fallbackActual),
+                            projectedEnergy: 0,
+                            completeEnergy: Math.max(0, fallbackActual),
+                            energy: Math.max(0, fallbackActual),
+                            status: fallbackActual > 0 ? 'ACTUAL' : 'NO_DATA'
+                        });
+                    }
+                    var projectedEnergy = Number(p.projectedEnergy);
+                    if (!isFinite(projectedEnergy) || projectedEnergy < 0) projectedEnergy = 0;
+                    var actualEnergy = Number(p.actualEnergy);
+                    if (!isFinite(actualEnergy) || actualEnergy < 0) {
+                        var itemTotal = Number(item.energy);
+                        actualEnergy = Math.max(0, (isFinite(itemTotal) ? itemTotal : 0) - projectedEnergy);
+                    }
+                    var completeEnergy = actualEnergy + projectedEnergy;
+                    return Object.assign({}, item, {
+                        actualEnergy: actualEnergy,
+                        projectedEnergy: projectedEnergy,
+                        completeEnergy: completeEnergy,
+                        energy: completeEnergy,
+                        status: p.status || (projectedEnergy > 0 ? (actualEnergy > 0 ? 'MIXED' : 'PROJECTED') : (actualEnergy > 0 ? 'ACTUAL' : 'NO_DATA'))
+                    });
                 });
-                var isThisMonth = deviceUsageDate.getMonth() === serverToday.getMonth() && deviceUsageDate.getFullYear() === serverToday.getFullYear();
-                var currentDay = serverToday.getDate();
-
-                var dailyColors = sortedDaily.map(function(d) {
-                    if (!isThisMonth) return 'rgba(25, 135, 84, 0.7)';
-                    if (d.projectedEnergy > 0) return 'rgba(220, 53, 69, 0.88)';
-                    if (d.sortKey === currentDay) return 'rgba(255, 165, 0, 0.9)';
-                    if (d.sortKey < currentDay) return 'rgba(25, 135, 84, 0.7)';
-                    return 'rgba(200, 200, 200, 0.3)';
-                });
-
                 deviceUsageCharts.daily = new Chart(dailyCtx, {
                     type: 'bar',
                     data: {
                         labels: sortedDaily.map(function(d) { return d.dateLabel; }),
                         datasets: [{
-                            label: 'Energi (kWh)',
-                            // Satu batang per hari: aktual + energi yang diproyeksikan.
-                            data: sortedDaily.map(function(d) {
-                                var completeEnergy = Number(d.completeEnergy);
-                                if (!isFinite(completeEnergy)) completeEnergy = Number(d.actualEnergy || d.energy || 0);
-                                return completeEnergy > 0 ? completeEnergy : null;
-                            }),
-                            backgroundColor: dailyColors,
-                            borderColor: dailyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
-                            borderWidth: 1
+                            label: 'Aktual (kWh)',
+                            data: sortedDaily.map(function(d) { return Number(d.actualEnergy) > 0 ? Number(d.actualEnergy) : null; }),
+                            backgroundColor: 'rgba(25, 135, 84, 0.78)',
+                            borderColor: 'rgba(25, 135, 84, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
+                        }, {
+                            label: 'Proyeksi - MQTT Gap (kWh)',
+                            data: sortedDaily.map(function(d) { return Number(d.projectedEnergy) > 0 ? Number(d.projectedEnergy) : null; }),
+                            backgroundColor: 'rgba(111, 185, 137, 0.82)',
+                            borderColor: 'rgba(67, 140, 91, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
@@ -1646,9 +1664,10 @@
                         scales: {
                             y: {
                                 beginAtZero: true,
+                                stacked: true,
                                 ticks: { font: { size: 9 }, callback: function(v) { return v.toFixed(2) + ' kWh'; } }
                             },
-                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                            x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 45 } }
                         }
                     })
                 });
@@ -1664,22 +1683,38 @@
                 monthlyProjection.forEach(function(p) { monthlyProjectionByMonth[Number(p.sortKey)] = p; });
                 var sortedMonthly = monthlySeries.slice().sort(function(a, b) { return a.sortKey - b.sortKey; }).map(function(item) {
                     var p = monthlyProjectionByMonth[Number(item.sortKey)];
-                    return p ? Object.assign({}, item, {
-                        actualEnergy: Number(p.actualEnergy || item.energy || 0), projectedEnergy: Number(p.projectedEnergy || 0),
-                        completeEnergy: Number(p.completeEnergy || item.energy || 0), status: p.status
-                    }) : Object.assign({}, item, { actualEnergy: Number(item.energy || 0), projectedEnergy: 0, completeEnergy: Number(item.energy || 0), status: 'ACTUAL' });
+                    var projectionActual = p ? Number(p.actualEnergy) : 0;
+                    var projectionProjected = p ? Number(p.projectedEnergy) : 0;
+                    var hasMonthlyProjectionData = p
+                        && ((isFinite(projectionActual) && projectionActual > 0)
+                            || (isFinite(projectionProjected) && projectionProjected > 0));
+                    if (!hasMonthlyProjectionData) {
+                        var fallbackActual = Number(item.actualEnergy);
+                        if (!isFinite(fallbackActual)) fallbackActual = Number(item.energy) || 0;
+                        return Object.assign({}, item, {
+                            actualEnergy: Math.max(0, fallbackActual),
+                            projectedEnergy: 0,
+                            completeEnergy: Math.max(0, fallbackActual),
+                            energy: Math.max(0, fallbackActual),
+                            status: fallbackActual > 0 ? 'ACTUAL' : 'NO_DATA'
+                        });
+                    }
+                    var projectedEnergy = Number(p.projectedEnergy);
+                    if (!isFinite(projectedEnergy) || projectedEnergy < 0) projectedEnergy = 0;
+                    var actualEnergy = Number(p.actualEnergy);
+                    if (!isFinite(actualEnergy) || actualEnergy < 0) {
+                        var itemTotal = Number(item.energy);
+                        actualEnergy = Math.max(0, (isFinite(itemTotal) ? itemTotal : 0) - projectedEnergy);
+                    }
+                    var completeEnergy = actualEnergy + projectedEnergy;
+                    return Object.assign({}, item, {
+                        actualEnergy: actualEnergy,
+                        projectedEnergy: projectedEnergy,
+                        completeEnergy: completeEnergy,
+                        energy: completeEnergy,
+                        status: p.status || (projectedEnergy > 0 ? (actualEnergy > 0 ? 'MIXED' : 'PROJECTED') : (actualEnergy > 0 ? 'ACTUAL' : 'NO_DATA'))
+                    });
                 });
-                var isThisYear = deviceUsageDate.getFullYear() === serverToday.getFullYear();
-                var currentMonth = serverToday.getMonth() + 1;
-
-                var monthlyColors = sortedMonthly.map(function(m) {
-                    if (!isThisYear) return 'rgba(13, 202, 240, 0.7)';
-                    if (m.projectedEnergy > 0) return 'rgba(220, 53, 69, 0.88)';
-                    if (m.sortKey === currentMonth) return 'rgba(255, 165, 0, 0.9)';
-                    if (m.sortKey < currentMonth) return 'rgba(13, 202, 240, 0.7)';
-                    return 'rgba(200, 200, 200, 0.3)';
-                });
-
                 deviceUsageCharts.monthly = new Chart(monthlyCtx, {
                     type: 'bar',
                     data: {
@@ -1687,14 +1722,17 @@
                         datasets: [{
                             label: 'Aktual (kWh)',
                             data: sortedMonthly.map(function(m) { return m.actualEnergy > 0 ? m.actualEnergy : null; }),
-                            backgroundColor: monthlyColors,
-                            borderColor: monthlyColors.map(function(c) { return c.replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5'); }),
-                            borderWidth: 1
+                            backgroundColor: 'rgba(24, 182, 217, 0.78)',
+                            borderColor: 'rgba(24, 182, 217, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
                         }, {
-                            label: 'Proyeksi (kWh)',
+                            label: 'Proyeksi - MQTT Gap (kWh)',
                             data: sortedMonthly.map(function(m) { return m.projectedEnergy > 0 ? m.projectedEnergy : null; }),
-                            backgroundColor: 'rgba(220, 53, 69, 0.88)',
-                            borderColor: 'rgba(185, 28, 28, 1)', borderWidth: 1
+                            backgroundColor: 'rgba(112, 205, 224, 0.82)',
+                            borderColor: 'rgba(46, 153, 176, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
                         }]
                     },
                     options: Object.assign({}, commonOptions, {
@@ -1702,9 +1740,10 @@
                         scales: {
                             y: {
                                 beginAtZero: true,
+                                stacked: true,
                                 ticks: { font: { size: 9 }, callback: function(v) { return v.toFixed(2) + ' kWh'; } }
                             },
-                            x: { ticks: { font: { size: 9 } } }
+                            x: { stacked: true, ticks: { font: { size: 9 } } }
                         }
                     })
                 });

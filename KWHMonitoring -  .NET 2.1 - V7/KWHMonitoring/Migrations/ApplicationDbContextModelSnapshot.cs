@@ -1004,6 +1004,9 @@ namespace KWHMonitoring.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeviceKey", "Date")
+                        .HasName("IX_DailyEnergy_Device_Date");
+
                     b.ToTable("DailyEnergy");
                 });
 
@@ -1476,6 +1479,9 @@ namespace KWHMonitoring.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeviceKey", "Hour")
+                        .HasName("IX_HourlyEnergy_Device_Hour");
+
                     b.ToTable("HourlyEnergy");
                 });
 
@@ -1695,6 +1701,9 @@ namespace KWHMonitoring.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeviceKey", "Year", "Month")
+                        .HasName("IX_MonthlyEnergy_Device_Year_Month");
+
                     b.ToTable("MonthlyEnergy");
                 });
 
@@ -1798,6 +1807,9 @@ namespace KWHMonitoring.Migrations
                     b.Property<int>("Year");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeviceKey", "Year")
+                        .HasName("IX_YearlyEnergy_Device_Year");
 
                     b.ToTable("YearlyEnergy");
                 });

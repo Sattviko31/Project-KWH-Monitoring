@@ -1101,6 +1101,19 @@
         let usagePanelListLastRefreshAt = 0;
         const USAGE_PANEL_LIST_REFRESH_INTERVAL = 30000;
 
+        function setUsageHeaderStatus(text, state) {
+            var $status = $('#statusText');
+            var $dot = $('#statusDot');
+            $status.text(text || 'Realtime aktif');
+            $dot.removeClass('text-success text-warning text-danger text-muted')
+                .addClass(state === 'error' ? 'text-danger' : (state === 'loading' ? 'text-warning' : 'text-success'));
+            $dot.attr('title', text || 'Realtime aktif');
+        }
+
+        function preserveUsageEnergyUpdateLabel() {
+            if (!lastSuccessfulUsageUpdate) $('#lastUpdate').text('Belum ada data energi');
+        }
+
         function resetUsageComparisonState() {
             if (comparisonXhr && comparisonXhr.readyState !== 4) comparisonXhr.abort();
             comparisonXhr = null;
@@ -1920,7 +1933,7 @@
             // request awal akan memindai seluruh tabel untuk semua perangkat.
             if (!activeUsageChipDeviceKey && !usagePanelListReady) {
                 usageInitialLoadPending = true;
-                $('#statusText').text('Menyiapkan daftar perangkat...');
+                setUsageHeaderStatus('Menyiapkan data realtime...', 'loading');
                 return;
             }
             // Coalesce realtime events while the base response and financial requests are active.
@@ -1940,8 +1953,8 @@
                 });
             }
             usageCycleInProgress = true;
-            $('#statusText').text('Memperbarui...');
-            $('#lastUpdate').text('Memperbarui data...');
+            setUsageHeaderStatus('Memuat data realtime...', 'loading');
+            preserveUsageEnergyUpdateLabel();
             var selectedDateText = selectedDate.getFullYear() + '-' + String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' + String(selectedDate.getDate()).padStart(2, '0');
 
             var isAllDevicesRequest = !activeUsageChipDeviceKey;
@@ -1977,7 +1990,7 @@
                             : null;
                         lastSuccessfulUsageUpdate = batchAggregateAt || '';
                         $('#lastUpdate').text(batchAggregateAt ? 'Agregat terakhir ' + batchAggregateAt : 'Belum ada waktu agregasi');
-                        $('#statusText').text('Online');
+                        setUsageHeaderStatus('Realtime aktif', 'ready');
                         // Energi utama sudah tampil. Jangan menahan realtime refresh
                         // hanya karena analisis finansial masih diproses.
                         finishUsageCycle(requestSequence);
@@ -1991,25 +2004,24 @@
                             updateFinancialUI(financialData, requestSequence, batchAggregateAt || 'Waktu agregasi tidak tersedia');
                             if (batchAggregateAt) {
                                 lastSuccessfulFinancialUpdate = batchAggregateAt;
-                                $('#lastUpdate').text('Data agregat terakhir ' + batchAggregateAt);
+                                $('#lastUpdate').text('Data energi terakhir ' + batchAggregateAt);
                             }
                             var expectedDeviceCount = isAllDevicesRequest ? (usagePanelList || []).length : 1;
                             if (batchDeviceResults.length < expectedDeviceCount) {
-                                $('#lastUpdate').text('Analisis finansial parsial (' + batchDeviceResults.length + '/' + expectedDeviceCount + ' perangkat)');
+                                setUsageHeaderStatus('Realtime aktif · finansial parsial', 'ready');
                             } else if (Array.isArray(data.noAggregateDeviceKeys) && data.noAggregateDeviceKeys.length > 0) {
-                                $('#lastUpdate').text((batchAggregateAt ? 'Data agregat terakhir ' + batchAggregateAt : 'Waktu agregasi tidak tersedia') +
-                                    ' · belum ada agregat untuk ' + data.noAggregateDeviceKeys.length + ' perangkat');
+                                setUsageHeaderStatus('Realtime aktif · agregat sebagian', 'ready');
                             }
                         } else {
                             showUsageCostUnavailable();
-                            $('#statusText').text('Grafik dimuat; analisis finansial perangkat gagal dihitung');
+                            setUsageHeaderStatus('Realtime aktif · finansial belum tersedia', 'ready');
                         }
                         return;
                     }
                     if (isAllDevicesRequest) {
                         if (!data || data.success === false || data.totalToday == null || !Array.isArray(data.hourlyData)) {
                             showUsageCostUnavailable();
-                            $('#statusText').text('Pembaruan gagal');
+                            setUsageHeaderStatus('Data realtime gagal dimuat', 'error');
                             finishUsageCycle(requestSequence);
                             return;
                         }
@@ -2017,7 +2029,7 @@
                         lastSuccessfulUsageUpdate = data.latestAggregateAt
                             ? new Date(data.latestAggregateAt).toLocaleString('id-ID')
                             : (data.serverTime ? new Date(data.serverTime).toLocaleString('id-ID') : new Date().toLocaleString('id-ID'));
-                        $('#statusText').text('Grafik diperbarui; analisis finansial memuat dari perangkat');
+                        setUsageHeaderStatus('Realtime aktif · finansial memuat', 'ready');
                         $('#lastUpdate').text(data.latestAggregateAt
                             ? 'Agregat energi mode lama · ' + lastSuccessfulUsageUpdate
                             : 'Mode endpoint lama · waktu sumber tidak tersedia');
@@ -2047,10 +2059,21 @@
                             return (Array.isArray(rows) ? rows : []).map(function (row) {
                                 var key = Number(row.sortKey);
                                 var projectedRow = projectionByKey[key];
-                                var actual = Number(row.energy);
-                                if (!isFinite(actual)) actual = Number(row.actualEnergy) || 0;
                                 var projected = projectedRow ? Number(projectedRow.projectedEnergy) : 0;
                                 if (!isFinite(projected) || projected < 0) projected = 0;
+                                // An empty projection row is not authoritative. Historical
+                                // actual data must remain visible when projection returns
+                                // zero for that month.
+                                var projectionActual = projectedRow ? Number(projectedRow.actualEnergy) : 0;
+                                var hasProjectionData = projectedRow
+                                    && ((isFinite(projectionActual) && projectionActual > 0) || projected > 0);
+                                if (!hasProjectionData) projectedRow = null;
+                                if (!projectedRow) projected = 0;
+                                var actual = Number(row.actualEnergy);
+                                if (!isFinite(actual) || actual < 0) {
+                                    var rowTotal = Number(row.energy);
+                                    actual = Math.max(0, (isFinite(rowTotal) ? rowTotal : 0) - projected);
+                                }
                                 var hasProjection = projected > 0;
                                 return Object.assign({}, row, {
                                     energy: actual + projected,
@@ -2066,19 +2089,22 @@
                         var normalizedMonthlyData = mergeProjectionRows(data.year.monthlyData, projectionMonthlyByMonth, 'monthName');
                         var normalizedHourlyData = mergeProjectionRows(data.today.hourlyData, projectionHourlyByHour, 'timeLabel');
                         // Normalize per-device response to match aggregate format
+                        var normalizedTodayTotal = normalizedHourlyData.reduce(function (sum, row) { return sum + (Number(row.completeEnergy) || 0); }, 0);
+                        var normalizedMonthTotal = normalizedDailyData.reduce(function (sum, row) { return sum + (Number(row.completeEnergy) || 0); }, 0);
+                        var normalizedYearTotal = normalizedMonthlyData.reduce(function (sum, row) { return sum + (Number(row.completeEnergy) || 0); }, 0);
                         data = {
-                            totalToday: data.today.total,
-                            avgPerHour: data.today.avgPerHour,
-                            peakHour: data.today.peakHour,
-                            peakHourTime: data.today.peakHourTime,
-                            totalThisMonth: data.month.total,
-                            avgPerDay: data.month.avgPerDay,
-                            peakDay: data.month.peakDay,
-                            peakDayDate: data.month.peakDayDate,
-                            totalThisYear: data.year.total,
-                            avgPerMonth: data.year.avgPerMonth,
-                            peakMonth: data.year.peakMonth,
-                            peakMonthName: data.year.peakMonthName,
+                            totalToday: normalizedTodayTotal,
+                            avgPerHour: normalizedTodayTotal / Math.max(normalizedHourlyData.length, 1),
+                            peakHour: Math.max.apply(null, normalizedHourlyData.map(function (row) { return Number(row.completeEnergy) || 0; })),
+                            peakHourTime: (normalizedHourlyData.reduce(function (best, row) { return (Number(row.completeEnergy) || 0) > (Number(best.completeEnergy) || 0) ? row : best; }, normalizedHourlyData[0] || { timeLabel: '00:00' })).timeLabel,
+                            totalThisMonth: normalizedMonthTotal,
+                            avgPerDay: normalizedMonthTotal / Math.max(normalizedDailyData.length, 1),
+                            peakDay: Math.max.apply(null, normalizedDailyData.map(function (row) { return Number(row.completeEnergy) || 0; })),
+                            peakDayDate: (normalizedDailyData.reduce(function (best, row) { return (Number(row.completeEnergy) || 0) > (Number(best.completeEnergy) || 0) ? row : best; }, normalizedDailyData[0] || { dateLabel: '' })).dateLabel,
+                            totalThisYear: normalizedYearTotal,
+                            avgPerMonth: normalizedYearTotal / Math.max(normalizedMonthlyData.length, 1),
+                            peakMonth: Math.max.apply(null, normalizedMonthlyData.map(function (row) { return Number(row.completeEnergy) || 0; })),
+                            peakMonthName: (normalizedMonthlyData.reduce(function (best, row) { return (Number(row.completeEnergy) || 0) > (Number(best.completeEnergy) || 0) ? row : best; }, normalizedMonthlyData[0] || { monthName: '' })).monthName,
                             hourlyData: normalizedHourlyData,
                             dailyData: normalizedDailyData,
                             monthlyData: normalizedMonthlyData,
@@ -2101,7 +2127,7 @@
                         ? perDeviceUpdatedAt.toLocaleString('id-ID')
                         : new Date().toLocaleString('id-ID');
                     $('#lastUpdate').text(lastSuccessfulUsageUpdate);
-                    $('#statusText').text('Online');
+                    setUsageHeaderStatus('Realtime aktif', 'ready');
 
                     // Update financial analysis — derived from per-device data
                     if (deviceFinancialData) {
@@ -2126,8 +2152,8 @@
                         error: errorThrown || null,
                         response: xhr.responseText || null
                     }); *@
-                    $('#statusText').text('Offline');
-                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    setUsageHeaderStatus('Data realtime offline', 'error');
+                    preserveUsageEnergyUpdateLabel();
                     finishUsageCycle(requestSequence);
                 },
                 complete: function() {
@@ -2158,7 +2184,7 @@
                     if (requestSequence !== usageLoadSequence) return;
                     if (!deviceData || deviceData.success === false || !deviceData.today || !deviceData.month || !deviceData.year) {
                         showUsageCostUnavailable();
-                        $('#statusText').text('Pembaruan perangkat gagal');
+                        setUsageHeaderStatus('Data realtime perangkat gagal', 'error');
                         finishUsageCycle(requestSequence);
                         return;
                     }
@@ -2198,17 +2224,15 @@
                         requestSequence,
                         aggregateAt || 'Waktu agregasi tidak tersedia'
                     );
-                    $('#statusText').text('Mode pemulihan perangkat aktif');
-                    $('#lastUpdate').text(aggregateAt
-                        ? 'Agregat perangkat ' + aggregateAt
-                        : 'Data perangkat tampil; waktu agregasi tidak tersedia');
+                    setUsageHeaderStatus('Realtime aktif · mode pemulihan', 'ready');
+                    if (aggregateAt) $('#lastUpdate').text('Data energi terakhir ' + aggregateAt);
                     finishUsageCycle(requestSequence);
                 },
                 error: function(xhr, textStatus) {
                     if (requestSequence !== usageLoadSequence || textStatus === 'abort') return;
                     showUsageCostUnavailable();
-                    $('#statusText').text('Pembaruan perangkat gagal');
-                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    setUsageHeaderStatus('Data realtime perangkat gagal', 'error');
+                    preserveUsageEnergyUpdateLabel();
                     finishUsageCycle(requestSequence);
                 },
                 complete: function() {
@@ -2272,16 +2296,14 @@
                     lastSuccessfulUsageUpdate = data.latestAggregateAt
                         ? new Date(data.latestAggregateAt).toLocaleString('id-ID')
                         : (data.serverTime ? new Date(data.serverTime).toLocaleString('id-ID') : new Date().toLocaleString('id-ID'));
-                    $('#statusText').text('Grafik diperbarui; memulihkan analisis finansial');
-                    $('#lastUpdate').text(data.latestAggregateAt
-                        ? 'Agregat energi mode pemulihan · ' + lastSuccessfulUsageUpdate
-                        : 'Ringkasan energi mode pemulihan · waktu sumber tidak tersedia');
+                    setUsageHeaderStatus('Realtime aktif · mode pemulihan', 'ready');
+                    if (data.latestAggregateAt) $('#lastUpdate').text('Data energi terakhir ' + lastSuccessfulUsageUpdate);
                     loadLegacyDeviceFinancial(requestSequence, selectedDateText);
                 },
                 error: function(xhr, textStatus) {
                     if (requestSequence !== usageLoadSequence || textStatus === 'abort') return;
-                    $('#statusText').text('Offline');
-                    $('#lastUpdate').text('Pembaruan gagal' + (lastSuccessfulUsageUpdate ? ' · data sebelumnya ' + lastSuccessfulUsageUpdate : ' · belum ada data'));
+                    setUsageHeaderStatus('Data realtime offline', 'error');
+                    preserveUsageEnergyUpdateLabel();
                     showUsageCostUnavailable();
                     finishUsageCycle(requestSequence);
                 },
@@ -2296,7 +2318,7 @@
             var panels = (usagePanelList || []).slice();
             if (panels.length === 0) {
                 showUsageCostUnavailable();
-                $('#statusText').text('Grafik diperbarui; perangkat finansial belum tersedia');
+                setUsageHeaderStatus('Realtime aktif · finansial belum tersedia', 'ready');
                 finishUsageCycle(requestSequence);
                 return;
             }
@@ -2321,14 +2343,12 @@
                     updateFinancialUI(aggregated, requestSequence, sourceUpdatedAt);
                     lastSuccessfulFinancialUpdate = sourceUpdatedAt;
                     var hasFailures = deviceResults.length < panels.length;
-                    $('#statusText').text(hasFailures
-                        ? 'Mode pemulihan aktif; analisis finansial parsial'
-                        : 'Mode pemulihan aktif; analisis finansial diperbarui');
-                    $('#lastUpdate').text('Data finansial fallback · ' + sourceUpdatedAt +
-                        (hasFailures ? ' · ' + deviceResults.length + '/' + panels.length + ' perangkat' : ''));
+                    setUsageHeaderStatus(hasFailures
+                        ? 'Realtime aktif · finansial parsial'
+                        : 'Realtime aktif · finansial diperbarui', 'ready');
                 } else {
                     showUsageCostUnavailable();
-                    $('#statusText').text('Grafik diperbarui; analisis finansial gagal dipulihkan');
+                    setUsageHeaderStatus('Realtime aktif · finansial gagal dipulihkan', 'ready');
                 }
                 finishUsageCycle(requestSequence);
             }
@@ -2645,12 +2665,17 @@
                     var energy = Number(item.energy);
                     if (!isFinite(actualEnergy)) actualEnergy = Math.max(0, energy || 0);
                     if (!isFinite(projectedEnergy)) projectedEnergy = 0;
-                    if (!isFinite(energy)) energy = actualEnergy + projectedEnergy;
+                    var completeEnergy = Number(item.completeEnergy);
+                    var calculatedCompleteEnergy = Math.max(0, actualEnergy) + Math.max(0, projectedEnergy);
+                    if (!isFinite(completeEnergy) || completeEnergy < calculatedCompleteEnergy) {
+                        completeEnergy = calculatedCompleteEnergy;
+                    }
+                    if (!isFinite(energy) || energy < completeEnergy) energy = completeEnergy;
                     return Object.assign({}, item, {
                         energy: energy,
                         actualEnergy: actualEnergy,
                         projectedEnergy: projectedEnergy,
-                        completeEnergy: isFinite(Number(item.completeEnergy)) ? Number(item.completeEnergy) : actualEnergy + projectedEnergy,
+                        completeEnergy: completeEnergy,
                         status: item.status || (projectedEnergy > 0 ? (actualEnergy > 0 ? 'MIXED' : 'PROJECTED') : (actualEnergy > 0 ? 'ACTUAL' : 'NO_DATA'))
                     });
                 });
@@ -2662,14 +2687,6 @@
                     : new Date();
                 var isThisMonth = selectedDate.getMonth() === usageServerToday.getMonth() && selectedDate.getFullYear() === usageServerToday.getFullYear();
                 var currentDay = usageServerToday.getDate();
-
-                var colors = dailyData.map(d => {
-                    if (d.projectedEnergy > 0) return 'rgba(46, 150, 101, 0.62)';
-                    if (!isThisMonth) return 'rgba(25, 135, 84, 0.7)';
-                    if (d.sortKey === currentDay) return 'rgba(255, 165, 0, 0.9)';
-                    if (d.sortKey < currentDay) return 'rgba(25, 135, 84, 0.7)';
-                    return 'rgba(200, 200, 200, 0.3)';
-                });
 
                 var avgDaily = calcAvg(dailyData);
                 var dailyTariff = Number(data.tariffPerKWh) > 0
@@ -2684,14 +2701,19 @@
                     data: {
                         labels: dailyData.map(d => d.dateLabel),
                         datasets: [{
-                            label: 'Energi aktual + proyeksi (kWh)',
-                            // Tepat satu batang untuk setiap tanggal.
-                            data: dailyData.map(d => d.completeEnergy > 0 ? d.completeEnergy : null),
-                            backgroundColor: colors,
-                            borderColor: dailyData.map((d, i) => d.projectedEnergy > 0
-                                ? 'rgba(22, 118, 74, 0.82)'
-                                : colors[i].replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5')),
-                            borderWidth: 1
+                            label: 'Aktual (kWh)',
+                            data: dailyData.map(d => d.actualEnergy > 0 ? d.actualEnergy : null),
+                            backgroundColor: 'rgba(25, 135, 84, 0.78)',
+                            borderColor: 'rgba(25, 135, 84, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
+                        }, {
+                            @* label: 'Proyeksi - MQTT Gap (kWh)', *@
+                            data: dailyData.map(d => d.projectedEnergy > 0 ? d.projectedEnergy : null),
+                            backgroundColor: 'rgba(111, 185, 137, 0.82)',
+                            borderColor: 'rgba(67, 140, 91, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
                         }, {
                             label: 'Rata-rata: ' + formatDecimal(avgDaily) + ' kWh',
                             data: makeAvgLine(dailyData, avgDaily),
@@ -2712,8 +2734,8 @@
                             tooltip: energyTooltipOptions(dailyData, 'daily', dailyTariff, dailyTariffLabel, data.wbpLwbp || (lastFinancialData && lastFinancialData.wbpLwbp))
                         },
                         scales: themeScales({
-                            y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
-                            x: { ticks: { font: { size: 8 }, maxRotation: 45 } }
+                            y: { beginAtZero: true, stacked: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
+                            x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 45 } },
                         })
                     }
                 });
@@ -2740,18 +2762,6 @@
                     });
                 });
 
-                var today = new Date();
-                var isThisYear = selectedDate.getFullYear() === today.getFullYear();
-                var currentMonth = today.getMonth() + 1;
-
-                var colors = monthlyData.map(m => {
-                    if (m.projectedEnergy > 0) return 'rgba(43, 194, 230, 0.62)';
-                    if (!isThisYear) return 'rgba(13, 202, 240, 0.7)';
-                    if (m.sortKey === currentMonth) return 'rgba(255, 165, 0, 0.9)';
-                    if (m.sortKey < currentMonth) return 'rgba(13, 202, 240, 0.7)';
-                    return 'rgba(200, 200, 200, 0.3)';
-                });
-
                 var avgMonthly = calcAvg(monthlyData);
                 var monthlyTariff = Number(data.tariffPerKWh) > 0
                     ? Number(data.tariffPerKWh)
@@ -2765,13 +2775,19 @@
                     data: {
                         labels: monthlyData.map(m => m.monthName),
                         datasets: [{
-                            label: 'Energi aktual + proyeksi (kWh)',
-                            data: monthlyData.map(m => m.energy),
-                            backgroundColor: colors,
-                            borderColor: monthlyData.map((m, i) => m.projectedEnergy > 0
-                                ? 'rgba(10, 175, 210, 0.82)'
-                                : colors[i].replace('0.7', '1').replace('0.9', '1').replace('0.3', '0.5')),
-                            borderWidth: 1
+                            label: 'Aktual (kWh)',
+                            data: monthlyData.map(m => m.actualEnergy > 0 ? m.actualEnergy : null),
+                            backgroundColor: 'rgba(24, 182, 217, 0.78)',
+                            borderColor: 'rgba(24, 182, 217, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
+                        }, {
+                            @* label: 'Proyeksi - MQTT Gap (kWh)', *@
+                            data: monthlyData.map(m => m.projectedEnergy > 0 ? m.projectedEnergy : null),
+                            backgroundColor: 'rgba(112, 205, 224, 0.82)',
+                            borderColor: 'rgba(46, 153, 176, 1)',
+                            borderWidth: 1,
+                            stack: 'energy'
                         }, {
                             label: 'Rata-rata: ' + formatDecimal(avgMonthly) + ' kWh',
                             data: makeAvgLine(monthlyData, avgMonthly),
@@ -2792,8 +2808,8 @@
                             tooltip: energyTooltipOptions(monthlyData, 'monthly', monthlyTariff, monthlyTariffLabel, data.wbpLwbp || (lastFinancialData && lastFinancialData.wbpLwbp))
                         },
                         scales: themeScales({
-                            y: { beginAtZero: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
-                            x: { ticks: { font: { size: 9 } } }
+                            y: { beginAtZero: true, stacked: true, ticks: { font: { size: 9 }, callback: v => v.toFixed(2) + ' kWh' } },
+                            x: { stacked: true, ticks: { font: { size: 9 } } }
                         })
                     }
                 });
@@ -3156,10 +3172,7 @@
 
         function showUsageCostUnavailable() {
             if (lastFinancialData) {
-                $('#statusText').text('Data finansial belum diperbarui');
-                $('#lastUpdate').text(lastSuccessfulFinancialUpdate === 'Waktu agregasi tidak tersedia'
-                    ? 'Data finansial sebelumnya · waktu agregasi tidak tersedia'
-                    : 'Analisis finansial terakhir berhasil diperbarui ' + lastSuccessfulFinancialUpdate);
+                setUsageHeaderStatus('Realtime aktif · finansial belum diperbarui', 'ready');
                 return;
             }
             $('#usageCost').text('Gagal dimuat');

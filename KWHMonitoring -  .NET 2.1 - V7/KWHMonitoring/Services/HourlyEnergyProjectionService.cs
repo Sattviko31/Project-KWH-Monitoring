@@ -94,7 +94,9 @@ namespace KWHMonitoring.Services
                 .Select(x => new HistoricalSample { Hour = x.Hour, EnergyKWh = x.EnergyKWh })
                 .ToListAsync();
 
-            var actualSample = samples.FirstOrDefault(x => x.Hour == normalizedBucket);
+            // Zero-valued placeholder rows represent a missing bucket, not actual
+            // consumption. They must remain eligible for projection.
+            var actualSample = samples.FirstOrDefault(x => x.Hour == normalizedBucket && x.EnergyKWh > 0m);
             if (actualSample != null)
             {
                 result.Status = "ACTUAL";
